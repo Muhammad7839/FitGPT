@@ -1,0 +1,37 @@
+package com.fitgpt.app.data.repository
+
+import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.data.model.SavedOutfit
+
+class FakeWardrobeRepository : WardrobeRepository {
+
+    private val wardrobeItems = mutableListOf(
+        ClothingItem(1, "Top", "Black", "Winter", 3),
+        ClothingItem(2, "Bottom", "Blue", "All", 4)
+    )
+
+    private val savedOutfits = mutableListOf<SavedOutfit>()
+
+    override fun getWardrobeItems(): List<ClothingItem> = wardrobeItems
+
+    override fun addItem(item: ClothingItem) {
+        wardrobeItems.add(item)
+    }
+
+    override fun deleteItem(item: ClothingItem) {
+        wardrobeItems.remove(item)
+    }
+
+    override fun updateItem(item: ClothingItem) {
+        val index = wardrobeItems.indexOfFirst { it.id == item.id }
+        if (index != -1) {
+            wardrobeItems[index] = item
+        }
+    }
+
+    override fun saveOutfit(outfit: SavedOutfit) {
+        savedOutfits.add(outfit)
+    }
+
+    override fun getSavedOutfits(): List<SavedOutfit> = savedOutfits
+}
