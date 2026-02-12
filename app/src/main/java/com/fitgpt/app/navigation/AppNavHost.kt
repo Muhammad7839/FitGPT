@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.vectorResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -17,15 +18,18 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.fitgpt.app.R
+import com.fitgpt.app.data.PreferencesManager
 import com.fitgpt.app.ui.additem.AddItemScreen
 import com.fitgpt.app.ui.chat.ChatScreen
 import com.fitgpt.app.ui.edititem.EditItemScreen
+import com.fitgpt.app.ui.onboarding.OnboardingScreen
 import com.fitgpt.app.ui.recommendation.RecommendationScreen
 import com.fitgpt.app.ui.wardrobe.WardrobeScreen
 import com.fitgpt.app.viewmodel.ChatViewModel
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 
 object Routes {
+    const val ONBOARDING = "onboarding"
     const val WARDROBE = "wardrobe"
     const val ADD_ITEM = "add_item"
     const val EDIT_ITEM = "edit_item"
@@ -45,6 +49,19 @@ fun AppNavHost(
 ) {
     val wardrobeViewModel: WardrobeViewModel = viewModel()
     val chatViewModel: ChatViewModel = viewModel()
+
+    val context = LocalContext.current
+    val preferencesManager = remember {
+        PreferencesManager(context.applicationContext)
+    }
+
+    // Wire persistence into the view model once
+    LaunchedEffect(Unit) {
+        wardrobeViewModel.initPersistence(preferencesManager)
+    }
+
+    val startDestination = if (preferencesManager.onboardingCompleted)
+        Routes.WARDROBE else Routes.ONBOARDING
 
     // Keep chat wardrobe context in sync
     val wardrobeItems by wardrobeViewModel.wardrobeItems.collectAsState()
@@ -90,9 +107,28 @@ fun AppNavHost(
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Routes.WARDROBE,
+            startDestination = startDestination,
             modifier = Modifier.padding(innerPadding)
         ) {
+            composable(route = Routes.ONBOARDING) {
+                OnboardingScreen(
+                    onComplete = { prefs ->
+                        wardrobeViewModel.updatePreferences(prefs)
+                        preferencesManager.onboardingCompleted = true
+                        navController.navigate(Routes.WARDROBE) {
+                            popUpTo(Routes.ONBOARDING) { inclusive = true }
+                        }
+                    },
+                    onSkip = {
+                        preferencesManager.savePreferences(wardrobeViewModel.userPreferences.value)
+                        preferencesManager.onboardingCompleted = true
+                        navController.navigate(Routes.WARDROBE) {
+                            popUpTo(Routes.ONBOARDING) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
             composable(route = Routes.WARDROBE) {
                 WardrobeScreen(
                     navController = navController,

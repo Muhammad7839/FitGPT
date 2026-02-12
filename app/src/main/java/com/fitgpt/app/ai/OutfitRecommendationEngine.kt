@@ -84,6 +84,10 @@ class OutfitRecommendationEngine {
         val styleNote = styleNote(item, preferences)
         if (styleNote != null) reasons.add(styleNote)
 
+        // Body type reasoning
+        val fitNote = bodyTypeFitNote(item, preferences)
+        if (fitNote != null) reasons.add(fitNote)
+
         // Color note
         reasons.add("${item.color.lowercase()} adds ${colorCharacter(item.color)} to your look")
 
@@ -96,7 +100,8 @@ class OutfitRecommendationEngine {
         val seasonScore = seasonMatchScore(item, preferences) * WEIGHT_SEASON
         val comfortScore = comfortMatchScore(item, preferences) * WEIGHT_COMFORT
         val styleScore = styleMatchScore(item, preferences) * WEIGHT_STYLE
-        return seasonScore + comfortScore + styleScore
+        val fitScore = bodyTypeFitScore(item, preferences) * WEIGHT_FIT
+        return seasonScore + comfortScore + styleScore + fitScore
     }
 
     internal fun scoreOutfit(
@@ -150,6 +155,38 @@ class OutfitRecommendationEngine {
             0.8
         } else {
             0.5
+        }
+    }
+
+    // --- Body type fit ---
+
+    internal fun bodyTypeFitScore(item: ClothingItem, preferences: UserPreferences): Double {
+        val category = item.category.lowercase()
+        return when (preferences.bodyType.lowercase()) {
+            "slim" -> when (category) {
+                "outerwear" -> 0.9   // layering adds visual dimension
+                "accessory" -> 0.85  // draws the eye, adds interest
+                else -> 0.7
+            }
+            "athletic" -> when (category) {
+                "top" -> 0.9         // accommodates broader shoulders
+                "shoes" -> 0.85      // sporty footwear complements build
+                "bottom" -> 0.8
+                else -> 0.7
+            }
+            "plus-size" -> {
+                // structured layers and comfortable fits flatter most
+                val comfortBoost = if (item.comfortLevel >= 4) 0.1 else 0.0
+                val base = when (category) {
+                    "outerwear" -> 0.9   // structured layers create shape
+                    "accessory" -> 0.85  // accessories draw the eye upward
+                    "top" -> 0.8
+                    "bottom" -> 0.75
+                    else -> 0.7
+                }
+                (base + comfortBoost).coerceAtMost(1.0)
+            }
+            else -> 0.7 // "average" or unrecognized — neutral baseline
         }
     }
 
@@ -376,6 +413,24 @@ class OutfitRecommendationEngine {
             "streetwear" -> parts.add("On-trend for a streetwear aesthetic")
         }
 
+        // Body type fit insight
+        when (preferences.bodyType.lowercase()) {
+            "slim" -> {
+                if (outfit.any { it.category.equals("Outerwear", ignoreCase = true) })
+                    parts.add("Layered pieces add depth to a slim frame")
+            }
+            "athletic" -> {
+                if (outfit.any { it.category.equals("Top", ignoreCase = true) })
+                    parts.add("Structured tops complement your athletic build")
+            }
+            "plus-size" -> {
+                if (outfit.any { it.category.equals("Outerwear", ignoreCase = true) })
+                    parts.add("Structured layers create a flattering silhouette")
+                else if (outfit.any { it.comfortLevel >= 4 })
+                    parts.add("Comfortable fits flatter your proportions")
+            }
+        }
+
         // Score tier
         val tier = when {
             score >= 2.5 -> "Highly recommended"
@@ -394,6 +449,29 @@ class OutfitRecommendationEngine {
             "sporty" -> if (item.comfortLevel >= 4) "comfort-first choice for an active lifestyle" else null
             "streetwear" -> "works well in a streetwear rotation"
             else -> null
+        }
+    }
+
+    private fun bodyTypeFitNote(item: ClothingItem, preferences: UserPreferences): String? {
+        val category = item.category.lowercase()
+        return when (preferences.bodyType.lowercase()) {
+            "slim" -> when (category) {
+                "outerwear" -> "layering adds dimension to a slim frame"
+                "accessory" -> "accessories add visual interest to your silhouette"
+                else -> null
+            }
+            "athletic" -> when (category) {
+                "top" -> "structured top complements an athletic build"
+                "shoes" -> "sporty footwear pairs well with your build"
+                else -> null
+            }
+            "plus-size" -> when {
+                category == "outerwear" -> "structured outerwear creates a flattering shape"
+                category == "accessory" -> "accessories draw the eye and accent your look"
+                item.comfortLevel >= 4 -> "comfortable fit flatters your proportions"
+                else -> null
+            }
+            else -> null // "average" — no specific note needed
         }
     }
 
@@ -422,7 +500,8 @@ class OutfitRecommendationEngine {
         internal const val WEIGHT_SEASON = 0.25
         internal const val WEIGHT_COMFORT = 0.20
         internal const val WEIGHT_STYLE = 0.15
-        internal const val WEIGHT_HARMONY = 0.30
+        internal const val WEIGHT_FIT = 0.10
+        internal const val WEIGHT_HARMONY = 0.20
         internal const val WEIGHT_COVERAGE = 0.10
     }
 }

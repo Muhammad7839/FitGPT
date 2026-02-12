@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.fitgpt.app.data.model.PreferenceOptions
 import com.fitgpt.app.data.model.UserPreferences
 
 @Composable
@@ -30,9 +31,9 @@ fun UserPreferencesDialog(
 
     var accessibilityMode by remember { mutableStateOf(currentPreferences.accessibilityModeEnabled) }
 
-    val bodyTypes = listOf("Slim", "Average", "Athletic", "Plus-size")
-    val styles = listOf("Casual", "Formal", "Sporty", "Streetwear")
-    val allSeasons = listOf("Spring", "Summer", "Fall", "Winter")
+    val bodyTypes = PreferenceOptions.bodyTypes
+    val styles = PreferenceOptions.styles
+    val allSeasons = PreferenceOptions.allSeasons
 
     AlertDialog(
         onDismissRequest = onDismiss,

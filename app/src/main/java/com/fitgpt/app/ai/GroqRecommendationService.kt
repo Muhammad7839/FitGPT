@@ -133,8 +133,13 @@ Rules:
   - Monochromatic outfits with tonal variation look sophisticated
   - Avoid pairing 3+ unrelated bright colors without a neutral anchor
 - Also consider season matching, comfort, and the user's style preference
-- In EXPLANATION, explicitly describe why the colors work together
-- In ITEM_DETAILS, mention how each item's color contributes to the outfit's palette
+- BODY TYPE FIT is important — tailor recommendations to flatter the user's proportions:
+  - Slim: layering with outerwear adds visual dimension; accessories create interest
+  - Athletic: structured tops that accommodate broader shoulders; sporty footwear complements build
+  - Plus-size: structured outerwear creates shape; prioritize comfortable fits (comfort 4+); accessories draw the eye
+  - Average: balanced proportions suit most items; focus on other factors
+- In EXPLANATION, explicitly describe why the colors work together and how the outfit flatters the user's body type
+- In ITEM_DETAILS, mention how each item's color contributes to the outfit's palette and how it suits the user's body type
 """.trim()
     }
 

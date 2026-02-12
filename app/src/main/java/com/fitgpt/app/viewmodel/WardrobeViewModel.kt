@@ -9,6 +9,7 @@ import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.data.model.OutfitRecommendation
 import com.fitgpt.app.data.model.SavedOutfit
 import com.fitgpt.app.data.model.UserPreferences
+import com.fitgpt.app.data.PreferencesManager
 import com.fitgpt.app.data.repository.FakeWardrobeRepository
 import com.fitgpt.app.data.repository.WardrobeRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +21,7 @@ class WardrobeViewModel : ViewModel() {
     private val repository: WardrobeRepository = FakeWardrobeRepository()
     private val recommendationEngine = OutfitRecommendationEngine()
     private val groqService = GroqRecommendationService()
+    private var preferencesManager: PreferencesManager? = null
 
     // Full source of truth
     private val allItems = MutableStateFlow(repository.getWardrobeItems())
@@ -107,10 +109,19 @@ class WardrobeViewModel : ViewModel() {
         applyFilters()
     }
 
+    /* ---------- PERSISTENCE ---------- */
+
+    fun initPersistence(pm: PreferencesManager) {
+        preferencesManager = pm
+        _userPreferences.value = pm.loadPreferences()
+        refreshRecommendations()
+    }
+
     /* ---------- USER PREFERENCES ---------- */
 
     fun updatePreferences(preferences: UserPreferences) {
         _userPreferences.value = preferences
+        preferencesManager?.savePreferences(preferences)
         refreshRecommendations()
     }
 
