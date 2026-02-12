@@ -119,14 +119,22 @@ For each outfit, respond in EXACTLY this format (separate outfits with a blank l
 OUTFIT: id1, id2, id3
 SCORE: 2.5
 EXPLANATION: A brief reason why this outfit works well together.
+ITEM_DETAILS: id1: why this item fits, id2: why this item fits, id3: why this item fits
 
 Rules:
 - ONLY use item IDs from the wardrobe above — never invent new IDs
 - Recommend exactly 5 outfits, each one must be a unique combination (no duplicate outfits)
 - Score from 0.0 to 3.0
 - Each outfit should have 2-5 items
-- Prioritize color harmony, season matching, and comfort
-- Consider the user's style preference
+- COLOR COORDINATION IS THE TOP PRIORITY: build outfits around polished color palettes
+  - Prefer neutral bases (black, white, gray, navy, beige) with 1 accent color
+  - Analogous colors (next to each other on color wheel) create harmonious looks
+  - Complementary colors (opposite on color wheel) create vibrant contrast
+  - Monochromatic outfits with tonal variation look sophisticated
+  - Avoid pairing 3+ unrelated bright colors without a neutral anchor
+- Also consider season matching, comfort, and the user's style preference
+- In EXPLANATION, explicitly describe why the colors work together
+- In ITEM_DETAILS, mention how each item's color contributes to the outfit's palette
 """.trim()
     }
 
@@ -173,6 +181,10 @@ Respond with ONLY the explanation, no labels or prefixes.
                     it.startsWith("EXPLANATION:", ignoreCase = true)
                 }
 
+                val itemDetailsLine = lines.firstOrNull {
+                    it.startsWith("ITEM_DETAILS:", ignoreCase = true)
+                }
+
                 val ids = outfitLine.substringAfter(":").trim()
                     .split(",")
                     .mapNotNull { it.trim().toIntOrNull() }
@@ -193,11 +205,14 @@ Respond with ONLY the explanation, no labels or prefixes.
                     ?.trim()
                     ?: "AI-recommended outfit combination."
 
+                val itemExplanations = parseItemDetails(itemDetailsLine, itemMap)
+
                 results.add(
                     OutfitRecommendation(
                         items = outfitItems,
                         score = score,
-                        explanation = explanation
+                        explanation = explanation,
+                        itemExplanations = itemExplanations
                     )
                 )
             } catch (_: Exception) {
@@ -209,5 +224,42 @@ Respond with ONLY the explanation, no labels or prefixes.
             .distinctBy { rec -> rec.items.map { it.id }.sorted() }
             .sortedByDescending { it.score }
             .take(5)
+    }
+
+    private fun parseItemDetails(
+        line: String?,
+        itemMap: Map<Int, ClothingItem>
+    ): Map<Int, String> {
+        if (line == null) return emptyMap()
+
+        val content = line.substringAfter(":", missingDelimiterValue = "").trim()
+        if (content.isBlank()) return emptyMap()
+
+        val result = mutableMapOf<Int, String>()
+
+        // Pattern: "id: reason" segments separated by commas — but reason text may
+        // itself contain commas, so we split on the pattern ", <digits>:" which marks
+        // the start of the next item entry.
+        val segmentPattern = Regex("""(\d+)\s*:\s*""")
+        val matchResults = segmentPattern.findAll(content).toList()
+
+        for (i in matchResults.indices) {
+            val id = matchResults[i].groupValues[1].toIntOrNull() ?: continue
+            if (id !in itemMap) continue
+
+            val reasonStart = matchResults[i].range.last + 1
+            val reasonEnd = if (i + 1 < matchResults.size) matchResults[i + 1].range.first else content.length
+
+            val reason = content.substring(reasonStart, reasonEnd)
+                .trim()
+                .trimEnd(',')
+                .trim()
+
+            if (reason.isNotBlank()) {
+                result[id] = reason
+            }
+        }
+
+        return result
     }
 }

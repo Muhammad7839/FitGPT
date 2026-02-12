@@ -25,10 +25,12 @@ class OutfitRecommendationEngine {
         if (outfitCombinations.isEmpty()) {
             return items.map { item ->
                 val score = scoreItem(item, preferences)
+                val perItem = mapOf(item.id to generateItemExplanation(item, preferences))
                 OutfitRecommendation(
                     items = listOf(item),
                     score = score,
-                    explanation = generateExplanation(listOf(item), score, preferences)
+                    explanation = generateExplanation(listOf(item), score, preferences),
+                    itemExplanations = perItem
                 )
             }
                 .sortedByDescending { it.score }
@@ -38,10 +40,14 @@ class OutfitRecommendationEngine {
         return outfitCombinations
             .map { outfit ->
                 val score = scoreOutfit(outfit, preferences)
+                val perItem = outfit.associate { item ->
+                    item.id to generateItemExplanation(item, preferences)
+                }
                 OutfitRecommendation(
                     items = outfit,
                     score = score,
-                    explanation = generateExplanation(outfit, score, preferences)
+                    explanation = generateExplanation(outfit, score, preferences),
+                    itemExplanations = perItem
                 )
             }
             .sortedByDescending { it.score }
@@ -153,33 +159,113 @@ class OutfitRecommendationEngine {
         if (outfit.size < 2) return 0.0
 
         val colors = outfit.map { it.color.lowercase() }
-
-        // Neutral colors pair well with everything
-        val neutrals = setOf("black", "white", "gray", "grey", "beige", "navy", "tan", "cream")
+        val neutrals = setOf("black", "white", "gray", "grey", "beige", "navy", "tan", "cream", "khaki", "ivory")
         val neutralCount = colors.count { it in neutrals }
+        val accentColors = colors.filter { it !in neutrals }
+        val accentCount = accentColors.size
 
-        // All neutrals: solid but safe
-        if (neutralCount == colors.size) return 0.6
+        // Monochromatic: all non-neutral colors are the same
+        val uniqueAccents = accentColors.toSet()
+        if (uniqueAccents.size == 1 && neutralCount >= 1) return 1.0
 
-        // Mix of neutrals and accent colors is ideal
-        val accentCount = colors.size - neutralCount
-        if (neutralCount >= 1 && accentCount >= 1) return 1.0
+        // All neutrals: polished and safe
+        if (neutralCount == colors.size) return 0.7
 
-        // Complementary color pairs
-        val complementary = mapOf(
-            "blue" to "orange", "red" to "green", "yellow" to "purple",
-            "orange" to "blue", "green" to "red", "purple" to "yellow"
-        )
-        for (i in colors.indices) {
-            for (j in i + 1 until colors.size) {
-                if (complementary[colors[i]] == colors[j]) return 0.9
-            }
+        // Neutral base with one accent: classic polished look
+        if (neutralCount >= 1 && accentCount == 1) return 1.0
+
+        // Neutral base with two accents: check if they're related
+        if (neutralCount >= 1 && accentCount == 2) {
+            val pair = accentColors.map { it.lowercase() }.sorted()
+            if (areAnalogous(pair[0], pair[1])) return 0.95
+            if (areComplementary(pair[0], pair[1])) return 0.9
+            // Unrelated accents with neutral base is still okay
+            return 0.7
         }
 
-        // Multiple non-neutral, non-complementary colors: risky
-        if (accentCount > 2) return 0.2
+        // No neutrals: check color relationships between accents
+        if (neutralCount == 0 && accentCount == 2) {
+            val pair = accentColors.map { it.lowercase() }.sorted()
+            if (areAnalogous(pair[0], pair[1])) return 0.85
+            if (areComplementary(pair[0], pair[1])) return 0.8
+            if (sameColorTemperature(pair[0], pair[1])) return 0.7
+            return 0.4
+        }
+
+        // Three+ non-neutral colors with no neutral base: risky
+        if (accentCount > 2 && neutralCount == 0) return 0.2
+
+        // Fallback: neutral base with 3+ accents
+        if (neutralCount >= 1 && accentCount > 2) return 0.5
 
         return 0.5
+    }
+
+    private fun areComplementary(a: String, b: String): Boolean {
+        val pairs = setOf(
+            setOf("blue", "orange"), setOf("red", "green"), setOf("yellow", "purple"),
+            setOf("teal", "red"), setOf("pink", "green"), setOf("coral", "teal")
+        )
+        return setOf(a, b) in pairs
+    }
+
+    private fun areAnalogous(a: String, b: String): Boolean {
+        val groups = listOf(
+            setOf("red", "orange", "coral", "pink"),
+            setOf("orange", "yellow", "gold"),
+            setOf("yellow", "green", "lime"),
+            setOf("green", "teal", "olive"),
+            setOf("blue", "teal", "navy"),
+            setOf("blue", "purple", "indigo"),
+            setOf("purple", "pink", "magenta"),
+            setOf("brown", "orange", "tan", "rust")
+        )
+        return groups.any { group -> a in group && b in group }
+    }
+
+    private fun sameColorTemperature(a: String, b: String): Boolean {
+        val warm = setOf("red", "orange", "yellow", "coral", "pink", "gold", "rust", "brown", "tan", "peach")
+        val cool = setOf("blue", "green", "purple", "teal", "navy", "indigo", "mint", "olive", "magenta")
+        return (a in warm && b in warm) || (a in cool && b in cool)
+    }
+
+    internal fun colorHarmonyLabel(outfit: List<ClothingItem>): String {
+        if (outfit.size < 2) return ""
+
+        val colors = outfit.map { it.color.lowercase() }
+        val neutrals = setOf("black", "white", "gray", "grey", "beige", "navy", "tan", "cream", "khaki", "ivory")
+        val accentColors = colors.filter { it !in neutrals }
+        val neutralCount = colors.count { it in neutrals }
+
+        val uniqueAccents = accentColors.toSet()
+        if (uniqueAccents.size == 1 && neutralCount >= 1) {
+            return "Monochromatic palette — ${uniqueAccents.first()} with neutral base creates a cohesive, polished look"
+        }
+        if (neutralCount == colors.size) {
+            return "All-neutral palette — ${colors.joinToString(", ")} gives a clean, sophisticated foundation"
+        }
+        if (neutralCount >= 1 && accentColors.size == 1) {
+            return "${accentColors.first().replaceFirstChar { it.uppercase() }} pops against ${colors.filter { it in neutrals }.joinToString("/")} — a classic, polished combination"
+        }
+        if (accentColors.size == 2) {
+            val pair = accentColors.sorted()
+            if (areAnalogous(pair[0], pair[1])) {
+                return "${pair[0].replaceFirstChar { it.uppercase() }} and ${pair[1]} are analogous colors — they sit next to each other on the color wheel for a harmonious blend"
+            }
+            if (areComplementary(pair[0], pair[1])) {
+                return "${pair[0].replaceFirstChar { it.uppercase() }} and ${pair[1]} are complementary — opposite on the color wheel for a vibrant, balanced contrast"
+            }
+            if (sameColorTemperature(pair[0], pair[1])) {
+                val temp = if (pair[0] in setOf("red", "orange", "yellow", "coral", "pink", "gold", "rust", "brown", "tan", "peach")) "warm" else "cool"
+                return "Both ${pair[0]} and ${pair[1]} are $temp tones — a unified color temperature for a cohesive feel"
+            }
+        }
+        val score = colorHarmonyBonus(outfit)
+        return when {
+            score >= 0.8 -> "Colors work well together for a coordinated look"
+            score >= 0.5 -> "Interesting color mix — adds personality"
+            else -> "Bold color combination — consider a neutral anchor piece"
+        }
     }
 
     // --- Category diversity ---
@@ -277,11 +363,9 @@ class OutfitRecommendationEngine {
         }
 
         // Color harmony insight
-        val harmonyScore = colorHarmonyBonus(outfit)
-        when {
-            harmonyScore >= 0.9 -> parts.add("Colors complement each other beautifully")
-            harmonyScore >= 0.6 -> parts.add("Solid neutral palette")
-            harmonyScore < 0.3 -> parts.add("Bold color combination")
+        val harmonyLabel = colorHarmonyLabel(outfit)
+        if (harmonyLabel.isNotBlank()) {
+            parts.add(harmonyLabel)
         }
 
         // Style match
@@ -334,11 +418,11 @@ class OutfitRecommendationEngine {
     companion object {
         private const val MAX_RECOMMENDATIONS = 5
 
-        // Scoring weights
-        internal const val WEIGHT_SEASON = 0.35
-        internal const val WEIGHT_COMFORT = 0.25
-        internal const val WEIGHT_STYLE = 0.20
-        internal const val WEIGHT_HARMONY = 0.10
+        // Scoring weights — color harmony is prioritized for a polished look
+        internal const val WEIGHT_SEASON = 0.25
+        internal const val WEIGHT_COMFORT = 0.20
+        internal const val WEIGHT_STYLE = 0.15
+        internal const val WEIGHT_HARMONY = 0.30
         internal const val WEIGHT_COVERAGE = 0.10
     }
 }
