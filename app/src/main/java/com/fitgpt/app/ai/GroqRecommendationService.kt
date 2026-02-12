@@ -1,0 +1,213 @@
+package com.fitgpt.app.ai
+
+import com.fitgpt.app.BuildConfig
+import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.data.model.OutfitRecommendation
+import com.fitgpt.app.data.model.UserPreferences
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
+
+class GroqRecommendationService {
+
+    private val apiKey: String = BuildConfig.GROQ_API_KEY
+
+    private val client: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .build()
+
+    val isAvailable: Boolean get() = apiKey.isNotBlank()
+
+    companion object {
+        private const val API_URL = "https://api.groq.com/openai/v1/chat/completions"
+        private const val MODEL = "llama-3.3-70b-versatile"
+        private const val TEMPERATURE = 0.7
+        private val JSON_MEDIA_TYPE = "application/json".toMediaType()
+    }
+
+    suspend fun recommend(
+        items: List<ClothingItem>,
+        preferences: UserPreferences
+    ): List<OutfitRecommendation> {
+        if (!isAvailable || items.isEmpty()) return emptyList()
+
+        val prompt = buildPrompt(items, preferences)
+        val text = callApi(prompt) ?: return emptyList()
+        return parseResponse(text, items)
+    }
+
+    suspend fun generateItemExplanation(
+        item: ClothingItem,
+        preferences: UserPreferences
+    ): String? {
+        if (!isAvailable) return null
+
+        val prompt = buildItemPrompt(item, preferences)
+        return callApi(prompt)?.trim()
+    }
+
+    private suspend fun callApi(prompt: String): String? = withContext(Dispatchers.IO) {
+        val messages = JSONArray().apply {
+            put(JSONObject().apply {
+                put("role", "user")
+                put("content", prompt)
+            })
+        }
+
+        val body = JSONObject().apply {
+            put("model", MODEL)
+            put("messages", messages)
+            put("temperature", TEMPERATURE)
+        }
+
+        val request = Request.Builder()
+            .url(API_URL)
+            .addHeader("Authorization", "Bearer $apiKey")
+            .addHeader("Content-Type", "application/json")
+            .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+
+        val response = client.newCall(request).execute()
+
+        if (!response.isSuccessful) {
+            throw RuntimeException("Groq API error: ${response.code} ${response.message}")
+        }
+
+        val responseBody = response.body?.string()
+            ?: throw RuntimeException("Groq API returned empty body")
+
+        JSONObject(responseBody)
+            .getJSONArray("choices")
+            .getJSONObject(0)
+            .getJSONObject("message")
+            .getString("content")
+    }
+
+    private fun buildPrompt(
+        items: List<ClothingItem>,
+        preferences: UserPreferences
+    ): String {
+        val itemLines = items.joinToString("\n") { item ->
+            "${item.id} | ${item.category} | ${item.color} | ${item.season} | ${item.comfortLevel}"
+        }
+
+        return """
+You are a fashion stylist AI. Given a wardrobe and user preferences, recommend exactly 5 unique outfit combinations.
+
+USER PREFERENCES:
+- Body type: ${preferences.bodyType}
+- Style: ${preferences.stylePreference}
+- Comfort preference: ${preferences.comfortPreference}/5
+- Preferred seasons: ${preferences.preferredSeasons.joinToString(", ")}
+
+WARDROBE (ID | Category | Color | Season | Comfort):
+$itemLines
+
+The ONLY valid item IDs are: ${items.joinToString(", ") { it.id.toString() }}
+Do NOT invent or use any IDs not listed above.
+
+For each outfit, respond in EXACTLY this format (separate outfits with a blank line):
+
+OUTFIT: id1, id2, id3
+SCORE: 2.5
+EXPLANATION: A brief reason why this outfit works well together.
+
+Rules:
+- ONLY use item IDs from the wardrobe above — never invent new IDs
+- Recommend exactly 5 outfits, each one must be a unique combination (no duplicate outfits)
+- Score from 0.0 to 3.0
+- Each outfit should have 2-5 items
+- Prioritize color harmony, season matching, and comfort
+- Consider the user's style preference
+""".trim()
+    }
+
+    private fun buildItemPrompt(
+        item: ClothingItem,
+        preferences: UserPreferences
+    ): String {
+        return """
+You are a fashion stylist AI. Give a brief 1-2 sentence explanation of how this clothing item fits the user's style.
+
+ITEM: ${item.category}, ${item.color}, ${item.season} season, comfort ${item.comfortLevel}/5
+
+USER PREFERENCES:
+- Body type: ${preferences.bodyType}
+- Style: ${preferences.stylePreference}
+- Comfort preference: ${preferences.comfortPreference}/5
+- Preferred seasons: ${preferences.preferredSeasons.joinToString(", ")}
+
+Respond with ONLY the explanation, no labels or prefixes.
+""".trim()
+    }
+
+    private fun parseResponse(
+        text: String,
+        items: List<ClothingItem>
+    ): List<OutfitRecommendation> {
+        val itemMap = items.associateBy { it.id }
+        val blocks = text.split("\n\n").filter { it.isNotBlank() }
+        val results = mutableListOf<OutfitRecommendation>()
+
+        for (block in blocks) {
+            try {
+                val lines = block.trim().lines()
+
+                val outfitLine = lines.firstOrNull {
+                    it.startsWith("OUTFIT:", ignoreCase = true)
+                } ?: continue
+
+                val scoreLine = lines.firstOrNull {
+                    it.startsWith("SCORE:", ignoreCase = true)
+                }
+
+                val explanationLine = lines.firstOrNull {
+                    it.startsWith("EXPLANATION:", ignoreCase = true)
+                }
+
+                val ids = outfitLine.substringAfter(":").trim()
+                    .split(",")
+                    .mapNotNull { it.trim().toIntOrNull() }
+                    .distinct()
+
+                val outfitItems = ids.mapNotNull { itemMap[it] }
+                if (outfitItems.isEmpty()) continue
+
+                val score = scoreLine
+                    ?.substringAfter(":")
+                    ?.trim()
+                    ?.toDoubleOrNull()
+                    ?.coerceIn(0.0, 3.0)
+                    ?: 1.5
+
+                val explanation = explanationLine
+                    ?.substringAfter(":")
+                    ?.trim()
+                    ?: "AI-recommended outfit combination."
+
+                results.add(
+                    OutfitRecommendation(
+                        items = outfitItems,
+                        score = score,
+                        explanation = explanation
+                    )
+                )
+            } catch (_: Exception) {
+                // Skip malformed blocks silently
+            }
+        }
+
+        return results
+            .distinctBy { rec -> rec.items.map { it.id }.sorted() }
+            .sortedByDescending { it.score }
+            .take(5)
+    }
+}

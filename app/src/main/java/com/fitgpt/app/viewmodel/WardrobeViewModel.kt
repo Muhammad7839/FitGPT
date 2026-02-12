@@ -1,16 +1,25 @@
 package com.fitgpt.app.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.fitgpt.app.ai.GroqRecommendationService
+import com.fitgpt.app.ai.OutfitRecommendationEngine
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.data.model.OutfitRecommendation
 import com.fitgpt.app.data.model.SavedOutfit
+import com.fitgpt.app.data.model.UserPreferences
 import com.fitgpt.app.data.repository.FakeWardrobeRepository
 import com.fitgpt.app.data.repository.WardrobeRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 class WardrobeViewModel : ViewModel() {
 
     private val repository: WardrobeRepository = FakeWardrobeRepository()
+    private val recommendationEngine = OutfitRecommendationEngine()
+    private val groqService = GroqRecommendationService()
 
     // Full source of truth
     private val allItems = MutableStateFlow(repository.getWardrobeItems())
@@ -23,6 +32,31 @@ class WardrobeViewModel : ViewModel() {
     private val _wardrobeItems =
         MutableStateFlow<List<ClothingItem>>(allItems.value)
     val wardrobeItems: StateFlow<List<ClothingItem>> = _wardrobeItems
+
+    // User preferences
+    private val _userPreferences = MutableStateFlow(
+        UserPreferences(
+            bodyType = "Average",
+            stylePreference = "Casual",
+            comfortPreference = 3,
+            preferredSeasons = listOf("Spring", "Summer", "Fall", "Winter")
+        )
+    )
+    val userPreferences: StateFlow<UserPreferences> = _userPreferences
+
+    // Recommendations (kept for backward compat with tests)
+    private val _recommendations = MutableStateFlow<List<OutfitRecommendation>>(emptyList())
+    val recommendations: StateFlow<List<OutfitRecommendation>> = _recommendations
+
+    // UI state for RecommendationScreen
+    private val _recommendationState = MutableStateFlow<RecommendationUiState>(
+        RecommendationUiState.Loading
+    )
+    val recommendationState: StateFlow<RecommendationUiState> = _recommendationState
+
+    init {
+        refreshRecommendations()
+    }
 
     /* ---------- CRUD ---------- */
 
@@ -73,16 +107,65 @@ class WardrobeViewModel : ViewModel() {
         applyFilters()
     }
 
-    /* ---------- AI EXPLANATION (PLACEHOLDER) ---------- */
+    /* ---------- USER PREFERENCES ---------- */
+
+    fun updatePreferences(preferences: UserPreferences) {
+        _userPreferences.value = preferences
+        refreshRecommendations()
+    }
+
+    /* ---------- AI RECOMMENDATIONS ---------- */
 
     fun generateExplanation(item: ClothingItem): String {
-        val comfortText =
-            if (item.comfortLevel >= 4) "high comfort"
-            else "moderate comfort"
+        return recommendationEngine.generateItemExplanation(item, _userPreferences.value)
+    }
 
-        val seasonText = item.season.lowercase()
+    fun refreshRecommendations() {
+        // Step 1: Always run rule-based engine synchronously as fallback
+        val fallback = recommendationEngine.recommend(
+            items = allItems.value,
+            preferences = _userPreferences.value
+        )
+        _recommendations.value = fallback
 
-        return "Recommended because it offers $comfortText and works well for the $seasonText season."
+        // Step 2: If Gemini is available, attempt AI recommendations
+        if (groqService.isAvailable) {
+            _recommendationState.value = RecommendationUiState.Loading
+
+            viewModelScope.launch {
+                try {
+                    val aiResults = groqService.recommend(
+                        items = allItems.value,
+                        preferences = _userPreferences.value
+                    )
+                    if (aiResults.isNotEmpty()) {
+                        _recommendations.value = aiResults
+                        _recommendationState.value = RecommendationUiState.Success(
+                            recommendations = aiResults,
+                            isAiGenerated = true
+                        )
+                    } else {
+                        // AI returned empty, use fallback
+                        _recommendationState.value = RecommendationUiState.Success(
+                            recommendations = fallback,
+                            isAiGenerated = false
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.e("WardrobeViewModel", "Groq AI failed", e)
+                    _recommendationState.value = RecommendationUiState.Error(
+                        message = e.message ?: "AI unavailable",
+                        fallbackRecommendations = fallback
+                    )
+                }
+            }
+        } else {
+            // No API key — use rule-based results directly
+            _recommendationState.value = RecommendationUiState.Success(
+                recommendations = fallback,
+                isAiGenerated = false
+            )
+        }
     }
 
     /* ---------- INTERNAL ---------- */
@@ -90,6 +173,7 @@ class WardrobeViewModel : ViewModel() {
     private fun refresh() {
         allItems.value = repository.getWardrobeItems()
         applyFilters()
+        refreshRecommendations()
     }
 
     private fun applyFilters() {

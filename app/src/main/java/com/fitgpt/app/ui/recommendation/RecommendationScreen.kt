@@ -9,10 +9,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.fitgpt.app.data.model.OutfitRecommendation
+import com.fitgpt.app.viewmodel.RecommendationUiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 
 @Composable
@@ -20,18 +23,14 @@ fun RecommendationScreen(
     navController: NavController,
     viewModel: WardrobeViewModel = viewModel()
 ) {
-    val items by viewModel.wardrobeItems.collectAsState()
-
-    val recommendedItems = remember(items) {
-        items.take(2)
-    }
+    val uiState by viewModel.recommendationState.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Outfit Recommendation") },
                 actions = {
-                    IconButton(onClick = { /* recomposition refresh */ }) {
+                    IconButton(onClick = { viewModel.refreshRecommendations() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
                 }
@@ -45,30 +44,111 @@ fun RecommendationScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
+            when (val state = uiState) {
+                is RecommendationUiState.Loading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator()
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Getting AI recommendations...",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
 
-            if (recommendedItems.isEmpty()) {
-                Text(
-                    text = "Add items to your wardrobe to get recommendations.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                return@Column
-            }
+                is RecommendationUiState.Success -> {
+                    if (state.recommendations.isEmpty()) {
+                        Text(
+                            text = "Add items to your wardrobe to get recommendations.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Recommended for you",
+                                style = MaterialTheme.typography.headlineSmall
+                            )
+                            if (state.isAiGenerated) {
+                                AssistChip(
+                                    onClick = {},
+                                    label = { Text("AI-powered") }
+                                )
+                            } else {
+                                AssistChip(
+                                    onClick = {},
+                                    label = { Text("Offline") }
+                                )
+                            }
+                        }
 
-            Text(
-                text = "Recommended for you",
-                style = MaterialTheme.typography.headlineSmall
-            )
+                        Spacer(modifier = Modifier.height(12.dp))
 
-            Spacer(modifier = Modifier.height(12.dp))
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(state.recommendations) { recommendation ->
+                                RecommendationCard(recommendation = recommendation)
+                            }
+                        }
+                    }
+                }
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(recommendedItems) { item ->
-                    RecommendationCard(
-                        title = "${item.category} - ${item.color}",
-                        explanation = viewModel.generateExplanation(item)
-                    )
+                is RecommendationUiState.Error -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(16.dp)
+                                .fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "AI unavailable. Showing offline recommendations.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            OutlinedButton(onClick = { viewModel.refreshRecommendations() }) {
+                                Text("Retry")
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (state.fallbackRecommendations.isNotEmpty()) {
+                        Text(
+                            text = "Recommended for you",
+                            style = MaterialTheme.typography.headlineSmall
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(state.fallbackRecommendations) { recommendation ->
+                                RecommendationCard(recommendation = recommendation)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -85,21 +165,25 @@ fun RecommendationScreen(
 }
 
 @Composable
-private fun RecommendationCard(
-    title: String,
-    explanation: String
-) {
+private fun RecommendationCard(recommendation: OutfitRecommendation) {
     Card(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = title,
+                text = recommendation.items.joinToString(" + ") {
+                    "${it.color} ${it.category}"
+                },
                 style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            LinearProgressIndicator(
+                progress = { (recommendation.score / 3.0).toFloat().coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth(),
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = explanation,
+                text = recommendation.explanation,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

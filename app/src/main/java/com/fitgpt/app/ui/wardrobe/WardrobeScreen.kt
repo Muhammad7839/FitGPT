@@ -8,6 +8,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,6 +19,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.navigation.Routes
+import com.fitgpt.app.ui.preferences.UserPreferencesDialog
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -27,9 +30,21 @@ fun WardrobeScreen(
     viewModel: WardrobeViewModel = viewModel()
 ) {
     val items by viewModel.wardrobeItems.collectAsState()
+    val userPreferences by viewModel.userPreferences.collectAsState()
     var itemToDelete by remember { mutableStateOf<ClothingItem?>(null) }
+    var showPreferencesDialog by remember { mutableStateOf(false) }
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("My Wardrobe") },
+                actions = {
+                    IconButton(onClick = { showPreferencesDialog = true }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Preferences")
+                    }
+                }
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { navController.navigate(Routes.ADD_ITEM) }
@@ -46,10 +61,18 @@ fun WardrobeScreen(
                 .padding(16.dp)
         ) {
 
-            Text(
-                text = "My Wardrobe",
-                style = MaterialTheme.typography.headlineSmall
-            )
+            Button(
+                onClick = { navController.navigate(Routes.RECOMMENDATIONS) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    Icons.Default.Star,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Get Recommendations")
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -68,6 +91,17 @@ fun WardrobeScreen(
                 }
             }
         }
+    }
+
+    if (showPreferencesDialog) {
+        UserPreferencesDialog(
+            currentPreferences = userPreferences,
+            onDismiss = { showPreferencesDialog = false },
+            onSave = { prefs ->
+                viewModel.updatePreferences(prefs)
+                showPreferencesDialog = false
+            }
+        )
     }
 
     if (itemToDelete != null) {

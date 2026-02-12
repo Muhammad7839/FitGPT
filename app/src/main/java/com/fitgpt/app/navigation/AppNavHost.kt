@@ -9,12 +9,14 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.fitgpt.app.ui.additem.AddItemScreen
 import com.fitgpt.app.ui.edititem.EditItemScreen
+import com.fitgpt.app.ui.recommendation.RecommendationScreen
 import com.fitgpt.app.ui.wardrobe.WardrobeScreen
 
 object Routes {
     const val WARDROBE = "wardrobe"
     const val ADD_ITEM = "add_item"
     const val EDIT_ITEM = "edit_item"
+    const val RECOMMENDATIONS = "recommendations"
 }
 
 @Composable
@@ -32,6 +34,10 @@ fun AppNavHost(
 
         composable(route = Routes.ADD_ITEM) {
             AddItemScreen(navController = navController)
+        }
+
+        composable(route = Routes.RECOMMENDATIONS) {
+            RecommendationScreen(navController = navController)
         }
 
         composable(
