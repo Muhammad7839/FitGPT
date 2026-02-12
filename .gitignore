@@ -4,7 +4,10 @@ build/
 
 # Local config
 local.properties
-
+node_modules
+.env
+.vscode/
+package-lock.json
 # Android Studio
 .idea/
 *.iml
