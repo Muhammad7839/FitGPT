@@ -14,7 +14,6 @@ const STYLE_OPTIONS = [
 export default function Onboarding({ onComplete }) {
   const [step, setStep] = useState(1);
 
-  // All onboarding answers live here
   const [answers, setAnswers] = useState({
     style: [],
     dressFor: [],
@@ -31,11 +30,11 @@ export default function Onboarding({ onComplete }) {
   };
 
   const goSkip = () => {
-    // skip still moves forward (does not block progress)
+
     goNext();
   };
 
-  // Toggle helper for multi-select lists like "style"
+ 
   const toggleMulti = (key, value) => {
     setAnswers((prev) => {
       const exists = prev[key].includes(value);
@@ -47,7 +46,7 @@ export default function Onboarding({ onComplete }) {
   };
 
   const renderStepContent = () => {
-    // Step 1: Welcome screen (matches your Figma)
+    //  Welcome screen 
     if (step === 1) {
       return (
         <div>
@@ -74,7 +73,7 @@ export default function Onboarding({ onComplete }) {
       );
     }
 
-    // Step 2: Style selection (multi-select)
+    // Style selection
     if (step === 2) {
       return (
         <div>
@@ -104,7 +103,7 @@ export default function Onboarding({ onComplete }) {
       );
     }
 
-    // Placeholder for remaining steps for now
+   
     return <div>Step {step} content will be added next.</div>;
   };
 
