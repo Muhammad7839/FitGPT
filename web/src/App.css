@@ -1,52 +1,109 @@
 :root {
   --bg: #ffffff;
-  --text: #111827;
+  --text: #111111;
   --muted: #6b7280;
   --border: #e5e7eb;
 
-  /* brand accent (dark red) */
-  --accent: #7f1d1d;
-  --accent-soft: rgba(127, 29, 29, 0.12);
+  --accent: #8b1e1e;
+  --accent-hover: #6e1616;
+  --accent-soft: rgba(139, 30, 30, 0.12);
+
+  --shadow: 0 12px 30px rgba(17, 24, 39, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
 }
 
 .app {
-  background: var(--bg);
   min-height: 100vh;
-  color: var(--text);
+  background: var(--bg);
 }
 
+/* page container */
 .onboarding {
-  max-width: 980px;
-  margin: 40px auto;
-  padding: 16px;
+  max-width: 1050px;
+  margin: 0 auto;
+  padding: 28px 16px 60px;
 }
 
+/* top header */
+.brandBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.brandLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brandLogo {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+/* card */
 .card {
   border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 24px;
-  background: white;
+  border-radius: 22px;
+  padding: 26px;
+  background: #fff;
+  box-shadow: var(--shadow);
 }
 
 .topRow {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 12px;
+  align-items: center;
+  margin-bottom: 14px;
 }
 
 .heroTitle {
   margin: 0;
-  font-size: 44px;
-  color: var(--text);
+  font-size: 46px;
+  line-height: 1.05;
+  letter-spacing: -0.6px;
 }
 
 .heroSub {
-  margin-top: 10px;
+  margin: 12px 0 0;
   color: var(--muted);
   font-size: 16px;
-  max-width: 720px;
+  max-width: 760px;
+  line-height: 1.5;
 }
 
+/* progress bar */
+.progressWrap {
+  margin-top: 14px;
+  height: 10px;
+  background: #f3f4f6;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 180ms ease;
+}
+
+/* feature grid */
 .featureGrid {
   margin-top: 18px;
   display: grid;
@@ -56,16 +113,29 @@
 
 .featureCard {
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px;
-  background: #f9fafb;
+  border-radius: 16px;
+  padding: 16px;
+  background: #fafafa;
 }
 
+.featureCard h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.featureCard p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 14px;
+}
+
+/* pills */
 .pillGrid {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 16px;
+  margin-top: 18px;
 }
 
 .pill {
@@ -75,6 +145,11 @@
   background: white;
   cursor: pointer;
   color: var(--text);
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.pill:hover {
+  transform: translateY(-1px);
 }
 
 .pill.selected {
@@ -84,31 +159,38 @@
 
 .noteBox {
   margin-top: 16px;
-  padding: 12px;
-  border-radius: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
   border: 1px solid var(--border);
-  background: #f9fafb;
+  background: #fafafa;
   color: #374151;
 }
 
+/* buttons */
 .buttonRow {
-  margin-top: 18px;
+  margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
 }
 
-.btn.primary {
+.btn {
   padding: 12px 18px;
   border-radius: 999px;
-  border: 0;
-  background: var(--accent);
-  color: white;
+  border: 1px solid var(--border);
+  background: white;
   cursor: pointer;
   font-weight: 700;
 }
 
+.btn.primary {
+  border: 0;
+  background: var(--accent);
+  color: white;
+}
+
 .btn.primary:hover {
-  filter: brightness(0.95);
+  background: var(--accent-hover);
 }
 
 .linkBtn {
@@ -116,9 +198,167 @@
   border: 0;
   color: #374151;
   cursor: pointer;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+.linkBtn:hover {
+  background: #f3f4f6;
 }
 
 .linkBtn:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* small footer text */
+.stepText {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* body type cards */
+.optionGrid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.optionCard {
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.optionCard.selected {
+  border: 2px solid var(--accent);
+  background: var(--accent-soft);
+}
+
+.optionTitle {
+  font-weight: 800;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.optionNote {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+/* review */
+.reviewGrid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.reviewCard {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  background: #f9fafb;
+}
+
+.reviewLabel {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.reviewValue {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* dashboard */
+.dashboard {
+  max-width: 1050px;
+  margin: 0 auto;
+  padding: 28px 16px 60px;
+}
+
+.dashboardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.dashCard {
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 20px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  margin-bottom: 14px;
+}
+
+.dashTitle {
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.profileRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.profileRow:first-of-type {
+  border-top: none;
+}
+
+.label {
+  color: var(--muted);
+}
+
+.value {
+  text-align: right;
+  max-width: 65%;
+}
+
+.mutedText {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.quickActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.mutedNote {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* responsive */
+@media (max-width: 860px) {
+  .heroTitle {
+    font-size: 38px;
+  }
+  .featureGrid {
+    grid-template-columns: 1fr;
+  }
+  .optionGrid {
+    grid-template-columns: 1fr;
+  }
 }
