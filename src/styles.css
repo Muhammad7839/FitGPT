@@ -1,0 +1,321 @@
+:root {
+  /*FitGPT Theme (Red/Black/White) */
+
+  /* LIGHT THEME */
+  --bg: #f7f8fb; 
+  --card: #ffffff;
+  --card2: #f3f5f9;
+  --text: #0f172a;
+  --muted: #6b7280;
+  --border: #e6e8ef;
+
+  --accent: #ff2b2b;
+  --accentSoft: rgba(255, 43, 43, 0.10);
+  --shadow: 0 8px 22px rgba(0,0,0,0.08);
+
+}
+
+/* DARK THEME */
+html[data-theme='dark']{
+  --bg: #0b0b10;
+  --card: #12121a;
+  --card2: #0f0f16;
+  --text: #f2f2f7;
+  --muted: #a1a1b3;
+  --border: rgba(255, 255, 255, 0.10);
+
+  --accent: #ff2b2b;
+  --accentSoft: rgba(255, 43, 43, 0.12);
+  --shadow: 0 12px 30px rgba(0,0,0,0.45);
+}
+
+/* Global */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.topbar {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  width: 34px; height: 34px; border-radius: 10px;
+  display: grid; place-items: center;
+  background: var(--accentSoft);
+  border: 1px solid rgba(255, 43, 43, 0.35);
+  color: var(--text);
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.recHeader {
+  background: linear-gradient(90deg, var(--accentSoft), transparent);
+  border-bottom: 1px solid rgba(255, 43, 43, 0.25);
+}
+.sparkle { color: var(--accent); margin-right: 8px; }
+
+.primaryBtn {
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 43, 43, 0.35);
+  background: linear-gradient(180deg, #ff3b3b, var(--accent));
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(255, 43, 43, 0.22);
+}
+.primaryBtn:hover { filter: brightness(1.03); }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.themeToggle {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.themeToggle:hover {
+  border-color: rgba(255, 43, 43, 0.35);
+}
+
+/* LAYOUT */
+.page { 
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/*centers the app */
+.content{
+  width: min(980px, 94vw);
+  margin: 18px auto 90px;
+  display: grid;
+  gap: 18px;
+}
+
+.brand{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brandName{
+  font-weight: 800;
+}
+
+.dateText{
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.muted{
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* WEATHER CARD */
+.weatherCard{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.weatherMain{
+  margin-top: 4px;
+}
+
+.weatherIcon{
+  font-size: 22px;
+}
+
+/* RECOMMENDATION CARD */
+.recCard{
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 43, 43, 0.25);
+}
+
+.recTitle{
+  font-weight: 800;
+}
+
+.chip{
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.outfitItem{
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+  background: var(--card2);
+}
+
+.outfitGrid{
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.thumb{
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.08);
+  margin: 10px auto 14px;
+}
+
+html[data-theme = 'dark'] .thumb{
+  background: rgba(255,255,255, 0.08);
+}
+
+.itemName{
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.divider{
+  height: 1px;
+  background: var(--border);
+}
+
+.explainTitle{
+  font-weight: 800;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+}
+
+.explainText{
+  color: var(--text);
+  opacity: 0.9;
+  font-size: 14px;
+}
+
+.actionsRow{
+  padding: 12px 16px 16px;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.iconBtn{
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  font-size: 18px;
+}
+
+/* QUICK ACTIONS */
+.quickCard .sectionTitle{
+  font-weight: 900;
+  margin-bottom: 10px;
+}
+
+.quickAction{
+  width: 100%;
+  text-align: left;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card2);
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.quickTitle{
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+/* BOTTON NAVIGATION */
+.bottomNav{
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 72px;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding: 8px 12px;
+}
+
+.navItem{
+  border: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.navItem.active{
+  color: var(--text);
+  background: var(--accentSoft);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 43, 43, 0.25);
+}
+
+.navIcon{
+  font-size: 18px;
+}
+
+.navLabel{
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* MOBILE */
+@media (max-width: 780px){
+  .outfitGrid{
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .actionsRow{
+    grid-template-columns: 1fr auto;
+  }
+
+  .actionsRow .iconBtn:last-child{
+    display: none;
+  }
+}
