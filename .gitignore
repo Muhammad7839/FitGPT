@@ -1,34 +1,21 @@
-# Gradle
-.gradle/
+# Python
+backend/venv/
+backend/__pycache__/
+backend/*.db
+backend/*.sqlite3
+
+# Python cache
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Android build
 build/
-
-# Local config
+.gradle/
 local.properties
 
-# Android Studio
+# IDE
 .idea/
-*.iml
-
-# OS files
-.DS_Store
-
-# Logs
-*.log
-
-# APK / AAB
-*.apk
-*.aab*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
+.vscode/
