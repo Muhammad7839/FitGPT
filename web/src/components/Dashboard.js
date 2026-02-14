@@ -1,24 +1,17 @@
+// web/src/components/Dashboard.js
 import React, { useEffect, useMemo, useState } from "react";
 
-const DEFAULT_BODY_TYPE = "unspecified";
+const THEME_KEY = "fitgpt_theme_v1";
 const WARDROBE_KEY = "fitgpt_wardrobe_v1";
+const DEFAULT_BODY_TYPE = "unspecified";
 
-function titleCase(text) {
-  if (!text) return "";
-  return text
-    .toString()
-    .split(" ")
-    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : ""))
-    .join(" ");
-}
-
-
-function joinNice(list) {
-  if (!Array.isArray(list) || list.length === 0) return "Not set";
-  if (list.length === 1) return titleCase(list[0]);
-  if (list.length === 2) return `${titleCase(list[0])} and ${titleCase(list[1])}`;
-  const allButLast = list.slice(0, -1).map(titleCase).join(", ");
-  return `${allButLast}, and ${titleCase(list[list.length - 1])}`;
+function formatToday() {
+  return new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function safeParse(json) {
@@ -35,261 +28,266 @@ function loadWardrobe() {
   return Array.isArray(parsed) ? parsed : [];
 }
 
-function saveWardrobe(items) {
-  localStorage.setItem(WARDROBE_KEY, JSON.stringify(items));
+function titleCase(text) {
+  if (!text) return "";
+  return text
+    .toString()
+    .replace(/[_-]/g, " ")
+    .split(" ")
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : ""))
+    .join(" ");
 }
 
-function makeId() {
-  return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+function joinNice(list) {
+  if (!Array.isArray(list) || list.length === 0) return "Not set";
+  if (list.length === 1) return titleCase(list[0]);
+  if (list.length === 2) return `${titleCase(list[0])} and ${titleCase(list[1])}`;
+  const allButLast = list.slice(0, -1).map(titleCase).join(", ");
+  return `${allButLast}, and ${titleCase(list[list.length - 1])}`;
 }
 
-const CATEGORY_OPTIONS = ["Top", "Bottom", "Dress", "Outerwear", "Shoes", "Accessory"];
+function pickDailyOutfit(items) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+
+  const daySeed = Number(new Date().toISOString().slice(0, 10).replace(/-/g, ""));
+  const hash = (n) => (n * 9301 + 49297) % 233280;
+
+  const pool = items.map((x, idx) => ({ ...x, _idx: idx }));
+  const picks = [];
+  let h = daySeed;
+
+  while (picks.length < Math.min(4, pool.length)) {
+    h = hash(h);
+    const i = h % pool.length;
+    const candidate = pool[i];
+    if (!picks.find((p) => p.id === candidate.id)) picks.push(candidate);
+  }
+
+  return picks.map((x, i) => ({
+    id: x.id ?? `${i}`,
+    name: x.name ?? "Wardrobe item",
+    category: x.category ?? "",
+    color: x.color ?? "",
+    notes: x.notes ?? "",
+  }));
+}
+
+function buildExplanation({ answers, outfit }) {
+  const style = Array.isArray(answers?.style) ? answers.style : [];
+  const dressFor = Array.isArray(answers?.dressFor) ? answers.dressFor : [];
+  const bodyType = answers?.bodyType ?? DEFAULT_BODY_TYPE;
+
+  const parts = [];
+
+  if (dressFor.length > 0) parts.push(`Built for ${titleCase(dressFor[0])}.`);
+  else parts.push("Built as a simple everyday outfit.");
+
+  if (style.length > 0) parts.push(`Style direction: ${titleCase(style[0])}.`);
+
+  if (outfit.length > 0) {
+    const cats = outfit
+      .map((o) => o.category)
+      .filter(Boolean)
+      .map(titleCase);
+    const uniqueCats = Array.from(new Set(cats));
+    if (uniqueCats.length > 0) parts.push(`Includes: ${uniqueCats.join(", ")}.`);
+  }
+
+  const bodyLine =
+    bodyType && bodyType !== DEFAULT_BODY_TYPE
+      ? `Fit note: adjusted for ${titleCase(bodyType)} proportions.`
+      : "Fit note: body type not set yet, so fit logic is neutral.";
+
+  return { why: parts.join(" "), body: bodyLine };
+}
 
 export default function Dashboard({ answers, onResetOnboarding }) {
-  const [wardrobe, setWardrobe] = useState([]);
-  const [form, setForm] = useState({
-    name: "",
-    category: "Top",
-    color: "",
-    notes: "",
+  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || "light");
+  const [wardrobe, setWardrobe] = useState(() => loadWardrobe());
+
+  const [weather] = useState({
+    label: "Today's Weather",
+    condition: "Partly Cloudy",
+    tempF: 68,
   });
 
-  const [error, setError] = useState("");
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
 
   useEffect(() => {
-    setWardrobe(loadWardrobe());
+    const onStorage = (e) => {
+      if (e.key === WARDROBE_KEY) setWardrobe(loadWardrobe());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  useEffect(() => {
-    saveWardrobe(wardrobe);
-  }, [wardrobe]);
+  const outfit = useMemo(() => pickDailyOutfit(wardrobe), [wardrobe]);
+  const explanation = useMemo(() => buildExplanation({ answers, outfit }), [answers, outfit]);
 
   const hasBodyType = !!answers?.bodyType && answers.bodyType !== DEFAULT_BODY_TYPE;
   const bodyTypeDisplay = hasBodyType ? titleCase(answers.bodyType) : "Not set";
 
-  const summary = useMemo(() => {
-    const styleCount = answers?.style?.length ?? 0;
-    const dressForCount = answers?.dressFor?.length ?? 0;
-    const bodyTypeIsSkipped = !answers?.bodyType || answers.bodyType === DEFAULT_BODY_TYPE;
+  const chipText = useMemo(() => {
+    const dressFor = Array.isArray(answers?.dressFor) ? answers.dressFor : [];
+    if (dressFor.length > 0) return titleCase(dressFor[0]);
+    return "Daily";
+  }, [answers]);
 
-    if (wardrobe.length === 0) {
-      return "Add your first wardrobe item. Once you have a few pieces, FitGPT can start building outfits.";
-    }
-
-    if (dressForCount > 0) {
-      return `Focus today: ${titleCase(answers.dressFor[0])}. You have ${wardrobe.length} item${
-        wardrobe.length === 1 ? "" : "s"
-      } saved.`;
-    }
-
-    if (styleCount > 0) {
-      return `Your vibe leans ${titleCase(answers.style[0])}. You have ${wardrobe.length} item${
-        wardrobe.length === 1 ? "" : "s"
-      } saved.`;
-    }
-
-    if (bodyTypeIsSkipped) {
-      return `You have ${wardrobe.length} wardrobe item${wardrobe.length === 1 ? "" : "s"} saved.`;
-    }
-
-    return `You have ${wardrobe.length} wardrobe item${wardrobe.length === 1 ? "" : "s"} saved.`;
-  }, [answers, wardrobe.length]);
-
-  const handleChange = (key, value) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-    if (error) setError("");
-  };
-
-  const handleAddItem = (e) => {
-    e.preventDefault();
-
-    const name = form.name.trim();
-    const color = form.color.trim();
-
-    if (!name) {
-      setError("Please enter an item name.");
-      return;
-    }
-
-    const newItem = {
-      id: makeId(),
-      name,
-      category: form.category,
-      color,
-      notes: form.notes.trim(),
-      createdAt: Date.now(),
-    };
-
-    setWardrobe((prev) => [newItem, ...prev]);
-    setForm({ name: "", category: form.category, color: "", notes: "" });
-  };
-
-  const handleDelete = (id) => {
-    setWardrobe((prev) => prev.filter((x) => x.id !== id));
-  };
+  const toggleTheme = () => setTheme((prev) => (prev === "light" ? "dark" : "light"));
 
   return (
-    <div className="dashboard">
-      <div className="dashboardHeader">
-        <div className="brandBar">
+    <div className="onboarding dashboardPage">
+      <div className="dashHeaderBar">
+        <div className="brandBar" style={{ marginBottom: 0 }}>
           <div className="brandLeft">
-            <img className="brandLogo" src="/officialLogo.png" alt="FitGPT official logo" />
+            <div className="brandMark brandMarkSm">
+              <img className="dashLogo" src="/officialLogo.png" alt="FitGPT official logo" />
+            </div>
           </div>
         </div>
 
-        <button type="button" className="btn" onClick={onResetOnboarding}>
-          Reset onboarding
-        </button>
-      </div>
-
-      <div className="dashCard">
-        <div className="dashTitle">Your style profile</div>
-
-        <div className="profileRow">
-          <div className="label">Style</div>
-          <div className="value">{joinNice(answers?.style)}</div>
-        </div>
-
-        <div className="profileRow">
-          <div className="label">Dress for</div>
-          <div className="value">{joinNice(answers?.dressFor)}</div>
-        </div>
-
-        <div className="profileRow">
-          <div className="label">Body type</div>
-          <div className="value">{bodyTypeDisplay}</div>
+        <div className="dashHeaderRight">
+          <div className="dashDate">{formatToday()}</div>
+          <button type="button" className="linkBtn" onClick={toggleTheme}>
+            {theme === "light" ? "Dark" : "Light"}
+          </button>
+          <button type="button" className="linkBtn" onClick={onResetOnboarding}>
+            Reset
+          </button>
         </div>
       </div>
 
-      <div className="dashCard">
-        <div className="dashTitle">Next best step</div>
-        <div className="mutedText">{summary}</div>
+      <div className="dashGrid">
+        <section className="card dashWide">
+          <div className="dashCardTitle">Weather</div>
+          <div className="dashWeatherLine">
+            <span className="dashMuted">{weather.label}</span>
+            <span className="dashDot" />
+            <span className="dashStrong">{weather.condition}</span>
+            <span className="dashMuted">, {weather.tempF}°F</span>
+          </div>
+        </section>
 
-        <div className="quickActions">
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() => {
-              const el = document.getElementById("wardrobeSection");
-              if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-            }}
-          >
-            Add wardrobe item
-          </button>
-
-          <button type="button" className="btn" disabled title="Next story">
-            Get an outfit
-          </button>
-
-          <button type="button" className="btn" disabled title="Next story">
-            Plan a week
-          </button>
-        </div>
-
-        <div className="mutedNote">
-          Wardrobe is implemented below. Outfit generation comes next.
-        </div>
-      </div>
-
-      <div className="dashCard" id="wardrobeSection">
-        <div className="dashTitle">Wardrobe</div>
-
-        <form onSubmit={handleAddItem} style={{ marginTop: 10 }}>
-          <div className="wardrobeFormRow">
-            <div className="field">
-              <div className="fieldLabel">Item name</div>
-              <input
-                className="textInput"
-                value={form.name}
-                onChange={(e) => handleChange("name", e.target.value)}
-                placeholder="Example: Black blazer"
-              />
+        <section className="card dashWide">
+          <div className="dashRecTop">
+            <div>
+              <div className="dashCardTitle">Today’s recommendation</div>
+              <div className="dashSubText">Based on your onboarding preferences</div>
             </div>
-
-            <div className="field">
-              <div className="fieldLabel">Category</div>
-              <select
-                className="textInput"
-                value={form.category}
-                onChange={(e) => handleChange("category", e.target.value)}
-              >
-                {CATEGORY_OPTIONS.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="field">
-              <div className="fieldLabel">Color</div>
-              <input
-                className="textInput"
-                value={form.color}
-                onChange={(e) => handleChange("color", e.target.value)}
-                placeholder="Example: Red"
-              />
-            </div>
+            <div className="dashChip">{chipText}</div>
           </div>
 
-          <div className="field" style={{ marginTop: 10 }}>
-            <div className="fieldLabel">Notes (optional)</div>
-            <input
-              className="textInput"
-              value={form.notes}
-              onChange={(e) => handleChange("notes", e.target.value)}
-              placeholder="Example: Oversized fit, good for work"
-            />
-          </div>
+          {outfit.length === 0 ? (
+            <div className="dashEmpty">
+              <div className="dashEmptyTitle">No wardrobe items yet</div>
+              <div className="dashSubText">
+                Add a few items first, then FitGPT can generate outfits from what you own.
+              </div>
 
-          {error ? (
-            <div style={{ marginTop: 10 }} className="noteBox">
-              {error}
+              <div className="buttonRow">
+                <button type="button" className="btn primary" disabled>
+                  Add wardrobe item
+                </button>
+                <button type="button" className="btn" disabled>
+                  Generate outfit
+                </button>
+              </div>
             </div>
-          ) : null}
-
-          <div className="buttonRow" style={{ justifyContent: "flex-start" }}>
-            <button type="submit" className="btn primary">
-              Save item
-            </button>
-          </div>
-        </form>
-
-        {wardrobe.length === 0 ? (
-          <div className="noteBox" style={{ marginTop: 14 }}>
-            Your wardrobe is empty. Add your first item above to start building outfits.
-          </div>
-        ) : (
-          <div style={{ marginTop: 14 }}>
-            <div className="mutedText" style={{ marginBottom: 10 }}>
-              Saved items: {wardrobe.length}
-            </div>
-
-            <div className="wardrobeList">
-              {wardrobe.map((item) => (
-                <div key={item.id} className="wardrobeItem">
-                  <div className="wardrobeMain">
-                    <div className="wardrobeName">{item.name}</div>
-                    <div className="wardrobeMeta">
-                      {item.category}
+          ) : (
+            <>
+              <div className="dashOutfitGrid">
+                {outfit.map((item) => (
+                  <div key={item.id} className="dashOutfitItem">
+                    <div className="dashThumb" />
+                    <div className="dashItemName">{item.name}</div>
+                    <div className="dashItemMeta">
+                      {item.category ? titleCase(item.category) : "Item"}
                       {item.color ? ` • ${titleCase(item.color)}` : ""}
-                      {item.notes ? ` • ${item.notes}` : ""}
                     </div>
                   </div>
+                ))}
+              </div>
 
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => handleDelete(item.id)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              ))}
-            </div>
+              <div className="dashDivider" />
+
+              <div className="dashExplainBlock">
+                <div className="dashExplainTitle">Why this outfit</div>
+                <div className="dashSubText">{explanation.why}</div>
+              </div>
+
+              <div className="dashDivider" />
+
+              <div className="dashExplainBlock">
+                <div className="dashExplainTitle">Fit logic</div>
+                <div className="dashSubText">{explanation.body}</div>
+              </div>
+
+              <div className="buttonRow">
+                <button type="button" className="btn primary" disabled>
+                  Another suggestion
+                </button>
+                <button type="button" className="btn" disabled>
+                  Save
+                </button>
+                <button type="button" className="btn" disabled>
+                  Share
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+
+        <section className="card">
+          <div className="dashCardTitle">Your profile</div>
+
+          <div className="dashProfileRow">
+            <div className="dashMuted">Style</div>
+            <div className="dashStrong">{joinNice(answers?.style)}</div>
           </div>
-        )}
+
+          <div className="dashProfileRow">
+            <div className="dashMuted">Dress for</div>
+            <div className="dashStrong">{joinNice(answers?.dressFor)}</div>
+          </div>
+
+          <div className="dashProfileRow">
+            <div className="dashMuted">Body type</div>
+            <div className="dashStrong">{bodyTypeDisplay}</div>
+          </div>
+        </section>
+
+        <section className="card">
+          <div className="dashCardTitle">Quick actions</div>
+
+          <button type="button" className="dashQuickAction" disabled>
+            <div className="dashStrong">Plan tomorrow’s outfit</div>
+            <div className="dashSubText">Weekly planning comes next</div>
+          </button>
+
+          <button type="button" className="dashQuickAction" disabled>
+            <div className="dashStrong">Browse past outfits</div>
+            <div className="dashSubText">Favorites and history come next</div>
+          </button>
+        </section>
       </div>
+
+      <nav className="dashBottomNav" aria-label="Dashboard navigation">
+        <button type="button" className="dashNavItem dashNavActive">
+          Today
+        </button>
+        <button type="button" className="dashNavItem" disabled>
+          Wardrobe
+        </button>
+        <button type="button" className="dashNavItem" disabled>
+          Favorites
+        </button>
+        <button type="button" className="dashNavItem" disabled>
+          Profile
+        </button>
+      </nav>
     </div>
   );
 }

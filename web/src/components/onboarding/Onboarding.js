@@ -45,7 +45,6 @@ function clampStep(n) {
 
 export default function Onboarding({ onComplete, initialStep = 1, initialAnswers, onProgress }) {
   const [step, setStep] = useState(() => clampStep(initialStep));
-
   const [answers, setAnswers] = useState(() => normalizeAnswers(initialAnswers));
 
   const isSkippableStep = step >= 2 && step <= 4;
@@ -250,10 +249,12 @@ export default function Onboarding({ onComplete, initialStep = 1, initialAnswers
   };
 
   return (
-    <div className="onboarding">
+    <div className="onboarding onboardingPage">
       <div className="brandBar">
         <div className="brandLeft">
-          <img className="brandLogo" src="/officialLogo.png" alt="FitGPT official logo" />
+          <div className="brandMark">
+            <img className="brandLogo" src="/officialLogo.png" alt="FitGPT official logo" />
+          </div>
         </div>
       </div>
 

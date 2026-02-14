@@ -19,7 +19,8 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  font-family: "Century Gothic", CenturyGothic, AppleGothic, system-ui, -apple-system,
+    "Segoe UI", Roboto, Arial, sans-serif;
 }
 
 .app {
@@ -49,10 +50,38 @@ body {
   gap: 10px;
 }
 
+/* logo badge (cleaner look) */
+.brandMark {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brandMark.brandMarkSm {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  box-shadow: 0 10px 22px rgba(17, 24, 39, 0.08);
+}
+
 .brandLogo {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 12px;
+  object-fit: cover;
+}
+
+/* dashboard logo smaller */
+.dashLogo {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
   object-fit: cover;
 }
 
@@ -63,6 +92,11 @@ body {
   padding: 26px;
   background: #fff;
   box-shadow: var(--shadow);
+}
+
+/* push onboarding card down slightly */
+.onboardingPage .card {
+  margin-top: 12px;
 }
 
 .topRow {
@@ -281,14 +315,8 @@ body {
   font-weight: 700;
 }
 
-/* dashboard */
-.dashboard {
-  max-width: 1050px;
-  margin: 0 auto;
-  padding: 28px 16px 60px;
-}
-
-.dashboardHeader {
+/* DASHBOARD (styled to match onboarding) */
+.dashHeaderBar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -296,22 +324,122 @@ body {
   margin-bottom: 18px;
 }
 
-.dashCard {
-  border: 1px solid var(--border);
-  border-radius: 22px;
-  padding: 20px;
-  background: #fff;
-  box-shadow: var(--shadow);
-  margin-bottom: 14px;
+.dashHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.dashTitle {
+.dashDate {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.dashGrid {
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  gap: 14px;
+}
+
+.dashWide {
+  grid-column: 1 / -1;
+}
+
+.dashCardTitle {
   font-size: 14px;
   font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.dashSubText {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.dashMuted {
+  color: var(--muted);
+}
+
+.dashStrong {
+  font-weight: 800;
+}
+
+.dashWeatherLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.dashDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(17, 24, 39, 0.25);
+}
+
+.dashRecTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 12px;
 }
 
-.profileRow {
+.dashChip {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fafafa;
+  font-weight: 800;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.dashOutfitGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.dashOutfitItem {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fafafa;
+  padding: 12px;
+}
+
+.dashThumb {
+  height: 86px;
+  border-radius: 14px;
+  background: rgba(139, 30, 30, 0.08);
+  border: 1px dashed rgba(139, 30, 30, 0.18);
+  margin-bottom: 10px;
+}
+
+.dashItemName {
+  font-weight: 800;
+}
+
+.dashItemMeta {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.dashDivider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.06);
+  margin: 14px 0;
+}
+
+.dashExplainTitle {
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.dashProfileRow {
   display: flex;
   justify-content: space-between;
   gap: 12px;
@@ -319,38 +447,57 @@ body {
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-.profileRow:first-of-type {
+.dashProfileRow:first-of-type {
   border-top: none;
 }
 
-.label {
-  color: var(--muted);
-}
-
-.value {
-  text-align: right;
-  max-width: 65%;
-}
-
-.mutedText {
-  color: var(--muted);
-  line-height: 1.45;
-}
-
-.quickActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.mutedNote {
+.dashQuickAction {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: #fafafa;
+  cursor: not-allowed;
   margin-top: 10px;
-  font-size: 12px;
-  color: var(--muted);
 }
 
-/* responsive */
+.dashBottomNav {
+  position: sticky;
+  bottom: 0;
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding: 12px 0 0;
+  background: var(--bg);
+}
+
+.dashNavItem {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 10px 12px;
+  background: white;
+  cursor: not-allowed;
+  font-weight: 800;
+  color: #374151;
+}
+
+.dashNavActive {
+  border: 2px solid var(--accent);
+  background: var(--accent-soft);
+  cursor: default;
+}
+
+@media (max-width: 960px) {
+  .dashGrid {
+    grid-template-columns: 1fr;
+  }
+  .dashOutfitGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 860px) {
   .heroTitle {
     font-size: 38px;
@@ -359,67 +506,6 @@ body {
     grid-template-columns: 1fr;
   }
   .optionGrid {
-    grid-template-columns: 1fr;
-  }
-}
-/* wardrobe */
-.wardrobeFormRow {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
-  gap: 10px;
-}
-
-.fieldLabel {
-  font-size: 12px;
-  color: var(--muted);
-  margin-bottom: 6px;
-}
-
-.textInput {
-  width: 100%;
-  padding: 11px 12px;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: #fff;
-  outline: none;
-  font: inherit;
-}
-
-.textInput:focus {
-  border-color: rgba(139, 30, 30, 0.35);
-  box-shadow: 0 0 0 4px rgba(139, 30, 30, 0.08);
-}
-
-.wardrobeList {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.wardrobeItem {
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 12px 14px;
-  background: #fafafa;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.wardrobeName {
-  font-weight: 800;
-}
-
-.wardrobeMeta {
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.35;
-}
-
-@media (max-width: 860px) {
-  .wardrobeFormRow {
     grid-template-columns: 1fr;
   }
 }
