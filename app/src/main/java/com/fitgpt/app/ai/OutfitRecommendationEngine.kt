@@ -8,7 +8,8 @@ class OutfitRecommendationEngine {
 
     fun recommend(
         items: List<ClothingItem>,
-        preferences: UserPreferences
+        preferences: UserPreferences,
+        recentlyShown: Set<Set<Int>> = emptySet()
     ): List<OutfitRecommendation> {
         if (items.isEmpty()) return emptyList()
 
@@ -18,11 +19,11 @@ class OutfitRecommendationEngine {
         val shoes = items.filter { it.category.equals("Shoes", ignoreCase = true) }
         val accessories = items.filter { it.category.equals("Accessory", ignoreCase = true) }
 
-        val outfitCombinations = buildOutfitCombinations(tops, bottoms, outerwear, shoes, accessories)
+        val allCombinations = buildOutfitCombinations(tops, bottoms, outerwear, shoes, accessories)
             .distinctBy { combo -> combo.map { it.id }.sorted() }
 
         // If we couldn't form any multi-item outfits, fall back to scoring individual items
-        if (outfitCombinations.isEmpty()) {
+        if (allCombinations.isEmpty()) {
             return items.map { item ->
                 val score = scoreItem(item, preferences)
                 val perItem = mapOf(item.id to generateItemExplanation(item, preferences))
@@ -36,6 +37,14 @@ class OutfitRecommendationEngine {
                 .sortedByDescending { it.score }
                 .take(MAX_RECOMMENDATIONS)
         }
+
+        // Filter out recently shown outfits
+        val fresh = allCombinations.filter { combo ->
+            combo.map { it.id }.toSet() !in recentlyShown
+        }
+
+        // If every combination was recently shown, ignore history to avoid empty results
+        val outfitCombinations = fresh.ifEmpty { allCombinations }
 
         return outfitCombinations
             .map { outfit ->
@@ -495,6 +504,7 @@ class OutfitRecommendationEngine {
 
     companion object {
         private const val MAX_RECOMMENDATIONS = 5
+        const val MAX_HISTORY_SIZE = 10
 
         // Scoring weights — color harmony is prioritized for a polished look
         internal const val WEIGHT_SEASON = 0.25

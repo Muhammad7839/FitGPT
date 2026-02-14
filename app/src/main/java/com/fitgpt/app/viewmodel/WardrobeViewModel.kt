@@ -50,6 +50,9 @@ class WardrobeViewModel : ViewModel() {
     private val _recommendations = MutableStateFlow<List<OutfitRecommendation>>(emptyList())
     val recommendations: StateFlow<List<OutfitRecommendation>> = _recommendations
 
+    // Recently shown outfit history — each entry is a set of item IDs
+    private val recentOutfitHistory = ArrayDeque<Set<Int>>()
+
     // UI state for RecommendationScreen
     private val _recommendationState = MutableStateFlow<RecommendationUiState>(
         RecommendationUiState.Loading
@@ -132,12 +135,16 @@ class WardrobeViewModel : ViewModel() {
     }
 
     fun refreshRecommendations() {
+        val historySnapshot = recentOutfitHistory.toSet()
+
         // Step 1: Always run rule-based engine synchronously as fallback
         val fallback = recommendationEngine.recommend(
             items = allItems.value,
-            preferences = _userPreferences.value
+            preferences = _userPreferences.value,
+            recentlyShown = historySnapshot
         )
         _recommendations.value = fallback
+        recordShownOutfits(fallback)
 
         // Step 2: If Gemini is available, attempt AI recommendations
         if (groqService.isAvailable) {
@@ -151,6 +158,7 @@ class WardrobeViewModel : ViewModel() {
                     )
                     if (aiResults.isNotEmpty()) {
                         _recommendations.value = aiResults
+                        recordShownOutfits(aiResults)
                         _recommendationState.value = RecommendationUiState.Success(
                             recommendations = aiResults,
                             isAiGenerated = true
@@ -176,6 +184,18 @@ class WardrobeViewModel : ViewModel() {
                 recommendations = fallback,
                 isAiGenerated = false
             )
+        }
+    }
+
+    private fun recordShownOutfits(recommendations: List<OutfitRecommendation>) {
+        for (rec in recommendations) {
+            val key = rec.items.map { it.id }.toSet()
+            if (key !in recentOutfitHistory) {
+                recentOutfitHistory.addLast(key)
+            }
+        }
+        while (recentOutfitHistory.size > OutfitRecommendationEngine.MAX_HISTORY_SIZE) {
+            recentOutfitHistory.removeFirst()
         }
     }
 

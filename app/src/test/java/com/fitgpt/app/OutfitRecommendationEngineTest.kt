@@ -283,8 +283,9 @@ class OutfitRecommendationEngineTest {
         )
         val score = engine.scoreItem(item, prefs)
 
-        // season=1.0*0.35 + comfort=1.0*0.25 + style=0.8*0.20 = 0.35+0.25+0.16 = 0.76
-        assertEquals(0.76, score, 0.001)
+        // season=1.0*0.25 + comfort=1.0*0.20 + style=0.8*0.15 + fit=0.7*0.10
+        // = 0.25 + 0.20 + 0.12 + 0.07 = 0.64
+        assertEquals(0.64, score, 0.001)
     }
 
     @Test
@@ -321,12 +322,12 @@ class OutfitRecommendationEngineTest {
     }
 
     @Test
-    fun colorHarmonyBonus_allNeutrals_returns0point6() {
+    fun colorHarmonyBonus_allNeutrals_returns0point7() {
         val outfit = listOf(
             ClothingItem(1, "Top", "Black", "Summer", 3),
             ClothingItem(2, "Bottom", "White", "Summer", 3)
         )
-        assertEquals(0.6, engine.colorHarmonyBonus(outfit), 0.001)
+        assertEquals(0.7, engine.colorHarmonyBonus(outfit), 0.001)
     }
 
     @Test
@@ -339,21 +340,22 @@ class OutfitRecommendationEngineTest {
     }
 
     @Test
-    fun colorHarmonyBonus_complementaryColors_returns0point9() {
+    fun colorHarmonyBonus_complementaryColors_returns0point8() {
         val outfit = listOf(
             ClothingItem(1, "Top", "Blue", "Summer", 3),
             ClothingItem(2, "Bottom", "Orange", "Summer", 3)
         )
-        assertEquals(0.9, engine.colorHarmonyBonus(outfit), 0.001)
+        assertEquals(0.8, engine.colorHarmonyBonus(outfit), 0.001)
     }
 
     @Test
-    fun colorHarmonyBonus_twoNonComplementaryAccents_returns0point5() {
+    fun colorHarmonyBonus_analogousAccents_returns0point85() {
+        // Red and pink are analogous colors
         val outfit = listOf(
             ClothingItem(1, "Top", "Red", "Summer", 3),
             ClothingItem(2, "Bottom", "Pink", "Summer", 3)
         )
-        assertEquals(0.5, engine.colorHarmonyBonus(outfit), 0.001)
+        assertEquals(0.85, engine.colorHarmonyBonus(outfit), 0.001)
     }
 
     @Test
@@ -448,14 +450,16 @@ class OutfitRecommendationEngineTest {
         )
         val score = engine.scoreOutfit(outfit, defaultPreferences)
 
-        // Score should be avgItemScore + harmony*0.10 + coverage*0.10
+        // Score should be avgItemScore + harmony*WEIGHT_HARMONY + coverage*WEIGHT_COVERAGE
         val item1Score = engine.scoreItem(outfit[0], defaultPreferences)
         val item2Score = engine.scoreItem(outfit[1], defaultPreferences)
         val avgItemScore = (item1Score + item2Score) / 2.0
         val harmony = engine.colorHarmonyBonus(outfit)
         val coverage = engine.categoryDiversityBonus(outfit)
 
-        val expected = avgItemScore + (harmony * 0.10) + (coverage * 0.10)
+        val expected = avgItemScore +
+            (harmony * OutfitRecommendationEngine.WEIGHT_HARMONY) +
+            (coverage * OutfitRecommendationEngine.WEIGHT_COVERAGE)
         assertEquals(expected, score, 0.001)
     }
 
@@ -642,6 +646,7 @@ class OutfitRecommendationEngineTest {
         val totalWeight = OutfitRecommendationEngine.WEIGHT_SEASON +
             OutfitRecommendationEngine.WEIGHT_COMFORT +
             OutfitRecommendationEngine.WEIGHT_STYLE +
+            OutfitRecommendationEngine.WEIGHT_FIT +
             OutfitRecommendationEngine.WEIGHT_HARMONY +
             OutfitRecommendationEngine.WEIGHT_COVERAGE
 
@@ -717,7 +722,7 @@ class OutfitRecommendationEngineTest {
             ClothingItem(1, "Top", "Gray", "Summer", 3),
             ClothingItem(2, "Bottom", "Grey", "Summer", 3)
         )
-        assertEquals(0.6, engine.colorHarmonyBonus(outfit), 0.001)
+        assertEquals(0.7, engine.colorHarmonyBonus(outfit), 0.001)
     }
 
     @Test
@@ -726,24 +731,117 @@ class OutfitRecommendationEngineTest {
             ClothingItem(1, "Top", "Beige", "Summer", 3),
             ClothingItem(2, "Bottom", "Navy", "Summer", 3)
         )
-        assertEquals(0.6, engine.colorHarmonyBonus(outfit), 0.001)
+        assertEquals(0.7, engine.colorHarmonyBonus(outfit), 0.001)
     }
 
     @Test
     fun colorHarmonyBonus_redAndGreenComplementary() {
+        // No neutral base — complementary without neutrals returns 0.8
         val outfit = listOf(
             ClothingItem(1, "Top", "Red", "Summer", 3),
             ClothingItem(2, "Bottom", "Green", "Summer", 3)
         )
-        assertEquals(0.9, engine.colorHarmonyBonus(outfit), 0.001)
+        assertEquals(0.8, engine.colorHarmonyBonus(outfit), 0.001)
     }
 
     @Test
     fun colorHarmonyBonus_yellowAndPurpleComplementary() {
+        // No neutral base — complementary without neutrals returns 0.8
         val outfit = listOf(
             ClothingItem(1, "Top", "Yellow", "Summer", 3),
             ClothingItem(2, "Bottom", "Purple", "Summer", 3)
         )
-        assertEquals(0.9, engine.colorHarmonyBonus(outfit), 0.001)
+        assertEquals(0.8, engine.colorHarmonyBonus(outfit), 0.001)
+    }
+
+    // -----------------------------------------------------------------------
+    // Repeat prevention — recentlyShown parameter
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun recommend_recentlyShown_excludesMatchingOutfits() {
+        val items = listOf(
+            ClothingItem(1, "Top", "White", "Summer", 5),
+            ClothingItem(2, "Top", "Black", "Summer", 3),
+            ClothingItem(3, "Top", "Blue", "Summer", 4),
+            ClothingItem(4, "Bottom", "Navy", "Summer", 3),
+            ClothingItem(5, "Bottom", "Gray", "Summer", 4),
+            ClothingItem(6, "Shoes", "Black", "All", 4)
+        )
+        // Mark only a small subset as recently shown
+        val shown = setOf(setOf(1, 4), setOf(1, 4, 6))
+
+        val result = engine.recommend(items, defaultPreferences, recentlyShown = shown)
+
+        assertTrue(result.isNotEmpty())
+        for (rec in result) {
+            val key = rec.items.map { it.id }.toSet()
+            assertFalse(
+                "Recently shown outfit $key should not repeat",
+                key in shown
+            )
+        }
+    }
+
+    @Test
+    fun recommend_allCombosRecentlyShown_fallsBackToShowingResults() {
+        val items = listOf(
+            ClothingItem(1, "Top", "White", "Summer", 4),
+            ClothingItem(2, "Bottom", "Blue", "Summer", 3)
+        )
+        // Only one possible combo: {1, 2}. Mark it as recently shown.
+        val shown = setOf(setOf(1, 2))
+
+        val result = engine.recommend(items, defaultPreferences, recentlyShown = shown)
+
+        // Should still return results rather than an empty list
+        assertTrue("Should return results even if all combos were recently shown", result.isNotEmpty())
+    }
+
+    @Test
+    fun recommend_emptyHistory_behavesNormally() {
+        val items = listOf(
+            ClothingItem(1, "Top", "White", "Summer", 4),
+            ClothingItem(2, "Bottom", "Blue", "Summer", 3)
+        )
+        val withHistory = engine.recommend(items, defaultPreferences, recentlyShown = emptySet())
+        val without = engine.recommend(items, defaultPreferences)
+
+        assertEquals(withHistory.size, without.size)
+        assertEquals(
+            withHistory.map { it.items.map { i -> i.id }.toSet() },
+            without.map { it.items.map { i -> i.id }.toSet() }
+        )
+    }
+
+    @Test
+    fun recommend_partialHistoryOverlap_excludesOnlyShownCombos() {
+        val items = listOf(
+            ClothingItem(1, "Top", "White", "Summer", 5),
+            ClothingItem(2, "Top", "Black", "Summer", 3),
+            ClothingItem(3, "Bottom", "Blue", "Summer", 3),
+            ClothingItem(4, "Shoes", "Black", "All", 4)
+        )
+        // Mark only a couple of combos as shown
+        val shown = setOf(setOf(1, 3), setOf(1, 3, 4))
+
+        val result = engine.recommend(items, defaultPreferences, recentlyShown = shown)
+
+        for (rec in result) {
+            val key = rec.items.map { it.id }.toSet()
+            assertFalse("Combo $key was recently shown and should be excluded", key in shown)
+        }
+    }
+
+    @Test
+    fun maxHistorySize_isReasonable() {
+        assertTrue(
+            "History size should be positive",
+            OutfitRecommendationEngine.MAX_HISTORY_SIZE > 0
+        )
+        assertTrue(
+            "History size should not be excessively large",
+            OutfitRecommendationEngine.MAX_HISTORY_SIZE <= 50
+        )
     }
 }
