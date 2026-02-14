@@ -362,3 +362,64 @@ body {
     grid-template-columns: 1fr;
   }
 }
+/* wardrobe */
+.wardrobeFormRow {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 10px;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.textInput {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: #fff;
+  outline: none;
+  font: inherit;
+}
+
+.textInput:focus {
+  border-color: rgba(139, 30, 30, 0.35);
+  box-shadow: 0 0 0 4px rgba(139, 30, 30, 0.08);
+}
+
+.wardrobeList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wardrobeItem {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: #fafafa;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wardrobeName {
+  font-weight: 800;
+}
+
+.wardrobeMeta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+@media (max-width: 860px) {
+  .wardrobeFormRow {
+    grid-template-columns: 1fr;
+  }
+}

@@ -4,6 +4,7 @@ import Onboarding from "./components/onboarding/Onboarding";
 import Dashboard from "./components/Dashboard";
 
 const LS_KEY = "fitgpt_onboarding_v1";
+const DEFAULT_BODY_TYPE = "unspecified";
 
 function safeParse(json) {
   try {
@@ -18,6 +19,14 @@ function normalizeAnswers(raw) {
     style: Array.isArray(raw?.style) ? raw.style : [],
     dressFor: Array.isArray(raw?.dressFor) ? raw.dressFor : [],
     bodyType: raw?.bodyType ?? null,
+  };
+}
+
+function finalizeAnswers(raw) {
+  const normalized = normalizeAnswers(raw);
+  return {
+    ...normalized,
+    bodyType: normalized.bodyType ?? DEFAULT_BODY_TYPE,
   };
 }
 
@@ -36,11 +45,24 @@ function App() {
     const parsed = safeParse(stored);
 
     if (parsed?.completed === true) {
+      const finalized = finalizeAnswers(parsed.answers);
+
       setHasCompletedOnboarding(true);
       setOnboardingDraft({
         step: 1,
-        answers: normalizeAnswers(parsed.answers),
+        answers: finalized,
       });
+
+      // upgrade older saved payloads that had bodyType: null
+      if (parsed?.answers?.bodyType == null) {
+        const upgradedPayload = {
+          completed: true,
+          answers: finalized,
+          savedAt: parsed?.savedAt ?? Date.now(),
+        };
+        localStorage.setItem(LS_KEY, JSON.stringify(upgradedPayload));
+      }
+
       return;
     }
 
@@ -74,15 +96,22 @@ function App() {
   };
 
   const handleOnboardingComplete = (answers) => {
-    const normalized = normalizeAnswers(answers);
+    const finalized = finalizeAnswers(answers);
 
     const payload = {
       completed: true,
-      answers: normalized,
+      answers: finalized,
       savedAt: Date.now(),
     };
 
     localStorage.setItem(LS_KEY, JSON.stringify(payload));
+
+    // make Dashboard immediately reflect the finalized default (no refresh needed)
+    setOnboardingDraft({
+      step: 1,
+      answers: finalized,
+    });
+
     setHasCompletedOnboarding(true);
   };
 
