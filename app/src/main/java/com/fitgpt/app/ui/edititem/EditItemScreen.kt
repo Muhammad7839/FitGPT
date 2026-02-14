@@ -5,95 +5,113 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditItemScreen(
     navController: NavController,
     itemId: Int,
-    viewModel: WardrobeViewModel = viewModel()
+    viewModel: WardrobeViewModel
 ) {
-    val items by viewModel.wardrobeItems.collectAsState()
+    val state by viewModel.wardrobeState.collectAsState()
 
-    val item = items.find { it.id == itemId }
+    when (state) {
 
-    if (item == null) {
-        Text("Item not found")
-        return
-    }
+        is UiState.Loading -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = androidx.compose.ui.Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        }
 
-    var category by remember { mutableStateOf(item.category) }
-    var color by remember { mutableStateOf(item.color) }
-    var season by remember { mutableStateOf(item.season) }
-    var comfort by remember { mutableStateOf(item.comfortLevel.toString()) }
+        is UiState.Error -> {
+            Text(
+                text = (state as UiState.Error).message,
+                modifier = Modifier.padding(16.dp)
+            )
+        }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
+        is UiState.Success -> {
+            val items = (state as UiState.Success<List<ClothingItem>>).data
+            val item = items.find { it.id == itemId }
 
-        Text(
-            text = "Edit Item",
-            style = MaterialTheme.typography.headlineSmall
-        )
+            if (item == null) {
+                Text("Item not found")
+                return
+            }
 
-        Spacer(modifier = Modifier.height(16.dp))
+            var category by remember { mutableStateOf(item.category) }
+            var color by remember { mutableStateOf(item.color) }
+            var season by remember { mutableStateOf(item.season) }
+            var comfort by remember { mutableStateOf(item.comfortLevel.toString()) }
 
-        OutlinedTextField(
-            value = category,
-            onValueChange = { category = it },
-            label = { Text("Category") },
-            modifier = Modifier.fillMaxWidth()
-        )
+            Scaffold { padding ->
 
-        Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
 
-        OutlinedTextField(
-            value = color,
-            onValueChange = { color = it },
-            label = { Text("Color") },
-            modifier = Modifier.fillMaxWidth()
-        )
+                    Text(
+                        text = "Edit Item",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
 
-        Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = category,
+                        onValueChange = { category = it },
+                        label = { Text("Category") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
-        OutlinedTextField(
-            value = season,
-            onValueChange = { season = it },
-            label = { Text("Season") },
-            modifier = Modifier.fillMaxWidth()
-        )
+                    OutlinedTextField(
+                        value = color,
+                        onValueChange = { color = it },
+                        label = { Text("Color") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
-        Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = season,
+                        onValueChange = { season = it },
+                        label = { Text("Season") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
-        OutlinedTextField(
-            value = comfort,
-            onValueChange = { comfort = it },
-            label = { Text("Comfort Level (1–5)") },
-            modifier = Modifier.fillMaxWidth()
-        )
+                    OutlinedTextField(
+                        value = comfort,
+                        onValueChange = { comfort = it },
+                        label = { Text("Comfort Level") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Button(
-            onClick = {
-                val updatedItem = item.copy(
-                    category = category,
-                    color = color,
-                    season = season,
-                    comfortLevel = comfort.toIntOrNull() ?: item.comfortLevel
-                )
-
-                viewModel.updateItem(updatedItem)
-                navController.popBackStack()
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Save Changes")
+                    Button(
+                        onClick = {
+                            viewModel.updateItem(
+                                item.copy(
+                                    category = category,
+                                    color = color,
+                                    season = season,
+                                    comfortLevel = comfort.toIntOrNull() ?: 3
+                                )
+                            )
+                            navController.popBackStack()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Save Changes")
+                    }
+                }
+            }
         }
     }
 }

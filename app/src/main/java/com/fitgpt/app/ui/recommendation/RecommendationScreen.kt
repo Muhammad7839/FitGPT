@@ -9,76 +9,105 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 
 @Composable
 fun RecommendationScreen(
     navController: NavController,
-    viewModel: WardrobeViewModel = viewModel()
+    viewModel: WardrobeViewModel
 ) {
-    val items by viewModel.wardrobeItems.collectAsState()
+    val state by viewModel.wardrobeState.collectAsState()
 
-    val recommendedItems = remember(items) {
-        items.take(2)
-    }
+    when (state) {
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Outfit Recommendation") },
-                actions = {
-                    IconButton(onClick = { /* recomposition refresh */ }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                    }
-                }
+        is UiState.Loading -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+
+        is UiState.Error -> {
+            Text(
+                text = (state as UiState.Error).message,
+                modifier = Modifier.padding(16.dp)
             )
         }
-    ) { paddingValues ->
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-        ) {
+        is UiState.Success -> {
 
-            if (recommendedItems.isEmpty()) {
-                Text(
-                    text = "Add items to your wardrobe to get recommendations.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                return@Column
+            val items = (state as UiState.Success<List<ClothingItem>>).data
+
+            val recommendedItems = remember(items) {
+                viewModel.generateOutfit()
             }
 
-            Text(
-                text = "Recommended for you",
-                style = MaterialTheme.typography.headlineSmall
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(recommendedItems) { item ->
-                    RecommendationCard(
-                        title = "${item.category} - ${item.color}",
-                        explanation = viewModel.generateExplanation(item)
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = { Text("Outfit Recommendation") },
+                        actions = {
+                            IconButton(onClick = { /* future refresh logic */ }) {
+                                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                            }
+                        }
                     )
                 }
-            }
+            ) { paddingValues ->
 
-            Spacer(modifier = Modifier.height(24.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .padding(16.dp)
+                ) {
 
-            Button(
-                onClick = { navController.popBackStack() },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Back to Wardrobe")
+                    if (recommendedItems.isEmpty()) {
+                        Text(
+                            text = "Add available items to generate an outfit.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        return@Column
+                    }
+
+                    Text(
+                        text = "Recommended for you",
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(recommendedItems) { item ->
+                            RecommendationCard(
+                                title = "${item.category} • ${item.color}",
+                                explanation = viewModel.generateExplanation(item)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Button(
+                        onClick = {
+                            viewModel.markOutfitAsWorn(recommendedItems)
+                            navController.popBackStack()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Wear This Outfit")
+                    }
+                }
             }
         }
     }

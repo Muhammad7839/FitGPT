@@ -1,11 +1,11 @@
 package com.fitgpt.app.ui.additem
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.viewmodel.WardrobeViewModel
@@ -14,85 +14,71 @@ import com.fitgpt.app.viewmodel.WardrobeViewModel
 @Composable
 fun AddItemScreen(
     navController: NavController,
-    viewModel: WardrobeViewModel = viewModel()
+    viewModel: WardrobeViewModel
 ) {
     var category by remember { mutableStateOf("") }
     var color by remember { mutableStateOf("") }
+    var season by remember { mutableStateOf("") }
+    var comfort by remember { mutableStateOf("") }
 
-    var season by remember { mutableStateOf("All") }
-    var seasonExpanded by remember { mutableStateOf(false) }
-
-    var comfortLevel by remember { mutableStateOf(3f) }
-
-    val seasons = listOf("All", "Winter", "Spring", "Summer", "Fall")
-
-    Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("Add Clothing Item") })
-        }
-    ) { paddingValues ->
+    Scaffold { padding ->
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(padding)
+                .padding(horizontal = 20.dp)
         ) {
 
-            OutlinedTextField(
-                value = category,
-                onValueChange = { category = it },
-                label = { Text("Category") },
-                modifier = Modifier.fillMaxWidth()
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = "Add New Item",
+                style = MaterialTheme.typography.headlineMedium
             )
 
-            OutlinedTextField(
-                value = color,
-                onValueChange = { color = it },
-                label = { Text("Color") },
-                modifier = Modifier.fillMaxWidth()
-            )
+            Spacer(modifier = Modifier.height(24.dp))
 
-            ExposedDropdownMenuBox(
-                expanded = seasonExpanded,
-                onExpandedChange = { seasonExpanded = !seasonExpanded }
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                OutlinedTextField(
-                    value = season,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Season") },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth()
-                )
-
-                ExposedDropdownMenu(
-                    expanded = seasonExpanded,
-                    onDismissRequest = { seasonExpanded = false }
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    seasons.forEach {
-                        DropdownMenuItem(
-                            text = { Text(it) },
-                            onClick = {
-                                season = it
-                                seasonExpanded = false
-                            }
-                        )
-                    }
+
+                    OutlinedTextField(
+                        value = category,
+                        onValueChange = { category = it },
+                        label = { Text("Category") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = color,
+                        onValueChange = { color = it },
+                        label = { Text("Color") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = season,
+                        onValueChange = { season = it },
+                        label = { Text("Season") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = comfort,
+                        onValueChange = { comfort = it },
+                        label = { Text("Comfort Level (1–5)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
 
-            Text("Comfort Level: ${comfortLevel.toInt()}")
-            Slider(
-                value = comfortLevel,
-                onValueChange = { comfortLevel = it },
-                valueRange = 1f..5f,
-                steps = 3
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = {
@@ -102,13 +88,13 @@ fun AddItemScreen(
                             category = category,
                             color = color,
                             season = season,
-                            comfortLevel = comfortLevel.toInt()
+                            comfortLevel = comfort.toIntOrNull() ?: 3
                         )
                     )
                     navController.popBackStack()
                 },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = category.isNotBlank() && color.isNotBlank()
+                shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Save Item")
             }
