@@ -1,3 +1,4 @@
+// web/src/components/onboarding/Onboarding.js
 import React, { useEffect, useMemo, useState } from "react";
 
 const TOTAL_STEPS = 5;

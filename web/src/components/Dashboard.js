@@ -101,7 +101,7 @@ function buildExplanation({ answers, outfit }) {
   return { why: parts.join(" "), body: bodyLine };
 }
 
-export default function Dashboard({ answers, onResetOnboarding }) {
+export default function Dashboard({ answers, onResetOnboarding, onLogout, userName }) {
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || "light");
   const [wardrobe, setWardrobe] = useState(() => loadWardrobe());
 
@@ -113,7 +113,7 @@ export default function Dashboard({ answers, onResetOnboarding }) {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem(THEME_KEY, theme);
+    localStorage.setItem(THEME_KEY, JSON.stringify(theme));
   }, [theme]);
 
   useEffect(() => {
@@ -139,23 +139,29 @@ export default function Dashboard({ answers, onResetOnboarding }) {
   const toggleTheme = () => setTheme((prev) => (prev === "light" ? "dark" : "light"));
 
   return (
-    <div className="onboarding dashboardPage">
+    <div className="onboarding onboardingPage">
       <div className="dashHeaderBar">
         <div className="brandBar" style={{ marginBottom: 0 }}>
           <div className="brandLeft">
             <div className="brandMark brandMarkSm">
               <img className="dashLogo" src="/officialLogo.png" alt="FitGPT official logo" />
             </div>
+            <div>
+              <div className="dashStrong">{userName ? `Hi, ${userName}` : "FitGPT"}</div>
+              <div className="dashDate">{formatToday()}</div>
+            </div>
           </div>
         </div>
 
         <div className="dashHeaderRight">
-          <div className="dashDate">{formatToday()}</div>
           <button type="button" className="linkBtn" onClick={toggleTheme}>
             {theme === "light" ? "Dark" : "Light"}
           </button>
           <button type="button" className="linkBtn" onClick={onResetOnboarding}>
             Reset
+          </button>
+          <button type="button" className="linkBtn" onClick={onLogout}>
+            Logout
           </button>
         </div>
       </div>

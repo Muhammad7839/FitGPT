@@ -1,9 +1,12 @@
+// web/src/App.js
 import "./App.css";
 import React, { useEffect, useState } from "react";
 import Onboarding from "./components/onboarding/Onboarding";
 import Dashboard from "./components/Dashboard";
+import Login from "./components/Login";
 
 const LS_KEY = "fitgpt_onboarding_v1";
+const AUTH_KEY = "fitgpt_auth_v1";
 const DEFAULT_BODY_TYPE = "unspecified";
 
 function safeParse(json) {
@@ -31,12 +34,26 @@ function finalizeAnswers(raw) {
 }
 
 function App() {
+  const [auth, setAuth] = useState({ loggedIn: false, provider: null, name: "" });
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
   const [onboardingDraft, setOnboardingDraft] = useState({
     step: 1,
     answers: { style: [], dressFor: [], bodyType: null },
   });
+
+  useEffect(() => {
+    const storedAuth = localStorage.getItem(AUTH_KEY);
+    const parsedAuth = storedAuth ? safeParse(storedAuth) : null;
+
+    if (parsedAuth?.loggedIn) {
+      setAuth({
+        loggedIn: true,
+        provider: parsedAuth.provider ?? "guest",
+        name: parsedAuth.name ?? "",
+      });
+    }
+  }, []);
 
   useEffect(() => {
     const stored = localStorage.getItem(LS_KEY);
@@ -48,12 +65,8 @@ function App() {
       const finalized = finalizeAnswers(parsed.answers);
 
       setHasCompletedOnboarding(true);
-      setOnboardingDraft({
-        step: 1,
-        answers: finalized,
-      });
+      setOnboardingDraft({ step: 1, answers: finalized });
 
-      // upgrade older saved payloads that had bodyType: null
       if (parsed?.answers?.bodyType == null) {
         const upgradedPayload = {
           completed: true,
@@ -62,7 +75,6 @@ function App() {
         };
         localStorage.setItem(LS_KEY, JSON.stringify(upgradedPayload));
       }
-
       return;
     }
 
@@ -75,10 +87,19 @@ function App() {
       return;
     }
 
-    if (stored === "true") {
-      setHasCompletedOnboarding(true);
-    }
+    if (stored === "true") setHasCompletedOnboarding(true);
   }, []);
+
+  const handleLogin = ({ provider, name }) => {
+    const payload = { loggedIn: true, provider, name: name ?? "" };
+    localStorage.setItem(AUTH_KEY, JSON.stringify(payload));
+    setAuth(payload);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem(AUTH_KEY);
+    setAuth({ loggedIn: false, provider: null, name: "" });
+  };
 
   const handleOnboardingProgress = (draft) => {
     const step = Number.isFinite(Number(draft?.step)) ? Number(draft.step) : 1;
@@ -105,13 +126,7 @@ function App() {
     };
 
     localStorage.setItem(LS_KEY, JSON.stringify(payload));
-
-    // make Dashboard immediately reflect the finalized default (no refresh needed)
-    setOnboardingDraft({
-      step: 1,
-      answers: finalized,
-    });
-
+    setOnboardingDraft({ step: 1, answers: finalized });
     setHasCompletedOnboarding(true);
   };
 
@@ -124,12 +139,22 @@ function App() {
     });
   };
 
+  if (!auth.loggedIn) {
+    return (
+      <div className="app">
+        <Login onLogin={handleLogin} />
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       {hasCompletedOnboarding ? (
         <Dashboard
           answers={onboardingDraft.answers}
           onResetOnboarding={handleResetOnboarding}
+          onLogout={handleLogout}
+          userName={auth.name}
         />
       ) : (
         <Onboarding
