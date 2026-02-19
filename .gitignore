@@ -15,7 +15,15 @@ __pycache__/
 build/
 .gradle/
 local.properties
+<<<<<<< HEAD
 
 # IDE
+=======
+node_modules
+.env
+.vscode/
+package-lock.json
+# Android Studio
+>>>>>>> origin/Dieuni
 .idea/
 .vscode/
