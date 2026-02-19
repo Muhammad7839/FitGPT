@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gradlew.bat assembleDebug:*)",
+      "Bash(git status:*)",
+      "WebSearch",
+      "WebFetch(domain:ai.google.dev)",
+      "Bash(.\\\\gradlew clean:*)",
+      "Bash(.\\\\gradlew.bat clean:*)",
+      "Bash(cmd /c \"gradlew.bat clean\")",
+      "Bash(./gradlew clean:*)",
+      "Bash(./gradlew assembleDebug:*)",
+      "Bash(./gradlew testDebugUnitTest:*)",
+      "Bash(./gradlew test:*)",
+      "Bash(java -version:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(./gradlew:*)",
+      "WebFetch(domain:mvnrepository.com)",
+      "Bash(.gradlew.bat:*)",
+      "Bash(cmd /c:*)",
+      "Bash(cmd.exe /c \"gradlew.bat assembleDebug 2>&1\")",
+      "Bash(cmd.exe /c \"gradlew.bat assembleDebug\")",
+      "Bash(./gradlew.bat assembleDebug:*)",
+      "Bash(adb logcat:*)",
+      "Bash(cmd.exe /c \"adb logcat -s WardrobeViewModel:E -d\")",
+      "Bash(\"C:\\\\Users\\\\aaron\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" logcat -s WardrobeViewModel:E -d)",
+      "Bash(xargs cat:*)",
+      "Bash(./gradlew.bat test:*)",
+      "Bash(./gradlew.bat testDebugUnitTest:*)",
+      "Bash(/c/Users/aaron/AppData/Local/Android/Sdk/platform-tools/adb.exe devices)",
+      "Bash(/c/Users/aaron/AppData/Local/Android/Sdk/emulator/emulator.exe:*)",
+      "Bash(./gradlew.bat installDebug:*)",
+      "Bash(/c/Users/aaron/AppData/Local/Android/Sdk/platform-tools/adb.exe:*)",
+      "Bash(powershell:*)",
+      "Bash(C:/Users/aaron/AppData/Local/Android/Sdk/platform-tools/adb.exe wait-for-device shell getprop sys.boot_completed)",
+      "Bash(C:/Users/aaron/AppData/Local/Android/Sdk/platform-tools/adb.exe devices)",
+      "Bash(C:/Users/aaron/AppData/Local/Android/Sdk/platform-tools/adb.exe shell am start -n com.fitgpt.app/.MainActivity)"
+    ]
+  }
+}
