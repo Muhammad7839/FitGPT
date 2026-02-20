@@ -10,6 +10,9 @@
   --accent-soft: rgba(139, 30, 30, 0.12);
 
   --shadow: 0 12px 30px rgba(17, 24, 39, 0.08);
+
+  --wardrobe-blue: #2563eb;
+  --wardrobe-blue-soft: rgba(37, 99, 235, 0.08);
 }
 
 * {
@@ -29,14 +32,12 @@ body {
   background: var(--bg);
 }
 
-/* page container */
 .onboarding {
   max-width: 1050px;
   margin: 0 auto;
   padding: 28px 16px 60px;
 }
 
-/* top header */
 .brandBar {
   display: flex;
   align-items: center;
@@ -51,7 +52,6 @@ body {
   gap: 10px;
 }
 
-/* logo badge (cleaner look) */
 .brandMark {
   width: 52px;
   height: 52px;
@@ -78,7 +78,6 @@ body {
   object-fit: cover;
 }
 
-/* dashboard logo smaller */
 .dashLogo {
   width: 28px;
   height: 28px;
@@ -86,7 +85,6 @@ body {
   object-fit: cover;
 }
 
-/* card */
 .card {
   border: 1px solid var(--border);
   border-radius: 22px;
@@ -95,7 +93,6 @@ body {
   box-shadow: var(--shadow);
 }
 
-/* push onboarding/login card down slightly */
 .onboardingPage .card {
   margin-top: 12px;
 }
@@ -122,7 +119,6 @@ body {
   line-height: 1.5;
 }
 
-/* progress bar */
 .progressWrap {
   margin-top: 14px;
   height: 10px;
@@ -138,7 +134,6 @@ body {
   transition: width 180ms ease;
 }
 
-/* feature grid */
 .featureGrid {
   margin-top: 18px;
   display: grid;
@@ -165,7 +160,6 @@ body {
   font-size: 14px;
 }
 
-/* pills */
 .pillGrid {
   display: flex;
   flex-wrap: wrap;
@@ -201,7 +195,6 @@ body {
   color: #374151;
 }
 
-/* buttons */
 .buttonRow {
   margin-top: 20px;
   display: flex;
@@ -246,7 +239,6 @@ body {
   cursor: default;
 }
 
-/* small footer text */
 .stepText {
   margin-top: 14px;
   color: var(--muted);
@@ -254,7 +246,6 @@ body {
   text-align: center;
 }
 
-/* body type cards */
 .optionGrid {
   margin-top: 16px;
   display: grid;
@@ -288,7 +279,6 @@ body {
   line-height: 1.3;
 }
 
-/* review */
 .reviewGrid {
   margin-top: 16px;
   display: grid;
@@ -316,54 +306,21 @@ body {
   font-weight: 700;
 }
 
-/* LOGIN */
-.loginCard {
-  max-width: 720px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.loginForm {
-  margin-top: 18px;
-  display: grid;
-  gap: 12px;
-}
-
-.fieldLabel {
-  font-size: 12px;
-  color: var(--muted);
-  margin-bottom: 6px;
-}
-
-.textInput {
-  width: 100%;
-  padding: 11px 12px;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: #fff;
-  outline: none;
-  font: inherit;
-}
-
-.textInput:focus {
-  border-color: rgba(139, 30, 30, 0.35);
-  box-shadow: 0 0 0 4px rgba(139, 30, 30, 0.08);
-}
-
+/* LOGIN BUTTONS LAYOUT (reused on Profile) */
 .loginButtons {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 6px;
+  margin-top: 18px;
 }
 
-/* DASHBOARD (styled to match onboarding) */
+/* DASHBOARD */
 .dashHeaderBar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 10px;
 }
 
 .dashHeaderRight {
@@ -372,25 +329,12 @@ body {
   gap: 10px;
 }
 
-.dashDate {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.dashGrid {
-  display: grid;
-  grid-template-columns: 1.45fr 1fr;
-  gap: 14px;
-}
-
-.dashWide {
-  grid-column: 1 / -1;
-}
-
-.dashCardTitle {
-  font-size: 14px;
+.dashStrong {
   font-weight: 800;
-  margin-bottom: 8px;
+}
+
+.dashMuted {
+  color: var(--muted);
 }
 
 .dashSubText {
@@ -398,109 +342,126 @@ body {
   line-height: 1.45;
 }
 
-.dashMuted {
+.dashWide {
+  width: 100%;
+}
+
+.dashTopRightDate {
+  text-align: right;
   color: var(--muted);
+  font-size: 13px;
+  margin: 6px 0 10px;
 }
 
-.dashStrong {
-  font-weight: 800;
-}
-
-.dashWeatherLine {
+.dashWeatherRow {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-}
-
-.dashDot {
-  width: 4px;
-  height: 4px;
-  border-radius: 99px;
-  background: rgba(17, 24, 39, 0.25);
-}
-
-.dashRecTop {
-  display: flex;
-  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+}
+
+.dashWeatherLeft {
+  display: grid;
+  gap: 2px;
+}
+
+.dashWeatherIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.dashRecCard {
+  padding: 0;
+  overflow: hidden;
+}
+
+.dashRecHeader {
+  background: rgba(37, 99, 235, 0.06);
+  border-bottom: 1px solid rgba(37, 99, 235, 0.12);
+  padding: 18px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashRecTitle {
+  font-size: 18px;
+  font-weight: 800;
 }
 
 .dashChip {
   padding: 8px 12px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: #fafafa;
+  background: #ffffff;
   font-weight: 800;
   color: #374151;
   white-space: nowrap;
 }
 
-.dashOutfitGrid {
+.dashOutfitGridFigma {
+  padding: 18px 22px 10px;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 6px;
+  gap: 14px;
 }
 
-.dashOutfitItem {
-  border: 1px solid var(--border);
+.dashSquareTile {
+  border: 2px solid rgba(0, 0, 0, 0.08);
   border-radius: 16px;
-  background: #fafafa;
-  padding: 12px;
+  background: #ffffff;
+  padding: 18px 14px;
+  min-height: 170px;
+  display: grid;
+  place-items: center;
+  gap: 12px;
 }
 
-.dashThumb {
-  height: 86px;
-  border-radius: 14px;
-  background: rgba(139, 30, 30, 0.08);
-  border: 1px dashed rgba(139, 30, 30, 0.18);
-  margin-bottom: 10px;
+.dashSquareImg {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.08);
 }
 
-.dashItemName {
+.dashSquareName {
   font-weight: 800;
+  text-align: center;
+  line-height: 1.2;
 }
 
-.dashItemMeta {
-  color: var(--muted);
-  font-size: 13px;
-  margin-top: 4px;
+.dashInfoBlock {
+  padding: 14px 22px;
+  border-top: 1px solid rgba(37, 99, 235, 0.12);
+  background: rgba(37, 99, 235, 0.05);
 }
 
-.dashDivider {
-  height: 1px;
-  background: rgba(0, 0, 0, 0.06);
-  margin: 14px 0;
-}
-
-.dashExplainTitle {
+.dashInfoTitle {
   font-weight: 800;
   margin-bottom: 6px;
 }
 
-.dashProfileRow {
+.dashActionRow {
+  padding: 16px 22px 22px;
   display: flex;
+  gap: 10px;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 0;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  flex-wrap: wrap;
 }
 
-.dashProfileRow:first-of-type {
-  border-top: none;
+.dashCardTitle {
+  font-size: 16px;
+  font-weight: 800;
+  margin-bottom: 10px;
 }
 
-.dashQuickAction {
-  width: 100%;
-  text-align: left;
-  border: 1px solid var(--border);
+.dashQuickActionFigma {
   border-radius: 16px;
-  padding: 12px 14px;
-  background: #fafafa;
-  cursor: not-allowed;
+  padding: 16px 14px;
+  background: #f3f4f6;
   margin-top: 10px;
 }
 
@@ -520,23 +481,344 @@ body {
   border-radius: 999px;
   padding: 10px 12px;
   background: white;
-  cursor: not-allowed;
   font-weight: 800;
   color: #374151;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 .dashNavActive {
   border: 2px solid var(--accent);
   background: var(--accent-soft);
-  cursor: default;
 }
 
-@media (max-width: 960px) {
-  .dashGrid {
-    grid-template-columns: 1fr;
-  }
-  .dashOutfitGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+/* PROFILE (big card) */
+.profilePage {
+  min-height: calc(100vh - 60px);
+}
+
+.profileCard {
+  width: 100%;
+  min-height: 70vh;
+  padding: 46px;
+}
+
+/* WARDROBE (matches your screenshots) */
+.wardrobeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.wardrobeTitle {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+}
+
+.wardrobeSub {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.wardrobeAddBtn {
+  border: 0;
+  background: var(--wardrobe-blue);
+  color: #fff;
+  font-weight: 800;
+  padding: 12px 18px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.wardrobeAddBtn:hover {
+  filter: brightness(0.95);
+}
+
+.wardrobeUploadCard {
+  margin-top: 14px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.wardrobeUploadInner {
+  border: 2px dashed rgba(37, 99, 235, 0.35);
+  border-radius: 18px;
+  padding: 34px 16px;
+  text-align: center;
+  background: #ffffff;
+}
+
+.wardrobeUploadIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  margin: 0 auto 12px;
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.wardrobeUploadTitle {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.wardrobeUploadSub {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.wardrobeChooseBtn {
+  margin-top: 14px;
+  border: 0;
+  background: var(--wardrobe-blue);
+  color: #fff;
+  font-weight: 800;
+  padding: 12px 22px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.wardrobeUploadHint {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.wardrobeControls {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.wardrobeSearchWrap {
+  flex: 1;
+  min-width: 260px;
+}
+
+.wardrobeSearch {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  outline: none;
+}
+
+.wardrobeControlRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wardrobeChipBtn {
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 700;
+  color: #374151;
+}
+
+.wardrobeChipBtn.active {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: var(--wardrobe-blue-soft);
+}
+
+.wardrobeViewToggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.wardrobeViewBtn {
+  border: 0;
+  background: transparent;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 800;
+  color: #374151;
+  min-width: 42px;
+}
+
+.wardrobeViewBtn.active {
+  background: var(--wardrobe-blue-soft);
+}
+
+.wardrobeTabs {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.wardrobeTab {
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: 10px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 800;
+  color: #374151;
+}
+
+.wardrobeTab.active {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: var(--wardrobe-blue-soft);
+}
+
+.wardrobeGrid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.wardrobeCard {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fff;
+  position: relative;
+}
+
+.wardrobeThumb {
+  height: 160px;
+  background: #f3f4f6;
+}
+
+.wardrobeThumb.sm {
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  background: #f3f4f6;
+}
+
+.wardrobeBadge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: #fff;
+}
+
+.wardrobeBadge.great {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.25);
+  color: #166534;
+}
+
+.wardrobeBadge.good {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.25);
+  color: #92400e;
+}
+
+.wardrobeCardBody {
+  padding: 12px 12px 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.wardrobeItemName {
+  font-weight: 900;
+}
+
+.wardrobeItemMeta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.wardrobeRemove {
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.wardrobeRemove:hover {
+  background: #f9fafb;
+}
+
+.wardrobeList {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.wardrobeRowItem {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wardrobeRowLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wardrobeRowText {
+  display: grid;
+  gap: 3px;
+}
+
+.wardrobeEmpty {
+  margin-top: 18px;
+  border: 1px dashed rgba(0, 0, 0, 0.18);
+  border-radius: 16px;
+  padding: 18px;
+  background: #fff;
+  grid-column: 1 / -1;
+}
+
+.wardrobeEmptyTitle {
+  font-weight: 900;
+}
+
+.wardrobeEmptySub {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.wardrobeToast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 86px;
+  background: #111827;
+  color: #fff;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 13px;
+  box-shadow: 0 18px 40px rgba(17, 24, 39, 0.22);
+}
+
+@media (max-width: 1020px) {
+  .wardrobeGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -549,5 +831,8 @@ body {
   }
   .optionGrid {
     grid-template-columns: 1fr;
+  }
+  .wardrobeGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
