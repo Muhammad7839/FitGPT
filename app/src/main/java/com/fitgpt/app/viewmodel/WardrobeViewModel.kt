@@ -12,36 +12,103 @@ class WardrobeViewModel : ViewModel() {
 
     private val repository: WardrobeRepository = FakeWardrobeRepository()
 
-    // Full source of truth
-    private val allItems = MutableStateFlow(repository.getWardrobeItems())
+    private val allItems = mutableListOf<ClothingItem>()
 
-    // Filters
-    private val selectedSeason = MutableStateFlow<String?>(null)
-    private val minComfortLevel = MutableStateFlow(1)
+    private val _wardrobeState =
+        MutableStateFlow<UiState<List<ClothingItem>>>(UiState.Loading)
 
-    // Exposed filtered list
-    private val _wardrobeItems =
-        MutableStateFlow<List<ClothingItem>>(allItems.value)
-    val wardrobeItems: StateFlow<List<ClothingItem>> = _wardrobeItems
+    val wardrobeState: StateFlow<UiState<List<ClothingItem>>> =
+        _wardrobeState
+
+    init {
+        loadItems()
+    }
+
+    /* ---------- LOAD ---------- */
+
+    private fun loadItems() {
+        try {
+            allItems.clear()
+            allItems.addAll(repository.getWardrobeItems())
+            _wardrobeState.value = UiState.Success(allItems.toList())
+        } catch (e: Exception) {
+            _wardrobeState.value =
+                UiState.Error("Failed to load wardrobe items")
+        }
+    }
 
     /* ---------- CRUD ---------- */
 
     fun addItem(item: ClothingItem) {
-        repository.addItem(item)
-        refresh()
+        try {
+            repository.addItem(item)
+            loadItems()
+        } catch (e: Exception) {
+            _wardrobeState.value =
+                UiState.Error("Failed to add item")
+        }
     }
 
     fun deleteItem(item: ClothingItem) {
-        repository.deleteItem(item)
-        refresh()
+        try {
+            repository.deleteItem(item)
+            loadItems()
+        } catch (e: Exception) {
+            _wardrobeState.value =
+                UiState.Error("Failed to delete item")
+        }
     }
 
     fun updateItem(item: ClothingItem) {
-        repository.updateItem(item)
-        refresh()
+        try {
+            repository.updateItem(item)
+            loadItems()
+        } catch (e: Exception) {
+            _wardrobeState.value =
+                UiState.Error("Failed to update item")
+        }
     }
 
-    /* ---------- SAVED OUTFITS ---------- */
+    /* ---------- Recommendation ---------- */
+
+    fun generateOutfit(): List<ClothingItem> {
+
+        val current =
+            (_wardrobeState.value as? UiState.Success)?.data
+                ?: return emptyList()
+
+        val available = current
+            .filter { it.isAvailable && !it.isArchived }
+            .sortedBy { it.lastWornTimestamp ?: 0L }
+
+        val tops = available.filter { it.category.equals("Top", true) }
+        val bottoms = available.filter { it.category.equals("Bottom", true) }
+
+        return listOfNotNull(
+            tops.firstOrNull(),
+            bottoms.firstOrNull()
+        )
+    }
+
+    fun markOutfitAsWorn(items: List<ClothingItem>) {
+
+        val timestamp = System.currentTimeMillis()
+
+        try {
+            items.forEach { item ->
+                val updated = item.copy(
+                    lastWornTimestamp = timestamp
+                )
+                repository.updateItem(updated)
+            }
+            loadItems()
+        } catch (e: Exception) {
+            _wardrobeState.value =
+                UiState.Error("Failed to update wear history")
+        }
+    }
+
+    /* ---------- Saved Outfits ---------- */
 
     fun saveOutfit(items: List<ClothingItem>) {
         val outfit = SavedOutfit(
@@ -55,52 +122,17 @@ class WardrobeViewModel : ViewModel() {
         return repository.getSavedOutfits()
     }
 
-    /* ---------- FILTERING ---------- */
-
-    fun setSeasonFilter(season: String?) {
-        selectedSeason.value = season
-        applyFilters()
-    }
-
-    fun setComfortFilter(minComfort: Int) {
-        minComfortLevel.value = minComfort
-        applyFilters()
-    }
-
-    fun clearFilters() {
-        selectedSeason.value = null
-        minComfortLevel.value = 1
-        applyFilters()
-    }
-
-    /* ---------- AI EXPLANATION (PLACEHOLDER) ---------- */
+    /* ---------- AI Explanation ---------- */
 
     fun generateExplanation(item: ClothingItem): String {
+
         val comfortText =
             if (item.comfortLevel >= 4) "high comfort"
             else "moderate comfort"
 
-        val seasonText = item.season.lowercase()
+        val brandText =
+            item.brand?.let { "from $it" } ?: ""
 
-        return "Recommended because it offers $comfortText and works well for the $seasonText season."
-    }
-
-    /* ---------- INTERNAL ---------- */
-
-    private fun refresh() {
-        allItems.value = repository.getWardrobeItems()
-        applyFilters()
-    }
-
-    private fun applyFilters() {
-        _wardrobeItems.value = allItems.value.filter { item ->
-            val seasonMatch =
-                selectedSeason.value == null || item.season == selectedSeason.value
-
-            val comfortMatch =
-                item.comfortLevel >= minComfortLevel.value
-
-            seasonMatch && comfortMatch
-        }
+        return "This $brandText piece works well for ${item.season.lowercase()} and provides $comfortText."
     }
 }
