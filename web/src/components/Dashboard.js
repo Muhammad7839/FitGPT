@@ -1,5 +1,5 @@
-// web/src/components/Dashboard.js
 import React, { useEffect, useMemo, useState } from "react";
+import { NavLink } from "react-router-dom";
 
 const THEME_KEY = "fitgpt_theme_v1";
 const WARDROBE_KEY = "fitgpt_wardrobe_v1";
@@ -22,6 +22,17 @@ function safeParse(json) {
   }
 }
 
+function readTheme() {
+  const raw = localStorage.getItem(THEME_KEY);
+  if (!raw) return "light";
+
+  const parsed = safeParse(raw);
+  if (parsed === "light" || parsed === "dark") return parsed;
+  if (raw === "light" || raw === "dark") return raw;
+
+  return "light";
+}
+
 function loadWardrobe() {
   const raw = localStorage.getItem(WARDROBE_KEY);
   const parsed = raw ? safeParse(raw) : null;
@@ -38,16 +49,15 @@ function titleCase(text) {
     .join(" ");
 }
 
-function joinNice(list) {
-  if (!Array.isArray(list) || list.length === 0) return "Not set";
-  if (list.length === 1) return titleCase(list[0]);
-  if (list.length === 2) return `${titleCase(list[0])} and ${titleCase(list[1])}`;
-  const allButLast = list.slice(0, -1).map(titleCase).join(", ");
-  return `${allButLast}, and ${titleCase(list[list.length - 1])}`;
-}
-
 function pickDailyOutfit(items) {
-  if (!Array.isArray(items) || items.length === 0) return [];
+  if (!Array.isArray(items) || items.length === 0) {
+    return [
+      { id: "p1", name: "Navy Blazer", color: "Navy", category: "Outerwear" },
+      { id: "p2", name: "White Button-Up", color: "White", category: "Tops" },
+      { id: "p3", name: "Gray Trousers", color: "Gray", category: "Bottoms" },
+      { id: "p4", name: "Black Oxfords", color: "Black", category: "Shoes" },
+    ];
+  }
 
   const daySeed = Number(new Date().toISOString().slice(0, 10).replace(/-/g, ""));
   const hash = (n) => (n * 9301 + 49297) % 233280;
@@ -60,60 +70,49 @@ function pickDailyOutfit(items) {
     h = hash(h);
     const i = h % pool.length;
     const candidate = pool[i];
-    if (!picks.find((p) => p.id === candidate.id)) picks.push(candidate);
+    const candidateId = candidate.id ?? candidate._idx;
+    if (!picks.find((p) => (p.id ?? p._idx) === candidateId)) picks.push(candidate);
   }
 
   return picks.map((x, i) => ({
-    id: x.id ?? `${i}`,
+    id: x.id ?? `w${i}`,
     name: x.name ?? "Wardrobe item",
     category: x.category ?? "",
     color: x.color ?? "",
-    notes: x.notes ?? "",
   }));
 }
 
-function buildExplanation({ answers, outfit }) {
-  const style = Array.isArray(answers?.style) ? answers.style : [];
+function buildExplanation({ answers }) {
   const dressFor = Array.isArray(answers?.dressFor) ? answers.dressFor : [];
+  const style = Array.isArray(answers?.style) ? answers.style : [];
   const bodyType = answers?.bodyType ?? DEFAULT_BODY_TYPE;
 
-  const parts = [];
+  const occasion = dressFor.length ? titleCase(dressFor[0]) : "your day";
+  const styleHint = style.length ? ` in a ${titleCase(style[0])} direction` : "";
+  const why = `Professional yet approachable for ${occasion}${styleHint}.`;
 
-  if (dressFor.length > 0) parts.push(`Built for ${titleCase(dressFor[0])}.`);
-  else parts.push("Built as a simple everyday outfit.");
-
-  if (style.length > 0) parts.push(`Style direction: ${titleCase(style[0])}.`);
-
-  if (outfit.length > 0) {
-    const cats = outfit
-      .map((o) => o.category)
-      .filter(Boolean)
-      .map(titleCase);
-    const uniqueCats = Array.from(new Set(cats));
-    if (uniqueCats.length > 0) parts.push(`Includes: ${uniqueCats.join(", ")}.`);
-  }
-
-  const bodyLine =
+  const fit =
     bodyType && bodyType !== DEFAULT_BODY_TYPE
-      ? `Fit note: adjusted for ${titleCase(bodyType)} proportions.`
-      : "Fit note: body type not set yet, so fit logic is neutral.";
+      ? `This combination is balanced to complement a ${titleCase(bodyType)} shape.`
+      : "Body type is not set yet, so fit logic is neutral for now.";
 
-  return { why: parts.join(" "), body: bodyLine };
+  return { why, fit };
 }
 
-export default function Dashboard({ answers, onResetOnboarding, onLogout, userName }) {
-  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || "light");
+export default function Dashboard({
+  answers,
+  onResetOnboarding = () => {},
+  authMode = "guest",
+  onSignIn = () => {},
+}) {
+  const [theme, setTheme] = useState(() => readTheme());
   const [wardrobe, setWardrobe] = useState(() => loadWardrobe());
 
-  const [weather] = useState({
-    label: "Today's Weather",
-    condition: "Partly Cloudy",
-    tempF: 68,
-  });
+  const weather = { label: "Today's Weather", condition: "Partly Cloudy", tempF: 68 };
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem(THEME_KEY, JSON.stringify(theme));
+    localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
 
   useEffect(() => {
@@ -125,18 +124,15 @@ export default function Dashboard({ answers, onResetOnboarding, onLogout, userNa
   }, []);
 
   const outfit = useMemo(() => pickDailyOutfit(wardrobe), [wardrobe]);
-  const explanation = useMemo(() => buildExplanation({ answers, outfit }), [answers, outfit]);
-
-  const hasBodyType = !!answers?.bodyType && answers.bodyType !== DEFAULT_BODY_TYPE;
-  const bodyTypeDisplay = hasBodyType ? titleCase(answers.bodyType) : "Not set";
+  const explanation = useMemo(() => buildExplanation({ answers }), [answers]);
 
   const chipText = useMemo(() => {
     const dressFor = Array.isArray(answers?.dressFor) ? answers.dressFor : [];
-    if (dressFor.length > 0) return titleCase(dressFor[0]);
-    return "Daily";
+    return dressFor.length ? titleCase(dressFor[0]) : "Daily";
   }, [answers]);
 
   const toggleTheme = () => setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  const isGuest = authMode !== "google" && authMode !== "email";
 
   return (
     <div className="onboarding onboardingPage">
@@ -146,10 +142,7 @@ export default function Dashboard({ answers, onResetOnboarding, onLogout, userNa
             <div className="brandMark brandMarkSm">
               <img className="dashLogo" src="/officialLogo.png" alt="FitGPT official logo" />
             </div>
-            <div>
-              <div className="dashStrong">{userName ? `Hi, ${userName}` : "FitGPT"}</div>
-              <div className="dashDate">{formatToday()}</div>
-            </div>
+            <div className="dashStrong">FitGPT</div>
           </div>
         </div>
 
@@ -157,142 +150,124 @@ export default function Dashboard({ answers, onResetOnboarding, onLogout, userNa
           <button type="button" className="linkBtn" onClick={toggleTheme}>
             {theme === "light" ? "Dark" : "Light"}
           </button>
+
           <button type="button" className="linkBtn" onClick={onResetOnboarding}>
             Reset
           </button>
-          <button type="button" className="linkBtn" onClick={onLogout}>
-            Logout
-          </button>
+
+          {isGuest ? (
+            <button
+              type="button"
+              className="btn primary"
+              onClick={() => onSignIn()}
+              disabled={typeof onSignIn !== "function"}
+            >
+              Sign in to save
+            </button>
+          ) : (
+            <div className="dashMuted" style={{ fontSize: 13 }}>
+              Signed in
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="dashGrid">
-        <section className="card dashWide">
-          <div className="dashCardTitle">Weather</div>
-          <div className="dashWeatherLine">
-            <span className="dashMuted">{weather.label}</span>
-            <span className="dashDot" />
-            <span className="dashStrong">{weather.condition}</span>
-            <span className="dashMuted">, {weather.tempF}°F</span>
-          </div>
-        </section>
+      <div className="dashTopRightDate">{formatToday()}</div>
 
-        <section className="card dashWide">
-          <div className="dashRecTop">
-            <div>
-              <div className="dashCardTitle">Today’s recommendation</div>
-              <div className="dashSubText">Based on your onboarding preferences</div>
+      <section className="card dashWide">
+        <div className="dashWeatherRow">
+          <div className="dashWeatherLeft">
+            <div className="dashMuted">{weather.label}</div>
+            <div className="dashStrong">
+              {weather.condition}, {weather.tempF}°F
             </div>
-            <div className="dashChip">{chipText}</div>
           </div>
+          <div className="dashWeatherIcon" aria-hidden="true" />
+        </div>
+      </section>
 
-          {outfit.length === 0 ? (
-            <div className="dashEmpty">
-              <div className="dashEmptyTitle">No wardrobe items yet</div>
-              <div className="dashSubText">
-                Add a few items first, then FitGPT can generate outfits from what you own.
-              </div>
+      <section className="card dashWide dashRecCard">
+        <div className="dashRecHeader">
+          <div className="dashRecHeaderLeft">
+            <div className="dashRecTitle">Today’s Recommendation</div>
+          </div>
+          <div className="dashChip">{chipText}</div>
+        </div>
 
-              <div className="buttonRow">
-                <button type="button" className="btn primary" disabled>
-                  Add wardrobe item
-                </button>
-                <button type="button" className="btn" disabled>
-                  Generate outfit
-                </button>
-              </div>
+        <div className="dashOutfitGridFigma">
+          {outfit.map((item) => (
+            <div key={item.id} className="dashSquareTile">
+              <div className="dashSquareImg" aria-hidden="true" />
+              <div className="dashSquareName">{item.name}</div>
             </div>
-          ) : (
-            <>
-              <div className="dashOutfitGrid">
-                {outfit.map((item) => (
-                  <div key={item.id} className="dashOutfitItem">
-                    <div className="dashThumb" />
-                    <div className="dashItemName">{item.name}</div>
-                    <div className="dashItemMeta">
-                      {item.category ? titleCase(item.category) : "Item"}
-                      {item.color ? ` • ${titleCase(item.color)}` : ""}
-                    </div>
-                  </div>
-                ))}
-              </div>
+          ))}
+        </div>
 
-              <div className="dashDivider" />
+        <div className="dashInfoBlock">
+          <div className="dashInfoTitle">Why This Outfit?</div>
+          <div className="dashSubText">{explanation.why}</div>
+        </div>
 
-              <div className="dashExplainBlock">
-                <div className="dashExplainTitle">Why this outfit</div>
-                <div className="dashSubText">{explanation.why}</div>
-              </div>
+        <div className="dashInfoBlock" style={{ marginTop: 10 }}>
+          <div className="dashInfoTitle">Tailored to Your Body Type</div>
+          <div className="dashSubText">{explanation.fit}</div>
+        </div>
 
-              <div className="dashDivider" />
-
-              <div className="dashExplainBlock">
-                <div className="dashExplainTitle">Fit logic</div>
-                <div className="dashSubText">{explanation.body}</div>
-              </div>
-
-              <div className="buttonRow">
-                <button type="button" className="btn primary" disabled>
-                  Another suggestion
-                </button>
-                <button type="button" className="btn" disabled>
-                  Save
-                </button>
-                <button type="button" className="btn" disabled>
-                  Share
-                </button>
-              </div>
-            </>
-          )}
-        </section>
-
-        <section className="card">
-          <div className="dashCardTitle">Your profile</div>
-
-          <div className="dashProfileRow">
-            <div className="dashMuted">Style</div>
-            <div className="dashStrong">{joinNice(answers?.style)}</div>
-          </div>
-
-          <div className="dashProfileRow">
-            <div className="dashMuted">Dress for</div>
-            <div className="dashStrong">{joinNice(answers?.dressFor)}</div>
-          </div>
-
-          <div className="dashProfileRow">
-            <div className="dashMuted">Body type</div>
-            <div className="dashStrong">{bodyTypeDisplay}</div>
-          </div>
-        </section>
-
-        <section className="card">
-          <div className="dashCardTitle">Quick actions</div>
-
-          <button type="button" className="dashQuickAction" disabled>
-            <div className="dashStrong">Plan tomorrow’s outfit</div>
-            <div className="dashSubText">Weekly planning comes next</div>
+        <div className="dashActionRow">
+          <button type="button" className="btn primary" disabled>
+            Get another suggestion
           </button>
-
-          <button type="button" className="dashQuickAction" disabled>
-            <div className="dashStrong">Browse past outfits</div>
-            <div className="dashSubText">Favorites and history come next</div>
+          <button type="button" className="btn" disabled>
+            Save
           </button>
-        </section>
-      </div>
+          <button type="button" className="btn" disabled>
+            Share
+          </button>
+        </div>
+      </section>
+
+      <section className="card dashWide">
+        <div className="dashCardTitle">Quick Actions</div>
+
+        <div className="dashQuickActionFigma" aria-disabled="true">
+          <div className="dashStrong">Plan Tomorrow’s Outfit</div>
+          <div className="dashSubText">Get ahead of your schedule</div>
+        </div>
+
+        <div className="dashQuickActionFigma" aria-disabled="true">
+          <div className="dashStrong">Browse Past Outfits</div>
+          <div className="dashSubText">See what you’ve worn recently</div>
+        </div>
+      </section>
 
       <nav className="dashBottomNav" aria-label="Dashboard navigation">
-        <button type="button" className="dashNavItem dashNavActive">
+        <NavLink
+          to="/dashboard"
+          className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}
+        >
           Today
-        </button>
-        <button type="button" className="dashNavItem" disabled>
+        </NavLink>
+
+        <NavLink
+          to="/wardrobe"
+          className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}
+        >
           Wardrobe
-        </button>
-        <button type="button" className="dashNavItem" disabled>
+        </NavLink>
+
+        <NavLink
+          to="/favorites"
+          className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}
+        >
           Favorites
-        </button>
-        <button type="button" className="dashNavItem" disabled>
+        </NavLink>
+
+        <NavLink
+          to="/profile"
+          className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}
+        >
           Profile
-        </button>
+        </NavLink>
       </nav>
     </div>
   );
