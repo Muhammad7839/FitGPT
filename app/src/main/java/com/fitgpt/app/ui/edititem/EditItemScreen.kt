@@ -5,7 +5,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.viewmodel.WardrobeViewModel
@@ -14,7 +13,7 @@ import com.fitgpt.app.viewmodel.WardrobeViewModel
 fun EditItemScreen(
     navController: NavController,
     itemId: Int,
-    viewModel: WardrobeViewModel = viewModel()
+    viewModel: WardrobeViewModel
 ) {
     val items by viewModel.wardrobeItems.collectAsState()
 

@@ -1,58 +1,113 @@
 package com.fitgpt.app.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.data.model.SavedOutfit
-import com.fitgpt.app.data.repository.FakeWardrobeRepository
 import com.fitgpt.app.data.repository.WardrobeRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
-class WardrobeViewModel : ViewModel() {
+class WardrobeViewModel(private val repository: WardrobeRepository) : ViewModel() {
 
-    private val repository: WardrobeRepository = FakeWardrobeRepository()
-
-    // Full source of truth
-    private val allItems = MutableStateFlow(repository.getWardrobeItems())
+    // Full source of truth (pre-filter)
+    private var allItems: List<ClothingItem> = emptyList()
 
     // Filters
     private val selectedSeason = MutableStateFlow<String?>(null)
     private val minComfortLevel = MutableStateFlow(1)
 
     // Exposed filtered list
-    private val _wardrobeItems =
-        MutableStateFlow<List<ClothingItem>>(allItems.value)
+    private val _wardrobeItems = MutableStateFlow<List<ClothingItem>>(emptyList())
     val wardrobeItems: StateFlow<List<ClothingItem>> = _wardrobeItems
+
+    // Loading & error state
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage
+
+    init {
+        loadItems()
+    }
 
     /* ---------- CRUD ---------- */
 
+    fun loadItems() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
+            try {
+                allItems = repository.getWardrobeItems()
+                applyFilters()
+            } catch (e: Exception) {
+                _errorMessage.value = e.message ?: "Failed to load items"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
     fun addItem(item: ClothingItem) {
-        repository.addItem(item)
-        refresh()
+        viewModelScope.launch {
+            _errorMessage.value = null
+            try {
+                repository.addItem(item)
+                allItems = repository.getWardrobeItems()
+                applyFilters()
+            } catch (e: Exception) {
+                _errorMessage.value = e.message ?: "Failed to add item"
+            }
+        }
     }
 
     fun deleteItem(item: ClothingItem) {
-        repository.deleteItem(item)
-        refresh()
+        viewModelScope.launch {
+            _errorMessage.value = null
+            try {
+                repository.deleteItem(item)
+                allItems = repository.getWardrobeItems()
+                applyFilters()
+            } catch (e: Exception) {
+                _errorMessage.value = e.message ?: "Failed to delete item"
+            }
+        }
     }
 
     fun updateItem(item: ClothingItem) {
-        repository.updateItem(item)
-        refresh()
+        viewModelScope.launch {
+            _errorMessage.value = null
+            try {
+                repository.updateItem(item)
+                allItems = repository.getWardrobeItems()
+                applyFilters()
+            } catch (e: Exception) {
+                _errorMessage.value = e.message ?: "Failed to update item"
+            }
+        }
     }
 
     /* ---------- SAVED OUTFITS ---------- */
 
     fun saveOutfit(items: List<ClothingItem>) {
-        val outfit = SavedOutfit(
-            id = System.currentTimeMillis().toInt(),
-            items = items
-        )
-        repository.saveOutfit(outfit)
+        viewModelScope.launch {
+            val outfit = SavedOutfit(
+                id = System.currentTimeMillis().toInt(),
+                items = items
+            )
+            repository.saveOutfit(outfit)
+        }
     }
 
     fun getSavedOutfits(): List<SavedOutfit> {
-        return repository.getSavedOutfits()
+        // For local-only outfits, we block briefly (acceptable for in-memory/local data)
+        var result: List<SavedOutfit> = emptyList()
+        viewModelScope.launch {
+            result = repository.getSavedOutfits()
+        }
+        return result
     }
 
     /* ---------- FILTERING ---------- */
@@ -87,13 +142,8 @@ class WardrobeViewModel : ViewModel() {
 
     /* ---------- INTERNAL ---------- */
 
-    private fun refresh() {
-        allItems.value = repository.getWardrobeItems()
-        applyFilters()
-    }
-
     private fun applyFilters() {
-        _wardrobeItems.value = allItems.value.filter { item ->
+        _wardrobeItems.value = allItems.filter { item ->
             val seasonMatch =
                 selectedSeason.value == null || item.season == selectedSeason.value
 

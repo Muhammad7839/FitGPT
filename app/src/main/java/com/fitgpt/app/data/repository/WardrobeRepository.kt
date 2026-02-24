@@ -5,12 +5,12 @@ import com.fitgpt.app.data.model.SavedOutfit
 
 interface WardrobeRepository {
 
-    fun getWardrobeItems(): List<ClothingItem>
-    fun addItem(item: ClothingItem)
-    fun deleteItem(item: ClothingItem)
-    fun updateItem(item: ClothingItem)
+    suspend fun getWardrobeItems(): List<ClothingItem>
+    suspend fun addItem(item: ClothingItem)
+    suspend fun deleteItem(item: ClothingItem)
+    suspend fun updateItem(item: ClothingItem)
 
     // Saved outfits
-    fun saveOutfit(outfit: SavedOutfit)
-    fun getSavedOutfits(): List<SavedOutfit>
+    suspend fun saveOutfit(outfit: SavedOutfit)
+    suspend fun getSavedOutfits(): List<SavedOutfit>
 }

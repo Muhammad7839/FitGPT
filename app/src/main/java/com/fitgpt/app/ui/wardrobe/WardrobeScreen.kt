@@ -13,7 +13,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.navigation.Routes
@@ -23,8 +22,8 @@ import com.fitgpt.app.viewmodel.WardrobeViewModel
 @Composable
 fun WardrobeScreen(
     navController: NavController,
-    modifier: Modifier = Modifier,
-    viewModel: WardrobeViewModel = viewModel()
+    viewModel: WardrobeViewModel,
+    modifier: Modifier = Modifier
 ) {
     val items by viewModel.wardrobeItems.collectAsState()
     var itemToDelete by remember { mutableStateOf<ClothingItem?>(null) }

@@ -12,26 +12,26 @@ class FakeWardrobeRepository : WardrobeRepository {
 
     private val savedOutfits = mutableListOf<SavedOutfit>()
 
-    override fun getWardrobeItems(): List<ClothingItem> = wardrobeItems
+    override suspend fun getWardrobeItems(): List<ClothingItem> = wardrobeItems
 
-    override fun addItem(item: ClothingItem) {
+    override suspend fun addItem(item: ClothingItem) {
         wardrobeItems.add(item)
     }
 
-    override fun deleteItem(item: ClothingItem) {
+    override suspend fun deleteItem(item: ClothingItem) {
         wardrobeItems.remove(item)
     }
 
-    override fun updateItem(item: ClothingItem) {
+    override suspend fun updateItem(item: ClothingItem) {
         val index = wardrobeItems.indexOfFirst { it.id == item.id }
         if (index != -1) {
             wardrobeItems[index] = item
         }
     }
 
-    override fun saveOutfit(outfit: SavedOutfit) {
+    override suspend fun saveOutfit(outfit: SavedOutfit) {
         savedOutfits.add(outfit)
     }
 
-    override fun getSavedOutfits(): List<SavedOutfit> = savedOutfits
+    override suspend fun getSavedOutfits(): List<SavedOutfit> = savedOutfits
 }

@@ -5,7 +5,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.viewmodel.WardrobeViewModel
@@ -14,7 +13,7 @@ import com.fitgpt.app.viewmodel.WardrobeViewModel
 @Composable
 fun AddItemScreen(
     navController: NavController,
-    viewModel: WardrobeViewModel = viewModel()
+    viewModel: WardrobeViewModel
 ) {
     var category by remember { mutableStateOf("") }
     var color by remember { mutableStateOf("") }
