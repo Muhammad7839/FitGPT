@@ -1,9 +1,8 @@
-// web/src/components/Login.js
+
 import React, { useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 
-// Optional backend hook-up (turn on when your teammate confirms payloads)
-// import { login } from "../api/authApi";
+
 
 export default function Login() {
   const navigate = useNavigate();
@@ -35,11 +34,9 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // UI-only flow for now
       await new Promise((r) => setTimeout(r, 350));
 
-      // When backend is ready, replace the UI-only block with:
-      // await login({ email: email.trim(), password });
+    
 
       navigate("/", { replace: true });
     } catch (err) {

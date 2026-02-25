@@ -1,4 +1,3 @@
-// web/src/api/apiFetch.js
 
 const BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:8000";
 const TOKEN_KEY = "fitgpt_token_v1";
@@ -46,14 +45,14 @@ async function readErrorMessage(res) {
     if (typeof data?.message === "string") return data.message;
     if (typeof data?.error === "string") return data.error;
   } catch {
-    // ignore
+    
   }
 
   try {
     const text = await res.text();
     if (text) return text.slice(0, 300);
   } catch {
-    // ignore
+    
   }
 
   return `Request failed (${res.status})`;

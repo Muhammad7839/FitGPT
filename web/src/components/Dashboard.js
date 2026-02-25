@@ -4,7 +4,7 @@ import { NavLink } from "react-router-dom";
 const THEME_KEY = "fitgpt_theme_v1";
 const WARDROBE_KEY = "fitgpt_wardrobe_v1";
 
-// Default body type when user skips selection
+
 const DEFAULT_BODY_TYPE = "rectangle";
 
 const BODY_TYPE_LABELS = {
@@ -125,13 +125,7 @@ function colorGroup(colorRaw) {
   return "unknown";
 }
 
-/*
-Sprint 2 definition of color coordinated
-neutral matches with anything
-warm matches with warm or neutral
-cool matches with cool or neutral
-unknown is allowed but lower confidence
-*/
+
 function pairScore(aColor, bColor) {
   const a = colorGroup(aColor);
   const b = colorGroup(bColor);
@@ -319,7 +313,6 @@ function buildExplanation1to2Sentences({ answers, outfit }) {
   const dressFor = Array.isArray(answers?.dressFor) ? answers.dressFor : [];
   const style = Array.isArray(answers?.style) ? answers.style : [];
 
-  // Apply default if missing/skipped
   const bodyTypeId = answers?.bodyType ? answers.bodyType : DEFAULT_BODY_TYPE;
 
   const occasion = dressFor.length ? titleCase(dressFor[0]) : "your day";
@@ -348,7 +341,7 @@ function buildExplanation1to2Sentences({ answers, outfit }) {
   const mentionsCategories =
     categories.length >= 2 ? `You’ve got a good mix of ${categories.slice(0, 3).join(", ")}.` : "";
 
-  // Still keep it short and readable
+  
   const sentence2 = [fitPart, mentionsCategories].filter(Boolean).join(" ").trim();
 
   const sentence3 = fitFocusSentence(bodyTypeId);

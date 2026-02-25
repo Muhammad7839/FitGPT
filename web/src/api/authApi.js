@@ -1,4 +1,4 @@
-// web/src/api/authApi.js
+
 import { apiFetch, setToken, clearToken, markSignedInEmail, markGuest, hasApi } from "./apiFetch";
 
 const AUTH_ENDPOINTS = {
@@ -47,7 +47,7 @@ export async function login(email, password) {
   return { token, raw: data };
 }
 
-// compatibility name (your UI is importing this)
+
 export async function loginWithEmail(email, password) {
   return login(email, password);
 }
@@ -62,7 +62,7 @@ export async function register(email, password) {
   });
 }
 
-// compatibility name (your UI is importing this)
+
 export async function registerWithEmail(email, password) {
   return register(email, password);
 }

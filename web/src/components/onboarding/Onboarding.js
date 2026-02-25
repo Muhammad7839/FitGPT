@@ -1,12 +1,12 @@
-// web/src/components/onboarding/Onboarding.js
+
 import React, { useEffect, useMemo, useState } from "react";
 
 const TOTAL_STEPS = 5;
 
-// Default body type if user skips selection
+
 const DEFAULT_BODY_TYPE_ID = "rectangle";
 
-// Default comfort if user skips selection
+
 const DEFAULT_COMFORT = ["Balanced"];
 
 const STYLE_OPTIONS = [

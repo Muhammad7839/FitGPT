@@ -1,15 +1,14 @@
-// web/src/components/Signup.js
+
 import React, { useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 
-// Optional backend hook-up (turn on when your teammate confirms payloads)
-// import { register } from "../api/authApi";
+
 
 export default function Signup() {
   const navigate = useNavigate();
 
   const [fullName, setFullName] = useState("");
-  const [dob, setDob] = useState(""); // optional field for now
+  const [dob, setDob] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -43,16 +42,10 @@ export default function Signup() {
     setIsLoading(true);
 
     try {
-      // UI-only flow for now (so you can demo without backend)
+    
       await new Promise((r) => setTimeout(r, 450));
 
-      // When backend is ready, replace the UI-only block with:
-      // await register({
-      //   full_name: fullName.trim(),
-      //   dob: dob || null,
-      //   email: email.trim(),
-      //   password,
-      // });
+     
 
       navigate("/onboarding", { replace: true });
     } catch (err) {
