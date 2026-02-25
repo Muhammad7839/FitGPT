@@ -836,3 +836,305 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+.wardrobeThumbWrap{
+  width: 140px;
+  height: 140px;
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wardrobeThumbImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wardrobeThumbWrap.sm{
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+}
+
+.wardrobeThumbImg.sm{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.modalOverlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  z-index: 9999;
+}
+
+.modalCard{
+  width: min(520px, 96vw);
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+}
+
+.modalTitle{
+  font-size: 18px;
+  margin: 0 0 6px 0;
+}
+
+.modalSub{
+  font-size: 14px;
+  opacity: 0.8;
+  margin: 0 0 12px 0;
+}
+
+.modalActions{
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.wardrobeAddPreview{
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 1 / 1;
+  border-radius: 14px;
+  overflow: hidden;
+  margin: 10px auto 14px auto;
+  background: #f1f5f9;
+  border: 1px solid #e5e7eb;
+}
+
+.wardrobeAddPreviewImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wardrobeAddForm{
+  display: grid;
+  gap: 10px;
+}
+
+.wardrobeLabel{
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.wardrobeInput{
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  padding: 0 12px;
+  outline: none;
+}
+
+.wardrobeInput:focus{
+  border-color: #94a3b8;
+}
+
+.btnPrimary, .btnSecondary{
+  height: 42px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.btnSecondary{
+  background: #f1f5f9;
+  border-color: #e5e7eb;
+}
+
+.btnPrimary{
+  background: #0f172a;
+  color: #ffffff;
+}
+.wardrobeGrid{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.wardrobeCard{
+  position: relative;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.wardrobeThumbWrap{
+  width: 100%;
+  height: 170px;
+}
+
+.wardrobeThumbImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wardrobeCardBody{
+  padding: 12px;
+}
+
+.wardrobeItemName{
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wardrobeItemMeta{
+  font-size: 12px;
+  opacity: 0.75;
+  margin-top: 4px;
+}
+
+.wardrobeTrash{
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: rgba(255,255,255,0.9);
+  cursor: pointer;
+}
+
+.wardrobeBadge{
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(15,23,42,0.9);
+  color: white;
+}
+.wardrobeFormError{
+  margin-top: 8px;
+  font-size: 13px;
+  color: #b91c1c;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+.wardrobeCardActions{
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.wardrobeRowActions{
+  display: flex;
+  gap: 8px;
+}
+
+.wardrobeIconBtn{
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.wardrobeIconBtn.danger{
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+.linkLike{
+  color: inherit;
+  text-decoration: underline;
+}
+.linkLike{
+  color: inherit;
+  text-decoration: underline;
+}
+.wardrobeColorTag{
+  display:inline-block;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  line-height:1;
+  border:1px solid var(--border);
+  background: var(--bgSoft);
+  color: var(--text);
+}
+/* AUTH SCREENS (Signup + Login) */
+
+.authCardTitleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.authForm {
+  margin-top: 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.authRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.authRow .wardrobeInput {
+  flex: 1;
+}
+
+.btnPrimary:hover {
+  filter: brightness(0.95);
+}
+
+.btnSecondary:hover {
+  filter: brightness(0.98);
+}
+
+.wardrobeIconBtn:hover {
+  background: #f8fafc;
+}
+
+.wardrobeIconBtn:active,
+.btnPrimary:active,
+.btnSecondary:active {
+  transform: translateY(1px);
+}
+
+@media (max-width: 520px) {
+  .card.dashWide {
+    padding: 18px;
+  }
+
+  .heroTitle {
+    font-size: 32px;
+  }
+
+  .authRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wardrobeIconBtn {
+    width: 100%;
+    height: 42px;
+  }
+}

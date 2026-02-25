@@ -1,10 +1,16 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 
 import Onboarding from "../components/onboarding/Onboarding";
 import Dashboard from "../components/Dashboard";
 import Wardrobe from "../components/Wardrobe";
+import Favorites from "../components/Favorites";
 import Profile from "../components/Profile";
+import Login from "../components/Login";
+import Signup from "../components/Signup";
+import AuthPrompt from "../components/AuthPrompt";
+
+import { getPreferences, savePreferences } from "../api/preferencesApi";
 
 const LS_KEY = "fitgpt_onboarding_v1";
 const AUTH_KEY = "fitgpt_auth_mode_v1";
@@ -66,43 +72,62 @@ function writeAuthMode(mode) {
   return v;
 }
 
-function Favorites() {
-  return (
-    <div className="onboarding onboardingPage">
-      <div className="card dashWide" style={{ marginTop: 12 }}>
-        <h1 className="heroTitle" style={{ fontSize: 34 }}>
-          Favorites
-        </h1>
-        <p className="heroSub">Coming next.</p>
-      </div>
-    </div>
-  );
-}
-
 export default function AppRoutes() {
   const navigate = useNavigate();
 
   const [onboarding, setOnboarding] = useState(() => readOnboardingState());
   const [authMode, setAuthMode] = useState(() => readAuthMode());
+  const [apiHydratedOnce, setApiHydratedOnce] = useState(false);
 
   const home = useMemo(() => {
     return onboarding.completed ? "/dashboard" : "/onboarding";
   }, [onboarding.completed]);
+
+  useEffect(() => {
+    const signedIn = authMode === "email" || authMode === "google";
+    if (!signedIn) return;
+    if (apiHydratedOnce) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const data = await getPreferences();
+        if (cancelled) return;
+
+        const apiAnswers = normalizeAnswers(data);
+        const merged = {
+          ...normalizeAnswers(onboarding.answers),
+          ...apiAnswers,
+        };
+
+        setOnboarding((prev) => ({
+          ...prev,
+          answers: merged,
+        }));
+      } catch {
+        // backend might not be ready, keep localStorage data
+      } finally {
+        if (!cancelled) setApiHydratedOnce(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authMode, apiHydratedOnce, onboarding.answers]);
 
   const handleOnboardingProgress = useCallback((draft) => {
     const step = clampStep(draft?.step);
     const answers = normalizeAnswers(draft?.answers);
 
     const next = { completed: false, step, answers };
-    localStorage.setItem(
-      LS_KEY,
-      JSON.stringify({ ...next, savedAt: Date.now() })
-    );
+    localStorage.setItem(LS_KEY, JSON.stringify({ ...next, savedAt: Date.now() }));
     setOnboarding(next);
   }, []);
 
   const handleOnboardingComplete = useCallback(
-    (answers) => {
+    async (answers) => {
       const finalized = finalizeAnswers(answers);
       const next = { completed: true, step: 1, answers: finalized };
 
@@ -112,9 +137,19 @@ export default function AppRoutes() {
       );
 
       setOnboarding(next);
-      navigate("/dashboard", { replace: true });
+
+      const signedIn = authMode === "email" || authMode === "google";
+      if (signedIn) {
+        try {
+          await savePreferences(finalized);
+        } catch {
+          // if API fails, localStorage still keeps it
+        }
+      }
+
+      navigate("/auth-prompt", { replace: true });
     },
-    [navigate]
+    [navigate, authMode]
   );
 
   const handleResetOnboarding = useCallback(() => {
@@ -125,21 +160,45 @@ export default function AppRoutes() {
   }, [navigate]);
 
   const handleSignIn = useCallback(() => {
-    navigate("/profile");
+    navigate("/login");
   }, [navigate]);
 
   const handleSignedIn = useCallback(
-    (mode) => {
+    async (mode) => {
       const stored = writeAuthMode(mode);
       setAuthMode(stored);
-      navigate("/dashboard", { replace: true });
+
+      const signedIn = stored === "email" || stored === "google";
+      if (signedIn) {
+        try {
+          const data = await getPreferences();
+          const apiAnswers = normalizeAnswers(data);
+
+          setOnboarding((prev) => ({
+            ...prev,
+            answers: { ...normalizeAnswers(prev.answers), ...apiAnswers },
+          }));
+        } catch {
+          // ignore, keep local data
+        }
+      }
+
+      navigate(onboarding.completed ? "/dashboard" : "/onboarding", { replace: true });
     },
-    [navigate]
+    [navigate, onboarding.completed]
   );
 
   return (
     <Routes>
       <Route path="/" element={<Navigate to={home} replace />} />
+
+      <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
+
+      <Route
+        path="/auth-prompt"
+        element={onboarding.completed ? <AuthPrompt /> : <Navigate to="/onboarding" replace />}
+      />
 
       <Route
         path="/onboarding"
@@ -176,33 +235,22 @@ export default function AppRoutes() {
       <Route
         path="/wardrobe"
         element={
-          onboarding.completed ? (
-            <Wardrobe answers={onboarding.answers} />
-          ) : (
-            <Navigate to="/onboarding" replace />
-          )
+          onboarding.completed ? <Wardrobe answers={onboarding.answers} /> : <Navigate to="/onboarding" replace />
         }
       />
 
       <Route
         path="/favorites"
-        element={
-          onboarding.completed ? <Favorites /> : <Navigate to="/onboarding" replace />
-        }
+        element={onboarding.completed ? <Favorites /> : <Navigate to="/onboarding" replace />}
       />
 
       <Route
         path="/profile"
         element={
-          onboarding.completed ? (
-            <Profile onSignedIn={handleSignedIn} />
-          ) : (
-            <Navigate to="/onboarding" replace />
-          )
+          onboarding.completed ? <Profile onSignedIn={handleSignedIn} /> : <Navigate to="/onboarding" replace />
         }
       />
 
-      <Route path="/login" element={<Navigate to={home} replace />} />
       <Route path="*" element={<Navigate to={home} replace />} />
     </Routes>
   );
