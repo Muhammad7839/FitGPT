@@ -21,7 +21,7 @@ function saveLocalProfile(next) {
 }
 
 export async function saveProfileDraft(draft) {
-  // draft can include: style, dressFor, bodyType, preferences
+
   if (!hasApi()) {
     const current = loadLocalProfile();
     const next = { ...current, ...draft, updatedAt: Date.now() };
@@ -29,7 +29,6 @@ export async function saveProfileDraft(draft) {
     return next;
   }
 
-  // Change endpoint if your backend differs
   return apiFetch("/profile", {
     method: "PUT",
     body: JSON.stringify(draft),
@@ -39,6 +38,6 @@ export async function saveProfileDraft(draft) {
 export async function readProfile() {
   if (!hasApi()) return loadLocalProfile();
 
-  // Change endpoint if your backend differs
+  
   return apiFetch("/profile", { method: "GET" });
 }

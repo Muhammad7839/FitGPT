@@ -1,4 +1,4 @@
-// web/src/components/Favorites.js
+
 import React, { useMemo, useState } from "react";
 import { NavLink } from "react-router-dom";
 
