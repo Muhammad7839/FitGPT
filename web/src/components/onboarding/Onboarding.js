@@ -3,6 +3,12 @@ import React, { useEffect, useMemo, useState } from "react";
 
 const TOTAL_STEPS = 5;
 
+// Default body type if user skips selection
+const DEFAULT_BODY_TYPE_ID = "rectangle";
+
+// Default comfort if user skips selection
+const DEFAULT_COMFORT = ["Balanced"];
+
 const STYLE_OPTIONS = [
   "Casual",
   "Professional",
@@ -10,6 +16,14 @@ const STYLE_OPTIONS = [
   "Athletic",
   "Minimalist",
   "Formal",
+];
+
+const COMFORT_OPTIONS = [
+  "Balanced",
+  "Relaxed",
+  "Fitted",
+  "Stretchy",
+  "Layered",
 ];
 
 const DRESS_FOR_OPTIONS = [
@@ -33,8 +47,9 @@ const BODY_TYPE_OPTIONS = [
 function normalizeAnswers(raw) {
   return {
     style: Array.isArray(raw?.style) ? raw.style : [],
+    comfort: Array.isArray(raw?.comfort) ? raw.comfort : [],
     dressFor: Array.isArray(raw?.dressFor) ? raw.dressFor : [],
-    bodyType: raw?.bodyType ?? null,
+    bodyType: raw?.bodyType ?? null, // keep null during onboarding if skipped
   };
 }
 
@@ -42,6 +57,18 @@ function clampStep(n) {
   const num = Number(n);
   if (!Number.isFinite(num)) return 1;
   return Math.min(Math.max(num, 1), TOTAL_STEPS);
+}
+
+function withDefaultsOnFinish(answers) {
+  const next = { ...(answers || {}) };
+
+  if (!next.bodyType) next.bodyType = DEFAULT_BODY_TYPE_ID;
+  if (!Array.isArray(next.comfort) || next.comfort.length === 0) next.comfort = DEFAULT_COMFORT;
+
+  if (!Array.isArray(next.style)) next.style = [];
+  if (!Array.isArray(next.dressFor)) next.dressFor = [];
+
+  return next;
 }
 
 export default function Onboarding({ onComplete, initialStep = 1, initialAnswers, onProgress }) {
@@ -64,7 +91,9 @@ export default function Onboarding({ onComplete, initialStep = 1, initialAnswers
       setStep((s) => s + 1);
       return;
     }
-    onComplete(answers);
+
+    const finalAnswers = withDefaultsOnFinish(answers);
+    onComplete(finalAnswers);
   };
 
   const goBack = () => {
@@ -73,7 +102,7 @@ export default function Onboarding({ onComplete, initialStep = 1, initialAnswers
 
   const goSkip = () => {
     setAnswers((prev) => {
-      if (step === 2) return { ...prev, style: [] };
+      if (step === 2) return { ...prev, style: [], comfort: [] };
       if (step === 3) return { ...prev, dressFor: [] };
       if (step === 4) return { ...prev, bodyType: null };
       return prev;
@@ -84,7 +113,7 @@ export default function Onboarding({ onComplete, initialStep = 1, initialAnswers
 
   const toggleMulti = (key, value) => {
     setAnswers((prev) => {
-      const list = prev[key];
+      const list = Array.isArray(prev[key]) ? prev[key] : [];
       const exists = list.includes(value);
       const updated = exists ? list.filter((v) => v !== value) : [...list, value];
       return { ...prev, [key]: updated };
@@ -99,6 +128,10 @@ export default function Onboarding({ onComplete, initialStep = 1, initialAnswers
     if (!answers.bodyType) return null;
     return BODY_TYPE_OPTIONS.find((x) => x.id === answers.bodyType)?.label ?? null;
   }, [answers.bodyType]);
+
+  const defaultBodyTypeLabel = useMemo(() => {
+    return BODY_TYPE_OPTIONS.find((x) => x.id === DEFAULT_BODY_TYPE_ID)?.label ?? "Default";
+  }, []);
 
   const renderStepContent = () => {
     if (step === 1) {
@@ -130,27 +163,53 @@ export default function Onboarding({ onComplete, initialStep = 1, initialAnswers
     if (step === 2) {
       return (
         <div>
-          <h1 className="heroTitle">What’s your style?</h1>
-          <p className="heroSub">Select all that apply. You can also skip.</p>
+          <h1 className="heroTitle">Quick preferences</h1>
+          <p className="heroSub">Optional. Pick anything that fits you. You can also skip.</p>
 
-          <div className="pillGrid">
-            {STYLE_OPTIONS.map((opt) => {
-              const selected = answers.style.includes(opt);
-              return (
-                <button
-                  key={opt}
-                  type="button"
-                  className={selected ? "pill selected" : "pill"}
-                  onClick={() => toggleMulti("style", opt)}
-                >
-                  {opt}
-                </button>
-              );
-            })}
+          <div style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 14, marginBottom: 8 }}>Style</div>
+            <div className="pillGrid">
+              {STYLE_OPTIONS.map((opt) => {
+                const selected = answers.style.includes(opt);
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    className={selected ? "pill selected" : "pill"}
+                    onClick={() => toggleMulti("style", opt)}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="noteBox" style={{ marginTop: 10 }}>
+              Style: {answers.style.length ? answers.style.join(", ") : "Skipped / None"}
+            </div>
           </div>
 
-          <div className="noteBox">
-            Selected: {answers.style.length ? answers.style.join(", ") : "Skipped / None"}
+          <div style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 14, marginBottom: 8 }}>Comfort</div>
+            <div className="pillGrid">
+              {COMFORT_OPTIONS.map((opt) => {
+                const selected = answers.comfort.includes(opt);
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    className={selected ? "pill selected" : "pill"}
+                    onClick={() => toggleMulti("comfort", opt)}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="noteBox" style={{ marginTop: 10 }}>
+              Comfort: {answers.comfort.length ? answers.comfort.join(", ") : "Skipped / None"}
+            </div>
           </div>
         </div>
       );
@@ -190,8 +249,7 @@ export default function Onboarding({ onComplete, initialStep = 1, initialAnswers
         <div>
           <h1 className="heroTitle">Body type</h1>
           <p className="heroSub">
-            Optional. If you choose one, FitGPT can improve fit-based suggestions. You can also
-            skip.
+            Optional. If you choose one, FitGPT can improve fit-based suggestions. You can also skip.
           </p>
 
           <div className="optionGrid">
@@ -211,7 +269,9 @@ export default function Onboarding({ onComplete, initialStep = 1, initialAnswers
             })}
           </div>
 
-          <div className="noteBox">Selected: {bodyTypeLabel ?? "Skipped / None"}</div>
+          <div className="noteBox">
+            Selected: {bodyTypeLabel ?? `Skipped (default will be ${defaultBodyTypeLabel})`}
+          </div>
         </div>
       );
     }
@@ -230,6 +290,13 @@ export default function Onboarding({ onComplete, initialStep = 1, initialAnswers
           </div>
 
           <div className="reviewCard">
+            <div className="reviewLabel">Comfort</div>
+            <div className="reviewValue">
+              {answers.comfort.length ? answers.comfort.join(", ") : "Skipped (default will be Balanced)"}
+            </div>
+          </div>
+
+          <div className="reviewCard">
             <div className="reviewLabel">Dressing for</div>
             <div className="reviewValue">
               {answers.dressFor.length ? answers.dressFor.join(", ") : "Skipped"}
@@ -238,7 +305,9 @@ export default function Onboarding({ onComplete, initialStep = 1, initialAnswers
 
           <div className="reviewCard">
             <div className="reviewLabel">Body type</div>
-            <div className="reviewValue">{bodyTypeLabel ?? "Skipped"}</div>
+            <div className="reviewValue">
+              {bodyTypeLabel ?? `Skipped (default will be ${defaultBodyTypeLabel})`}
+            </div>
           </div>
         </div>
 
