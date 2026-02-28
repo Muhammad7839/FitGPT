@@ -70,6 +70,8 @@ def create_clothing_item(db: Session, item: schemas.ClothingItemCreate, user_id:
         name=item.name,
         category=item.category,
         color=item.color,
+        fit_type=item.fit_type,
+        style_tag=item.style_tag,
         image_url=item.image_url,
         owner_id=user_id
     )
@@ -83,7 +85,8 @@ def create_clothing_item(db: Session, item: schemas.ClothingItemCreate, user_id:
 
 def get_clothing_items_for_user(db: Session, user_id: int):
     return db.query(models.ClothingItem).filter(
-        models.ClothingItem.owner_id == user_id
+        models.ClothingItem.owner_id == user_id,
+        models.ClothingItem.is_deleted == False
     ).all()
 
 
@@ -101,6 +104,8 @@ def update_clothing_item(
     db_item.name = updated_data.name
     db_item.category = updated_data.category
     db_item.color = updated_data.color
+    db_item.fit_type = updated_data.fit_type
+    db_item.style_tag = updated_data.style_tag
     db_item.image_url = updated_data.image_url
 
     db.commit()
@@ -110,5 +115,5 @@ def update_clothing_item(
 
 
 def delete_clothing_item(db: Session, db_item: models.ClothingItem):
-    db.delete(db_item)
+    db_item.is_deleted = True
     db.commit()
