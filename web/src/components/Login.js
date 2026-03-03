@@ -1,11 +1,12 @@
-
 import React, { useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-
-
+import { loginWithEmail, getMe } from "../api/authApi";
+import { useAuth } from "../auth/AuthProvider";
 
 export default function Login() {
   const navigate = useNavigate();
+  const auth = useAuth();
+  const setUser = auth?.setUser;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,11 +35,14 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      await new Promise((r) => setTimeout(r, 350));
+      await loginWithEmail(email.trim(), password);
 
-    
+      try {
+        const me = await getMe();
+        if (typeof setUser === "function") setUser(me);
+      } catch {}
 
-      navigate("/", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(err?.message || "Login failed. Please try again.");
     } finally {
@@ -67,7 +71,7 @@ export default function Login() {
             </p>
           </div>
 
-          <button type="button" className="btnSecondary" onClick={() => navigate("/auth")}>
+          <button type="button" className="btn" onClick={() => navigate("/auth")}>
             Back
           </button>
         </div>
@@ -110,7 +114,7 @@ export default function Login() {
           <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
             <button
               type="button"
-              className="btnSecondary"
+              className="linkBtn"
               onClick={() => setError("Password reset UI coming next.")}
             >
               Forgot password?
@@ -121,7 +125,7 @@ export default function Login() {
 
           <button
             type="submit"
-            className="btnPrimary"
+            className="btn primary"
             style={{ width: "100%", marginTop: 14 }}
             disabled={!canSubmit || isLoading}
           >

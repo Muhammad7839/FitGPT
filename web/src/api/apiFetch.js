@@ -1,7 +1,14 @@
-
 const BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:8000";
 const TOKEN_KEY = "fitgpt_token_v1";
 const AUTH_MODE_KEY = "fitgpt_auth_mode_v1";
+
+const AUTH_STRATEGY = (process.env.REACT_APP_AUTH_STRATEGY || "token").toLowerCase();
+const USE_COOKIES = AUTH_STRATEGY === "cookies";
+
+let onUnauthorized = null;
+export function setUnauthorizedHandler(fn) {
+  onUnauthorized = typeof fn === "function" ? fn : null;
+}
 
 export function hasApi() {
   const base = (BASE_URL || "").toString().trim();
@@ -9,20 +16,20 @@ export function hasApi() {
 }
 
 export function getToken() {
-  return sessionStorage.getItem(TOKEN_KEY) || "";
+  return localStorage.getItem(TOKEN_KEY) || "";
 }
 
 export function setToken(token) {
   const t = (token || "").toString().trim();
   if (!t) {
-    sessionStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_KEY);
     return;
   }
-  sessionStorage.setItem(TOKEN_KEY, t);
+  localStorage.setItem(TOKEN_KEY, t);
 }
 
 export function clearToken() {
-  sessionStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(TOKEN_KEY);
 }
 
 function setAuthMode(mode) {
@@ -44,16 +51,12 @@ async function readErrorMessage(res) {
     if (typeof data?.detail === "string") return data.detail;
     if (typeof data?.message === "string") return data.message;
     if (typeof data?.error === "string") return data.error;
-  } catch {
-    
-  }
+  } catch {}
 
   try {
     const text = await res.text();
     if (text) return text.slice(0, 300);
-  } catch {
-    
-  }
+  } catch {}
 
   return `Request failed (${res.status})`;
 }
@@ -64,27 +67,29 @@ export async function apiFetch(path, options = {}) {
   const token = getToken();
   const headers = new Headers(options.headers || {});
 
-  const isFormData =
-    typeof FormData !== "undefined" && options.body instanceof FormData;
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
 
   if (!isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
-  if (token && !headers.has("Authorization")) {
+  if (!USE_COOKIES && token && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
   const res = await fetch(url, {
     ...options,
     headers,
+    credentials: "include",
   });
 
   if (!res.ok) {
     if (res.status === 401) {
-      clearToken();
+      if (!USE_COOKIES) clearToken();
       setAuthMode("guest");
+      if (onUnauthorized) onUnauthorized();
     }
+
     const msg = await readErrorMessage(res);
     const err = new Error(msg);
     err.status = res.status;

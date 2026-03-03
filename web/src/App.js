@@ -1,7 +1,14 @@
+// web/src/App.js
 import React from "react";
-import AppRoutes from "./routes/AppRoutes";
+import "./App.css";
 
+import AppRoutes from "./routes/AppRoutes";
+import { AuthProvider } from "./auth/AuthProvider";
 
 export default function App() {
-  return <AppRoutes />;
+  return (
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
+  );
 }
