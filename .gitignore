@@ -19,3 +19,11 @@ local.properties
 # IDE
 .idea/
 .vscode/
+
+# Node
+node_modules/
+package-lock.json
+
+# Misc
+nul
+.claude/
