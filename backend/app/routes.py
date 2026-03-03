@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta
 
@@ -11,10 +10,12 @@ from app.auth import (
     get_current_user,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
-from app.schemas import RecommendationResponse
+from app.schemas import RecommendationResponse, AIRecommendationRequest, AIRecommendationResponse
 from app.weather import get_weather
+from app.groq_service import get_ai_recommendations
 
 router = APIRouter()
+auth_router = APIRouter(prefix="/auth")
 
 
 # =============================
@@ -30,29 +31,20 @@ def require_onboarding_complete(current_user: models.User):
 
 
 # =============================
-# Register
+# Auth helpers (shared logic)
 # =============================
 
-@router.post("/register", response_model=schemas.UserResponse)
-def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+def _register(user: schemas.UserCreate, db: Session):
     existing_user = crud.get_user_by_email(db, user.email)
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     return crud.create_user(db, user)
 
 
-# =============================
-# Login (JWT)
-# =============================
+def _login(user: schemas.UserLogin, db: Session):
+    db_user = crud.get_user_by_email(db, user.email)
 
-@router.post("/login", response_model=schemas.Token)
-def login_user(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
-):
-    user = crud.get_user_by_email(db, form_data.username)
-
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    if not db_user or not verify_password(user.password, db_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
@@ -61,7 +53,7 @@ def login_user(
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
     access_token = create_access_token(
-        data={"sub": str(user.id)},
+        data={"sub": str(db_user.id)},
         expires_delta=access_token_expires
     )
 
@@ -72,11 +64,41 @@ def login_user(
 
 
 # =============================
-# Current User
+# Register  —  /register  &  /auth/register
+# =============================
+
+@router.post("/register", response_model=schemas.UserResponse)
+def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    return _register(user, db)
+
+@auth_router.post("/register", response_model=schemas.UserResponse)
+def auth_register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    return _register(user, db)
+
+
+# =============================
+# Login  —  /login  &  /auth/login
+# =============================
+
+@router.post("/login", response_model=schemas.Token)
+def login_user_json(user: schemas.UserLogin, db: Session = Depends(get_db)):
+    return _login(user, db)
+
+@auth_router.post("/login", response_model=schemas.Token)
+def auth_login_user_json(user: schemas.UserLogin, db: Session = Depends(get_db)):
+    return _login(user, db)
+
+
+# =============================
+# Current User  —  /me  &  /auth/me
 # =============================
 
 @router.get("/me", response_model=schemas.UserResponse)
 def read_current_user(current_user: models.User = Depends(get_current_user)):
+    return current_user
+
+@auth_router.get("/me", response_model=schemas.UserResponse)
+def auth_read_current_user(current_user: models.User = Depends(get_current_user)):
     return current_user
 
 
@@ -265,4 +287,24 @@ def get_recommendations(
         "body_type": current_user.body_type,
         "lifestyle": current_user.lifestyle,
         "outfits": outfits[:3]
+    }
+
+
+# =============================
+# AI-Powered Recommendations (no auth required)
+# =============================
+
+@router.post("/recommendations/ai", response_model=AIRecommendationResponse)
+def get_ai_recommendations_endpoint(request: AIRecommendationRequest):
+    items_dicts = [item.model_dump() for item in request.items]
+    context_dict = request.context.model_dump() if request.context else {}
+
+    result = get_ai_recommendations(items_dicts, context_dict)
+
+    if result is None:
+        return {"source": "fallback", "outfits": []}
+
+    return {
+        "source": "ai",
+        "outfits": result,
     }

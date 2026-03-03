@@ -1,38 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
-
-const WARDROBE_KEY = "fitgpt_wardrobe_v1";
-const GUEST_WARDROBE_KEY = "fitgpt_guest_wardrobe_v1";
-
-function safeParse(json) {
-  try {
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
-function readWardrobeFromStorage(storageObj, key) {
-  const raw = storageObj.getItem(key);
-  const parsed = raw ? safeParse(raw) : null;
-  return Array.isArray(parsed) ? parsed : [];
-}
-
-function loadWardrobeForUser(isSignedIn) {
-  if (isSignedIn) return readWardrobeFromStorage(localStorage, WARDROBE_KEY);
-  return readWardrobeFromStorage(sessionStorage, GUEST_WARDROBE_KEY);
-}
-
-function saveWardrobeForUser(isSignedIn, items) {
-  const safe = Array.isArray(items) ? items : [];
-  if (isSignedIn) {
-    localStorage.setItem(WARDROBE_KEY, JSON.stringify(safe));
-  } else {
-    sessionStorage.setItem(GUEST_WARDROBE_KEY, JSON.stringify(safe));
-    window.dispatchEvent(new Event("fitgpt:guest-wardrobe-changed"));
-  }
-}
+import { loadWardrobe, saveWardrobe } from "../utils/userStorage";
 
 function normalizeId(id) {
   return (id ?? "").toString().trim();
@@ -62,25 +31,22 @@ export default function Favorites() {
   const isSignedIn = Boolean(user);
   const navigate = useNavigate();
 
-  const [items, setItems] = useState(() => loadWardrobeForUser(isSignedIn));
+  const [items, setItems] = useState(() => loadWardrobe(user));
   const [query, setQuery] = useState("");
 
   useEffect(() => {
-    setItems(loadWardrobeForUser(isSignedIn));
-  }, [isSignedIn]);
+    setItems(loadWardrobe(user));
+  }, [user]);
 
   useEffect(() => {
-    const refresh = () => setItems(loadWardrobeForUser(isSignedIn));
+    const refresh = () => setItems(loadWardrobe(user));
 
     const onStorage = (e) => {
-      if (isSignedIn && e.key === WARDROBE_KEY) refresh();
+      if (e.key?.startsWith("fitgpt_wardrobe") || e.key?.startsWith("fitgpt_guest_wardrobe")) refresh();
     };
 
     const onFocus = () => refresh();
-
-    const onGuestWardrobeChanged = () => {
-      if (!isSignedIn) refresh();
-    };
+    const onGuestWardrobeChanged = () => refresh();
 
     window.addEventListener("storage", onStorage);
     window.addEventListener("focus", onFocus);
@@ -91,7 +57,7 @@ export default function Favorites() {
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("fitgpt:guest-wardrobe-changed", onGuestWardrobeChanged);
     };
-  }, [isSignedIn]);
+  }, [user]);
 
   const favorites = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -118,7 +84,7 @@ export default function Favorites() {
     });
 
     setItems(next);
-    saveWardrobeForUser(isSignedIn, next);
+    saveWardrobe(next, user);
   };
 
   return (
@@ -186,10 +152,10 @@ export default function Favorites() {
 
         {!favorites.length ? (
           <div className="wardrobeEmpty">
+            <div className="wardrobeEmptyIcon">{"\u2661"}</div>
             <div className="wardrobeEmptyTitle">No favorites yet</div>
-            <div className="wardrobeEmptySub">Tap the heart on items in Wardrobe to save them here.</div>
-
-            <div style={{ marginTop: 14 }}>
+            <div className="wardrobeEmptySub">Tap the heart on items in your wardrobe to save them here.</div>
+            <div className="wardrobeEmptyBtn">
               <button className="btn primary" type="button" onClick={() => navigate("/wardrobe")}>
                 Go to Wardrobe
               </button>
@@ -202,21 +168,20 @@ export default function Favorites() {
         <NavLink to="/dashboard" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           Home
         </NavLink>
-
         <NavLink to="/wardrobe" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           Wardrobe
         </NavLink>
-
+        <NavLink to="/favorites" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
+          Favorites
+        </NavLink>
         <NavLink to="/history" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           History
         </NavLink>
-
+        <NavLink to="/plans" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
+          Plans
+        </NavLink>
         <NavLink to="/profile" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           Profile
-        </NavLink>
-
-        <NavLink to="/favorites" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          Favorites
         </NavLink>
       </nav>
     </div>

@@ -34,7 +34,7 @@ export default function SavedOutfits() {
     setMsg("");
 
     try {
-      const res = await savedOutfitsApi.listSaved();
+      const res = await savedOutfitsApi.listSaved(user);
       const list = Array.isArray(res?.saved_outfits) ? res.saved_outfits : [];
       setSaved(list);
     } catch (e) {
@@ -52,6 +52,19 @@ export default function SavedOutfits() {
     }
     refresh();
   }, [user]);
+
+  useEffect(() => {
+    const onChanged = () => refresh();
+    const onFocus = () => refresh();
+
+    window.addEventListener("fitgpt:saved-outfits-changed", onChanged);
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      window.removeEventListener("fitgpt:saved-outfits-changed", onChanged);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
 
   const hasAny = saved.length > 0;
 

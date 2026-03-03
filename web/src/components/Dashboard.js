@@ -1,14 +1,14 @@
 // web/src/components/Dashboard.js
 import React, { useEffect, useMemo, useState } from "react";
+import ReactDOM from "react-dom";
 import { NavLink, useNavigate } from "react-router-dom";
 import { logout } from "../api/authApi";
 import { useAuth } from "../auth/AuthProvider";
 import { savedOutfitsApi } from "../api/savedOutfitsApi";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
-
-const THEME_KEY = "fitgpt_theme_v1";
-const WARDROBE_KEY = "fitgpt_wardrobe_v1";
-const GUEST_WARDROBE_KEY = "fitgpt_guest_wardrobe_v1";
+import { loadWardrobe } from "../utils/userStorage";
+import { fetchAIRecommendations } from "../api/recommendationsApi";
+import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 
 const OPEN_ADD_ITEM_FLAG = "fitgpt_open_add_item";
 const DEFAULT_BODY_TYPE = "rectangle";
@@ -44,26 +44,23 @@ function safeParse(json) {
   }
 }
 
-function readTheme() {
-  const raw = localStorage.getItem(THEME_KEY);
-  if (!raw) return "light";
+const REC_SEED_KEY = "fitgpt_rec_seed_v1";
 
-  const parsed = safeParse(raw);
-  if (parsed === "light" || parsed === "dark") return parsed;
-  if (raw === "light" || raw === "dark") return raw;
-
-  return "light";
+function readRecSeed() {
+  try {
+    const raw = sessionStorage.getItem(REC_SEED_KEY);
+    if (raw) {
+      const n = Number(raw);
+      if (Number.isFinite(n)) return n;
+    }
+  } catch {}
+  return Date.now();
 }
 
-function readWardrobeFromStorage(storageObj, key) {
-  const raw = storageObj.getItem(key);
-  const parsed = raw ? safeParse(raw) : null;
-  return Array.isArray(parsed) ? parsed : [];
-}
-
-function loadWardrobeForUser(isSignedIn) {
-  if (isSignedIn) return readWardrobeFromStorage(localStorage, WARDROBE_KEY);
-  return readWardrobeFromStorage(sessionStorage, GUEST_WARDROBE_KEY);
+function writeRecSeed(seed) {
+  try {
+    sessionStorage.setItem(REC_SEED_KEY, String(seed));
+  } catch {}
 }
 
 function titleCase(text) {
@@ -114,6 +111,18 @@ function normalizeColorName(raw) {
   };
 
   return map[t] || t;
+}
+
+function colorToCss(colorName) {
+  const c = normalizeColorName(colorName).toLowerCase();
+  const map = {
+    black: "#1a1a1a", white: "#f5f5f5", gray: "#9ca3af", grey: "#9ca3af",
+    red: "#dc2626", blue: "#3b82f6", green: "#22c55e", yellow: "#eab308",
+    orange: "#f97316", purple: "#a855f7", pink: "#ec4899", brown: "#92400e",
+    beige: "#d4c5a9", navy: "#1e3a5f", teal: "#14b8a6", coral: "#f87171",
+    gold: "#d97706", olive: "#65a30d", lavender: "#a78bfa", mint: "#34d399",
+  };
+  return map[c] || "#9ca3af";
 }
 
 function normalizeFitTag(raw) {
@@ -460,6 +469,7 @@ function defaultOutfitSet(seedNumber) {
       category: normalizeCategory(x.category),
       color: titleCase(x.color || ""),
       fit_tag: "unspecified",
+      image_url: x.image_url || "",
     }));
   };
 
@@ -497,61 +507,6 @@ function makeRecentSets(historyList) {
   return { sigs, itemCounts };
 }
 
-function buildOneOutfit({ buckets, rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers }) {
-  const fallback = [
-    ...buckets.Tops,
-    ...buckets.Bottoms,
-    ...buckets.Shoes,
-    ...buckets.Outerwear,
-    ...buckets.Other,
-  ];
-
-  const topPool = buckets.Tops.length ? buckets.Tops : fallback;
-  const top = pickBestByScore(
-    topPool,
-    (c) => {
-      const id = (c?.id ?? "").toString().trim();
-      const freq = id && recentItemCounts ? recentItemCounts.get(id) || 0 : 0;
-      const wBias = weatherScoreBias(weatherCat, c?.category);
-      const tBias = timeScoreBias(timeCat, c?.category, answers);
-      return 100 - fitPenalty(c?.fit_tag, bodyTypeId, c?.category) - freq * 2 + wBias + tBias;
-    },
-    rng
-  );
-
-  const bottomPool = buckets.Bottoms.length ? buckets.Bottoms : fallback;
-  const bottom = bestMatch(top, bottomPool, rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
-
-  const shoesPool = buckets.Shoes.length ? buckets.Shoes : fallback;
-  const shoes = bestMatch(bottom || top, shoesPool, rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
-
-  const items = [top, bottom, shoes].filter(Boolean);
-
-  const shouldTryOuterwear = (weatherCat === "cold" || weatherCat === "cool") && buckets.Outerwear.length > 0;
-  if (shouldTryOuterwear) {
-    const outer = pickBestByScore(
-      buckets.Outerwear,
-      (c) => {
-        const id = (c?.id ?? "").toString().trim();
-        const freq = id && recentItemCounts ? recentItemCounts.get(id) || 0 : 0;
-        const wBias = weatherScoreBias(weatherCat, c?.category);
-        const tBias = timeScoreBias(timeCat, c?.category, answers);
-        return 50 - freq * 2 + wBias + tBias;
-      },
-      rng
-    );
-    if (outer) items.unshift(outer);
-  }
-
-  return items.map((x, i) => ({
-    id: x.id ?? `w${i}_${x._idx}`,
-    name: x.name ?? "Wardrobe item",
-    category: normalizeCategory(x.category),
-    color: titleCase(x.color || ""),
-    fit_tag: normalizeFitTag(x.fit_tag),
-  }));
-}
-
 function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactSigs, recentItemCounts, weatherCat, timeCat, answers) {
   const active = (Array.isArray(items) ? items : []).filter((x) => x && x.is_active !== false);
 
@@ -562,36 +517,80 @@ function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactSigs, re
   const seed = typeof seedNumber === "number" && Number.isFinite(seedNumber) ? seedNumber : Date.now();
   const buckets = bucketWardrobe(active);
 
-  const outfits = [];
-  const attemptsLimit = 18;
-
-  for (let attempt = 0; attempt < attemptsLimit && outfits.length < 3; attempt++) {
-    const rng = mulberry32(seed + attempt * 9973);
-
-    const outfit = buildOneOutfit({
-      buckets,
-      rng,
-      bodyTypeId: bodyTypeId || DEFAULT_BODY_TYPE,
-      recentItemCounts: recentItemCounts || null,
-      weatherCat: weatherCat || "mild",
-      timeCat: timeCat || "work hours",
-      answers: answers || null,
-    });
-
-    if (!outfit.length) continue;
-
-    const sig = signatureFromItems(outfit);
-    if (sig && recentExactSigs && recentExactSigs.has(sig)) continue;
-    if (sig && outfits.some((o) => signatureFromItems(o) === sig)) continue;
-
-    outfits.push(outfit);
+  // Fisher-Yates shuffle using provided RNG
+  function shuffle(arr, rng) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      const tmp = a[i];
+      a[i] = a[j];
+      a[j] = tmp;
+    }
+    return a;
   }
 
-  while (outfits.length < 3) {
-    outfits.push(defaultOutfitSet(seedNumber)[outfits.length]);
+  const rng = mulberry32(seed);
+
+  const includeOuterwear = (weatherCat === "cold" || weatherCat === "cool") && buckets.Outerwear.length > 0;
+  const includeOther = buckets.Other.length > 0;
+
+  // Track items used as "anchors" across outfits to encourage variety
+  const usedTopIds = new Set();
+
+  const results = [];
+
+  for (let optIdx = 0; optIdx < 3; optIdx++) {
+    const outfitItems = [];
+
+    // Pick anchor top — shuffle, then prefer one not yet used as anchor
+    const shuffledTops = shuffle(buckets.Tops, rng);
+    const unusedTop = shuffledTops.find((t) => !usedTopIds.has(t.id));
+    const top = unusedTop || shuffledTops[0] || null;
+    if (top) {
+      usedTopIds.add(top.id);
+      outfitItems.push(top);
+    }
+
+    // Score-based picking for remaining categories
+    const anchor = top || outfitItems[0] || null;
+
+    const bottom = bestMatch(anchor, shuffle(buckets.Bottoms, rng), rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
+    if (bottom) outfitItems.push(bottom);
+
+    const shoes = bestMatch(bottom || anchor, shuffle(buckets.Shoes, rng), rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
+    if (shoes) outfitItems.push(shoes);
+
+    if (includeOuterwear) {
+      const outer = bestMatch(anchor, shuffle(buckets.Outerwear, rng), rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
+      if (outer) outfitItems.push(outer);
+    }
+
+    if (includeOther) {
+      const accessory = bestMatch(anchor, shuffle(buckets.Other, rng), rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
+      if (accessory) outfitItems.push(accessory);
+    }
+
+    const mapped = outfitItems.map((x, i) => ({
+      id: x.id ?? `w${i}_${x._idx}`,
+      name: x.name ?? "Wardrobe item",
+      category: normalizeCategory(x.category),
+      color: titleCase(x.color || ""),
+      fit_tag: normalizeFitTag(x.fit_tag),
+      image_url: x.image_url || "",
+    }));
+
+    if (mapped.length) {
+      results.push(mapped);
+    }
   }
 
-  return outfits.slice(0, 3);
+  // Always return exactly 3 options; pad by cloning if needed
+  if (!results.length) return defaultOutfitSet(seedNumber);
+  while (results.length < 3) {
+    results.push(results[results.length - 1]);
+  }
+
+  return results.slice(0, 3);
 }
 
 function uniqueNonEmpty(values) {
@@ -691,6 +690,7 @@ function buildOutfitFromIds(ids, wardrobe) {
         category: normalizeCategory(found.category),
         color: titleCase(normalizeColorName(found.color || "")),
         fit_tag: normalizeFitTag(found.fit_tag || found.fitTag || found.fit),
+        image_url: found.image_url || "",
       });
     } else {
       out.push({
@@ -709,9 +709,8 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
 
-  const [theme, setTheme] = useState(() => readTheme());
-  const [wardrobe, setWardrobe] = useState(() => loadWardrobeForUser(!!user));
-  const [recSeed, setRecSeed] = useState(() => Date.now());
+  const [wardrobe, setWardrobe] = useState(() => loadWardrobe(user));
+  const [recSeed, setRecSeed] = useState(() => readRecSeed());
 
   const [saveMsg, setSaveMsg] = useState("");
   const [savingSig, setSavingSig] = useState("");
@@ -729,28 +728,41 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [timeCategory, setTimeCategory] = useState(() => readTimeOverride() || timeCategoryFromDate(new Date()));
   const [showTimePicker, setShowTimePicker] = useState(false);
 
+  // AI recommendation state
+  const [aiOutfits, setAiOutfits] = useState(null);
+  const [aiExplanations, setAiExplanations] = useState([]);
+  const [aiLoading, setAiLoading] = useState(true);
+  const [aiSource, setAiSource] = useState("local");
+  const [aiRefreshToken, setAiRefreshToken] = useState(0);
+  const [aiHasResolved, setAiHasResolved] = useState(false);
+
+  const [upcomingPlan, setUpcomingPlan] = useState(null);
+
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [planDate, setPlanDate] = useState("");
+  const [planOccasion, setPlanOccasion] = useState("");
+  const [planSaving, setPlanSaving] = useState(false);
+
+  // Persist recSeed so recommendations survive navigation
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem(THEME_KEY, theme);
-  }, [theme]);
+    writeRecSeed(recSeed);
+  }, [recSeed]);
 
   useEffect(() => {
-    setWardrobe(loadWardrobeForUser(!!user));
+    setWardrobe(loadWardrobe(user));
   }, [user]);
 
   useEffect(() => {
-    const refresh = () => setWardrobe(loadWardrobeForUser(!!user));
+    const refresh = () => setWardrobe(loadWardrobe(user));
 
     const onStorage = (e) => {
-      if (!user) return;
-      if (e.key === WARDROBE_KEY) refresh();
+      if (e.key?.startsWith("fitgpt_wardrobe") || e.key?.startsWith("fitgpt_guest_wardrobe")) refresh();
     };
 
     const onFocus = () => refresh();
 
-    const onGuestWardrobeChanged = () => {
-      if (!user) refresh();
-    };
+    // Always refresh on wardrobe change, regardless of auth state
+    const onGuestWardrobeChanged = () => refresh();
 
     window.addEventListener("storage", onStorage);
     window.addEventListener("focus", onFocus);
@@ -766,6 +778,42 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   useEffect(() => {
     let alive = true;
 
+    async function loadUpcomingPlan() {
+      try {
+        const res = await plannedOutfitsApi.listPlanned(user);
+        const list = Array.isArray(res?.planned_outfits) ? res.planned_outfits : [];
+
+        const now = new Date();
+        const todayStr = now.toISOString().slice(0, 10);
+        const limit = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+        const upcoming = list
+          .filter((p) => {
+            const d = (p?.planned_date || "").toString();
+            return d >= todayStr && d <= limit;
+          })
+          .sort((a, b) => (a?.planned_date || "").localeCompare(b?.planned_date || ""));
+
+        if (alive) setUpcomingPlan(upcoming.length > 0 ? upcoming[0] : null);
+      } catch {
+        if (alive) setUpcomingPlan(null);
+      }
+    }
+
+    loadUpcomingPlan();
+
+    const onPlannedChange = () => loadUpcomingPlan();
+    window.addEventListener("fitgpt:planned-outfits-changed", onPlannedChange);
+
+    return () => {
+      alive = false;
+      window.removeEventListener("fitgpt:planned-outfits-changed", onPlannedChange);
+    };
+  }, [user]);
+
+  useEffect(() => {
+    let alive = true;
+
     async function loadSavedSigs() {
       if (!user) {
         if (alive) setSavedSigs(new Set());
@@ -773,7 +821,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       }
 
       try {
-        const res = await savedOutfitsApi.listSaved();
+        const res = await savedOutfitsApi.listSaved(user);
         const list = Array.isArray(res?.saved_outfits) ? res.saved_outfits : [];
 
         const sigs = new Set(list.map((o) => (o?.outfit_signature || "").toString().trim()).filter(Boolean));
@@ -796,7 +844,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
     async function loadRecentHistory() {
       try {
-        const res = await outfitHistoryApi.listHistory();
+        const res = await outfitHistoryApi.listHistory(user);
         const list = Array.isArray(res?.history) ? res.history : [];
 
         const sorted = [...list].sort((a, b) => {
@@ -881,6 +929,99 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
   }, []);
 
+  // Fetch AI recommendations in background (debounced to avoid re-fires on mount)
+  useEffect(() => {
+    let alive = true;
+
+    const timerId = setTimeout(() => {
+      async function fetchAI() {
+        const active = (Array.isArray(wardrobe) ? wardrobe : []).filter(
+          (x) => x && x.is_active !== false
+        );
+        if (active.length < 2) {
+          if (alive) {
+            setAiOutfits(null);
+            setAiSource("local");
+            setAiLoading(false);
+            setAiHasResolved(true);
+          }
+          return;
+        }
+
+        setAiLoading(true);
+
+        try {
+          const dressFor = Array.isArray(answers?.dressFor) ? answers.dressFor : [];
+          const style = Array.isArray(answers?.style) ? answers.style : [];
+
+          const context = {
+            weather_category: weatherCategory || "mild",
+            time_category: timeCategory || "work hours",
+            body_type: answers?.bodyType || DEFAULT_BODY_TYPE,
+            occasion: dressFor.length ? dressFor[0] : "daily",
+            style_preferences: style,
+          };
+
+          const res = await fetchAIRecommendations(active, context);
+
+          if (!alive) return;
+
+          if (res?.source === "ai" && Array.isArray(res.outfits) && res.outfits.length > 0) {
+            const byId = new Map(active.map((x) => [(x?.id ?? "").toString(), x]));
+
+            const resolved = res.outfits.map((o) => {
+              const ids = Array.isArray(o?.item_ids) ? o.item_ids : [];
+              return ids
+                .map((id) => {
+                  const found = byId.get(id.toString());
+                  if (!found) return null;
+                  return {
+                    id: found.id ?? id,
+                    name: found.name || "Wardrobe item",
+                    category: normalizeCategory(found.category),
+                    color: titleCase(normalizeColorName(found.color || "")),
+                    fit_tag: normalizeFitTag(found.fit_tag || found.fitTag || found.fit),
+                    image_url: found.image_url || "",
+                  };
+                })
+                .filter(Boolean);
+            }).filter((outfit) => outfit.length >= 2);
+
+            if (resolved.length > 0) {
+              setAiOutfits(resolved.slice(0, 3));
+              setAiExplanations(res.outfits.slice(0, 3).map((o) => o?.explanation || ""));
+              setAiSource("ai");
+            } else {
+              setAiOutfits(null);
+              setAiSource("local");
+            }
+          } else {
+            setAiOutfits(null);
+            setAiSource("local");
+          }
+        } catch {
+          if (alive) {
+            setAiOutfits(null);
+            setAiSource("local");
+          }
+        } finally {
+          if (alive) {
+            setAiLoading(false);
+            setAiHasResolved(true);
+          }
+        }
+      }
+
+      fetchAI();
+    }, 150);
+
+    return () => {
+      alive = false;
+      clearTimeout(timerId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wardrobe, weatherCategory, timeCategory, answers, aiRefreshToken]);
+
   const bodyTypeId = answers?.bodyType ? answers.bodyType : DEFAULT_BODY_TYPE;
 
   const generatedOutfits = useMemo(
@@ -901,32 +1042,56 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const reused = useMemo(() => readReuseOutfit(), []);
 
   const outfits = useMemo(() => {
-    if (!reused) return generatedOutfits;
+    if (reused) {
+      const reusedOutfit = buildOutfitFromIds(reused.items, wardrobe);
+      const rest = generatedOutfits.slice(0, 2);
+      return [reusedOutfit, ...rest].slice(0, 3);
+    }
 
-    const reusedOutfit = buildOutfitFromIds(reused.items, wardrobe);
-    const rest = generatedOutfits.slice(0, 2);
+    // Prefer AI outfits when available
+    if (aiOutfits && aiOutfits.length > 0) {
+      // Pad with local outfits if AI returned fewer than 3
+      const padded = [...aiOutfits];
+      let localIdx = 0;
+      while (padded.length < 3 && localIdx < generatedOutfits.length) {
+        padded.push(generatedOutfits[localIdx++]);
+      }
+      return padded.slice(0, 3);
+    }
 
-    return [reusedOutfit, ...rest].slice(0, 3);
-  }, [generatedOutfits, reused, wardrobe]);
+    return generatedOutfits;
+  }, [generatedOutfits, reused, wardrobe, aiOutfits]);
+
+  const [selectedIdx, setSelectedIdx] = useState(0);
 
   const explanationText = useMemo(() => {
-    const firstOutfit = outfits[0] || [];
-    const text = buildExplanation1to2Sentences({ answers, outfit: firstOutfit });
+    // Use AI explanation if available for this outfit index
+    if (aiSource === "ai" && !reused && aiExplanations[selectedIdx]) {
+      return aiExplanations[selectedIdx];
+    }
+
+    const activeOutfit = outfits[selectedIdx] || outfits[0] || [];
+    const text = buildExplanation1to2Sentences({ answers, outfit: activeOutfit });
     const cleaned = (text || "").toString().trim();
     return cleaned || "Pick a style and an occasion in onboarding to get a personalized explanation.";
-  }, [answers, outfits]);
+  }, [answers, outfits, selectedIdx, aiSource, aiExplanations, reused]);
 
   const chipText = useMemo(() => {
     const dressFor = Array.isArray(answers?.dressFor) ? answers.dressFor : [];
     return dressFor.length ? titleCase(dressFor[0]) : "Daily";
   }, [answers]);
 
-  const toggleTheme = () => setTheme((prev) => (prev === "light" ? "dark" : "light"));
   const canRefresh = true;
 
   const handleRefreshRecommendation = () => {
     clearReuseOutfit();
-    setRecSeed(Date.now());
+    setSelectedIdx(0);
+    // New seed for local fallback (only used if AI fails)
+    setRecSeed((prev) => prev + Math.floor(Math.random() * 100000) + 1);
+    // Keep current AI outfits visible while new ones load —
+    // only clear source/explanations so the word animation replays
+    setAiExplanations([]);
+    setAiRefreshToken((prev) => prev + 1);
   };
 
   const handleLogout = async () => {
@@ -941,6 +1106,70 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const goAddItem = () => {
     sessionStorage.setItem(OPEN_ADD_ITEM_FLAG, "1");
     navigate("/wardrobe");
+  };
+
+  const openPlanModal = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const yyyy = tomorrow.getFullYear();
+    const mm = String(tomorrow.getMonth() + 1).padStart(2, "0");
+    const dd = String(tomorrow.getDate()).padStart(2, "0");
+    setPlanDate(`${yyyy}-${mm}-${dd}`);
+    setPlanOccasion("");
+    setShowPlanModal(true);
+  };
+
+  const handlePlanSave = async () => {
+    if (!planDate) {
+      setSaveMsg("Please pick a date.");
+      window.setTimeout(() => setSaveMsg(""), 2500);
+      return;
+    }
+
+    const outfit = outfits[selectedIdx] || outfits[0] || [];
+    if (!outfit.length) return;
+
+    setPlanSaving(true);
+
+    const itemIds = outfit.map((x) => x?.id).filter(Boolean);
+    const itemDetails = outfit.map((x) => ({
+      id: (x?.id ?? "").toString(),
+      name: x?.name || "",
+      category: x?.category || "",
+      color: x?.color || "",
+      image_url: x?.image_url || "",
+    }));
+
+    try {
+      await plannedOutfitsApi.planOutfit({
+        item_ids: itemIds,
+        item_details: itemDetails,
+        planned_date: planDate,
+        occasion: planOccasion,
+        source: "planner",
+      }, user);
+
+      setSaveMsg("Outfit planned!");
+      window.setTimeout(() => setSaveMsg(""), 2500);
+      setShowPlanModal(false);
+    } catch {
+      setSaveMsg("Could not save plan.");
+      window.setTimeout(() => setSaveMsg(""), 2500);
+    } finally {
+      setPlanSaving(false);
+    }
+  };
+
+  const handleWearPlanNow = () => {
+    if (!upcomingPlan) return;
+    const itemIds = Array.isArray(upcomingPlan.item_ids) ? upcomingPlan.item_ids : [];
+    if (!itemIds.length) return;
+    const normalized = savedOutfitsApi.normalizeItems(itemIds);
+    sessionStorage.setItem(
+      REUSE_OUTFIT_KEY,
+      JSON.stringify({ items: normalized, saved_outfit_id: upcomingPlan.planned_id || "" })
+    );
+    window.location.reload();
   };
 
   function outfitSignature(outfit) {
@@ -965,9 +1194,9 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           time_of_day: timeCategory,
         },
         confidence_score: null,
-      });
+      }, user);
 
-      const res = await outfitHistoryApi.listHistory();
+      const res = await outfitHistoryApi.listHistory(user);
       const list = Array.isArray(res?.history) ? res.history : [];
       const sorted = [...list].sort((a, b) => {
         const da = (a?.worn_at || "").toString();
@@ -1002,16 +1231,40 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     }
 
     if (savedSigs.has(sig)) {
-      setSaveMsg("This outfit is already in your saved outfits.");
-      window.setTimeout(() => setSaveMsg(""), 2500);
+      setSavingSig(sig);
+      try {
+        await savedOutfitsApi.unsaveOutfit(sig, user);
+        await outfitHistoryApi.removeBySignature(sig, user);
+        setSavedSigs((prev) => {
+          const next = new Set(prev);
+          next.delete(sig);
+          return next;
+        });
+        setSaveMsg("Removed from saved outfits.");
+        window.setTimeout(() => setSaveMsg(""), 2500);
+      } catch (e) {
+        setSaveMsg(e?.message || "Could not unsave outfit.");
+        window.setTimeout(() => setSaveMsg(""), 2500);
+      } finally {
+        setSavingSig("");
+      }
       return;
     }
 
     setSavingSig(sig);
 
     try {
+      const itemDetails = (outfit || []).map((x) => ({
+        id: (x?.id ?? "").toString(),
+        name: x?.name || "",
+        category: x?.category || "",
+        color: x?.color || "",
+        image_url: x?.image_url || "",
+      }));
+
       const res = await savedOutfitsApi.saveOutfit({
         items: normalized,
+        item_details: itemDetails,
         source: "recommended",
         context: {
           occasion: chipText,
@@ -1019,7 +1272,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           temperature_f: weatherTempF,
           time_of_day: timeCategory,
         },
-      });
+      }, user);
 
       const created = res?.created === true;
       const msg = (res?.message || "").toString().trim();
@@ -1096,14 +1349,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         </div>
 
         <div className="dashHeaderRight">
-          <button type="button" className="linkBtn" onClick={toggleTheme}>
-            {theme === "light" ? "Dark" : "Light"}
-          </button>
-
-          <button type="button" className="linkBtn" onClick={onResetOnboarding}>
-            Reset
-          </button>
-
           {user ? (
             <button type="button" className="btn" onClick={handleLogout}>
               Logout
@@ -1118,92 +1363,159 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
       <div className="dashTopRightDate">{formatToday()}</div>
 
-      <section className="card dashWide">
-        <div className="dashWeatherRow">
-          <div className="dashWeatherLeft">
-            <div className="dashMuted">Today's Weather</div>
-            <div className="dashStrong">{weatherLine}</div>
-            <div className="dashSubText" style={{ marginTop: 2 }}>
-              Time: {timeLine}
+      <section className="card dashWide dashWeatherCard">
+        <div className="dashWeatherHud">
+          <div className="dashWeatherMain">
+            <span className="dashWeatherEmoji">
+              {weatherCategory === "cold" ? "\u2744\uFE0F" :
+               weatherCategory === "cool" ? "\uD83C\uDF2C\uFE0F" :
+               weatherCategory === "warm" ? "\u2600\uFE0F" :
+               weatherCategory === "hot" ? "\uD83D\uDD25" : "\u26C5"}
+            </span>
+            <div className="dashWeatherInfo">
+              <div className="dashWeatherTemp">
+                {Number.isFinite(Number(weatherTempF)) ? `${weatherTempF}\u00B0F` : titleCase(weatherCategory)}
+              </div>
+              <div className="dashWeatherLabel">
+                {Number.isFinite(Number(weatherTempF)) ? titleCase(weatherCategory) : "Today's Weather"}
+              </div>
             </div>
-
-            {weatherLoading ? (
-              <div className="dashSubText" style={{ marginTop: 4 }}>
-                Detecting weather...
-              </div>
-            ) : null}
-
-            {weatherMsg ? (
-              <div className="dashSubText" style={{ marginTop: 4 }}>
-                {weatherMsg}
-              </div>
-            ) : null}
           </div>
 
-          <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
+          <div className="dashWeatherChips">
             <button
               type="button"
-              className="linkBtn"
-              onClick={() => setShowWeatherPicker((p) => !p)}
-              aria-expanded={showWeatherPicker ? "true" : "false"}
+              className={"dashContextChip" + (showWeatherPicker ? " active" : "")}
+              onClick={() => { setShowWeatherPicker((p) => !p); setShowTimePicker(false); }}
             >
-              Weather
+              <span className="dashContextChipIcon">{"\u2601\uFE0F"}</span>
+              <span>{titleCase(weatherCategory)}</span>
             </button>
-
-            {showWeatherPicker ? (
-              <div style={{ display: "grid", gap: 8, minWidth: 180 }}>
-                <select
-                  className="wardrobeSearch"
-                  value={readWeatherOverride() || ""}
-                  onChange={(e) => applyWeatherOverride(e.target.value)}
-                  aria-label="Weather category"
-                >
-                  <option value="">Use live weather</option>
-                  <option value="cold">Cold</option>
-                  <option value="cool">Cool</option>
-                  <option value="mild">Mild</option>
-                  <option value="warm">Warm</option>
-                  <option value="hot">Hot</option>
-                </select>
-
-                <button type="button" className="btn" onClick={() => setShowWeatherPicker(false)}>
-                  Done
-                </button>
-              </div>
-            ) : null}
 
             <button
               type="button"
-              className="linkBtn"
-              onClick={() => setShowTimePicker((p) => !p)}
-              aria-expanded={showTimePicker ? "true" : "false"}
+              className={"dashContextChip" + (showTimePicker ? " active" : "")}
+              onClick={() => { setShowTimePicker((p) => !p); setShowWeatherPicker(false); }}
             >
-              Time
+              <span className="dashContextChipIcon">{"\uD83D\uDD52"}</span>
+              <span>{timeLine}</span>
             </button>
-
-            {showTimePicker ? (
-              <div style={{ display: "grid", gap: 8, minWidth: 180 }}>
-                <select
-                  className="wardrobeSearch"
-                  value={readTimeOverride() || ""}
-                  onChange={(e) => applyTimeOverride(e.target.value)}
-                  aria-label="Time of day"
-                >
-                  <option value="">Use system time</option>
-                  <option value="morning">Morning</option>
-                  <option value="work hours">Work hours</option>
-                  <option value="evening">Evening</option>
-                  <option value="night">Night</option>
-                </select>
-
-                <button type="button" className="btn" onClick={() => setShowTimePicker(false)}>
-                  Done
-                </button>
-              </div>
-            ) : null}
           </div>
         </div>
+
+        {weatherLoading ? (
+          <div className="dashWeatherStatus">Detecting weather...</div>
+        ) : null}
+        {weatherMsg && !weatherLoading ? (
+          <div className="dashWeatherStatus">{weatherMsg}</div>
+        ) : null}
+
+        {showWeatherPicker ? (
+          <div className="dashContextPicker">
+            {["", "cold", "cool", "mild", "warm", "hot"].map((val) => {
+              const current = readWeatherOverride() || "";
+              const isActive = val === current;
+              const label = val ? titleCase(val) : "Live Weather";
+              return (
+                <button
+                  key={val}
+                  type="button"
+                  className={"dashContextPickerBtn" + (isActive ? " active" : "")}
+                  onClick={() => applyWeatherOverride(val)}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {showTimePicker ? (
+          <div className="dashContextPicker">
+            {["", "morning", "work hours", "evening", "night"].map((val) => {
+              const current = readTimeOverride() || "";
+              const isActive = val === current;
+              const label = val ? titleCase(val) : "System Time";
+              return (
+                <button
+                  key={val}
+                  type="button"
+                  className={"dashContextPickerBtn" + (isActive ? " active" : "")}
+                  onClick={() => applyTimeOverride(val)}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
       </section>
+
+      {upcomingPlan && (() => {
+        const details = Array.isArray(upcomingPlan.item_details) ? upcomingPlan.item_details : [];
+        const previewIds = Array.isArray(upcomingPlan.item_ids) ? upcomingPlan.item_ids.slice(0, 4) : [];
+        const wardrobeMap = new Map(
+          (Array.isArray(wardrobe) ? wardrobe : []).map((x) => [(x?.id ?? "").toString().trim(), x])
+        );
+        const dateLabel = (() => {
+          try {
+            return new Date(upcomingPlan.planned_date + "T00:00:00").toLocaleDateString(undefined, {
+              weekday: "short", month: "short", day: "numeric",
+            });
+          } catch { return upcomingPlan.planned_date; }
+        })();
+
+        return (
+          <section className="card dashWide upcomingPlanCard">
+            <div className="upcomingPlanHeader">
+              <div>
+                <div className="upcomingPlanTitle">Upcoming Plan</div>
+                <div className="upcomingPlanMeta">
+                  {dateLabel}
+                  {upcomingPlan.occasion ? ` \u2022 ${upcomingPlan.occasion}` : ""}
+                </div>
+              </div>
+              <span className="historyBadge planned">Planned</span>
+            </div>
+
+            <div className="upcomingPlanItems">
+              {details.length > 0
+                ? details.slice(0, 4).map((d, idx) => (
+                    <div key={`up_d_${idx}`} className="upcomingPlanItem">
+                      {d?.image_url ? (
+                        <img className="upcomingPlanItemImg" src={d.image_url} alt={d?.name || "Item"} />
+                      ) : (
+                        <div className="upcomingPlanItemPh" />
+                      )}
+                      <span className="upcomingPlanItemName">{d?.name || "Item"}</span>
+                    </div>
+                  ))
+                : previewIds.map((id, idx) => {
+                    const item = wardrobeMap.get((id ?? "").toString().trim());
+                    return (
+                      <div key={`up_i_${idx}`} className="upcomingPlanItem">
+                        {item?.image_url ? (
+                          <img className="upcomingPlanItemImg" src={item.image_url} alt={item?.name || "Item"} />
+                        ) : (
+                          <div className="upcomingPlanItemPh" />
+                        )}
+                        <span className="upcomingPlanItemName">{item?.name || "Item"}</span>
+                      </div>
+                    );
+                  })}
+            </div>
+
+            <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button type="button" className="btn primary" onClick={handleWearPlanNow}>
+                Wear This Now
+              </button>
+              <button type="button" className="btn" onClick={() => navigate("/plans")}>
+                View All Plans
+              </button>
+            </div>
+          </section>
+        );
+      })()}
 
       <section className="card dashWide dashRecCard">
         <div className="dashRecHeader">
@@ -1218,40 +1530,86 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           <div className="dashChip">{chipText}</div>
         </div>
 
-        {outfits.map((outfit, idx) => {
-          const sig = outfitSignature(outfit);
-          const disabled = !sig || savingSig === sig || savedSigs.has(sig);
-          const label = savedSigs.has(sig) ? "Saved" : savingSig === sig ? "Saving..." : "Save";
-
-          return (
-            <div key={`opt_${idx}`} style={{ marginTop: idx === 0 ? 0 : 14 }}>
-              <div className="dashMuted" style={{ fontSize: 13, marginBottom: 8 }}>
-                Option {idx + 1}
-              </div>
-
-              <div className="dashOutfitGridFigma">
-                {outfit.map((item) => (
-                  <div key={item.id} className="dashSquareTile">
-                    <div className="dashSquareImg" aria-hidden="true" />
-                    <div className="dashSquareName">{item.name}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ marginTop: 10 }}>
-                <button type="button" className="btn" onClick={() => handleSaveOutfit(outfit)} disabled={disabled}>
-                  {label}
-                </button>
-              </div>
+        <div key={recSeed} className="dashOutfitsAnimWrap">
+          {!aiHasResolved ? (
+            <div className="dashAiLoading" style={{ padding: "32px 0", textAlign: "center" }}>
+              Generating your outfits...
             </div>
-          );
-        })}
+          ) : outfits.map((outfit, idx) => {
+            const sig = outfitSignature(outfit);
+            const isSaved = savedSigs.has(sig);
+            const disabled = !sig || savingSig === sig;
+            const label = isSaved ? "Unsave" : savingSig === sig ? "Saving..." : "Save";
+
+            return (
+              <div
+                key={`opt_${idx}`}
+                className={"dashOutfitOption" + (idx === selectedIdx ? " dashOutfitSelected" : "")}
+                style={{ animationDelay: `${idx * 120}ms`, marginTop: idx === 0 ? 0 : 18, cursor: "pointer" }}
+                onClick={() => setSelectedIdx(idx)}
+              >
+                <div className="optionLabel">
+                  <span className="optionLabelNum">{String(idx + 1).padStart(2, "0")}</span>
+                  <span className="optionLabelSlash">//</span>
+                  <span className="optionLabelText">OPTION</span>
+                </div>
+
+                <div className="dashOutfitGridFigma">
+                  {outfit.map((item) => (
+                    <div key={item.id} className="dashSquareTile">
+                      {item.image_url ? (
+                        <img className="dashSquareImg" src={item.image_url} alt={item.name} />
+                      ) : (
+                        <div className="dashSquareImg" aria-hidden="true" />
+                      )}
+                      <div className="dashSquareNameRow">
+                        <span
+                          className="dashColorDot"
+                          style={{ background: colorToCss(item.color) }}
+                          title={item.color}
+                        />
+                        <span className="dashSquareName">{item.name}</span>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="dashSaveBtnCell">
+                    <button
+                      type="button"
+                      className={"styledSaveBtn" + (isSaved ? " saved" : "")}
+                      onClick={() => handleSaveOutfit(outfit)}
+                      disabled={disabled}
+                    >
+                      <span className="styledSaveBtnIcon">{isSaved ? "\u2713" : "\u2661"}</span>
+                      <span className="styledSaveBtnText">{label}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
         <div className="dashInfoBlock" aria-live="polite" style={{ marginTop: 12 }}>
-          <div className="dashInfoTitle">Why This Outfit?</div>
-          <div className="dashSubText" style={{ lineHeight: 1.45 }}>
-            {explanationText}
+          <div className="dashInfoTitle">
+            Why Option {String(selectedIdx + 1).padStart(2, "0")}?
+            {aiSource === "ai" && !reused ? <span className="dashAiBadge">AI Powered Suggestion</span> : null}
           </div>
+          {aiLoading ? (
+            <div className="dashAiLoading">Thinking...</div>
+          ) : (
+            <div className="dashSubText" style={{ lineHeight: 1.45 }}>
+              <span key={`${selectedIdx}-${aiRefreshToken}-${recSeed}`} className="dashAiReveal">
+                {explanationText.split(" ").map((word, i) => (
+                  <React.Fragment key={i}>
+                    <span className="dashAiWord" style={{ animationDelay: `${i * 40}ms` }}>
+                      {word}
+                    </span>{" "}
+                  </React.Fragment>
+                ))}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="dashActionRow">
@@ -1259,7 +1617,19 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             Refresh suggestions
           </button>
 
-          <button type="button" className="btn" disabled>
+          <button type="button" className="btn" onClick={() => {
+            const outfit = outfits[selectedIdx] || outfits[0] || [];
+            if (!outfit.length) return;
+            const lines = outfit.map((item) => `${item.name}${item.color ? ` (${item.color})` : ""}`);
+            const text = `My FitGPT Outfit:\n${lines.join("\n")}`;
+            navigator.clipboard.writeText(text).then(() => {
+              setSaveMsg("Outfit copied to clipboard!");
+              window.setTimeout(() => setSaveMsg(""), 2500);
+            }).catch(() => {
+              setSaveMsg("Could not copy to clipboard.");
+              window.setTimeout(() => setSaveMsg(""), 2500);
+            });
+          }}>
             Share
           </button>
         </div>
@@ -1274,40 +1644,97 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       <section className="card dashWide">
         <div className="dashCardTitle">Quick Actions</div>
 
-        <button type="button" className="dashQuickActionFigma" onClick={goAddItem}>
-          <div className="dashStrong">Add item</div>
-          <div className="dashSubText">Upload a new wardrobe piece</div>
-        </button>
+        <div className="dashQuickActionsGrid">
+          <button type="button" className="dashQuickActionFigma" onClick={goAddItem}>
+            <div className="dashQAIcon">+</div>
+            <div className="dashQAContent">
+              <div className="dashQATitle">Add item</div>
+              <div className="dashQADesc">Upload a new wardrobe piece</div>
+            </div>
+            <span className="dashQAArrow">&rsaquo;</span>
+          </button>
 
-        <div className="dashQuickActionFigma" aria-disabled="true">
-          <div className="dashStrong">Plan Tomorrow’s Outfit</div>
-          <div className="dashSubText">Get ahead of your schedule</div>
-        </div>
+          <button type="button" className="dashQuickActionFigma" onClick={openPlanModal}>
+            <div className="dashQAIcon">{"\u2606"}</div>
+            <div className="dashQAContent">
+              <div className="dashQATitle">Plan Tomorrow’s Outfit</div>
+              <div className="dashQADesc">Get ahead of your schedule</div>
+            </div>
+            <span className="dashQAArrow">&rsaquo;</span>
+          </button>
 
-        <div className="dashQuickActionFigma" aria-disabled="true">
-          <div className="dashStrong">Browse Past Outfits</div>
-          <div className="dashSubText">See what you’ve worn recently</div>
+          <button type="button" className="dashQuickActionFigma" onClick={() => navigate("/history")}>
+            <div className="dashQAIcon">{"\u29D6"}</div>
+            <div className="dashQAContent">
+              <div className="dashQATitle">Browse Past Outfits</div>
+              <div className="dashQADesc">See what you’ve worn recently</div>
+            </div>
+            <span className="dashQAArrow">&rsaquo;</span>
+          </button>
         </div>
       </section>
 
+      {showPlanModal && ReactDOM.createPortal(
+        <div className="modalOverlay" role="dialog" aria-modal="true">
+          <div className="modalCard">
+            <div className="modalTitle">Plan This Outfit</div>
+            <div className="modalSub">Pick a date and occasion for this outfit.</div>
+
+            <div style={{ marginTop: 16 }}>
+              <label className="planModalLabel">Date</label>
+              <input
+                type="date"
+                className="wardrobeInput"
+                value={planDate}
+                onChange={(e) => setPlanDate(e.target.value)}
+              />
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <label className="planModalLabel">Occasion</label>
+              <input
+                type="text"
+                className="wardrobeInput"
+                placeholder="e.g. Work, Date night, Casual..."
+                value={planOccasion}
+                onChange={(e) => setPlanOccasion(e.target.value)}
+              />
+            </div>
+
+            <div className="modalActions" style={{ marginTop: 18 }}>
+              <button className="btn" onClick={() => setShowPlanModal(false)} disabled={planSaving}>
+                Cancel
+              </button>
+              <button className="btn primary" onClick={handlePlanSave} disabled={planSaving}>
+                {planSaving ? "Saving..." : "Save Plan"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       <nav className="dashBottomNav" aria-label="Dashboard navigation">
         <NavLink to="/dashboard" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          Today
+          Home
         </NavLink>
-
         <NavLink to="/wardrobe" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           Wardrobe
         </NavLink>
-
         <NavLink to="/favorites" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           Favorites
         </NavLink>
-
+        <NavLink to="/history" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
+          History
+        </NavLink>
+        <NavLink to="/plans" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
+          Plans
+        </NavLink>
         <NavLink to="/profile" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           Profile
         </NavLink>
       </nav>
     </div>
   );
-  
+
 }

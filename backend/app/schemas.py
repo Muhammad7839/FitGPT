@@ -58,6 +58,11 @@ class UserCreate(BaseModel):
     password: str
 
 
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+
 class UserResponse(BaseModel):
     id: int
     email: EmailStr
@@ -152,3 +157,39 @@ class RecommendationResponse(BaseModel):
     body_type: str
     lifestyle: str
     outfits: List[OutfitResponse]
+
+
+# =============================
+# AI Recommendation Schemas
+# =============================
+
+class WardrobeItemInput(BaseModel):
+    id: str
+    name: Optional[str] = ""
+    category: Optional[str] = ""
+    color: Optional[str] = ""
+    fit_type: Optional[str] = ""
+    style_tag: Optional[str] = ""
+
+
+class AIRecommendationContext(BaseModel):
+    weather_category: Optional[str] = "mild"
+    time_category: Optional[str] = "work hours"
+    occasion: Optional[str] = "daily"
+    body_type: Optional[str] = "rectangle"
+    style_preferences: Optional[List[str]] = []
+
+
+class AIRecommendationRequest(BaseModel):
+    items: List[WardrobeItemInput]
+    context: Optional[AIRecommendationContext] = None
+
+
+class AIOutfitResult(BaseModel):
+    item_ids: List[str]
+    explanation: str
+
+
+class AIRecommendationResponse(BaseModel):
+    source: str  # "ai" or "fallback"
+    outfits: List[AIOutfitResult]

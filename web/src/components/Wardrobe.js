@@ -1,7 +1,8 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { wardrobeApi } from "../api/wardrobeApi";
 import { useAuth } from "../auth/AuthProvider";
+import { loadWardrobe, saveWardrobe, userKey, ONBOARDING_ANSWERS_KEY } from "../utils/userStorage";
 
 const CATEGORIES = ["All Items", "Tops", "Bottoms", "Outerwear", "Shoes", "Accessories"];
 
@@ -17,30 +18,10 @@ const FIT_TAG_OPTIONS = [
   { value: "plus", label: "Plus" },
 ];
 
-const GUEST_WARDROBE_KEY = "fitgpt_guest_wardrobe_v1";
 const OPEN_ADD_ITEM_FLAG = "fitgpt_open_add_item";
 
 function uid() {
   return Math.random().toString(16).slice(2) + Date.now().toString(16);
-}
-
-function safeParse(json) {
-  try {
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
-function loadGuestItems() {
-  const raw = sessionStorage.getItem(GUEST_WARDROBE_KEY);
-  const parsed = raw ? safeParse(raw) : null;
-  return Array.isArray(parsed) ? parsed : [];
-}
-
-function saveGuestItems(items) {
-  sessionStorage.setItem(GUEST_WARDROBE_KEY, JSON.stringify(items));
-  window.dispatchEvent(new Event("fitgpt:guest-wardrobe-changed"));
 }
 
 function fileIsOk(file) {
@@ -51,6 +32,30 @@ function fileIsOk(file) {
 
 function fileToObjectUrl(file) {
   return URL.createObjectURL(file);
+}
+
+function fileToDataUrl(file, maxSize = 200) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(objectUrl);
+      resolve(canvas.toDataURL("image/jpeg", 0.7));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Could not load image"));
+    };
+    img.src = objectUrl;
+  });
 }
 
 function normalizeFitTag(raw) {
@@ -64,6 +69,56 @@ function fitLabel(value) {
   const v = normalizeFitTag(value);
   return FIT_TAG_OPTIONS.find((x) => x.value === v)?.label || "Unknown";
 }
+
+// Map wardrobe fit tags to body-type compatibility
+// Based on Dashboard.js fitPenalty logic
+function bodyFitRating(fitTag, bodyType, category) {
+  const tag = normalizeFitTag(fitTag);
+  // Map wardrobe fit tags → Dashboard fit categories
+  let mapped = "unspecified";
+  if (tag === "slim") mapped = "tight";
+  else if (tag === "regular") mapped = "regular";
+  else if (tag === "relaxed" || tag === "plus") mapped = "relaxed";
+  else if (tag === "oversized") mapped = "oversized";
+  else if (tag === "tailored" || tag === "athletic" || tag === "petite") mapped = "fitted";
+
+  const body = (bodyType || "rectangle").toString().trim().toLowerCase();
+  if (mapped === "unspecified") return "neutral";
+
+  if (body === "apple") {
+    if (mapped === "tight") return "poor";
+    if (mapped === "fitted" && category === "Tops") return "fair";
+    if (mapped === "relaxed" || mapped === "regular") return "great";
+    return "good";
+  }
+  if (body === "pear") {
+    if (category === "Tops" && mapped === "oversized") return "poor";
+    if (category === "Bottoms" && mapped === "tight") return "fair";
+    if (category === "Tops" && (mapped === "fitted" || mapped === "regular")) return "great";
+    return "good";
+  }
+  if (body === "inverted") {
+    if (category === "Tops" && mapped === "tight") return "poor";
+    if (category === "Bottoms" && mapped === "oversized") return "fair";
+    if (category === "Bottoms" && (mapped === "regular" || mapped === "relaxed")) return "great";
+    return "good";
+  }
+  if (body === "hourglass") {
+    if (mapped === "oversized") return "fair";
+    if (mapped === "fitted" || mapped === "regular") return "great";
+    return "good";
+  }
+  // rectangle — everything works
+  return "good";
+}
+
+const RATING_META = {
+  great: { label: "Great Fit", cls: "bodyFitGreat" },
+  good:  { label: "Good Fit",  cls: "bodyFitGood" },
+  fair:  { label: "Okay Fit",  cls: "bodyFitFair" },
+  poor:  { label: "Not Ideal", cls: "bodyFitPoor" },
+  neutral: { label: "", cls: "" },
+};
 
 function isNetworkError(e) {
   const msg = (e?.message || "").toString().toLowerCase();
@@ -83,17 +138,53 @@ export default function Wardrobe() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  const userBodyType = useMemo(() => {
+    try {
+      const key = userKey(ONBOARDING_ANSWERS_KEY, user);
+      const raw = localStorage.getItem(key);
+      if (raw) return JSON.parse(raw)?.bodyType || "rectangle";
+    } catch {}
+    return "rectangle";
+  }, [user]);
+
   const fileInputRef = useRef(null);
+  const filterRef = useRef(null);
+  const localEditRef = useRef(false); // prevents load effect from clobbering local changes
+
+  // Wraps setItems to also save to storage synchronously and flag local edit,
+  // preventing the load effect from clobbering freshly added/modified items.
+  const setItemsAndSave = React.useCallback((updater) => {
+    setItems((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveWardrobe(next, user);
+      return next;
+    });
+    localEditRef.current = true;
+  }, [user]);
 
   const [backendOffline, setBackendOffline] = useState(false);
   const effectiveSignedIn = !!user && !backendOffline;
 
-  const [items, setItems] = useState(() => (effectiveSignedIn ? [] : loadGuestItems()));
+  const [items, setItems] = useState(() => loadWardrobe(user));
+  const [itemsLoaded, setItemsLoaded] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All Items");
   const [query, setQuery] = useState("");
   const [bodyFitOn, setBodyFitOn] = useState(true);
   const [view, setView] = useState("grid");
   const [toast, setToast] = useState("");
+
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterColors, setFilterColors] = useState(new Set());
+  const [filterFits, setFilterFits] = useState(new Set());
+
+  useEffect(() => {
+    if (!filterOpen) return;
+    const handleClick = (e) => {
+      if (filterRef.current && !filterRef.current.contains(e.target)) setFilterOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [filterOpen]);
 
   const [tab, setTab] = useState("active");
 
@@ -112,6 +203,12 @@ export default function Wardrobe() {
   const [isSaving, setIsSaving] = useState(false);
   const [addError, setAddError] = useState("");
 
+  // Bulk upload state
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkItems, setBulkItems] = useState([]);
+  const [isBulkSaving, setIsBulkSaving] = useState(false);
+  const [bulkError, setBulkError] = useState("");
+
   const [editOpen, setEditOpen] = useState(false);
   const [editId, setEditId] = useState(null);
   const [editName, setEditName] = useState("");
@@ -127,14 +224,32 @@ export default function Wardrobe() {
   React.useEffect(() => {
     let alive = true;
 
+    // Skip re-loading from storage if a local edit just happened —
+    // the save effect will persist the current items to storage.
+    if (localEditRef.current) {
+      localEditRef.current = false;
+      setItemsLoaded(true);
+      return;
+    }
+
     async function load() {
+      // Always start with local data so we never lose items
+      const local = loadWardrobe(user);
+
       try {
         if (effectiveSignedIn) {
           const data = await wardrobeApi.getItems();
           if (!alive) return;
-          setItems(Array.isArray(data) ? data : []);
+          const apiItems = Array.isArray(data) ? data : [];
+          // Only use API data if it has items; otherwise keep local
+          if (apiItems.length > 0) {
+            setItems(apiItems);
+          } else if (local.length > 0) {
+            setItems(local);
+          } else {
+            setItems([]);
+          }
         } else {
-          const local = loadGuestItems();
           if (!alive) return;
           setItems(Array.isArray(local) ? local : []);
         }
@@ -143,14 +258,12 @@ export default function Wardrobe() {
 
         if (effectiveSignedIn && isNetworkError(e)) {
           setBackendOffline(true);
-          const local = loadGuestItems();
-          setItems(Array.isArray(local) ? local : []);
-          setToast("Backend offline. Using local demo data.");
-          window.setTimeout(() => setToast(""), 2200);
-          return;
         }
 
-        if (!effectiveSignedIn) setItems(loadGuestItems());
+        // On any error, fall back to local data
+        setItems(Array.isArray(local) ? local : []);
+      } finally {
+        if (alive) setItemsLoaded(true);
       }
     }
 
@@ -158,13 +271,15 @@ export default function Wardrobe() {
     return () => {
       alive = false;
     };
-  }, [effectiveSignedIn]);
+  }, [effectiveSignedIn, user]);
 
+  // Always persist to sessionStorage as local backup, regardless of auth state
   React.useEffect(() => {
-    if (!effectiveSignedIn) {
-      saveGuestItems(items);
+    if (itemsLoaded) {
+      saveWardrobe(items, user);
     }
-  }, [items, effectiveSignedIn]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, itemsLoaded]);
 
   const activeItems = useMemo(() => items.filter((x) => x && x.is_active !== false), [items]);
   const archivedItems = useMemo(() => items.filter((x) => x && x.is_active === false), [items]);
@@ -188,6 +303,47 @@ export default function Wardrobe() {
     return map;
   }, [activeItems, archivedItems, tab]);
 
+  const availableColors = useMemo(() => {
+    const source = tab === "archived" ? archivedItems : activeItems;
+    const set = new Set();
+    for (const it of source) {
+      const c = (it.color || "").trim();
+      if (c) set.add(c);
+    }
+    return [...set].sort();
+  }, [activeItems, archivedItems, tab]);
+
+  const availableFits = useMemo(() => {
+    const source = tab === "archived" ? archivedItems : activeItems;
+    const set = new Set();
+    for (const it of source) {
+      const f = normalizeFitTag(it.fit_tag || it.fitTag || it.fit);
+      if (f && f !== "unknown") set.add(f);
+    }
+    return FIT_TAG_OPTIONS.filter((x) => set.has(x.value));
+  }, [activeItems, archivedItems, tab]);
+
+  const activeFilterCount = filterColors.size + filterFits.size;
+
+  const toggleFilterColor = (color) =>
+    setFilterColors((prev) => {
+      const next = new Set(prev);
+      next.has(color) ? next.delete(color) : next.add(color);
+      return next;
+    });
+
+  const toggleFilterFit = (fitVal) =>
+    setFilterFits((prev) => {
+      const next = new Set(prev);
+      next.has(fitVal) ? next.delete(fitVal) : next.add(fitVal);
+      return next;
+    });
+
+  const clearFilters = () => {
+    setFilterColors(new Set());
+    setFilterFits(new Set());
+  };
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const base = tab === "archived" ? archivedItems : activeItems;
@@ -196,9 +352,11 @@ export default function Wardrobe() {
       const catOk = activeCategory === "All Items" ? true : it.category === activeCategory;
       const fit = fitLabel(it.fit_tag || it.fitTag || it.fit);
       const qOk = !q ? true : `${it.name} ${it.color} ${it.category} ${fit}`.toLowerCase().includes(q);
-      return catOk && qOk;
+      const colorOk = filterColors.size === 0 || filterColors.has((it.color || "").trim());
+      const fitOk = filterFits.size === 0 || filterFits.has(normalizeFitTag(it.fit_tag || it.fitTag || it.fit));
+      return catOk && qOk && colorOk && fitOk;
     });
-  }, [activeItems, archivedItems, tab, activeCategory, query]);
+  }, [activeItems, archivedItems, tab, activeCategory, query, filterColors, filterFits]);
 
   const openPicker = () => fileInputRef.current?.click();
 
@@ -249,16 +407,40 @@ export default function Wardrobe() {
     }
   };
 
-  const onPickFile = (fileList) => {
-    const files = Array.from(fileList || []);
-    if (!files.length) return;
-
-    if (files.length > 1) {
-      setToast("Add one item at a time so you can fill the details.");
-      window.setTimeout(() => setToast(""), 2500);
+  const onPickFile = async (fileList) => {
+    const files = Array.from(fileList || []).filter(fileIsOk);
+    if (!files.length) {
+      if (fileList?.length) {
+        setToast("Only JPG/PNG/WEBP up to 10MB are supported.");
+        window.setTimeout(() => setToast(""), 2500);
+      }
+      return;
     }
 
-    openAddModalForFile(files[0]);
+    if (files.length === 1) {
+      openAddModalForFile(files[0]);
+    } else {
+      // Bulk upload
+      const entries = await Promise.all(
+        files.map(async (file) => {
+          const preview = await fileToDataUrl(file);
+          const niceName = file.name.replace(/\.[^/.]+$/, "");
+          return {
+            _key: uid(),
+            file,
+            preview,
+            name: niceName,
+            category: guessCategoryFromName(file.name),
+            color: "",
+            fitTag: "unknown",
+          };
+        })
+      );
+      setBulkItems(entries);
+      setBulkError("");
+      setBulkOpen(true);
+    }
+
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -297,18 +479,19 @@ export default function Wardrobe() {
 
     try {
       if (!effectiveSignedIn) {
+        const dataUrl = await fileToDataUrl(pendingFile);
         const localItem = {
           id: uid(),
           name,
           category: formCategory,
           color,
           fit_tag,
-          image_url: pendingPreview || "",
+          image_url: dataUrl || "",
           is_active: true,
           is_favorite: false,
         };
 
-        setItems((prev) => [localItem, ...prev]);
+        setItemsAndSave((prev) => [localItem, ...prev]);
 
         setIsSaving(false);
         setAddOpen(false);
@@ -338,7 +521,7 @@ export default function Wardrobe() {
         is_favorite: created?.is_favorite ?? false,
       };
 
-      setItems((prev) => [localShadow, ...prev]);
+      setItemsAndSave((prev) => [localShadow, ...prev]);
 
       setIsSaving(false);
       setAddOpen(false);
@@ -350,18 +533,20 @@ export default function Wardrobe() {
       if (effectiveSignedIn && isNetworkError(e)) {
         setBackendOffline(true);
 
+        let dataUrl = "";
+        try { dataUrl = await fileToDataUrl(pendingFile); } catch {}
         const localItem = {
           id: uid(),
           name,
           category: formCategory,
           color,
           fit_tag,
-          image_url: pendingPreview || "",
+          image_url: dataUrl,
           is_active: true,
           is_favorite: false,
         };
 
-        setItems((prev) => [localItem, ...prev]);
+        setItemsAndSave((prev) => [localItem, ...prev]);
 
         setIsSaving(false);
         setAddOpen(false);
@@ -383,6 +568,78 @@ export default function Wardrobe() {
     resetAddForm();
   };
 
+  const updateBulkItem = (key, field, value) => {
+    setBulkItems((prev) =>
+      prev.map((entry) => (entry._key === key ? { ...entry, [field]: value } : entry))
+    );
+  };
+
+  const removeBulkItem = (key) => {
+    setBulkItems((prev) => prev.filter((entry) => entry._key !== key));
+  };
+
+  const cancelBulk = () => {
+    if (isBulkSaving) return;
+    setBulkOpen(false);
+    setBulkItems([]);
+    setBulkError("");
+  };
+
+  const saveBulkItems = async () => {
+    setBulkError("");
+
+    const missing = bulkItems.find((e) => !e.name.trim() || !e.color.trim());
+    if (missing) {
+      setBulkError("Every item needs a name and color.");
+      return;
+    }
+
+    setIsBulkSaving(true);
+
+    try {
+      const newItems = bulkItems.map((entry) => ({
+        id: uid(),
+        name: entry.name.trim(),
+        category: entry.category,
+        color: entry.color.trim(),
+        fit_tag: normalizeFitTag(entry.fitTag),
+        image_url: entry.preview || "",
+        is_active: true,
+        is_favorite: false,
+      }));
+
+      if (effectiveSignedIn) {
+        for (const entry of bulkItems) {
+          try {
+            await wardrobeApi.createItem({
+              name: entry.name.trim(),
+              category: entry.category,
+              color: entry.color.trim(),
+              fit_tag: normalizeFitTag(entry.fitTag),
+              imageFile: entry.file,
+            });
+          } catch (e) {
+            if (isNetworkError(e)) {
+              setBackendOffline(true);
+              break;
+            }
+          }
+        }
+      }
+
+      setItemsAndSave((prev) => [...newItems, ...prev]);
+      setIsBulkSaving(false);
+      setBulkOpen(false);
+      setBulkItems([]);
+
+      setToast(`${newItems.length} item${newItems.length > 1 ? "s" : ""} added.`);
+      window.setTimeout(() => setToast(""), 2000);
+    } catch (e) {
+      setIsBulkSaving(false);
+      setBulkError(e?.message || "Bulk upload failed. Please try again.");
+    }
+  };
+
   const askDelete = (id) => {
     setPendingDeleteId(id);
     setConfirmOpen(true);
@@ -398,42 +655,36 @@ export default function Wardrobe() {
     if (!pendingDeleteId) return;
     setIsDeleting(true);
 
+    const removeLocally = () => {
+      setItemsAndSave((prev) => prev.filter((x) => x.id !== pendingDeleteId));
+      setIsDeleting(false);
+      setConfirmOpen(false);
+      setPendingDeleteId(null);
+    };
+
     try {
       if (!effectiveSignedIn) {
-        setItems((prev) => prev.filter((x) => x.id !== pendingDeleteId));
-        setIsDeleting(false);
-        setConfirmOpen(false);
-        setPendingDeleteId(null);
+        removeLocally();
         setToast(backendOffline ? "Deleted (demo)." : "Deleted (guest mode).");
         window.setTimeout(() => setToast(""), 2000);
         return;
       }
 
       await wardrobeApi.deleteItem(pendingDeleteId);
-      setItems((prev) => prev.filter((x) => x.id !== pendingDeleteId));
-
-      setIsDeleting(false);
-      setConfirmOpen(false);
-      setPendingDeleteId(null);
-
+      removeLocally();
       setToast("Deleted.");
       window.setTimeout(() => setToast(""), 2000);
     } catch (e) {
+      // Always fall back to local delete if API fails
+      removeLocally();
+
       if (effectiveSignedIn && isNetworkError(e)) {
         setBackendOffline(true);
-
-        setItems((prev) => prev.filter((x) => x.id !== pendingDeleteId));
-        setIsDeleting(false);
-        setConfirmOpen(false);
-        setPendingDeleteId(null);
-
-        setToast("Backend offline. Deleted locally for demo.");
-        window.setTimeout(() => setToast(""), 2200);
-        return;
+        setToast("Backend offline. Deleted locally.");
+      } else {
+        setToast("Deleted locally.");
       }
-
-      setIsDeleting(false);
-      setToast(e?.message || "Delete failed.");
+      window.setTimeout(() => setToast(""), 2200);
       window.setTimeout(() => setToast(""), 2500);
     }
   };
@@ -445,28 +696,19 @@ export default function Wardrobe() {
     setIsArchiving(true);
     setPendingArchiveId(id);
 
-    setItems((prev) => prev.map((x) => (x.id === id ? { ...x, is_active: false } : x)));
+    setItemsAndSave((prev) => prev.map((x) => (x.id === id ? { ...x, is_active: false } : x)));
+    setToast("Archived.");
+    window.setTimeout(() => setToast(""), 2000);
+
+    if (tab === "active" && activeCategory !== "All Items") {
+      const stillHas = items.some((x) => x.id !== id && x.is_active !== false && x.category === activeCategory);
+      if (!stillHas) setActiveCategory("All Items");
+    }
 
     try {
-      if (effectiveSignedIn) {
-        await wardrobeApi.archiveItem(id);
-      }
-      setToast("Archived.");
-      window.setTimeout(() => setToast(""), 2000);
-      if (tab === "active" && activeCategory !== "All Items") {
-        const stillHas = items.some((x) => x.is_active !== false && x.category === activeCategory);
-        if (!stillHas) setActiveCategory("All Items");
-      }
-    } catch (e) {
-      if (effectiveSignedIn && isNetworkError(e)) {
-        setBackendOffline(true);
-        setToast("Backend offline. Archived locally for demo.");
-        window.setTimeout(() => setToast(""), 2200);
-      } else {
-        setItems((prev) => prev.map((x) => (x.id === id ? { ...x, is_active: true } : x)));
-        setToast(e?.message || "Could not archive item.");
-        window.setTimeout(() => setToast(""), 2500);
-      }
+      if (effectiveSignedIn) await wardrobeApi.archiveItem(id);
+    } catch {
+      // Ignore API errors — local update is already saved
     } finally {
       setIsArchiving(false);
       setPendingArchiveId(null);
@@ -480,24 +722,14 @@ export default function Wardrobe() {
     setIsArchiving(true);
     setPendingArchiveId(id);
 
-    setItems((prev) => prev.map((x) => (x.id === id ? { ...x, is_active: true } : x)));
+    setItemsAndSave((prev) => prev.map((x) => (x.id === id ? { ...x, is_active: true } : x)));
+    setToast("Unarchived.");
+    window.setTimeout(() => setToast(""), 2000);
 
     try {
-      if (effectiveSignedIn) {
-        await wardrobeApi.unarchiveItem(id);
-      }
-      setToast("Unarchived.");
-      window.setTimeout(() => setToast(""), 2000);
-    } catch (e) {
-      if (effectiveSignedIn && isNetworkError(e)) {
-        setBackendOffline(true);
-        setToast("Backend offline. Unarchived locally for demo.");
-        window.setTimeout(() => setToast(""), 2200);
-      } else {
-        setItems((prev) => prev.map((x) => (x.id === id ? { ...x, is_active: false } : x)));
-        setToast(e?.message || "Could not unarchive item.");
-        window.setTimeout(() => setToast(""), 2500);
-      }
+      if (effectiveSignedIn) await wardrobeApi.unarchiveItem(id);
+    } catch {
+      // Ignore API errors — local update is already saved
     } finally {
       setIsArchiving(false);
       setPendingArchiveId(null);
@@ -545,49 +777,23 @@ export default function Wardrobe() {
 
     setIsUpdating(true);
 
+    // Always save locally
+    setItemsAndSave((prev) =>
+      prev.map((it) => (it.id === editId ? { ...it, name, category: editCategory, color, fit_tag } : it))
+    );
+
+    setIsUpdating(false);
+    setEditOpen(false);
+    setToast("Changes saved.");
+    window.setTimeout(() => setToast(""), 2000);
+
+    // Best-effort API sync
     try {
-      if (!effectiveSignedIn) {
-        setItems((prev) =>
-          prev.map((it) => (it.id === editId ? { ...it, name, category: editCategory, color, fit_tag } : it))
-        );
-
-        setIsUpdating(false);
-        setEditOpen(false);
-
-        setToast(backendOffline ? "Changes saved (demo)." : "Changes saved (guest mode).");
-        window.setTimeout(() => setToast(""), 2000);
-        return;
+      if (effectiveSignedIn) {
+        await wardrobeApi.updateItem(editId, { name, category: editCategory, color, fit_tag });
       }
-
-      await wardrobeApi.updateItem(editId, { name, category: editCategory, color, fit_tag });
-
-      setItems((prev) =>
-        prev.map((it) => (it.id === editId ? { ...it, name, category: editCategory, color, fit_tag } : it))
-      );
-
-      setIsUpdating(false);
-      setEditOpen(false);
-
-      setToast("Changes saved.");
-      window.setTimeout(() => setToast(""), 2000);
-    } catch (e) {
-      if (effectiveSignedIn && isNetworkError(e)) {
-        setBackendOffline(true);
-
-        setItems((prev) =>
-          prev.map((it) => (it.id === editId ? { ...it, name, category: editCategory, color, fit_tag } : it))
-        );
-
-        setIsUpdating(false);
-        setEditOpen(false);
-
-        setToast("Backend offline. Changes saved locally for demo.");
-        window.setTimeout(() => setToast(""), 2200);
-        return;
-      }
-
-      setIsUpdating(false);
-      setEditError(e?.message || "Could not save changes.");
+    } catch {
+      // Ignore API errors — local update is already saved
     }
   };
 
@@ -595,29 +801,18 @@ export default function Wardrobe() {
     const current = items.find((x) => x.id === id);
     const nextVal = !(current?.is_favorite === true);
 
-    if (!effectiveSignedIn && !backendOffline) {
-      setToast("Favorites require an account.");
-      window.setTimeout(() => setToast(""), 2000);
-      return;
-    }
+    // Always update locally first
+    setItemsAndSave((prev) => prev.map((it) => (it.id === id ? { ...it, is_favorite: nextVal } : it)));
+    setToast(nextVal ? "Added to favorites." : "Removed from favorites.");
+    window.setTimeout(() => setToast(""), 1500);
 
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, is_favorite: nextVal } : it)));
-
+    // Best-effort API sync
     try {
       if (effectiveSignedIn) {
         await wardrobeApi.setFavorite(id, nextVal);
       }
-    } catch (e) {
-      if (effectiveSignedIn && isNetworkError(e)) {
-        setBackendOffline(true);
-        setToast("Backend offline. Favorite saved locally for demo.");
-        window.setTimeout(() => setToast(""), 2200);
-        return;
-      }
-
-      setItems((prev) => prev.map((it) => (it.id === id ? { ...it, is_favorite: !nextVal } : it)));
-      setToast(e?.message || "Could not update favorite.");
-      window.setTimeout(() => setToast(""), 2500);
+    } catch {
+      // Ignore API errors — local update is already saved
     }
   };
 
@@ -632,7 +827,6 @@ export default function Wardrobe() {
           </div>
           <div className="wardrobeSub">
             Upload and manage your clothing items
-            {!effectiveSignedIn ? " (demo/guest mode: saved in this browser session)" : ""}
           </div>
         </div>
 
@@ -646,6 +840,7 @@ export default function Wardrobe() {
           ref={fileInputRef}
           type="file"
           accept="image/png,image/jpeg,image/webp"
+          multiple
           style={{ display: "none" }}
           onChange={(e) => onPickFile(e.target.files)}
         />
@@ -725,9 +920,65 @@ export default function Wardrobe() {
             Body Type Fit
           </button>
 
-          <button type="button" className="wardrobeChipBtn" onClick={() => setToast("Filter UI coming next.")}>
-            Filter
-          </button>
+          <div className="wardrobeFilterWrap" ref={filterRef}>
+            <button
+              type="button"
+              className={filterOpen || activeFilterCount > 0 ? "wardrobeChipBtn active" : "wardrobeChipBtn"}
+              onClick={() => setFilterOpen((v) => !v)}
+            >
+              Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+            </button>
+
+            {filterOpen && (
+              <div className="wardrobeFilterDropdown">
+                {availableColors.length > 0 && (
+                  <div className="wardrobeFilterSection">
+                    <div className="wardrobeFilterHeading">Color</div>
+                    <div className="wardrobeFilterChips">
+                      {availableColors.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          className={filterColors.has(c) ? "wardrobeFilterChip active" : "wardrobeFilterChip"}
+                          onClick={() => toggleFilterColor(c)}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {availableFits.length > 0 && (
+                  <div className="wardrobeFilterSection">
+                    <div className="wardrobeFilterHeading">Fit Type</div>
+                    <div className="wardrobeFilterChips">
+                      {availableFits.map((f) => (
+                        <button
+                          key={f.value}
+                          type="button"
+                          className={filterFits.has(f.value) ? "wardrobeFilterChip active" : "wardrobeFilterChip"}
+                          onClick={() => toggleFilterFit(f.value)}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {availableColors.length === 0 && availableFits.length === 0 && (
+                  <div className="wardrobeFilterEmpty">No filter options available yet. Add items to your wardrobe first.</div>
+                )}
+
+                {activeFilterCount > 0 && (
+                  <button type="button" className="wardrobeFilterClear" onClick={clearFilters}>
+                    Clear All Filters
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
 
           <div className="wardrobeViewToggle">
             <button
@@ -780,15 +1031,16 @@ export default function Wardrobe() {
                 )}
               </div>
 
-              {tab === "active" && bodyFitOn ? (
-                <div className="wardrobeBadge good">{Math.random() < 0.45 ? "Great Fit" : "Good Fit"}</div>
-              ) : null}
-
               <div className="wardrobeCardBody">
                 <div className="wardrobeItemName">{it.name}</div>
                 <div className="wardrobeItemMeta">
                   {it.category} · {it.color} · Fit: {fitLabel(it.fit_tag || it.fitTag || it.fit)}
                 </div>
+                {bodyFitOn && (() => {
+                  const r = bodyFitRating(it.fit_tag || it.fitTag || it.fit, userBodyType, it.category);
+                  const meta = RATING_META[r];
+                  return meta?.label ? <span className={`wardrobeBodyFitBadge ${meta.cls}`}>{meta.label}</span> : null;
+                })()}
 
                 <div className="wardrobeCardActions">
                   <button
@@ -862,6 +1114,11 @@ export default function Wardrobe() {
                   <div className="wardrobeItemName">{it.name}</div>
                   <div className="wardrobeItemMeta">
                     {it.category} · {it.color} · Fit: {fitLabel(it.fit_tag || it.fitTag || it.fit)}
+                    {bodyFitOn && (() => {
+                      const r = bodyFitRating(it.fit_tag || it.fitTag || it.fit, userBodyType, it.category);
+                      const meta = RATING_META[r];
+                      return meta?.label ? <span className={`wardrobeBodyFitBadge inline ${meta.cls}`}>{meta.label}</span> : null;
+                    })()}
                   </div>
                 </div>
               </div>
@@ -927,7 +1184,8 @@ export default function Wardrobe() {
 
         {!filtered.length ? (
           <div className="wardrobeEmpty">
-            <div className="wardrobeEmptyTitle">{tab === "archived" ? "No archived items found" : "No items found"}</div>
+            <div className="wardrobeEmptyIcon">{tab === "archived" ? "\u2001" : "\uD83D\uDC54"}</div>
+            <div className="wardrobeEmptyTitle">{tab === "archived" ? "No archived items" : "No items found"}</div>
             <div className="wardrobeEmptySub">Try a different category or search term.</div>
           </div>
         ) : null}
@@ -995,6 +1253,102 @@ export default function Wardrobe() {
               </button>
               <button type="button" className="btnPrimary" onClick={saveNewItem} disabled={isSaving}>
                 {isSaving ? "Saving..." : "Save item"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {bulkOpen ? (
+        <div className="modalOverlay" role="dialog" aria-modal="true">
+          <div className="modalCard" style={{ maxHeight: "85vh", overflow: "auto", width: "min(680px, 96vw)" }}>
+            <div className="modalTitle">Add {bulkItems.length} item{bulkItems.length > 1 ? "s" : ""}</div>
+            <div className="modalSub">Review and fill in details for each item.</div>
+
+            <div style={{ display: "grid", gap: 14, marginTop: 12 }}>
+              {bulkItems.map((entry, idx) => (
+                <div
+                  key={entry._key}
+                  style={{
+                    border: "1px solid rgba(0,0,0,0.08)",
+                    borderRadius: 16,
+                    padding: 14,
+                    display: "grid",
+                    gridTemplateColumns: "80px 1fr auto",
+                    gap: 12,
+                    alignItems: "start",
+                    background: "#fff",
+                  }}
+                >
+                  <img
+                    src={entry.preview}
+                    alt={entry.name}
+                    style={{ width: 80, height: 80, borderRadius: 12, objectFit: "cover" }}
+                  />
+
+                  <div style={{ display: "grid", gap: 8 }}>
+                    <input
+                      className="wardrobeInput"
+                      placeholder="Item name"
+                      value={entry.name}
+                      onChange={(e) => updateBulkItem(entry._key, "name", e.target.value)}
+                    />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <select
+                        className="wardrobeInput"
+                        value={entry.category}
+                        onChange={(e) => updateBulkItem(entry._key, "category", e.target.value)}
+                        style={{ flex: 1 }}
+                      >
+                        {CATEGORIES.filter((c) => c !== "All Items").map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                      <input
+                        className="wardrobeInput"
+                        placeholder="Color"
+                        value={entry.color}
+                        onChange={(e) => updateBulkItem(entry._key, "color", e.target.value)}
+                        style={{ flex: 1 }}
+                      />
+                    </div>
+                    <select
+                      className="wardrobeInput"
+                      value={entry.fitTag}
+                      onChange={(e) => updateBulkItem(entry._key, "fitTag", e.target.value)}
+                    >
+                      {FIT_TAG_OPTIONS.map((x) => (
+                        <option key={x.value} value={x.value}>{x.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="wardrobeIconBtn danger"
+                    onClick={() => removeBulkItem(entry._key)}
+                    title="Remove"
+                    aria-label="Remove item"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {bulkError ? <div className="wardrobeFormError" style={{ marginTop: 10 }}>{bulkError}</div> : null}
+
+            <div className="modalActions">
+              <button type="button" className="btnSecondary" onClick={cancelBulk} disabled={isBulkSaving}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btnPrimary"
+                onClick={saveBulkItems}
+                disabled={isBulkSaving || !bulkItems.length}
+              >
+                {isBulkSaving ? "Saving..." : `Save ${bulkItems.length} item${bulkItems.length > 1 ? "s" : ""}`}
               </button>
             </div>
           </div>
@@ -1087,13 +1441,19 @@ export default function Wardrobe() {
 
       <nav className="dashBottomNav" aria-label="Dashboard navigation">
         <NavLink to="/dashboard" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          Today
+          Home
         </NavLink>
         <NavLink to="/wardrobe" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           Wardrobe
         </NavLink>
         <NavLink to="/favorites" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           Favorites
+        </NavLink>
+        <NavLink to="/history" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
+          History
+        </NavLink>
+        <NavLink to="/plans" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
+          Plans
         </NavLink>
         <NavLink to="/profile" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           Profile

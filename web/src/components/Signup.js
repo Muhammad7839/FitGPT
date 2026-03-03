@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { registerWithEmail, getMe } from "../api/authApi";
 import { useAuth } from "../auth/AuthProvider";
+import { migrateGuestData, clearGuestData } from "../utils/userStorage";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -47,6 +48,10 @@ export default function Signup() {
 
       try {
         const me = await getMe();
+        if (me) {
+          migrateGuestData(me);
+          clearGuestData();
+        }
         if (typeof setUser === "function") setUser(me);
       } catch {}
 
@@ -68,15 +73,11 @@ export default function Signup() {
         </div>
       </div>
 
-      <div className="card dashWide" style={{ marginTop: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+      <div className="card authCard">
+        <div className="authHeader">
           <div>
-            <h1 className="heroTitle" style={{ fontSize: 34, marginBottom: 6 }}>
-              Create account
-            </h1>
-            <p className="heroSub" style={{ marginTop: 0 }}>
-              Save your wardrobe, favorites, and outfit picks.
-            </p>
+            <h1 className="authTitle">Create account</h1>
+            <p className="authSub">Save your wardrobe, favorites, and outfit picks.</p>
           </div>
 
           <button type="button" className="btn" onClick={() => navigate("/auth")}>
@@ -84,8 +85,8 @@ export default function Signup() {
           </button>
         </div>
 
-        <form onSubmit={onSubmit} style={{ marginTop: 18 }}>
-          <label className="wardrobeLabel">
+        <form onSubmit={onSubmit} className="authForm">
+          <label className="authFormGroup">
             Full name
             <input
               className="wardrobeInput"
@@ -96,7 +97,7 @@ export default function Signup() {
             />
           </label>
 
-          <label className="wardrobeLabel" style={{ marginTop: 12 }}>
+          <label className="authFormGroup">
             Date of birth (optional)
             <input
               className="wardrobeInput"
@@ -106,7 +107,7 @@ export default function Signup() {
             />
           </label>
 
-          <label className="wardrobeLabel" style={{ marginTop: 12 }}>
+          <label className="authFormGroup">
             Email
             <input
               className="wardrobeInput"
@@ -118,12 +119,11 @@ export default function Signup() {
             />
           </label>
 
-          <label className="wardrobeLabel" style={{ marginTop: 12 }}>
+          <label className="authFormGroup">
             Password
-            <div style={{ display: "flex", gap: 10 }}>
+            <div className="authPasswordRow">
               <input
                 className="wardrobeInput"
-                style={{ flex: 1 }}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Min 6 characters"
@@ -132,23 +132,20 @@ export default function Signup() {
               />
               <button
                 type="button"
-                className="wardrobeIconBtn"
+                className="wardrobeIconBtn authShowBtn"
                 onClick={() => setShowPw((v) => !v)}
               >
                 {showPw ? "Hide" : "Show"}
               </button>
             </div>
-            <div className="heroSub" style={{ fontSize: 12, marginTop: 6 }}>
-              Password must be at least 6 characters.
-            </div>
+            <span className="authHint">Password must be at least 6 characters.</span>
           </label>
 
-          <label className="wardrobeLabel" style={{ marginTop: 12 }}>
+          <label className="authFormGroup">
             Confirm password
-            <div style={{ display: "flex", gap: 10 }}>
+            <div className="authPasswordRow">
               <input
                 className="wardrobeInput"
-                style={{ flex: 1 }}
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 placeholder="Re-enter password"
@@ -157,7 +154,7 @@ export default function Signup() {
               />
               <button
                 type="button"
-                className="wardrobeIconBtn"
+                className="wardrobeIconBtn authShowBtn"
                 onClick={() => setShowConfirm((v) => !v)}
               >
                 {showConfirm ? "Hide" : "Show"}
@@ -165,21 +162,18 @@ export default function Signup() {
             </div>
           </label>
 
-          {error ? <div className="wardrobeFormError">{error}</div> : null}
+          {error ? <div className="authError">{error}</div> : null}
 
           <button
             type="submit"
-            className="btn primary"
-            style={{ width: "100%", marginTop: 14 }}
+            className="btn primary authSubmit"
             disabled={!canSubmit || isLoading}
           >
             {isLoading ? "Creating..." : "Create account"}
           </button>
 
-          <div style={{ marginTop: 14, textAlign: "center" }}>
-            <span className="heroSub" style={{ fontSize: 14 }}>
-              Already have an account?
-            </span>{" "}
+          <div className="authFooter">
+            <span className="heroSub">Already have an account?</span>{" "}
             <NavLink to="/login" className="linkLike">
               Sign in
             </NavLink>
