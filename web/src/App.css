@@ -1,18 +1,36 @@
 /* web/src/App.css */
+
 :root {
   --bg: #ffffff;
   --text: #111111;
-  --muted: #6b7280;
-  --border: #e5e7eb;
+  --muted: rgba(17, 17, 17, 0.62);
+  --border: rgba(17, 24, 39, 0.10);
 
   --accent: #8b1e1e;
   --accent-hover: #6e1616;
-  --accent-soft: rgba(139, 30, 30, 0.12);
+  --accent-deep: #5a0f0f;
 
-  --shadow: 0 12px 30px rgba(17, 24, 39, 0.08);
+  --accent-soft: rgba(139, 30, 30, 0.12);
+  --accent-soft-2: rgba(139, 30, 30, 0.08);
+  --accent-outline: rgba(139, 30, 30, 0.38);
+  --accent-glow: rgba(139, 30, 30, 0.14);
 
   --wardrobe-blue: #2563eb;
   --wardrobe-blue-soft: rgba(37, 99, 235, 0.08);
+
+  --bgSoft: rgba(0, 0, 0, 0.04);
+
+  --shadow: 0 16px 44px rgba(17, 24, 39, 0.10);
+  --shadow-hover: 0 20px 60px rgba(17, 24, 39, 0.14);
+
+  --pageBg1: #fbf7f7;
+  --pageBg2: #ffffff;
+
+  --radius-lg: 22px;
+  --radius-md: 18px;
+  --radius-sm: 12px;
+
+  --focus: rgba(139, 30, 30, 0.55);
 }
 
 * {
@@ -21,21 +39,60 @@
 
 body {
   margin: 0;
-  background: var(--bg);
   color: var(--text);
-  font-family: "Century Gothic", CenturyGothic, AppleGothic, system-ui, -apple-system,
-    "Segoe UI", Roboto, Arial, sans-serif;
+  font-family: "Century Gothic", CenturyGothic, AppleGothic, system-ui, -apple-system, "Segoe UI", Roboto, Arial,
+    sans-serif;
+  background:
+    radial-gradient(900px 500px at 15% 0%, rgba(139, 30, 30, 0.10), transparent 55%),
+    radial-gradient(900px 500px at 85% 0%, rgba(139, 30, 30, 0.07), transparent 55%),
+    linear-gradient(180deg, var(--pageBg1), var(--pageBg2));
+}
+
+a {
+  color: inherit;
 }
 
 .app {
   min-height: 100vh;
-  background: var(--bg);
+  background: transparent;
 }
 
 .onboarding {
   max-width: 1050px;
   margin: 0 auto;
   padding: 28px 16px 60px;
+}
+
+.card {
+  position: relative;
+  border-radius: var(--radius-lg);
+  padding: 26px;
+  background: #fff;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 6px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  opacity: 0.9;
+}
+
+.onboardingPage .card {
+  margin-top: 12px;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(139, 30, 30, 0.22);
+  box-shadow: var(--shadow-hover), 0 0 0 6px rgba(139, 30, 30, 0.08);
 }
 
 .brandBar {
@@ -57,8 +114,8 @@ body {
   height: 52px;
   border-radius: 16px;
   background: #ffffff;
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
+  border: 1px solid rgba(139, 30, 30, 0.18);
+  box-shadow: 0 14px 34px rgba(17, 24, 39, 0.10), 0 0 0 6px rgba(139, 30, 30, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -68,7 +125,7 @@ body {
   width: 40px;
   height: 40px;
   border-radius: 14px;
-  box-shadow: 0 10px 22px rgba(17, 24, 39, 0.08);
+  box-shadow: 0 12px 28px rgba(17, 24, 39, 0.10), 0 0 0 6px rgba(139, 30, 30, 0.07);
 }
 
 .brandLogo {
@@ -85,18 +142,6 @@ body {
   object-fit: cover;
 }
 
-.card {
-  border: 1px solid var(--border);
-  border-radius: 22px;
-  padding: 26px;
-  background: #fff;
-  box-shadow: var(--shadow);
-}
-
-.onboardingPage .card {
-  margin-top: 12px;
-}
-
 .topRow {
   display: flex;
   justify-content: space-between;
@@ -108,7 +153,7 @@ body {
   margin: 0;
   font-size: 46px;
   line-height: 1.05;
-  letter-spacing: -0.6px;
+  letter-spacing: -0.8px;
 }
 
 .heroSub {
@@ -119,119 +164,64 @@ body {
   line-height: 1.5;
 }
 
-.progressWrap {
-  margin-top: 14px;
-  height: 10px;
-  background: #f3f4f6;
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.progressBar {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 999px;
-  transition: width 180ms ease;
-}
-
-.featureGrid {
-  margin-top: 18px;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-
-.featureCard {
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 16px;
-  background: #fafafa;
-}
-
-.featureCard h3 {
-  margin: 0 0 8px;
-  font-size: 16px;
-}
-
-.featureCard p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.45;
-  font-size: 14px;
-}
-
-.pillGrid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.pill {
-  padding: 10px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: white;
-  cursor: pointer;
-  color: var(--text);
-  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
-}
-
-.pill:hover {
-  transform: translateY(-1px);
-}
-
-.pill.selected {
-  border: 2px solid var(--accent);
-  background: var(--accent-soft);
-}
-
 .noteBox {
   margin-top: 16px;
   padding: 12px 14px;
   border-radius: 14px;
-  border: 1px solid var(--border);
-  background: #fafafa;
-  color: #374151;
-}
-
-.buttonRow {
-  margin-top: 20px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.02);
+  color: rgba(17, 24, 39, 0.85);
 }
 
 .btn {
   padding: 12px 18px;
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(0, 0, 0, 0.10);
   background: white;
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 800;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.btn:active {
+  transform: translateY(1px);
 }
 
 .btn.primary {
   border: 0;
-  background: var(--accent);
   color: white;
+  background: linear-gradient(180deg, var(--accent), var(--accent-hover));
+  box-shadow: 0 16px 40px rgba(139, 30, 30, 0.22);
 }
 
 .btn.primary:hover {
-  background: var(--accent-hover);
+  background: linear-gradient(180deg, var(--accent-hover), var(--accent-deep));
+  box-shadow: 0 18px 46px rgba(139, 30, 30, 0.26);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+  box-shadow: none;
 }
 
 .linkBtn {
   background: transparent;
   border: 0;
-  color: #374151;
+  color: rgba(17, 24, 39, 0.80);
   cursor: pointer;
   padding: 8px 10px;
   border-radius: 10px;
+  transition: background 140ms ease;
 }
 
 .linkBtn:hover {
-  background: #f3f4f6;
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .linkBtn:disabled {
@@ -239,74 +229,6 @@ body {
   cursor: default;
 }
 
-.stepText {
-  margin-top: 14px;
-  color: var(--muted);
-  font-size: 13px;
-  text-align: center;
-}
-
-.optionGrid {
-  margin-top: 16px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.optionCard {
-  text-align: left;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px;
-  background: #ffffff;
-  cursor: pointer;
-}
-
-.optionCard.selected {
-  border: 2px solid var(--accent);
-  background: var(--accent-soft);
-}
-
-.optionTitle {
-  font-weight: 800;
-  margin-bottom: 6px;
-  color: var(--text);
-}
-
-.optionNote {
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.3;
-}
-
-.reviewGrid {
-  margin-top: 16px;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-
-.reviewCard {
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px;
-  background: #f9fafb;
-}
-
-.reviewLabel {
-  font-size: 12px;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 6px;
-}
-
-.reviewValue {
-  color: var(--text);
-  font-weight: 700;
-}
-
-/* LOGIN BUTTONS LAYOUT (reused on Profile) */
 .loginButtons {
   display: flex;
   flex-wrap: wrap;
@@ -314,7 +236,6 @@ body {
   margin-top: 18px;
 }
 
-/* DASHBOARD */
 .dashHeaderBar {
   display: flex;
   align-items: center;
@@ -330,7 +251,7 @@ body {
 }
 
 .dashStrong {
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .dashMuted {
@@ -369,7 +290,8 @@ body {
   width: 32px;
   height: 32px;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(139, 30, 30, 0.08);
+  border: 1px solid rgba(139, 30, 30, 0.12);
 }
 
 .dashRecCard {
@@ -378,8 +300,8 @@ body {
 }
 
 .dashRecHeader {
-  background: rgba(37, 99, 235, 0.06);
-  border-bottom: 1px solid rgba(37, 99, 235, 0.12);
+  background: rgba(139, 30, 30, 0.06);
+  border-bottom: 1px solid rgba(139, 30, 30, 0.12);
   padding: 18px 22px;
   display: flex;
   align-items: center;
@@ -389,16 +311,17 @@ body {
 
 .dashRecTitle {
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 900;
+  letter-spacing: -0.3px;
 }
 
 .dashChip {
   padding: 8px 12px;
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(0, 0, 0, 0.10);
   background: #ffffff;
-  font-weight: 800;
-  color: #374151;
+  font-weight: 900;
+  color: rgba(17, 24, 39, 0.80);
   white-space: nowrap;
 }
 
@@ -410,7 +333,7 @@ body {
 }
 
 .dashSquareTile {
-  border: 2px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: 16px;
   background: #ffffff;
   padding: 18px 14px;
@@ -418,29 +341,36 @@ body {
   display: grid;
   place-items: center;
   gap: 12px;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.08);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.dashSquareTile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 40px rgba(17, 24, 39, 0.12), 0 0 0 6px rgba(139, 30, 30, 0.10);
 }
 
 .dashSquareImg {
   width: 72px;
   height: 72px;
   border-radius: 16px;
-  background: rgba(0, 0, 0, 0.08);
+  background: linear-gradient(135deg, rgba(139, 30, 30, 0.10), rgba(0, 0, 0, 0.06));
 }
 
 .dashSquareName {
-  font-weight: 800;
+  font-weight: 900;
   text-align: center;
   line-height: 1.2;
 }
 
 .dashInfoBlock {
   padding: 14px 22px;
-  border-top: 1px solid rgba(37, 99, 235, 0.12);
-  background: rgba(37, 99, 235, 0.05);
+  border-top: 1px solid rgba(139, 30, 30, 0.12);
+  background: rgba(139, 30, 30, 0.05);
 }
 
 .dashInfoTitle {
-  font-weight: 800;
+  font-weight: 900;
   margin-bottom: 6px;
 }
 
@@ -454,14 +384,16 @@ body {
 
 .dashCardTitle {
   font-size: 16px;
-  font-weight: 800;
+  font-weight: 900;
   margin-bottom: 10px;
+  letter-spacing: -0.3px;
 }
 
 .dashQuickActionFigma {
   border-radius: 16px;
   padding: 16px 14px;
-  background: #f3f4f6;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   margin-top: 10px;
 }
 
@@ -473,29 +405,30 @@ body {
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
   padding: 12px 0 0;
-  background: var(--bg);
+  background: transparent;
 }
 
 .dashNavItem {
-  border: 1px solid var(--border);
+  border: 1px solid rgba(0, 0, 0, 0.10);
   border-radius: 999px;
   padding: 10px 12px;
-  background: white;
-  font-weight: 800;
-  color: #374151;
+  background: rgba(255, 255, 255, 0.92);
+  font-weight: 900;
+  color: rgba(17, 24, 39, 0.82);
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
+  backdrop-filter: blur(6px);
 }
 
 .dashNavActive {
-  border: 2px solid var(--accent);
-  background: var(--accent-soft);
+  border: 2px solid rgba(139, 30, 30, 0.60);
+  background: rgba(139, 30, 30, 0.10);
 }
 
-/* PROFILE (big card) */
 .profilePage {
   min-height: calc(100vh - 60px);
 }
@@ -506,7 +439,118 @@ body {
   padding: 46px;
 }
 
-/* WARDROBE (matches your screenshots) */
+.profileHeaderRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.profileTitle {
+  font-size: 40px;
+  letter-spacing: -0.8px;
+}
+
+.profileSub {
+  margin-top: 8px;
+  color: var(--muted);
+}
+
+.profileHeaderActions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.profileSection {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.profileSectionTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.profileEmpty {
+  margin-top: 12px;
+  border: 1px dashed rgba(0, 0, 0, 0.18);
+  border-radius: 16px;
+  padding: 18px;
+  background: #fff;
+}
+
+/* SAVED OUTFITS */
+.savedOutfitsList {
+  margin-top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.savedOutfitCard {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  background: #fff;
+  padding: 14px;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.savedOutfitCard:hover {
+  transform: translateY(-2px);
+  border-color: rgba(139, 30, 30, 0.28);
+  box-shadow: 0 16px 40px rgba(17, 24, 39, 0.10), 0 0 0 6px rgba(139, 30, 30, 0.08);
+}
+
+.savedOutfitTop {
+  display: grid;
+  gap: 4px;
+}
+
+.savedOutfitTitle {
+  font-weight: 950;
+}
+
+.savedOutfitMeta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.savedOutfitItems {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.savedOutfitPill {
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(17, 24, 39, 0.80);
+}
+
+.savedOutfitMore {
+  color: var(--muted);
+  font-size: 12px;
+  align-self: center;
+}
+
+.savedOutfitActions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* WARDROBE */
 .wardrobeHeader {
   display: flex;
   align-items: center;
@@ -517,8 +561,8 @@ body {
 
 .wardrobeTitle {
   font-size: 34px;
-  font-weight: 800;
-  letter-spacing: -0.4px;
+  font-weight: 900;
+  letter-spacing: -0.8px;
 }
 
 .wardrobeSub {
@@ -528,30 +572,44 @@ body {
 
 .wardrobeAddBtn {
   border: 0;
-  background: var(--wardrobe-blue);
+  background: linear-gradient(180deg, var(--accent), var(--accent-hover));
   color: #fff;
-  font-weight: 800;
+  font-weight: 900;
   padding: 12px 18px;
   border-radius: 12px;
   cursor: pointer;
+  box-shadow: 0 16px 40px rgba(139, 30, 30, 0.20);
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
 }
 
 .wardrobeAddBtn:hover {
-  filter: brightness(0.95);
+  background: linear-gradient(180deg, var(--accent-hover), var(--accent-deep));
+  box-shadow: 0 18px 46px rgba(139, 30, 30, 0.24);
+}
+
+.wardrobeAddBtn:active {
+  transform: translateY(1px);
 }
 
 .wardrobeUploadCard {
   margin-top: 14px;
   padding: 0;
   cursor: pointer;
+  border-color: rgba(139, 30, 30, 0.20);
+}
+
+.wardrobeUploadCard::before {
+  height: 0;
 }
 
 .wardrobeUploadInner {
-  border: 2px dashed rgba(37, 99, 235, 0.35);
+  border: 2px dashed rgba(139, 30, 30, 0.34);
   border-radius: 18px;
   padding: 34px 16px;
   text-align: center;
-  background: #ffffff;
+  background:
+    radial-gradient(900px 500px at 20% 0%, rgba(139, 30, 30, 0.10), transparent 55%),
+    #ffffff;
 }
 
 .wardrobeUploadIcon {
@@ -559,12 +617,13 @@ body {
   height: 44px;
   border-radius: 14px;
   margin: 0 auto 12px;
-  background: rgba(37, 99, 235, 0.12);
+  background: rgba(139, 30, 30, 0.12);
+  border: 1px solid rgba(139, 30, 30, 0.14);
 }
 
 .wardrobeUploadTitle {
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 950;
 }
 
 .wardrobeUploadSub {
@@ -575,12 +634,23 @@ body {
 .wardrobeChooseBtn {
   margin-top: 14px;
   border: 0;
-  background: var(--wardrobe-blue);
+  background: linear-gradient(180deg, var(--accent), var(--accent-hover));
   color: #fff;
-  font-weight: 800;
+  font-weight: 950;
   padding: 12px 22px;
   border-radius: 12px;
   cursor: pointer;
+  box-shadow: 0 16px 40px rgba(139, 30, 30, 0.20);
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.wardrobeChooseBtn:hover {
+  background: linear-gradient(180deg, var(--accent-hover), var(--accent-deep));
+  box-shadow: 0 18px 46px rgba(139, 30, 30, 0.24);
+}
+
+.wardrobeChooseBtn:active {
+  transform: translateY(1px);
 }
 
 .wardrobeUploadHint {
@@ -607,8 +677,16 @@ body {
   width: 100%;
   padding: 13px 14px;
   border-radius: 12px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(0, 0, 0, 0.12);
   outline: none;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.wardrobeSearch:focus {
+  border-color: rgba(139, 30, 30, 0.35);
+  box-shadow: 0 14px 34px rgba(17, 24, 39, 0.08), 0 0 0 6px rgba(139, 30, 30, 0.08);
 }
 
 .wardrobeControlRight {
@@ -618,26 +696,34 @@ body {
 }
 
 .wardrobeChipBtn {
-  border: 1px solid var(--border);
-  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.92);
   padding: 10px 14px;
   border-radius: 12px;
   cursor: pointer;
-  font-weight: 700;
-  color: #374151;
+  font-weight: 900;
+  color: rgba(17, 24, 39, 0.82);
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.wardrobeChipBtn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(139, 30, 30, 0.22);
 }
 
 .wardrobeChipBtn.active {
-  border-color: rgba(37, 99, 235, 0.35);
-  background: var(--wardrobe-blue-soft);
+  background: rgba(139, 30, 30, 0.10);
+  border-color: rgba(139, 30, 30, 0.45);
 }
 
 .wardrobeViewToggle {
   display: inline-flex;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 12px;
   overflow: hidden;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
 }
 
 .wardrobeViewBtn {
@@ -645,13 +731,13 @@ body {
   background: transparent;
   padding: 10px 12px;
   cursor: pointer;
-  font-weight: 800;
-  color: #374151;
+  font-weight: 950;
+  color: rgba(17, 24, 39, 0.82);
   min-width: 42px;
 }
 
 .wardrobeViewBtn.active {
-  background: var(--wardrobe-blue-soft);
+  background: rgba(139, 30, 30, 0.10);
 }
 
 .wardrobeTabs {
@@ -662,139 +748,201 @@ body {
 }
 
 .wardrobeTab {
-  border: 1px solid var(--border);
-  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.92);
   padding: 10px 14px;
   border-radius: 999px;
   cursor: pointer;
-  font-weight: 800;
-  color: #374151;
+  font-weight: 950;
+  color: rgba(17, 24, 39, 0.82);
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.wardrobeTab:hover {
+  transform: translateY(-1px);
+  border-color: rgba(139, 30, 30, 0.22);
 }
 
 .wardrobeTab.active {
-  border-color: rgba(37, 99, 235, 0.35);
-  background: var(--wardrobe-blue-soft);
+  background: rgba(139, 30, 30, 0.10);
+  border-color: rgba(139, 30, 30, 0.45);
 }
 
 .wardrobeGrid {
-  margin-top: 14px;
+  margin-top: 12px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   gap: 14px;
 }
 
 .wardrobeCard {
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  overflow: hidden;
-  background: #fff;
   position: relative;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
+  background: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 12px 30px rgba(17, 24, 39, 0.08);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.wardrobeCard:hover {
+  transform: translateY(-2px);
+  border-color: rgba(139, 30, 30, 0.28);
+  box-shadow: 0 18px 44px rgba(17, 24, 39, 0.12), 0 0 0 6px rgba(139, 30, 30, 0.10);
+}
+
+.wardrobeThumbWrap {
+  width: 100%;
+  height: 170px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(139, 30, 30, 0.06);
+}
+
+.wardrobeThumbWrap.sm {
+  height: 64px;
+  width: 64px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.wardrobeThumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wardrobeThumbImg.sm {
+  width: 64px;
+  height: 64px;
 }
 
 .wardrobeThumb {
-  height: 160px;
-  background: #f3f4f6;
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(139, 30, 30, 0.10), rgba(0, 0, 0, 0.06));
 }
 
 .wardrobeThumb.sm {
-  width: 54px;
-  height: 54px;
+  width: 64px;
+  height: 64px;
   border-radius: 14px;
-  background: #f3f4f6;
-}
-
-.wardrobeBadge {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  padding: 7px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 900;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  background: #fff;
-}
-
-.wardrobeBadge.great {
-  background: rgba(34, 197, 94, 0.12);
-  border-color: rgba(34, 197, 94, 0.25);
-  color: #166534;
-}
-
-.wardrobeBadge.good {
-  background: rgba(245, 158, 11, 0.12);
-  border-color: rgba(245, 158, 11, 0.25);
-  color: #92400e;
 }
 
 .wardrobeCardBody {
-  padding: 12px 12px 14px;
+  padding: 12px;
   display: grid;
   gap: 6px;
 }
 
 .wardrobeItemName {
-  font-weight: 900;
+  font-size: 14px;
+  font-weight: 950;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .wardrobeItemMeta {
+  font-size: 12px;
   color: var(--muted);
-  font-size: 13px;
 }
 
-.wardrobeRemove {
+.wardrobeCardActions {
   margin-top: 6px;
-  border: 1px solid var(--border);
-  background: #fff;
-  padding: 10px 12px;
-  border-radius: 12px;
-  cursor: pointer;
-  font-weight: 800;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
-.wardrobeRemove:hover {
-  background: #f9fafb;
+.wardrobeIconBtn {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  background: rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+  font-weight: 950;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.wardrobeIconBtn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(139, 30, 30, 0.22);
+}
+
+.wardrobeIconBtn.fav.active {
+  background: rgba(139, 30, 30, 0.10);
+  border-color: rgba(139, 30, 30, 0.32);
+}
+
+.wardrobeIconBtn.danger:hover {
+  border-color: rgba(139, 30, 30, 0.30);
+  background: rgba(139, 30, 30, 0.06);
 }
 
 .wardrobeList {
-  margin-top: 14px;
+  margin-top: 12px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .wardrobeRowItem {
-  border: 1px solid var(--border);
-  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
+  background: #ffffff;
   padding: 12px;
-  background: #fff;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  box-shadow: 0 12px 30px rgba(17, 24, 39, 0.08);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.wardrobeRowItem:hover {
+  transform: translateY(-2px);
+  border-color: rgba(139, 30, 30, 0.22);
+  box-shadow: 0 18px 44px rgba(17, 24, 39, 0.12), 0 0 0 6px rgba(139, 30, 30, 0.10);
 }
 
 .wardrobeRowLeft {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
 .wardrobeRowText {
-  display: grid;
-  gap: 3px;
+  min-width: 0;
+}
+
+.wardrobeRowActions {
+  display: flex;
+  gap: 8px;
 }
 
 .wardrobeEmpty {
-  margin-top: 18px;
   border: 1px dashed rgba(0, 0, 0, 0.18);
-  border-radius: 16px;
+  border-radius: 18px;
   padding: 18px;
-  background: #fff;
-  grid-column: 1 / -1;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
 }
 
 .wardrobeEmptyTitle {
-  font-weight: 900;
+  font-weight: 950;
+  font-size: 16px;
 }
 
 .wardrobeEmptySub {
@@ -807,64 +955,18 @@ body {
   left: 50%;
   transform: translateX(-50%);
   bottom: 86px;
-  background: #111827;
+  background: rgba(17, 24, 39, 0.92);
   color: #fff;
   padding: 12px 14px;
   border-radius: 12px;
-  font-weight: 800;
+  font-weight: 900;
   font-size: 13px;
-  box-shadow: 0 18px 40px rgba(17, 24, 39, 0.22);
+  box-shadow: 0 22px 70px rgba(17, 24, 39, 0.22), 0 0 0 6px rgba(139, 30, 30, 0.10);
+  backdrop-filter: blur(8px);
 }
 
-@media (max-width: 1020px) {
-  .wardrobeGrid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 860px) {
-  .heroTitle {
-    font-size: 38px;
-  }
-  .featureGrid {
-    grid-template-columns: 1fr;
-  }
-  .optionGrid {
-    grid-template-columns: 1fr;
-  }
-  .wardrobeGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-.wardrobeThumbWrap{
-  width: 140px;
-  height: 140px;
-  border-radius: 14px;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.wardrobeThumbImg{
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.wardrobeThumbWrap.sm{
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
-}
-
-.wardrobeThumbImg.sm{
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.modalOverlay{
+/* MODAL */
+.modalOverlay {
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.55);
@@ -875,248 +977,551 @@ body {
   z-index: 9999;
 }
 
-.modalCard{
+.modalCard {
   width: min(520px, 96vw);
   background: #ffffff;
   border-radius: 18px;
   padding: 16px;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+  border: 1px solid rgba(139, 30, 30, 0.18);
+  box-shadow: 0 22px 70px rgba(17, 24, 39, 0.18), 0 0 0 7px rgba(139, 30, 30, 0.10);
 }
 
-.modalTitle{
+.modalTitle {
   font-size: 18px;
   margin: 0 0 6px 0;
+  font-weight: 950;
+  letter-spacing: -0.3px;
 }
 
-.modalSub{
+.modalSub {
   font-size: 14px;
-  opacity: 0.8;
+  color: rgba(17, 17, 17, 0.62);
   margin: 0 0 12px 0;
 }
 
-.modalActions{
+.modalActions {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
   margin-top: 14px;
 }
 
-.wardrobeAddPreview{
-  width: 100%;
-  max-width: 320px;
-  aspect-ratio: 1 / 1;
-  border-radius: 14px;
-  overflow: hidden;
-  margin: 10px auto 14px auto;
-  background: #f1f5f9;
-  border: 1px solid #e5e7eb;
+.btnPrimary {
+  border: 0;
+  color: white;
+  background: linear-gradient(180deg, var(--accent), var(--accent-hover));
+  font-weight: 950;
+  padding: 12px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 16px 40px rgba(139, 30, 30, 0.22);
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
 }
 
-.wardrobeAddPreviewImg{
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+.btnPrimary:hover {
+  background: linear-gradient(180deg, var(--accent-hover), var(--accent-deep));
+  box-shadow: 0 18px 46px rgba(139, 30, 30, 0.26);
 }
 
-.wardrobeAddForm{
+.btnPrimary:active {
+  transform: translateY(1px);
+}
+
+.btnPrimary:disabled {
+  opacity: 0.6;
+  cursor: default;
+  box-shadow: none;
+}
+
+.btnSecondary {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  font-weight: 950;
+  padding: 12px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.btnSecondary:hover {
+  transform: translateY(-1px);
+  border-color: rgba(139, 30, 30, 0.18);
+}
+
+.btnSecondary:active {
+  transform: translateY(1px);
+}
+
+.btnSecondary:disabled {
+  opacity: 0.6;
+  cursor: default;
+  box-shadow: none;
+}
+
+.wardrobeAddForm {
   display: grid;
   gap: 10px;
 }
 
-.wardrobeLabel{
+.wardrobeLabel {
   display: grid;
   gap: 6px;
   font-size: 13px;
+  font-weight: 900;
+  color: rgba(17, 24, 39, 0.82);
 }
 
-.wardrobeInput{
+.wardrobeInput {
   height: 42px;
   border-radius: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgba(0, 0, 0, 0.12);
   padding: 0 12px;
   outline: none;
+  background: rgba(255, 255, 255, 0.92);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
-.wardrobeInput:focus{
-  border-color: #94a3b8;
+.wardrobeInput:focus {
+  border-color: rgba(139, 30, 30, 0.35);
+  box-shadow: 0 14px 34px rgba(17, 24, 39, 0.08), 0 0 0 6px rgba(139, 30, 30, 0.08);
 }
 
-.btnPrimary, .btnSecondary{
-  height: 42px;
-  padding: 0 14px;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  cursor: pointer;
+.wardrobeFormError {
+  border: 1px solid rgba(220, 38, 38, 0.22);
+  background: rgba(220, 38, 38, 0.06);
+  color: rgba(127, 29, 29, 0.95);
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-weight: 900;
+  font-size: 13px;
 }
 
-.btnSecondary{
-  background: #f1f5f9;
-  border-color: #e5e7eb;
-}
-
-.btnPrimary{
-  background: #0f172a;
-  color: #ffffff;
-}
-.wardrobeGrid{
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 14px;
-  margin-top: 12px;
-}
-
-.wardrobeCard{
-  position: relative;
-  border: 1px solid #e5e7eb;
-  border-radius: 18px;
-  background: #ffffff;
+.wardrobeAddPreview {
+  width: 100%;
+  border-radius: 16px;
   overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.03);
+  margin: 10px 0 12px;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
 }
 
-.wardrobeThumbWrap{
+.wardrobeAddPreviewImg {
   width: 100%;
-  height: 170px;
-}
-
-.wardrobeThumbImg{
-  width: 100%;
-  height: 100%;
+  height: 220px;
   object-fit: cover;
   display: block;
 }
 
-.wardrobeCardBody{
-  padding: 12px;
+/* HISTORY */
+.historyTopBar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
 }
 
-.wardrobeItemName{
-  font-size: 14px;
-  white-space: nowrap;
+.historyTitle {
+  font-size: 40px;
+  font-weight: 950;
+  letter-spacing: -0.8px;
+}
+
+.historySub {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.historyTopRight {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
+.historyDate {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.historyControls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.historyFilterIcon {
+  display: none;
+}
+
+.historySelect {
+  height: 42px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  font-weight: 950;
+  color: rgba(17, 24, 39, 0.82);
+  outline: none;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
+}
+
+.historySelect:focus {
+  border-color: rgba(139, 30, 30, 0.35);
+  box-shadow: 0 14px 34px rgba(17, 24, 39, 0.08), 0 0 0 6px rgba(139, 30, 30, 0.08);
+}
+
+.historyList {
+  margin-top: 14px;
+  display: grid;
+  gap: 14px;
+}
+
+.historyCard {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
+  background: #fff;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 14px;
+  align-items: center;
+  box-shadow: 0 12px 30px rgba(17, 24, 39, 0.08);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.historyCard:hover {
+  transform: translateY(-2px);
+  border-color: rgba(139, 30, 30, 0.22);
+  box-shadow: 0 18px 44px rgba(17, 24, 39, 0.12), 0 0 0 6px rgba(139, 30, 30, 0.10);
+}
+
+.historyCardLeft {
+  display: flex;
+}
+
+.historyThumbGrid {
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.historyThumbTile {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.02);
+  padding: 10px;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 86px;
+}
+
+.historyThumbImg {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  object-fit: cover;
+  display: block;
+}
+
+.historyThumbPh {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(139, 30, 30, 0.10), rgba(0, 0, 0, 0.06));
+}
+
+.historyThumbLabel {
+  font-size: 12px;
+  font-weight: 950;
+  text-align: center;
+  color: rgba(17, 24, 39, 0.82);
+  line-height: 1.2;
+  max-width: 96px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.wardrobeItemMeta{
-  font-size: 12px;
-  opacity: 0.75;
-  margin-top: 4px;
+.historyCardRight {
+  min-width: 0;
 }
 
-.wardrobeTrash{
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
-  border: 1px solid #e5e7eb;
-  background: rgba(255,255,255,0.9);
-  cursor: pointer;
+.historyMetaRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.wardrobeBadge{
-  position: absolute;
-  left: 10px;
-  top: 10px;
+.historyMetaDate {
+  font-weight: 950;
+  color: rgba(17, 24, 39, 0.92);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.historyBadge {
   padding: 6px 10px;
   border-radius: 999px;
   font-size: 12px;
-  background: rgba(15,23,42,0.9);
-  color: white;
+  font-weight: 950;
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  background: rgba(0, 0, 0, 0.03);
+  color: rgba(17, 24, 39, 0.82);
 }
-.wardrobeFormError{
+
+.historyBadge.recommended {
+  background: rgba(139, 30, 30, 0.10);
+  border-color: rgba(139, 30, 30, 0.22);
+  color: rgba(110, 22, 22, 0.95);
+}
+
+.historyBadge.planned {
+  background: rgba(37, 99, 235, 0.10);
+  border-color: rgba(37, 99, 235, 0.22);
+  color: rgba(30, 64, 175, 0.95);
+}
+
+.historyBadge.saved {
+  background: rgba(34, 197, 94, 0.10);
+  border-color: rgba(34, 197, 94, 0.22);
+  color: rgba(22, 101, 52, 0.95);
+}
+
+.historyCardTitle {
   margin-top: 8px;
-  font-size: 13px;
-  color: #b91c1c;
-  background: #fee2e2;
-  border: 1px solid #fecaca;
-  padding: 10px 12px;
-  border-radius: 12px;
+  font-size: 22px;
+  font-weight: 950;
+  color: rgba(17, 24, 39, 0.92);
 }
-.wardrobeCardActions{
+
+.historyItemsLine {
+  margin-top: 6px;
+  color: rgba(17, 24, 39, 0.82);
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.historyActions {
+  margin-top: 12px;
   display: flex;
-  gap: 8px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* HISTORY STATS + CALLOUT */
+.historyStatsCard {
+  margin-top: 12px;
+  padding: 28px;
+}
+
+.historyStatsCard::before {
+  opacity: 0.85;
+}
+
+.historyStatsTitle {
+  font-size: 28px;
+  font-weight: 950;
+  margin: 0 0 18px;
+}
+
+.historyStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.historyStatTile {
+  background: rgba(139, 30, 30, 0.07);
+  border-radius: 18px;
+  padding: 22px 18px;
+  text-align: center;
+  border: 1px solid rgba(139, 30, 30, 0.10);
+}
+
+.historyStatNumber {
+  font-weight: 950;
+  font-size: 44px;
+  color: var(--accent);
+  line-height: 1.05;
+}
+
+.historyStatLabel {
   margin-top: 10px;
+  font-size: 20px;
+  color: rgba(17, 24, 39, 0.82);
+  font-weight: 900;
 }
 
-.wardrobeRowActions{
+.historyCallout {
+  margin-top: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(139, 30, 30, 0.20);
+  background: rgba(139, 30, 30, 0.06);
+  padding: 18px 18px;
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 14px;
 }
 
-.wardrobeIconBtn{
+.historyCalloutIcon {
   width: 40px;
   height: 40px;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
-  cursor: pointer;
-}
-
-.wardrobeIconBtn.danger{
-  background: #fff1f2;
-  border-color: #fecdd3;
-}
-.linkLike{
-  color: inherit;
-  text-decoration: underline;
-}
-.linkLike{
-  color: inherit;
-  text-decoration: underline;
-}
-.wardrobeColorTag{
-  display:inline-block;
-  padding:6px 10px;
-  border-radius:999px;
-  font-size:12px;
-  line-height:1;
-  border:1px solid var(--border);
-  background: var(--bgSoft);
-  color: var(--text);
-}
-/* AUTH SCREENS (Signup + Login) */
-
-.authCardTitleRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.authForm {
-  margin-top: 18px;
+  border-radius: 14px;
   display: grid;
-  gap: 12px;
+  place-items: center;
+  background: rgba(139, 30, 30, 0.10);
+  color: var(--accent);
+  font-weight: 950;
+  font-size: 18px;
 }
 
-.authRow {
+.historyCalloutText {
+  color: rgba(17, 24, 39, 0.82);
+  line-height: 1.45;
+  font-size: 18px;
+}
+
+.historyCalloutStrong {
+  font-weight: 950;
+  color: rgba(17, 24, 39, 0.92);
+}
+
+/* WEATHER (Dashboard) */
+.dashWeatherRight {
   display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dashWeatherPill {
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 950;
+  font-size: 13px;
+  color: rgba(17, 24, 39, 0.82);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
+  backdrop-filter: blur(6px);
+}
+
+.dashWeatherPill.temp {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.dashWeatherPill.status {
+  background: rgba(139, 30, 30, 0.10);
+  border-color: rgba(139, 30, 30, 0.22);
+  color: rgba(110, 22, 22, 0.95);
+}
+
+.weatherInlineMsg {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.86);
+  color: rgba(17, 24, 39, 0.82);
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
+}
+
+.weatherOverrideRow {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
 }
 
-.authRow .wardrobeInput {
-  flex: 1;
+.weatherChangeBtn {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  background: rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+  font-weight: 950;
+  color: rgba(17, 24, 39, 0.82);
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
 }
 
-.btnPrimary:hover {
-  filter: brightness(0.95);
+.weatherChangeBtn:hover {
+  border-color: rgba(139, 30, 30, 0.18);
 }
 
-.btnSecondary:hover {
-  filter: brightness(0.98);
+.weatherSelect {
+  height: 42px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  font-weight: 950;
+  color: rgba(17, 24, 39, 0.82);
+  outline: none;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
 }
 
-.wardrobeIconBtn:hover {
-  background: #f8fafc;
+.weatherSelect:focus {
+  border-color: rgba(139, 30, 30, 0.35);
+  box-shadow: 0 14px 34px rgba(17, 24, 39, 0.08), 0 0 0 6px rgba(139, 30, 30, 0.08);
 }
 
-.wardrobeIconBtn:active,
-.btnPrimary:active,
-.btnSecondary:active {
-  transform: translateY(1px);
+/* ACCESSIBILITY: focus rings */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 4px rgba(139, 30, 30, 0.18);
+  border-color: rgba(139, 30, 30, 0.35);
+}
+
+@media (max-width: 860px) {
+  .heroTitle {
+    font-size: 38px;
+  }
+
+  .dashOutfitGridFigma {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profileCard {
+    padding: 26px;
+  }
+
+  .historyStatsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .historyCard {
+    grid-template-columns: 1fr;
+  }
+
+  .historyTopRight {
+    justify-items: start;
+  }
 }
 
 @media (max-width: 520px) {
@@ -1128,13 +1533,21 @@ body {
     font-size: 32px;
   }
 
-  .authRow {
-    flex-direction: column;
-    align-items: stretch;
+  .wardrobeSearchWrap {
+    min-width: 100%;
   }
 
-  .wardrobeIconBtn {
+  .dashWeatherPill {
     width: 100%;
-    height: 42px;
+    justify-content: center;
+  }
+
+  .weatherOverrideRow {
+    width: 100%;
+  }
+
+  .weatherChangeBtn,
+  .weatherSelect {
+    width: 100%;
   }
 }

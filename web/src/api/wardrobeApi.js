@@ -1,4 +1,3 @@
-// web/src/api/wardrobeApi.js
 import { apiFetch, hasApi } from "./apiFetch";
 
 const PATHS = {
@@ -12,6 +11,22 @@ function ensureApi() {
   if (!hasApi()) throw new Error("API base URL is missing.");
 }
 
+function toFormData(payload) {
+  const fd = new FormData();
+
+  Object.entries(payload || {}).forEach(([k, v]) => {
+    if (v === undefined || v === null) return;
+    if (k === "imageFile") return;
+    fd.append(k, String(v));
+  });
+
+  if (payload?.imageFile) {
+    fd.append("image", payload.imageFile);
+  }
+
+  return fd;
+}
+
 export const wardrobeApi = {
   async getItems() {
     ensureApi();
@@ -20,6 +35,13 @@ export const wardrobeApi = {
 
   async createItem(payload) {
     ensureApi();
+
+    const hasFile = !!payload?.imageFile;
+    if (hasFile) {
+      const body = toFormData(payload);
+      return apiFetch(PATHS.create, { method: "POST", body });
+    }
+
     return apiFetch(PATHS.create, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -28,6 +50,13 @@ export const wardrobeApi = {
 
   async updateItem(id, payload) {
     ensureApi();
+
+    const hasFile = !!payload?.imageFile;
+    if (hasFile) {
+      const body = toFormData(payload);
+      return apiFetch(PATHS.update(id), { method: "PUT", body });
+    }
+
     return apiFetch(PATHS.update(id), {
       method: "PUT",
       body: JSON.stringify(payload),
@@ -37,5 +66,29 @@ export const wardrobeApi = {
   async deleteItem(id) {
     ensureApi();
     return apiFetch(PATHS.remove(id), { method: "DELETE" });
+  },
+
+  async setFavorite(id, is_favorite) {
+    ensureApi();
+    return apiFetch(PATHS.update(id), {
+      method: "PUT",
+      body: JSON.stringify({ is_favorite }),
+    });
+  },
+
+  async archiveItem(id) {
+    ensureApi();
+    return apiFetch(PATHS.update(id), {
+      method: "PUT",
+      body: JSON.stringify({ is_active: false }),
+    });
+  },
+
+  async unarchiveItem(id) {
+    ensureApi();
+    return apiFetch(PATHS.update(id), {
+      method: "PUT",
+      body: JSON.stringify({ is_active: true }),
+    });
   },
 };
