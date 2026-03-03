@@ -1,11 +1,12 @@
-
 import React, { useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-
-
+import { registerWithEmail, getMe } from "../api/authApi";
+import { useAuth } from "../auth/AuthProvider";
 
 export default function Signup() {
   const navigate = useNavigate();
+  const auth = useAuth();
+  const setUser = auth?.setUser;
 
   const [fullName, setFullName] = useState("");
   const [dob, setDob] = useState("");
@@ -42,12 +43,14 @@ export default function Signup() {
     setIsLoading(true);
 
     try {
-    
-      await new Promise((r) => setTimeout(r, 450));
+      await registerWithEmail(email.trim(), password);
 
-     
+      try {
+        const me = await getMe();
+        if (typeof setUser === "function") setUser(me);
+      } catch {}
 
-      navigate("/onboarding", { replace: true });
+      navigate("/login", { replace: true });
     } catch (err) {
       setError(err?.message || "Registration failed. Please try again.");
     } finally {
@@ -76,7 +79,7 @@ export default function Signup() {
             </p>
           </div>
 
-          <button type="button" className="btnSecondary" onClick={() => navigate("/auth")}>
+          <button type="button" className="btn" onClick={() => navigate("/auth")}>
             Back
           </button>
         </div>
@@ -166,7 +169,7 @@ export default function Signup() {
 
           <button
             type="submit"
-            className="btnPrimary"
+            className="btn primary"
             style={{ width: "100%", marginTop: 14 }}
             disabled={!canSubmit || isLoading}
           >

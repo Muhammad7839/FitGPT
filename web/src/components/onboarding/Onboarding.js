@@ -1,12 +1,9 @@
-
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const TOTAL_STEPS = 5;
 
-
 const DEFAULT_BODY_TYPE_ID = "rectangle";
-
-
 const DEFAULT_COMFORT = ["Balanced"];
 
 const STYLE_OPTIONS = [
@@ -18,13 +15,7 @@ const STYLE_OPTIONS = [
   "Formal",
 ];
 
-const COMFORT_OPTIONS = [
-  "Balanced",
-  "Relaxed",
-  "Fitted",
-  "Stretchy",
-  "Layered",
-];
+const COMFORT_OPTIONS = ["Balanced", "Relaxed", "Fitted", "Stretchy", "Layered"];
 
 const DRESS_FOR_OPTIONS = [
   "Class / Campus",
@@ -49,7 +40,7 @@ function normalizeAnswers(raw) {
     style: Array.isArray(raw?.style) ? raw.style : [],
     comfort: Array.isArray(raw?.comfort) ? raw.comfort : [],
     dressFor: Array.isArray(raw?.dressFor) ? raw.dressFor : [],
-    bodyType: raw?.bodyType ?? null, // keep null during onboarding if skipped
+    bodyType: raw?.bodyType ?? null,
   };
 }
 
@@ -63,7 +54,8 @@ function withDefaultsOnFinish(answers) {
   const next = { ...(answers || {}) };
 
   if (!next.bodyType) next.bodyType = DEFAULT_BODY_TYPE_ID;
-  if (!Array.isArray(next.comfort) || next.comfort.length === 0) next.comfort = DEFAULT_COMFORT;
+  if (!Array.isArray(next.comfort) || next.comfort.length === 0)
+    next.comfort = DEFAULT_COMFORT;
 
   if (!Array.isArray(next.style)) next.style = [];
   if (!Array.isArray(next.dressFor)) next.dressFor = [];
@@ -71,11 +63,20 @@ function withDefaultsOnFinish(answers) {
   return next;
 }
 
-export default function Onboarding({ onComplete, initialStep = 1, initialAnswers, onProgress }) {
+export default function Onboarding({
+  onComplete,
+  initialStep = 1,
+  initialAnswers,
+  onProgress,
+}) {
+  const navigate = useNavigate();
+
   const [step, setStep] = useState(() => clampStep(initialStep));
   const [answers, setAnswers] = useState(() => normalizeAnswers(initialAnswers));
 
   const isSkippableStep = step >= 2 && step <= 4;
+
+  const safeComplete = typeof onComplete === "function" ? onComplete : null;
 
   const progressWidth = useMemo(() => {
     return `${(step / TOTAL_STEPS) * 100}%`;
@@ -93,7 +94,14 @@ export default function Onboarding({ onComplete, initialStep = 1, initialAnswers
     }
 
     const finalAnswers = withDefaultsOnFinish(answers);
-    onComplete(finalAnswers);
+
+    // Fix: if onComplete wasn't passed, don't crash — just go to dashboard.
+    if (safeComplete) {
+      safeComplete(finalAnswers);
+      return;
+    }
+
+    navigate("/dashboard", { replace: true });
   };
 
   const goBack = () => {
@@ -292,7 +300,9 @@ export default function Onboarding({ onComplete, initialStep = 1, initialAnswers
           <div className="reviewCard">
             <div className="reviewLabel">Comfort</div>
             <div className="reviewValue">
-              {answers.comfort.length ? answers.comfort.join(", ") : "Skipped (default will be Balanced)"}
+              {answers.comfort.length
+                ? answers.comfort.join(", ")
+                : "Skipped (default will be Balanced)"}
             </div>
           </div>
 
@@ -350,7 +360,7 @@ export default function Onboarding({ onComplete, initialStep = 1, initialAnswers
         <div style={{ marginTop: 18 }}>{renderStepContent()}</div>
 
         <div className="buttonRow">
-          <button className="btn primary" onClick={goNext}>
+          <button type="button" className="btn primary" onClick={goNext}>
             {step === TOTAL_STEPS ? "Finish" : "Continue"}
           </button>
         </div>
