@@ -1213,13 +1213,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   }
 
   async function handleSaveOutfit(outfit) {
-    if (!user) {
-      setSaveMsg("Sign in to save outfits.");
-      window.setTimeout(() => setSaveMsg(""), 2500);
-      navigate("/auth");
-      return;
-    }
-
     const itemIds = (outfit || []).map((x) => x?.id).filter(Boolean);
     const normalized = savedOutfitsApi.normalizeItems(itemIds);
     const sig = normalized.join("|");
@@ -1282,8 +1275,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         next.add(sig);
         return next;
       });
-
-      await recordOutfitInHistory(outfit, "saved");
 
       if (msg) setSaveMsg(msg);
       else setSaveMsg(created ? "Saved." : "This outfit is already in your saved outfits.");
@@ -1726,6 +1717,9 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         </NavLink>
         <NavLink to="/history" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           History
+        </NavLink>
+        <NavLink to="/saved-outfits" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
+          Saved
         </NavLink>
         <NavLink to="/plans" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           Plans

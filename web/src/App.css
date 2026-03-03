@@ -2686,6 +2686,24 @@ img.dashSquareImg {
   font-size: 13px;
 }
 
+.classifyingHint {
+  display: inline-block;
+  font-size: 11px;
+  color: rgba(99, 102, 241, 0.85);
+  font-weight: 600;
+  margin-top: 3px;
+  animation: classifyPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes classifyPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+[data-theme="dark"] .classifyingHint {
+  color: rgba(165, 180, 252, 0.9);
+}
+
 .wardrobeAddPreview {
   width: 100%;
   border-radius: 16px;
