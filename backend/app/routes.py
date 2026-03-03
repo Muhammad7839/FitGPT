@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta
-from app.auth import get_current_user
 
 from app.database.database import get_db
 from app import schemas, crud, models
@@ -12,8 +11,22 @@ from app.auth import (
     get_current_user,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
+from app.schemas import RecommendationResponse
+from app.weather import get_weather
 
 router = APIRouter()
+
+
+# =============================
+# Onboarding Enforcement
+# =============================
+
+def require_onboarding_complete(current_user: models.User):
+    if not current_user.onboarding_complete:
+        raise HTTPException(
+            status_code=403,
+            detail="Complete onboarding before accessing this feature."
+        )
 
 
 # =============================
@@ -25,7 +38,6 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     existing_user = crud.get_user_by_email(db, user.email)
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
-
     return crud.create_user(db, user)
 
 
@@ -40,13 +52,7 @@ def login_user(
 ):
     user = crud.get_user_by_email(db, form_data.username)
 
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
-        )
-
-    if not verify_password(form_data.password, user.hashed_password):
+    if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
@@ -66,83 +72,16 @@ def login_user(
 
 
 # =============================
-# Protected Test Route
+# Current User
 # =============================
 
 @router.get("/me", response_model=schemas.UserResponse)
 def read_current_user(current_user: models.User = Depends(get_current_user)):
     return current_user
 
-# =============================
-# Wardrobe - Create Item
-# =============================
-
-@router.post("/wardrobe/items", response_model=schemas.ClothingItemResponse)
-def create_wardrobe_item(
-    item: schemas.ClothingItemCreate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    return crud.create_clothing_item(db, item, current_user.id)
-
 
 # =============================
-# Wardrobe - Get My Items
-# =============================
-
-@router.get("/wardrobe/items", response_model=list[schemas.ClothingItemResponse])
-def get_my_wardrobe(
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    return crud.get_clothing_items_for_user(db, current_user.id)
-
-# =============================
-# Wardrobe - Update Item
-# =============================
-
-@router.put("/wardrobe/items/{item_id}", response_model=schemas.ClothingItemResponse)
-def update_wardrobe_item(
-    item_id: int,
-    updated_item: schemas.ClothingItemCreate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    db_item = crud.get_clothing_item_by_id(db, item_id)
-
-    if not db_item:
-        raise HTTPException(status_code=404, detail="Item not found")
-
-    if db_item.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this item")
-
-    return crud.update_clothing_item(db, db_item, updated_item)
-
-
-# =============================
-# Wardrobe - Delete Item
-# =============================
-
-@router.delete("/wardrobe/items/{item_id}")
-def delete_wardrobe_item(
-    item_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    db_item = crud.get_clothing_item_by_id(db, item_id)
-
-    if not db_item:
-        raise HTTPException(status_code=404, detail="Item not found")
-
-    if db_item.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this item")
-
-    crud.delete_clothing_item(db, db_item)
-
-    return {"detail": "Item deleted successfully"}
-
-# =============================
-# Update User Profile (Onboarding)
+# Update User Profile
 # =============================
 
 @router.put("/me/profile", response_model=schemas.UserResponse)
@@ -153,3 +92,177 @@ def update_my_profile(
 ):
     return crud.update_user_profile(db, current_user, updated_data)
 
+
+# =============================
+# Wardrobe CRUD
+# =============================
+
+@router.post("/wardrobe/items", response_model=schemas.ClothingItemResponse)
+def create_wardrobe_item(
+    item: schemas.ClothingItemCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    require_onboarding_complete(current_user)
+    return crud.create_clothing_item(db, item, current_user.id)
+
+
+@router.get("/wardrobe/items", response_model=list[schemas.ClothingItemResponse])
+def get_my_wardrobe(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    require_onboarding_complete(current_user)
+    return crud.get_clothing_items_for_user(db, current_user.id)
+
+
+@router.put("/wardrobe/items/{item_id}", response_model=schemas.ClothingItemResponse)
+def update_wardrobe_item(
+    item_id: int,
+    updated_item: schemas.ClothingItemCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    require_onboarding_complete(current_user)
+
+    db_item = crud.get_clothing_item_by_id(db, item_id)
+
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    if db_item.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    return crud.update_clothing_item(db, db_item, updated_item)
+
+
+@router.delete("/wardrobe/items/{item_id}")
+def delete_wardrobe_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    require_onboarding_complete(current_user)
+
+    db_item = crud.get_clothing_item_by_id(db, item_id)
+
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    if db_item.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    crud.delete_clothing_item(db, db_item)
+    return {"detail": "Item deleted successfully"}
+
+
+# =============================
+# Dashboard Context
+# =============================
+
+@router.get("/dashboard/context")
+def get_dashboard_context(
+    current_user: models.User = Depends(get_current_user)
+):
+    require_onboarding_complete(current_user)
+    weather = get_weather()
+    return {"weather": weather}
+
+
+# =============================
+# Advanced Outfit Recommendations
+# =============================
+
+@router.get("/recommendations", response_model=RecommendationResponse)
+def get_recommendations(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    require_onboarding_complete(current_user)
+
+    items = crud.get_clothing_items_for_user(db, current_user.id)
+
+    if not items:
+        return {
+            "body_type": current_user.body_type,
+            "lifestyle": current_user.lifestyle,
+            "outfits": []
+        }
+
+    tops = [i for i in items if i.category == "top"]
+    bottoms = [i for i in items if i.category == "bottom"]
+    shoes = [i for i in items if i.category == "shoes"]
+    outerwear = [i for i in items if i.category == "outerwear"]
+    accessories = [i for i in items if i.category == "accessory"]
+
+    outfits = []
+    seen = set()
+
+    neutral = {"black", "white", "gray", "beige"}
+    warm = {"red", "orange", "yellow"}
+    cool = {"blue", "green", "purple"}
+
+    for top in tops:
+        for bottom in bottoms:
+
+            combo = (top.id, bottom.id)
+            if combo in seen:
+                continue
+            seen.add(combo)
+
+            score = 1
+            reasons = []
+
+            # Style scoring
+            if top.style_tag == current_user.lifestyle:
+                score += 3
+                reasons.append("Top matches lifestyle")
+
+            if bottom.style_tag == current_user.lifestyle:
+                score += 2
+                reasons.append("Bottom matches lifestyle")
+
+            # Fit scoring
+            if current_user.body_type == "athletic" and top.fit_type in ["slim", "athletic"]:
+                score += 2
+                reasons.append("Fit complements athletic build")
+
+            # Color harmony logic
+            if top.color in neutral or bottom.color in neutral:
+                score += 2
+                reasons.append("Neutral color balance")
+
+            elif (top.color in warm and bottom.color in warm):
+                score += 2
+                reasons.append("Warm color harmony")
+
+            elif (top.color in cool and bottom.color in cool):
+                score += 2
+                reasons.append("Cool color harmony")
+
+            else:
+                score += 1
+                reasons.append("Balanced contrast")
+
+            confidence = round((score / 10) * 100, 2)
+
+            outfit = {
+                "top": top,
+                "bottom": bottom,
+                "shoes": shoes[0] if shoes else None,
+                "outerwear": outerwear[0] if outerwear else None,
+                "accessory": accessories[0] if accessories else None,
+                "score": score,
+                "confidence": confidence,
+                "reason": ", ".join(reasons)
+            }
+
+            outfits.append(outfit)
+
+    outfits.sort(key=lambda x: x["score"], reverse=True)
+
+    return {
+        "body_type": current_user.body_type,
+        "lifestyle": current_user.lifestyle,
+        "outfits": outfits[:3]
+    }

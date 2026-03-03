@@ -24,3 +24,11 @@ package-lock.json
 
 .idea/
 .vscode/
+
+# Node
+node_modules/
+package-lock.json
+
+# Misc
+nul
+.claude/
