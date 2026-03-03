@@ -1,6 +1,5 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
-
 from app.database.database import Base
 
 
@@ -12,14 +11,13 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
 
-    # --- Profile / Preferences ---
+    # Profile / Preferences
     body_type = Column(String, default="unspecified")
     lifestyle = Column(String, default="casual")
     comfort_preference = Column(String, default="medium")
 
     is_active = Column(Boolean, default=True)
     onboarding_complete = Column(Boolean, default=False)
-
 
     wardrobe_items = relationship(
         "ClothingItem",
@@ -36,8 +34,14 @@ class ClothingItem(Base):
     name = Column(String, nullable=False)
     category = Column(String, nullable=False)
     color = Column(String, nullable=False)
+
+    fit_type = Column(String, nullable=False, default="regular")
+    style_tag = Column(String, nullable=False, default="casual")
+
     image_url = Column(String, nullable=True)
 
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)
+
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
     owner = relationship("User", back_populates="wardrobe_items")
