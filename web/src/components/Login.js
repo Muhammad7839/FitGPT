@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { loginWithEmail, getMe } from "../api/authApi";
 import { useAuth } from "../auth/AuthProvider";
+import { migrateGuestData, clearGuestData } from "../utils/userStorage";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -39,12 +40,21 @@ export default function Login() {
 
       try {
         const me = await getMe();
+        if (me) {
+          migrateGuestData(me);
+          clearGuestData();
+        }
         if (typeof setUser === "function") setUser(me);
       } catch {}
 
       navigate("/dashboard", { replace: true });
     } catch (err) {
-      setError(err?.message || "Login failed. Please try again.");
+      const msg = err?.message || "";
+      if (msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("networkerror")) {
+        setError("Can't reach the server. Check your connection or try again later.");
+      } else {
+        setError(msg || "Login failed. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -60,15 +70,11 @@ export default function Login() {
         </div>
       </div>
 
-      <div className="card dashWide" style={{ marginTop: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+      <div className="card authCard">
+        <div className="authHeader">
           <div>
-            <h1 className="heroTitle" style={{ fontSize: 34, marginBottom: 6 }}>
-              Sign in
-            </h1>
-            <p className="heroSub" style={{ marginTop: 0 }}>
-              Welcome back. Let’s get you styled.
-            </p>
+            <h1 className="authTitle">Sign in</h1>
+            <p className="authSub">Welcome back. Let's get you styled.</p>
           </div>
 
           <button type="button" className="btn" onClick={() => navigate("/auth")}>
@@ -76,8 +82,8 @@ export default function Login() {
           </button>
         </div>
 
-        <form onSubmit={onSubmit} style={{ marginTop: 18 }}>
-          <label className="wardrobeLabel">
+        <form onSubmit={onSubmit} className="authForm">
+          <label className="authFormGroup">
             Email
             <input
               className="wardrobeInput"
@@ -89,12 +95,11 @@ export default function Login() {
             />
           </label>
 
-          <label className="wardrobeLabel" style={{ marginTop: 12 }}>
+          <label className="authFormGroup">
             Password
-            <div style={{ display: "flex", gap: 10 }}>
+            <div className="authPasswordRow">
               <input
                 className="wardrobeInput"
-                style={{ flex: 1 }}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
@@ -103,7 +108,7 @@ export default function Login() {
               />
               <button
                 type="button"
-                className="wardrobeIconBtn"
+                className="wardrobeIconBtn authShowBtn"
                 onClick={() => setShowPw((v) => !v)}
               >
                 {showPw ? "Hide" : "Show"}
@@ -111,7 +116,7 @@ export default function Login() {
             </div>
           </label>
 
-          <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
+          <div className="authForgotRow">
             <button
               type="button"
               className="linkBtn"
@@ -121,21 +126,18 @@ export default function Login() {
             </button>
           </div>
 
-          {error ? <div className="wardrobeFormError">{error}</div> : null}
+          {error ? <div className="authError">{error}</div> : null}
 
           <button
             type="submit"
-            className="btn primary"
-            style={{ width: "100%", marginTop: 14 }}
+            className="btn primary authSubmit"
             disabled={!canSubmit || isLoading}
           >
             {isLoading ? "Signing in..." : "Sign in"}
           </button>
 
-          <div style={{ marginTop: 14, textAlign: "center" }}>
-            <span className="heroSub" style={{ fontSize: 14 }}>
-              New here?
-            </span>{" "}
+          <div className="authFooter">
+            <span className="heroSub">New here?</span>{" "}
             <NavLink to="/signup" className="linkLike">
               Create an account
             </NavLink>

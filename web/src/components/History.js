@@ -1,31 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
+import ReactDOM from "react-dom";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
 import { savedOutfitsApi } from "../api/savedOutfitsApi";
+import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
+import { loadWardrobe } from "../utils/userStorage";
 
-const WARDROBE_KEY = "fitgpt_wardrobe_v1";
-const GUEST_WARDROBE_KEY = "fitgpt_guest_wardrobe_v1";
 const REUSE_OUTFIT_KEY = "fitgpt_reuse_outfit_v1";
-
-function safeParse(json) {
-  try {
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
-function readWardrobeFromStorage(storageObj, key) {
-  const raw = storageObj.getItem(key);
-  const parsed = raw ? safeParse(raw) : null;
-  return Array.isArray(parsed) ? parsed : [];
-}
-
-function loadWardrobeForUser(isSignedIn) {
-  if (isSignedIn) return readWardrobeFromStorage(localStorage, WARDROBE_KEY);
-  return readWardrobeFromStorage(sessionStorage, GUEST_WARDROBE_KEY);
-}
 
 function formatTodayTopRight() {
   return new Date().toLocaleDateString(undefined, {
@@ -93,14 +75,19 @@ function signatureFromIds(ids) {
 export default function History() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const isSignedIn = Boolean(user);
 
   const [range, setRange] = useState("30");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
   const [history, setHistory] = useState([]);
+  const [confirmClear, setConfirmClear] = useState(false);
 
-  const wardrobe = useMemo(() => loadWardrobeForUser(isSignedIn), [isSignedIn]);
+  const [planModalEntry, setPlanModalEntry] = useState(null);
+  const [planDate, setPlanDate] = useState("");
+  const [planOccasion, setPlanOccasion] = useState("");
+  const [planSaving, setPlanSaving] = useState(false);
+
+  const wardrobe = useMemo(() => loadWardrobe(user), [user]);
 
   const wardrobeById = useMemo(() => {
     const map = new Map();
@@ -116,7 +103,7 @@ export default function History() {
     setLoading(true);
     setMsg("");
     try {
-      const res = await outfitHistoryApi.listHistory();
+      const res = await outfitHistoryApi.listHistory(user);
       const list = Array.isArray(res?.history) ? res.history : [];
 
       const sorted = [...list].sort((a, b) => {
@@ -136,7 +123,8 @@ export default function History() {
 
   useEffect(() => {
     refresh();
-  }, [isSignedIn]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const filtered = useMemo(() => {
     const d = range === "7" ? 7 : range === "30" ? 30 : 0;
@@ -214,8 +202,67 @@ export default function History() {
     navigate("/dashboard");
   };
 
-  const handlePlanForLater = () => {
-    setMsg("Planner is not available yet.");
+  const handlePlanForLater = (entry) => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const yyyy = tomorrow.getFullYear();
+    const mm = String(tomorrow.getMonth() + 1).padStart(2, "0");
+    const dd = String(tomorrow.getDate()).padStart(2, "0");
+    setPlanDate(`${yyyy}-${mm}-${dd}`);
+    setPlanOccasion(entry?.context?.occasion || "");
+    setPlanModalEntry(entry);
+  };
+
+  const handlePlanSave = async () => {
+    if (!planDate) {
+      setMsg("Please pick a date.");
+      window.setTimeout(() => setMsg(""), 2500);
+      return;
+    }
+
+    setPlanSaving(true);
+
+    const itemIds = Array.isArray(planModalEntry?.item_ids) ? planModalEntry.item_ids : [];
+    const itemDetails = itemIds.map((id) => {
+      const item = wardrobeById.get((id ?? "").toString().trim());
+      return {
+        id: (id ?? "").toString(),
+        name: item?.name || "",
+        category: item?.category || "",
+        color: item?.color || "",
+        image_url: item?.image_url || "",
+      };
+    });
+
+    try {
+      await plannedOutfitsApi.planOutfit({
+        item_ids: itemIds,
+        item_details: itemDetails,
+        planned_date: planDate,
+        occasion: planOccasion,
+        source: "planner",
+      }, user);
+
+      setMsg("Outfit planned!");
+      window.setTimeout(() => setMsg(""), 2500);
+      setPlanModalEntry(null);
+    } catch {
+      setMsg("Could not save plan.");
+      window.setTimeout(() => setMsg(""), 2500);
+    } finally {
+      setPlanSaving(false);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    try {
+      await outfitHistoryApi.clearHistory(user);
+      setHistory([]);
+      setMsg("History cleared.");
+    } catch {
+      setMsg("Could not clear history.");
+    }
+    setConfirmClear(false);
     window.setTimeout(() => setMsg(""), 2500);
   };
 
@@ -244,11 +291,82 @@ export default function History() {
             <button className="btn" onClick={refresh} disabled={loading}>
               {loading ? "Loading..." : "Refresh"}
             </button>
+
+            {history.length > 0 && (
+              <button
+                className="btn"
+                style={{ color: "var(--color-danger, #e74c3c)" }}
+                onClick={() => setConfirmClear(true)}
+              >
+                Clear History
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       {msg && <div className="noteBox" style={{ marginTop: 12 }}>{msg}</div>}
+
+      {confirmClear && (
+        <div className="modalOverlay" role="dialog" aria-modal="true">
+          <div className="modalCard">
+            <div className="modalTitle">Clear all outfit history?</div>
+            <div className="modalSub">This cannot be undone.</div>
+            <div className="modalActions">
+              <button className="btn" onClick={() => setConfirmClear(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn primary"
+                style={{ background: "var(--color-danger, #e74c3c)" }}
+                onClick={handleClearHistory}
+              >
+                Clear All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {planModalEntry && ReactDOM.createPortal(
+        <div className="modalOverlay" role="dialog" aria-modal="true">
+          <div className="modalCard">
+            <div className="modalTitle">Plan This Outfit</div>
+            <div className="modalSub">Pick a date and occasion for this outfit.</div>
+
+            <div style={{ marginTop: 16 }}>
+              <label className="planModalLabel">Date</label>
+              <input
+                type="date"
+                className="wardrobeInput"
+                value={planDate}
+                onChange={(e) => setPlanDate(e.target.value)}
+              />
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <label className="planModalLabel">Occasion</label>
+              <input
+                type="text"
+                className="wardrobeInput"
+                placeholder="e.g. Work, Date night, Casual..."
+                value={planOccasion}
+                onChange={(e) => setPlanOccasion(e.target.value)}
+              />
+            </div>
+
+            <div className="modalActions" style={{ marginTop: 18 }}>
+              <button className="btn" onClick={() => setPlanModalEntry(null)} disabled={planSaving}>
+                Cancel
+              </button>
+              <button className="btn primary" onClick={handlePlanSave} disabled={planSaving}>
+                {planSaving ? "Saving..." : "Save Plan"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       <div className="historyList">
         {filtered.map((h) => {
@@ -305,7 +423,7 @@ export default function History() {
                   <button className="btn primary" onClick={() => handleWearAgain(h)}>
                     Wear Again
                   </button>
-                  <button className="btn" onClick={handlePlanForLater}>
+                  <button className="btn" onClick={() => handlePlanForLater(h)}>
                     Plan for Later
                   </button>
                 </div>
@@ -321,22 +439,26 @@ export default function History() {
 
         <div className="historyStatsGrid">
           <div className="historyStatTile">
+            <div className="historyStatIcon">&#x1F455;</div>
             <div className="historyStatNumber">{monthlyStats.outfitsWorn}</div>
             <div className="historyStatLabel">Outfits Worn</div>
           </div>
 
           <div className="historyStatTile">
+            <div className="historyStatIcon">&#x2728;</div>
             <div className="historyStatNumber">{monthlyStats.uniqueCombos}</div>
             <div className="historyStatLabel">Unique Combos</div>
           </div>
 
-          <div className="historyStatTile">
-            <div className="historyStatNumber">{monthlyStats.mostWornItemName}</div>
+          <div className="historyStatTile historyStatTileText">
+            <div className="historyStatIcon">&#x1F451;</div>
+            <div className="historyStatValue">{monthlyStats.mostWornItemName || "—"}</div>
             <div className="historyStatLabel">Most Worn Item</div>
           </div>
 
-          <div className="historyStatTile">
-            <div className="historyStatNumber">{monthlyStats.topOccasion}</div>
+          <div className="historyStatTile historyStatTileText">
+            <div className="historyStatIcon">&#x1F3AF;</div>
+            <div className="historyStatValue">{monthlyStats.topOccasion || "—"}</div>
             <div className="historyStatLabel">Top Occasion</div>
           </div>
         </div>
@@ -349,21 +471,24 @@ export default function History() {
         </div>
       </div>
 
-      <nav className="dashBottomNav">
+      <nav className="dashBottomNav" aria-label="Dashboard navigation">
         <NavLink to="/dashboard" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           Home
         </NavLink>
         <NavLink to="/wardrobe" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           Wardrobe
         </NavLink>
+        <NavLink to="/favorites" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
+          Favorites
+        </NavLink>
         <NavLink to="/history" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           History
         </NavLink>
+        <NavLink to="/plans" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
+          Plans
+        </NavLink>
         <NavLink to="/profile" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           Profile
-        </NavLink>
-        <NavLink to="/favorites" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          Favorites
         </NavLink>
       </nav>
     </div>

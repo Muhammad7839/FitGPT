@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { getMe } from "../api/authApi";
 import { setUnauthorizedHandler } from "../api/apiFetch";
+import { migrateGuestData } from "../utils/userStorage";
 
 const AuthContext = createContext(null);
 
@@ -40,7 +41,9 @@ export function AuthProvider({ children }) {
         if (!alive) return;
 
         if (looksLikeUser(data)) {
-          setUser(data.user || data);
+          const resolved = data.user || data;
+          migrateGuestData(resolved);
+          setUser(resolved);
         } else {
           setUser(null);
         }

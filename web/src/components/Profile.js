@@ -47,7 +47,7 @@ function uniq(arr) {
   return out;
 }
 
-export default function Profile() {
+export default function Profile({ onResetOnboarding = () => {} }) {
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
 
@@ -72,11 +72,7 @@ export default function Profile() {
     }
   };
 
-  const handleLocalSignIn = () => {
-    const fake = { demoEmail: "user@fitgpt.app" };
-    writeDemoAuth(fake);
-    if (typeof setUser === "function") setUser(fake);
-  };
+
 
   const refreshSaved = async () => {
     if (!effectiveUser) {
@@ -88,7 +84,7 @@ export default function Profile() {
     setSavedMsg("");
 
     try {
-      const res = await savedOutfitsApi.listSaved();
+      const res = await savedOutfitsApi.listSaved(effectiveUser);
       const list = Array.isArray(res?.saved_outfits) ? res.saved_outfits : [];
       setSavedOutfits(list);
     } catch (e) {
@@ -159,6 +155,9 @@ export default function Profile() {
               <button className="btn" type="button" onClick={() => navigate("/history")}>
                 Outfit history
               </button>
+              <button className="btn" type="button" onClick={() => { onResetOnboarding(); navigate("/"); }}>
+                Redo Onboarding
+              </button>
             </div>
 
             <div className="profileSection">
@@ -195,16 +194,10 @@ export default function Profile() {
               {sortedSaved.length ? (
                 <div className="savedOutfitsList">
                   {sortedSaved.map((o) => {
+                    const details = Array.isArray(o?.item_details) ? o.item_details : [];
                     const itemCount = Array.isArray(o?.items) ? o.items.length : 0;
                     const createdAt = formatDate(o?.created_at);
                     const title = o?.name ? o.name : "Saved outfit";
-
-                    const pills = (Array.isArray(o?.items) ? o.items : []).slice(0, 6).map((id) => {
-                      const txt = (id ?? "").toString().trim();
-                      return txt ? txt : "item";
-                    });
-
-                    const more = itemCount > pills.length ? itemCount - pills.length : 0;
 
                     return (
                       <div key={o?.saved_outfit_id || o?.outfit_signature} className="savedOutfitCard">
@@ -216,13 +209,35 @@ export default function Profile() {
                           </div>
                         </div>
 
-                        <div className="savedOutfitItems" aria-label="Saved outfit item ids">
-                          {pills.map((p, idx) => (
-                            <span key={`${o?.saved_outfit_id || o?.outfit_signature}_${idx}`} className="savedOutfitPill">
-                              {p}
-                            </span>
-                          ))}
-                          {more ? <span className="savedOutfitMore">+{more} more</span> : null}
+                        <div className="savedOutfitItems" aria-label="Saved outfit items">
+                          {details.length > 0
+                            ? details.slice(0, 6).map((d, idx) => (
+                                <div
+                                  key={`${o?.saved_outfit_id || o?.outfit_signature}_${idx}`}
+                                  className="savedOutfitItemChip"
+                                >
+                                  {d?.image_url ? (
+                                    <img
+                                      className="savedOutfitItemImg"
+                                      src={d.image_url}
+                                      alt={d?.name || "Item"}
+                                    />
+                                  ) : (
+                                    <div className="savedOutfitItemPh" />
+                                  )}
+                                  <span className="savedOutfitItemName">
+                                    {d?.name || "Item"}
+                                  </span>
+                                </div>
+                              ))
+                            : (Array.isArray(o?.items) ? o.items : []).slice(0, 6).map((id, idx) => (
+                                <span
+                                  key={`${o?.saved_outfit_id || o?.outfit_signature}_${idx}`}
+                                  className="savedOutfitPill"
+                                >
+                                  {(id ?? "").toString().trim() || "item"}
+                                </span>
+                              ))}
                         </div>
 
                         <div className="savedOutfitActions">
@@ -236,6 +251,7 @@ export default function Profile() {
                 </div>
               ) : null}
             </div>
+
           </>
         ) : (
           <>
@@ -244,17 +260,17 @@ export default function Profile() {
             </div>
 
             <div className="loginButtons" style={{ marginTop: 18 }}>
-              <button className="btn primary" type="button" onClick={handleLocalSignIn}>
+              <button className="btn primary" type="button" onClick={() => navigate("/login")}>
                 Sign in
-              </button>
-              <button className="btn" type="button" onClick={() => navigate("/auth")}>
-                Use email sign in
               </button>
               <button className="btn" type="button" onClick={() => navigate("/dashboard")}>
                 Continue
               </button>
               <button className="btn" type="button" onClick={() => navigate("/history")}>
                 Outfit history
+              </button>
+              <button className="btn" type="button" onClick={() => { onResetOnboarding(); navigate("/"); }}>
+                Redo Onboarding
               </button>
             </div>
 

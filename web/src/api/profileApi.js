@@ -1,6 +1,5 @@
 import { apiFetch, hasApi } from "./apiFetch";
-
-const PROFILE_KEY = "fitgpt_profile_v1";
+import { userKey, PROFILE_KEY } from "../utils/userStorage";
 
 function safeParse(json) {
   try {
@@ -10,22 +9,24 @@ function safeParse(json) {
   }
 }
 
-function loadLocalProfile() {
-  const raw = localStorage.getItem(PROFILE_KEY);
+function loadLocalProfile(user) {
+  const key = userKey(PROFILE_KEY, user);
+  const raw = localStorage.getItem(key);
   const parsed = raw ? safeParse(raw) : null;
   return parsed && typeof parsed === "object" ? parsed : {};
 }
 
-function saveLocalProfile(next) {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(next));
+function saveLocalProfile(next, user) {
+  const key = userKey(PROFILE_KEY, user);
+  localStorage.setItem(key, JSON.stringify(next));
 }
 
-export async function saveProfileDraft(draft) {
+export async function saveProfileDraft(draft, user) {
 
   if (!hasApi()) {
-    const current = loadLocalProfile();
+    const current = loadLocalProfile(user);
     const next = { ...current, ...draft, updatedAt: Date.now() };
-    saveLocalProfile(next);
+    saveLocalProfile(next, user);
     return next;
   }
 
@@ -35,9 +36,9 @@ export async function saveProfileDraft(draft) {
   });
 }
 
-export async function readProfile() {
-  if (!hasApi()) return loadLocalProfile();
+export async function readProfile(user) {
+  if (!hasApi()) return loadLocalProfile(user);
 
-  
+
   return apiFetch("/profile", { method: "GET" });
 }

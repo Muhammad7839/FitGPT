@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import SplashCrumple from "./SplashCrumple";
 
 const TOTAL_STEPS = 5;
 
@@ -71,8 +72,13 @@ export default function Onboarding({
 }) {
   const navigate = useNavigate();
 
+  const [showSplash, setShowSplash] = useState(true);
   const [step, setStep] = useState(() => clampStep(initialStep));
   const [answers, setAnswers] = useState(() => normalizeAnswers(initialAnswers));
+
+  const handleSplashComplete = useCallback(() => {
+    setShowSplash(false);
+  }, []);
 
   const isSkippableStep = step >= 2 && step <= 4;
 
@@ -330,6 +336,7 @@ export default function Onboarding({
 
   return (
     <div className="onboarding onboardingPage">
+      {showSplash && <SplashCrumple onComplete={handleSplashComplete} />}
       <div className="brandBar">
         <div className="brandLeft">
           <div className="brandMark">
