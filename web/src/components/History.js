@@ -1,10 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import ReactDOM from "react-dom";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
 import { savedOutfitsApi } from "../api/savedOutfitsApi";
-import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 import { loadWardrobe } from "../utils/userStorage";
 
 const REUSE_OUTFIT_KEY = "fitgpt_reuse_outfit_v1";
@@ -42,7 +40,6 @@ function withinDays(iso, days) {
 function labelFromSource(src) {
   const s = (src || "").toString().trim().toLowerCase();
   if (s === "planner") return "Planned";
-  if (s === "saved") return "Saved";
   return "Recommended";
 }
 
@@ -81,11 +78,6 @@ export default function History() {
   const [msg, setMsg] = useState("");
   const [history, setHistory] = useState([]);
   const [confirmClear, setConfirmClear] = useState(false);
-
-  const [planModalEntry, setPlanModalEntry] = useState(null);
-  const [planDate, setPlanDate] = useState("");
-  const [planOccasion, setPlanOccasion] = useState("");
-  const [planSaving, setPlanSaving] = useState(false);
 
   const wardrobe = useMemo(() => loadWardrobe(user), [user]);
 
@@ -202,58 +194,6 @@ export default function History() {
     navigate("/dashboard");
   };
 
-  const handlePlanForLater = (entry) => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const yyyy = tomorrow.getFullYear();
-    const mm = String(tomorrow.getMonth() + 1).padStart(2, "0");
-    const dd = String(tomorrow.getDate()).padStart(2, "0");
-    setPlanDate(`${yyyy}-${mm}-${dd}`);
-    setPlanOccasion(entry?.context?.occasion || "");
-    setPlanModalEntry(entry);
-  };
-
-  const handlePlanSave = async () => {
-    if (!planDate) {
-      setMsg("Please pick a date.");
-      window.setTimeout(() => setMsg(""), 2500);
-      return;
-    }
-
-    setPlanSaving(true);
-
-    const itemIds = Array.isArray(planModalEntry?.item_ids) ? planModalEntry.item_ids : [];
-    const itemDetails = itemIds.map((id) => {
-      const item = wardrobeById.get((id ?? "").toString().trim());
-      return {
-        id: (id ?? "").toString(),
-        name: item?.name || "",
-        category: item?.category || "",
-        color: item?.color || "",
-        image_url: item?.image_url || "",
-      };
-    });
-
-    try {
-      await plannedOutfitsApi.planOutfit({
-        item_ids: itemIds,
-        item_details: itemDetails,
-        planned_date: planDate,
-        occasion: planOccasion,
-        source: "planner",
-      }, user);
-
-      setMsg("Outfit planned!");
-      window.setTimeout(() => setMsg(""), 2500);
-      setPlanModalEntry(null);
-    } catch {
-      setMsg("Could not save plan.");
-      window.setTimeout(() => setMsg(""), 2500);
-    } finally {
-      setPlanSaving(false);
-    }
-  };
-
   const handleClearHistory = async () => {
     try {
       await outfitHistoryApi.clearHistory(user);
@@ -328,46 +268,6 @@ export default function History() {
         </div>
       )}
 
-      {planModalEntry && ReactDOM.createPortal(
-        <div className="modalOverlay" role="dialog" aria-modal="true">
-          <div className="modalCard">
-            <div className="modalTitle">Plan This Outfit</div>
-            <div className="modalSub">Pick a date and occasion for this outfit.</div>
-
-            <div style={{ marginTop: 16 }}>
-              <label className="planModalLabel">Date</label>
-              <input
-                type="date"
-                className="wardrobeInput"
-                value={planDate}
-                onChange={(e) => setPlanDate(e.target.value)}
-              />
-            </div>
-
-            <div style={{ marginTop: 12 }}>
-              <label className="planModalLabel">Occasion</label>
-              <input
-                type="text"
-                className="wardrobeInput"
-                placeholder="e.g. Work, Date night, Casual..."
-                value={planOccasion}
-                onChange={(e) => setPlanOccasion(e.target.value)}
-              />
-            </div>
-
-            <div className="modalActions" style={{ marginTop: 18 }}>
-              <button className="btn" onClick={() => setPlanModalEntry(null)} disabled={planSaving}>
-                Cancel
-              </button>
-              <button className="btn primary" onClick={handlePlanSave} disabled={planSaving}>
-                {planSaving ? "Saving..." : "Save Plan"}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
       <div className="historyList">
         {filtered.map((h) => {
           const wornAt = formatCardDate(h?.worn_at);
@@ -422,9 +322,6 @@ export default function History() {
                 <div className="historyActions">
                   <button className="btn primary" onClick={() => handleWearAgain(h)}>
                     Wear Again
-                  </button>
-                  <button className="btn" onClick={() => handlePlanForLater(h)}>
-                    Plan for Later
                   </button>
                 </div>
               </div>
@@ -483,6 +380,9 @@ export default function History() {
         </NavLink>
         <NavLink to="/history" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           History
+        </NavLink>
+        <NavLink to="/saved-outfits" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
+          Saved
         </NavLink>
         <NavLink to="/plans" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           Plans

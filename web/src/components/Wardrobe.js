@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { wardrobeApi } from "../api/wardrobeApi";
 import { useAuth } from "../auth/AuthProvider";
 import { loadWardrobe, saveWardrobe, userKey, ONBOARDING_ANSWERS_KEY } from "../utils/userStorage";
+import { classifyFromUrl, preloadModel } from "../utils/classifyClothing";
 
 const CATEGORIES = ["All Items", "Tops", "Bottoms", "Outerwear", "Shoes", "Accessories"];
 
@@ -202,6 +203,8 @@ export default function Wardrobe() {
   const [formFitTag, setFormFitTag] = useState("unknown");
   const [isSaving, setIsSaving] = useState(false);
   const [addError, setAddError] = useState("");
+  const [isClassifying, setIsClassifying] = useState(false);
+  const [userOverrodeCategory, setUserOverrodeCategory] = useState(false);
 
   // Bulk upload state
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -368,6 +371,9 @@ export default function Wardrobe() {
     }
   }, [user]);
 
+  // Start downloading MobileNet model in the background on mount
+  useEffect(() => { preloadModel(); }, []);
+
   const resetAddForm = () => {
     if (pendingPreview) URL.revokeObjectURL(pendingPreview);
     setPendingPreview("");
@@ -377,6 +383,8 @@ export default function Wardrobe() {
     setFormColor("");
     setFormFitTag("unknown");
     setAddError("");
+    setUserOverrodeCategory(false);
+    setIsClassifying(false);
   };
 
   const openAddModalForFile = (file) => {
@@ -399,8 +407,21 @@ export default function Wardrobe() {
       setFormColor("");
       setFormFitTag("unknown");
       setAddError("");
+      setUserOverrodeCategory(false);
+      setIsClassifying(true);
 
       setAddOpen(true);
+
+      // Run ML classification in the background
+      classifyFromUrl(preview).then((result) => {
+        if (result.category) {
+          setUserOverrodeCategory((overrode) => {
+            if (!overrode) setFormCategory(result.category);
+            return overrode;
+          });
+        }
+        setIsClassifying(false);
+      });
     } catch {
       setToast("Upload failed. Try again.");
       window.setTimeout(() => setToast(""), 2500);
@@ -433,12 +454,30 @@ export default function Wardrobe() {
             category: guessCategoryFromName(file.name),
             color: "",
             fitTag: "unknown",
+            classifying: true,
+            userOverrode: false,
           };
         })
       );
       setBulkItems(entries);
       setBulkError("");
       setBulkOpen(true);
+
+      // Classify each entry in parallel
+      for (const entry of entries) {
+        classifyFromUrl(entry.preview).then((result) => {
+          setBulkItems((prev) =>
+            prev.map((e) => {
+              if (e._key !== entry._key) return e;
+              return {
+                ...e,
+                classifying: false,
+                category: result.category && !e.userOverrode ? result.category : e.category,
+              };
+            })
+          );
+        });
+      }
     }
 
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -570,7 +609,12 @@ export default function Wardrobe() {
 
   const updateBulkItem = (key, field, value) => {
     setBulkItems((prev) =>
-      prev.map((entry) => (entry._key === key ? { ...entry, [field]: value } : entry))
+      prev.map((entry) => {
+        if (entry._key !== key) return entry;
+        const update = { ...entry, [field]: value };
+        if (field === "category") update.userOverrode = true;
+        return update;
+      })
     );
   };
 
@@ -1214,13 +1258,16 @@ export default function Wardrobe() {
 
               <label className="wardrobeLabel">
                 Category
-                <select className="wardrobeInput" value={formCategory} onChange={(e) => setFormCategory(e.target.value)}>
-                  {CATEGORIES.filter((c) => c !== "All Items").map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+                <div style={{ position: "relative" }}>
+                  <select className="wardrobeInput" value={formCategory} onChange={(e) => { setFormCategory(e.target.value); setUserOverrodeCategory(true); }}>
+                    {CATEGORIES.filter((c) => c !== "All Items").map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                  {isClassifying && <span className="classifyingHint">Detecting...</span>}
+                </div>
               </label>
 
               <label className="wardrobeLabel">
@@ -1293,17 +1340,20 @@ export default function Wardrobe() {
                       value={entry.name}
                       onChange={(e) => updateBulkItem(entry._key, "name", e.target.value)}
                     />
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <select
-                        className="wardrobeInput"
-                        value={entry.category}
-                        onChange={(e) => updateBulkItem(entry._key, "category", e.target.value)}
-                        style={{ flex: 1 }}
-                      >
-                        {CATEGORIES.filter((c) => c !== "All Items").map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ flex: 1, position: "relative" }}>
+                        <select
+                          className="wardrobeInput"
+                          value={entry.category}
+                          onChange={(e) => updateBulkItem(entry._key, "category", e.target.value)}
+                          style={{ width: "100%" }}
+                        >
+                          {CATEGORIES.filter((c) => c !== "All Items").map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                        {entry.classifying && <span className="classifyingHint">Detecting...</span>}
+                      </div>
                       <input
                         className="wardrobeInput"
                         placeholder="Color"
@@ -1451,6 +1501,9 @@ export default function Wardrobe() {
         </NavLink>
         <NavLink to="/history" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           History
+        </NavLink>
+        <NavLink to="/saved-outfits" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
+          Saved
         </NavLink>
         <NavLink to="/plans" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           Plans

@@ -14,6 +14,7 @@ import Favorites from "../components/Favorites";
 import Profile from "../components/Profile";
 import History from "../components/History";
 import Plans from "../components/Plans";
+import SavedOutfits from "../components/SavedOutfits";
 
 function loadAnswers(user) {
   try {
@@ -120,6 +121,7 @@ export default function AppRoutes() {
         <Route path="/profile" element={<Profile onResetOnboarding={handleResetOnboarding} />} />
         <Route path="/history" element={<History />} />
         <Route path="/plans" element={<Plans />} />
+        <Route path="/saved-outfits" element={<SavedOutfits />} />
 
         <Route path="/onboarding" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />

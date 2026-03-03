@@ -177,6 +177,9 @@ export default function Favorites() {
         <NavLink to="/history" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           History
         </NavLink>
+        <NavLink to="/saved-outfits" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
+          Saved
+        </NavLink>
         <NavLink to="/plans" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
           Plans
         </NavLink>
