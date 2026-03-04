@@ -367,9 +367,7 @@ export default function History() {
           <div className="historyTitle">Outfit History</div>
           <div className="historySub">Track what you've worn</div>
         </div>
-        <div className="historyTopRight">
-          <div className="historyDate">{formatTodayTopRight()}</div>
-        </div>
+        <div className="historyTopRight" />
       </div>
       <HistoryContent />
     </div>

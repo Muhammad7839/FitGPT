@@ -579,9 +579,7 @@ export default function Analytics() {
           <div className="historyTitle">Analytics</div>
           <div className="historySub">Your style at a glance</div>
         </div>
-        <div className="historyTopRight">
-          <div className="historyDate">{formatTodayTopRight()}</div>
-        </div>
+        <div className="historyTopRight" />
       </div>
       <AnalyticsContent />
     </div>

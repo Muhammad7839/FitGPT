@@ -42,9 +42,7 @@ export default function HistoryAnalytics() {
           <div className="historyTitle">{meta.title}</div>
           <div className="historySub">{meta.sub}</div>
         </div>
-        <div className="historyTopRight">
-          <div className="historyDate">{formatTodayTopRight()}</div>
-        </div>
+        <div className="historyTopRight" />
       </div>
 
       <div className="wardrobeTabs">

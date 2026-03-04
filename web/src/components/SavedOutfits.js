@@ -205,7 +205,6 @@ export default function SavedOutfits() {
         </div>
 
         <div className="historyTopRight">
-          <div className="historyDate">{formatTodayTopRight()}</div>
 
           <div className="historyControls">
             <button className="btn" onClick={refresh} disabled={loading}>
