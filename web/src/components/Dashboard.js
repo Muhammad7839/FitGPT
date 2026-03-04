@@ -164,29 +164,83 @@ function fitPenalty(fitTag, bodyTypeId, category) {
   return 0;
 }
 
-function colorGroup(colorRaw) {
+/* ── Color coordination engine ─────────────────────────────── */
+const COLOR_HUE_MAP = {
+  red: 0, coral: 16, orange: 30, gold: 43, yellow: 55,
+  olive: 80, green: 130, mint: 155, teal: 175, turquoise: 180,
+  blue: 220, navy: 225, purple: 275, lavender: 265, pink: 335, peach: 20,
+};
+
+const NEUTRAL_COLORS = new Set([
+  "black", "white", "gray", "grey", "beige", "tan", "cream", "brown", "denim",
+]);
+
+function colorInfo(colorRaw) {
   const c = normalizeColorName(colorRaw);
-
-  const neutrals = new Set(["black", "white", "gray", "grey", "beige", "tan", "cream", "brown", "navy", "denim"]);
-  const warms = new Set(["red", "orange", "yellow", "pink", "coral", "peach"]);
-  const cools = new Set(["blue", "green", "purple", "teal", "turquoise"]);
-
-  if (!c) return "unknown";
-  if (neutrals.has(c)) return "neutral";
-  if (warms.has(c)) return "warm";
-  if (cools.has(c)) return "cool";
-  return "unknown";
+  if (!c) return { hue: -1, neutral: false, name: "" };
+  if (NEUTRAL_COLORS.has(c)) return { hue: -1, neutral: true, name: c };
+  const hue = COLOR_HUE_MAP[c];
+  if (hue !== undefined) return { hue, neutral: false, name: c };
+  return { hue: -1, neutral: false, name: c };
 }
 
+function hueDiff(h1, h2) {
+  const d = Math.abs(h1 - h2);
+  return Math.min(d, 360 - d);
+}
+
+/**
+ * Score how well two colors pair (0-5 scale, higher = better).
+ * Uses color theory: complementary, analogous, triadic, neutral pairing.
+ */
 function pairScore(aColor, bColor) {
-  const a = colorGroup(aColor);
-  const b = colorGroup(bColor);
+  const a = colorInfo(aColor);
+  const b = colorInfo(bColor);
 
-  if (a === "neutral" || b === "neutral") return 3;
-  if (a === "unknown" || b === "unknown") return 2;
-  if (a === b) return 3;
-  return 1;
+  // Unknown colors — neutral score
+  if (!a.name || !b.name) return 2;
+
+  // Both neutrals — classic, always good
+  if (a.neutral && b.neutral) {
+    // Black + white, navy + beige, etc. are great; same neutral is okay
+    return a.name === b.name ? 3 : 4;
+  }
+
+  // One neutral + one color — almost always works
+  if (a.neutral || b.neutral) {
+    // Dark neutrals pair better with bold colors
+    const neutral = a.neutral ? a.name : b.name;
+    const darkNeutrals = new Set(["black", "navy", "brown", "gray", "grey", "denim"]);
+    return darkNeutrals.has(neutral) ? 4 : 3;
+  }
+
+  // Both chromatic — use hue distance
+  if (a.hue < 0 || b.hue < 0) return 2; // unknown hue
+
+  const diff = hueDiff(a.hue, b.hue);
+
+  // Monochromatic / very close (same color family) — stylish if not identical
+  if (diff <= 15) return a.name === b.name ? 2 : 4;
+
+  // Analogous (neighbors on the wheel) — harmonious
+  if (diff <= 40) return 4;
+
+  // Complementary (opposite on the wheel) — bold and balanced
+  if (diff >= 150 && diff <= 210) return 5;
+
+  // Triadic (120° apart) — vibrant but coordinated
+  if (diff >= 100 && diff <= 140) return 3;
+
+  // Split-complementary (around 150°) — good variety
+  if (diff >= 130 && diff <= 160) return 3;
+
+  // Everything else — potential clash
+  if (diff >= 50 && diff <= 100) return 1;
+
+  return 2;
 }
+
+
 
 function mulberry32(seed) {
   let t = seed >>> 0;
@@ -382,14 +436,18 @@ function timeScoreBias(timeCatRaw, itemCategory, answers) {
   return Math.round(base * strength);
 }
 
-function bestMatch(primaryItem, candidates, rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers) {
-  if (!primaryItem) return pickOne(candidates, rng);
+function bestMatch(outfitSoFar, candidates, rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers) {
+  if (!outfitSoFar || !outfitSoFar.length) return pickOne(candidates, rng);
   if (!Array.isArray(candidates) || candidates.length === 0) return null;
 
-  const primaryColor = primaryItem?.color;
-
   const scoreFn = (c) => {
-    const color = pairScore(primaryColor, c?.color);
+    // Average color pair score against all items already in the outfit
+    let colorTotal = 0;
+    for (const item of outfitSoFar) {
+      colorTotal += pairScore(item?.color, c?.color);
+    }
+    const colorAvg = colorTotal / outfitSoFar.length;
+
     const pen = fitPenalty(c?.fit_tag, bodyTypeId, c?.category);
 
     const id = (c?.id ?? "").toString().trim();
@@ -398,7 +456,7 @@ function bestMatch(primaryItem, candidates, rng, bodyTypeId, recentItemCounts, w
     const wBias = weatherScoreBias(weatherCat, c?.category);
     const tBias = timeScoreBias(timeCat, c?.category, answers);
 
-    return color * 10 - pen - freq * 2 + wBias + tBias;
+    return colorAvg * 12 - pen - freq * 2 + wBias + tBias;
   };
 
   return pickBestByScore(candidates, scoreFn, rng);
@@ -553,22 +611,20 @@ function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactSigs, re
       outfitItems.push(top);
     }
 
-    // Score-based picking for remaining categories
-    const anchor = top || outfitItems[0] || null;
-
-    const bottom = bestMatch(anchor, shuffle(buckets.Bottoms, rng), rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
+    // Score-based picking — each pick considers all items already in the outfit
+    const bottom = bestMatch(outfitItems, shuffle(buckets.Bottoms, rng), rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
     if (bottom) outfitItems.push(bottom);
 
-    const shoes = bestMatch(bottom || anchor, shuffle(buckets.Shoes, rng), rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
+    const shoes = bestMatch(outfitItems, shuffle(buckets.Shoes, rng), rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
     if (shoes) outfitItems.push(shoes);
 
     if (includeOuterwear) {
-      const outer = bestMatch(anchor, shuffle(buckets.Outerwear, rng), rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
+      const outer = bestMatch(outfitItems, shuffle(buckets.Outerwear, rng), rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
       if (outer) outfitItems.push(outer);
     }
 
     if (includeOther) {
-      const accessory = bestMatch(anchor, shuffle(buckets.Other, rng), rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
+      const accessory = bestMatch(outfitItems, shuffle(buckets.Other, rng), rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
       if (accessory) outfitItems.push(accessory);
     }
 
