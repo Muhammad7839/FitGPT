@@ -2169,6 +2169,46 @@ img.dashSquareImg {
   letter-spacing: -0.3px;
 }
 
+/* ── Consolidated Quick Action Buttons ────────────────────── */
+.dashQuickRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.dashQuickBtn {
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bgSoft);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 100ms ease;
+}
+
+.dashQuickBtn:hover {
+  background: var(--accent-soft-2);
+  border-color: var(--accent-outline);
+}
+
+.dashQuickBtn:active {
+  transform: scale(0.97);
+}
+
+[data-theme="dark"] .dashQuickBtn {
+  background: var(--surface-input);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+[data-theme="dark"] .dashQuickBtn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
 .dashQuickActionsGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
