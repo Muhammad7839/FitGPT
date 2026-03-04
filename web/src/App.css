@@ -2520,6 +2520,14 @@ img.dashSquareImg {
   flex-wrap: wrap;
 }
 
+.profilePrefLabel {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+
 .profileEmpty {
   margin-top: 12px;
   border: 1px dashed rgba(0, 0, 0, 0.18);
@@ -4187,6 +4195,172 @@ select:focus-visible {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* ── Analytics Page ──────────────────────────────────────── */
+
+.analyticsOverviewGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.analyticsSubtitle {
+  font-weight: 800;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  margin-top: 20px;
+  margin-bottom: 10px;
+}
+
+/* Side-by-side chart blocks */
+.analyticsChartRow {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.analyticsChartBlock {
+  flex: 1;
+  min-width: 240px;
+}
+
+/* Custom tooltip */
+.analyticsTooltip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.analyticsTooltipLabel {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.analyticsTooltipValue {
+  color: var(--muted);
+}
+
+.analyticsTooltipValue strong {
+  color: var(--accent);
+}
+
+/* Least worn list */
+.analyticsBarLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analyticsLeastWornList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.analyticsLeastWornRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bgSoft);
+  border-radius: 10px;
+}
+
+.analyticsLeastWornCount {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* Style insights row */
+.analyticsInsightsRow {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.analyticsScoreCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.analyticsScoreCircle {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  border: 3px solid var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.analyticsScoreValue {
+  font-size: 36px;
+  font-weight: 950;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.analyticsScoreLabel {
+  font-size: 14px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text);
+}
+
+.analyticsScoreSub {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.analyticsSmallStats {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.analyticsSourcePie {
+  min-width: 160px;
+}
+
+/* Recharts legend text color for dark mode */
+.recharts-legend-item-text {
+  color: var(--text) !important;
+}
+
+/* Responsive */
+@media (max-width: 700px) {
+  .analyticsOverviewGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .analyticsChartRow {
+    flex-direction: column;
+  }
+  .analyticsInsightsRow {
+    flex-direction: column;
+    align-items: center;
+  }
+  .analyticsSmallStats {
+    flex-direction: column;
+    align-items: center;
   }
 }
 

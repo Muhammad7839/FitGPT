@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { to: "/favorites", label: "Favorites" },
   { to: "/history", label: "History" },
   { to: "/saved-outfits", label: "Saved" },
+  { to: "/analytics", label: "Analytics" },
   { to: "/plans", label: "Plans" },
   { to: "/profile", label: "Profile" },
 ];
