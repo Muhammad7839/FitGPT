@@ -170,7 +170,7 @@ export default function Wardrobe() {
   const [itemsLoaded, setItemsLoaded] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All Items");
   const [query, setQuery] = useState("");
-  const [bodyFitOn, setBodyFitOn] = useState(true);
+  const [bodyFitOn, setBodyFitOn] = useState(false);
   const [view, setView] = useState("grid");
   const [toast, setToast] = useState("");
 
