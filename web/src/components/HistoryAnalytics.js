@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { HistoryContent } from "./History";
 import { AnalyticsContent } from "./Analytics";
@@ -22,12 +22,20 @@ const TAB_META = {
   analytics: { title: "Analytics", sub: "Your style at a glance" },
 };
 
+const TAB_INDEX = { history: 0, analytics: 1 };
+
 export default function HistoryAnalytics() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") === "analytics" ? "analytics" : "history";
   const meta = TAB_META[activeTab];
+  const prevTabRef = useRef(activeTab);
+  const [direction, setDirection] = useState("left");
 
   const switchTab = (key) => {
+    if (key !== prevTabRef.current) {
+      setDirection(TAB_INDEX[key] > TAB_INDEX[prevTabRef.current] ? "left" : "right");
+      prevTabRef.current = key;
+    }
     if (key === "history") {
       setSearchParams({}, { replace: true });
     } else {
@@ -57,7 +65,9 @@ export default function HistoryAnalytics() {
         ))}
       </div>
 
-      {activeTab === "history" ? <HistoryContent /> : <AnalyticsContent />}
+      <div key={activeTab} className={`tabFlip tabFlip--${direction}`}>
+        {activeTab === "history" ? <HistoryContent /> : <AnalyticsContent />}
+      </div>
     </div>
   );
 }
