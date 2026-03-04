@@ -1665,6 +1665,22 @@ a {
   border-color: var(--surface-hover);
 }
 
+.authSuccess {
+  color: #2d7a3a;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(45, 122, 58, 0.08);
+  border: 1px solid rgba(45, 122, 58, 0.18);
+}
+
+[data-theme="dark"] .authSuccess {
+  color: #5cba6e;
+  background: rgba(45, 122, 58, 0.14);
+  border-color: var(--surface-hover);
+}
+
 .dashHeaderBar {
   display: flex;
   align-items: center;

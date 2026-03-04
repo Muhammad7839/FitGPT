@@ -120,7 +120,7 @@ export default function Login() {
             <button
               type="button"
               className="linkBtn"
-              onClick={() => setError("Password reset UI coming next.")}
+              onClick={() => navigate("/forgot-password")}
             >
               Forgot password?
             </button>

@@ -1,10 +1,13 @@
+import secrets
+from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import timedelta
 
 from app.database.database import get_db
 from app import schemas, crud, models
 from app.auth import (
+    hash_password,
     verify_password,
     create_access_token,
     get_current_user,
@@ -13,6 +16,7 @@ from app.auth import (
 from app.schemas import RecommendationResponse, AIRecommendationRequest, AIRecommendationResponse
 from app.weather import get_weather
 from app.groq_service import get_ai_recommendations
+from app.email import send_password_reset_email
 
 router = APIRouter()
 auth_router = APIRouter(prefix="/auth")
@@ -87,6 +91,55 @@ def login_user_json(user: schemas.UserLogin, db: Session = Depends(get_db)):
 @auth_router.post("/login", response_model=schemas.Token)
 def auth_login_user_json(user: schemas.UserLogin, db: Session = Depends(get_db)):
     return _login(user, db)
+
+
+# =============================
+# Forgot Password  —  /auth/forgot-password
+# =============================
+
+@auth_router.post("/forgot-password")
+def forgot_password(body: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
+    user = crud.get_user_by_email(db, body.email)
+    if user:
+        token = secrets.token_urlsafe(32)
+        reset_token = models.PasswordResetToken(
+            user_id=user.id,
+            token=token,
+            expires_at=datetime.utcnow() + timedelta(hours=1),
+        )
+        db.add(reset_token)
+        db.commit()
+        send_password_reset_email(body.email, token)
+    return {"message": "If an account exists, a reset link has been sent."}
+
+
+# =============================
+# Reset Password  —  /auth/reset-password
+# =============================
+
+@auth_router.post("/reset-password")
+def reset_password(body: schemas.ResetPasswordRequest, db: Session = Depends(get_db)):
+    reset_token = (
+        db.query(models.PasswordResetToken)
+        .filter(models.PasswordResetToken.token == body.token)
+        .first()
+    )
+    if not reset_token:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
+    if reset_token.used:
+        raise HTTPException(status_code=400, detail="This reset link has already been used.")
+    if reset_token.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="This reset link has expired.")
+
+    user = db.query(models.User).filter(models.User.id == reset_token.user_id).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
+
+    user.hashed_password = hash_password(body.new_password)
+    reset_token.used = True
+    db.commit()
+
+    return {"message": "Password has been reset successfully."}
 
 
 # =============================
