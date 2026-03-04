@@ -106,7 +106,7 @@ const PieLabelRender = ({ cx, cy, midAngle, innerRadius, outerRadius, percent })
   );
 };
 
-export default function Analytics() {
+export function AnalyticsContent() {
   const { user } = useAuth();
   const theme = useThemeColors();
 
@@ -154,9 +154,7 @@ export default function Analytics() {
     [wardrobe]
   );
 
-  // Overview stats — unique to Analytics (History already shows monthly counts)
   const overviewStats = useMemo(() => {
-    // Utilization: % of wardrobe items worn at least once
     const wornIds = new Set();
     for (const h of history) {
       const ids = Array.isArray(h?.item_ids) ? h.item_ids : [];
@@ -173,17 +171,14 @@ export default function Analytics() {
       ? Math.round((wornActiveCount / activeItems.length) * 100)
       : 0;
 
-    // Categories count
     const categories = new Set(
       activeItems.map((i) => (i?.category || "").toString().trim()).filter(Boolean)
     ).size;
 
-    // Categories count
     const colorCount = new Set(
       activeItems.map((i) => (i?.color || "").toString().trim().toLowerCase()).filter(Boolean)
     ).size;
 
-    // Avg outfits per week (over last 30 days)
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const recentCount = history.filter((h) => {
       const t = new Date(h?.worn_at).getTime();
@@ -194,7 +189,6 @@ export default function Analytics() {
     return { totalItems: activeItems.length, utilization, categories, colorCount, avgPerWeek };
   }, [activeItems, history]);
 
-  // Category breakdown for pie chart
   const categoryData = useMemo(() => {
     const counts = {};
     for (const it of activeItems) {
@@ -206,7 +200,6 @@ export default function Analytics() {
       .map(([name, value]) => ({ name, value }));
   }, [activeItems]);
 
-  // Color palette for pie chart
   const colorData = useMemo(() => {
     const counts = {};
     for (const it of activeItems) {
@@ -220,7 +213,6 @@ export default function Analytics() {
       .map(([name, value]) => ({ name, value, fill: COLOR_CSS[name] || "#999" }));
   }, [activeItems]);
 
-  // Wear frequency (top 8 most worn) for bar chart
   const wearData = useMemo(() => {
     const counts = new Map();
     for (const h of history) {
@@ -240,7 +232,6 @@ export default function Analytics() {
       }));
   }, [history, wardrobeById]);
 
-  // Least worn items
   const leastWorn = useMemo(() => {
     const counts = new Map();
     for (const it of activeItems) {
@@ -264,7 +255,6 @@ export default function Analytics() {
       }));
   }, [activeItems, history, wardrobeById]);
 
-  // Top occasions for bar chart
   const occasionData = useMemo(() => {
     const counts = {};
     for (const h of history) {
@@ -278,7 +268,6 @@ export default function Analytics() {
       .map(([name, value]) => ({ name, count: value }));
   }, [history]);
 
-  // Style insights
   const styleInsights = useMemo(() => {
     const uniqueCombos = new Set(
       history.map((h) => {
@@ -306,7 +295,6 @@ export default function Analytics() {
     return { versatility, uniqueCombos, avgSize, recCount, planCount };
   }, [history]);
 
-  // Source ratio for pie
   const sourceData = useMemo(() => {
     const entries = [];
     if (styleInsights.recCount > 0) entries.push({ name: "Recommended", value: styleInsights.recCount });
@@ -314,7 +302,6 @@ export default function Analytics() {
     return entries;
   }, [styleInsights]);
 
-  // Monthly timeline for area chart
   const monthlyTimeline = useMemo(() => {
     const now = new Date();
     const months = [];
@@ -335,33 +322,15 @@ export default function Analytics() {
   }, [history]);
 
   if (loading) {
-    return (
-      <div className="onboarding onboardingPage">
-        <div className="historyTopBar">
-          <div>
-            <div className="historyTitle">Analytics</div>
-            <div className="historySub">Your style at a glance</div>
-          </div>
-        </div>
-        <div className="noteBox" style={{ marginTop: 24 }}>Loading...</div>
-      </div>
-    );
+    return <div className="noteBox" style={{ marginTop: 24 }}>Loading...</div>;
   }
 
   const noData = !wardrobe.length && !history.length && !saved.length;
 
   return (
-    <div className="onboarding onboardingPage">
-      {/* Header */}
-      <div className="historyTopBar">
-        <div>
-          <div className="historyTitle">Analytics</div>
-          <div className="historySub">Your style at a glance</div>
-        </div>
-        <div className="historyTopRight">
-          <div className="historyDate">{formatTodayTopRight()}</div>
-          <button className="btn" onClick={refresh}>Refresh</button>
-        </div>
+    <div className="tabContentFadeIn">
+      <div className="historyControls" style={{ marginTop: 14, marginBottom: 8 }}>
+        <button className="btn" onClick={refresh}>Refresh</button>
       </div>
 
       {noData && (
@@ -397,13 +366,12 @@ export default function Analytics() {
         </div>
       </section>
 
-      {/* Section 2: Wardrobe Breakdown — Pie charts */}
+      {/* Section 2: Wardrobe Breakdown */}
       {activeItems.length > 0 && (
         <section className="card dashWide" style={{ marginTop: 14 }}>
           <div className="historyStatsTitle">Wardrobe Breakdown</div>
 
           <div className="analyticsChartRow">
-            {/* Category pie */}
             {categoryData.length > 0 && (
               <div className="analyticsChartBlock">
                 <div className="analyticsSubtitle">By Category</div>
@@ -431,7 +399,6 @@ export default function Analytics() {
               </div>
             )}
 
-            {/* Color distribution pie — uses actual garment colors */}
             {colorData.length > 0 && (
               <div className="analyticsChartBlock">
                 <div className="analyticsSubtitle">Color Palette</div>
@@ -466,12 +433,11 @@ export default function Analytics() {
         </section>
       )}
 
-      {/* Section 3: Outfit Insights — Bar charts */}
+      {/* Section 3: Outfit Insights */}
       {history.length > 0 && (
         <section className="card dashWide" style={{ marginTop: 14 }}>
           <div className="historyStatsTitle">Outfit Insights</div>
 
-          {/* Most worn bar chart */}
           {wearData.length > 0 && (
             <>
               <div className="analyticsSubtitle">Most Worn Items</div>
@@ -487,7 +453,6 @@ export default function Analytics() {
             </>
           )}
 
-          {/* Least worn */}
           {leastWorn.length > 0 && (
             <>
               <div className="analyticsSubtitle" style={{ marginTop: 24 }}>Least Worn Items</div>
@@ -504,7 +469,6 @@ export default function Analytics() {
             </>
           )}
 
-          {/* Top occasions bar chart */}
           {occasionData.length > 0 && (
             <>
               <div className="analyticsSubtitle" style={{ marginTop: 24 }}>Top Occasions</div>
@@ -545,7 +509,6 @@ export default function Analytics() {
                 <div className="historyStatLabel">Avg Items / Outfit</div>
               </div>
 
-              {/* Source ratio pie */}
               {sourceData.length > 0 && (
                 <div className="analyticsSourcePie">
                   <ResponsiveContainer width="100%" height={160}>
@@ -573,7 +536,7 @@ export default function Analytics() {
         </section>
       )}
 
-      {/* Section 5: Activity Timeline — Area chart */}
+      {/* Section 5: Activity Timeline */}
       {history.length > 0 && (
         <section className="card dashWide" style={{ marginTop: 14, marginBottom: 24 }}>
           <div className="historyStatsTitle">Activity Timeline</div>
@@ -604,6 +567,23 @@ export default function Analytics() {
           </ResponsiveContainer>
         </section>
       )}
+    </div>
+  );
+}
+
+export default function Analytics() {
+  return (
+    <div className="onboarding onboardingPage">
+      <div className="historyTopBar">
+        <div>
+          <div className="historyTitle">Analytics</div>
+          <div className="historySub">Your style at a glance</div>
+        </div>
+        <div className="historyTopRight">
+          <div className="historyDate">{formatTodayTopRight()}</div>
+        </div>
+      </div>
+      <AnalyticsContent />
     </div>
   );
 }

@@ -69,7 +69,7 @@ function signatureFromIds(ids) {
   return norm.join("|");
 }
 
-export default function History() {
+export function HistoryContent() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -207,42 +207,31 @@ export default function History() {
   };
 
   return (
-    <div className="onboarding onboardingPage">
-      <div className="historyTopBar">
-        <div>
-          <div className="historyTitle">Outfit History</div>
-          <div className="historySub">Track what you've worn</div>
-        </div>
+    <div className="tabContentFadeIn">
+      <div className="historyControls" style={{ marginTop: 14, marginBottom: 8 }}>
+        <select
+          className="historySelect"
+          value={range}
+          onChange={(e) => setRange(e.target.value)}
+        >
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="0">All</option>
+        </select>
 
-        <div className="historyTopRight">
-          <div className="historyDate">{formatTodayTopRight()}</div>
+        <button className="btn" onClick={refresh} disabled={loading}>
+          {loading ? "Loading..." : "Refresh"}
+        </button>
 
-          <div className="historyControls">
-            <select
-              className="historySelect"
-              value={range}
-              onChange={(e) => setRange(e.target.value)}
-            >
-              <option value="7">Last 7 days</option>
-              <option value="30">Last 30 days</option>
-              <option value="0">All</option>
-            </select>
-
-            <button className="btn" onClick={refresh} disabled={loading}>
-              {loading ? "Loading..." : "Refresh"}
-            </button>
-
-            {history.length > 0 && (
-              <button
-                className="btn"
-                style={{ color: "var(--color-danger, #e74c3c)" }}
-                onClick={() => setConfirmClear(true)}
-              >
-                Clear History
-              </button>
-            )}
-          </div>
-        </div>
+        {history.length > 0 && (
+          <button
+            className="btn"
+            style={{ color: "var(--color-danger, #e74c3c)" }}
+            onClick={() => setConfirmClear(true)}
+          >
+            Clear History
+          </button>
+        )}
       </div>
 
       {msg && <div className="noteBox" style={{ marginTop: 12 }}>{msg}</div>}
@@ -330,7 +319,6 @@ export default function History() {
         })}
       </div>
 
-      {/* STATS AT BOTTOM */}
       <section className="card dashWide historyStatsCard" style={{ marginTop: 18 }}>
         <div className="historyStatsTitle">This Month's Activity</div>
 
@@ -367,7 +355,23 @@ export default function History() {
           <span className="historyCalloutStrong">Smart Recommendations:</span> FitGPT tracks your history to avoid suggesting recently worn outfits, keeping your style fresh.
         </div>
       </div>
+    </div>
+  );
+}
 
+export default function History() {
+  return (
+    <div className="onboarding onboardingPage">
+      <div className="historyTopBar">
+        <div>
+          <div className="historyTitle">Outfit History</div>
+          <div className="historySub">Track what you've worn</div>
+        </div>
+        <div className="historyTopRight">
+          <div className="historyDate">{formatTodayTopRight()}</div>
+        </div>
+      </div>
+      <HistoryContent />
     </div>
   );
 }
