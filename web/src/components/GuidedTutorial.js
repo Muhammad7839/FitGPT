@@ -16,10 +16,26 @@ const TUTORIAL_STEPS = [
   {
     type: "spotlight",
     route: "/dashboard",
-    selector: ".dashWeatherCard",
+    selector: ".topNavInner",
     title: "Welcome to FitGPT!",
     description:
-      "This is your weather dashboard — we detect your local weather automatically so your outfit picks always match the forecast.",
+      "This is your navigation bar. Use these tabs to jump between your Dashboard, Wardrobe, Favorites, Insights, Saved Outfits, Plans, and Profile — everything you need is one tap away.",
+  },
+  {
+    type: "spotlight",
+    route: "/dashboard",
+    selector: ".dashWeatherCard",
+    title: "Weather Detection",
+    description:
+      "We detect your local weather automatically so your outfit picks always match the forecast.",
+  },
+  {
+    type: "spotlight",
+    route: "/dashboard",
+    selector: ".topNavRight .themePicker",
+    title: "Themes & Dark Mode",
+    description:
+      "Switch between Light, Dark, and other preset themes — or create your own custom theme with your favorite colors. Tap the theme pill in the top bar anytime to change your look.",
   },
   {
     type: "spotlight",
