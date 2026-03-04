@@ -439,6 +439,7 @@ export default function SplashCrumple({ onComplete }) {
         height: "100vh",
         zIndex: 9999,
         cursor: "pointer",
+        background: "#0e0e12",
       }}
     />
   );

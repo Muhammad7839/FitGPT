@@ -1,5 +1,5 @@
 // web/src/App.js
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState } from "react";
 import "./App.css";
 
 import AppRoutes from "./routes/AppRoutes";
@@ -61,8 +61,8 @@ export default function App() {
   const [customThemes, setCustomThemes] = useState(() => loadCustomThemes());
   const [activeTheme, setActiveTheme] = useState(() => readTheme(customThemes));
 
-  // Apply theme whenever it changes
-  useEffect(() => {
+  // Apply theme whenever it changes — useLayoutEffect to prevent light-mode flash
+  useLayoutEffect(() => {
     applyTheme(activeTheme);
     localStorage.setItem(THEME_KEY, JSON.stringify({ activeThemeId: activeTheme.id }));
   }, [activeTheme]);
