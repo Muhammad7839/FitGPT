@@ -871,14 +871,13 @@ export default function Wardrobe() {
           </div>
           <div className="wardrobeSub">
             Upload and manage your clothing items
+            {!effectiveSignedIn && !backendOffline ? (
+              <button type="button" className="btn primary" onClick={() => navigate("/auth")} style={{ marginLeft: 12, fontSize: "0.85rem", padding: "6px 16px", verticalAlign: "middle" }}>
+                Sign in to save
+              </button>
+            ) : null}
           </div>
         </div>
-
-        {!effectiveSignedIn && !backendOffline ? (
-          <button type="button" className="btn primary" onClick={() => navigate("/auth")}>
-            Sign in to save
-          </button>
-        ) : null}
 
         <input
           ref={fileInputRef}
@@ -927,7 +926,6 @@ export default function Wardrobe() {
         }}
       >
         <div className="wardrobeUploadInner">
-          <div className="wardrobeUploadIcon" aria-hidden="true" />
           <div className="wardrobeUploadTitle">Upload Wardrobe Items</div>
           <div className="wardrobeUploadSub">Drag and drop photos or click to browse</div>
           <button
