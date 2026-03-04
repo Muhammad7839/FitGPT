@@ -1683,38 +1683,11 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         ) : null}
       </section>
 
-      <section className="card dashWide">
-        <div className="dashCardTitle">Quick Actions</div>
-
-        <div className="dashQuickActionsGrid">
-          <button type="button" className="dashQuickActionFigma" onClick={goAddItem}>
-            <div className="dashQAIcon">+</div>
-            <div className="dashQAContent">
-              <div className="dashQATitle">Add item</div>
-              <div className="dashQADesc">Upload a new wardrobe piece</div>
-            </div>
-            <span className="dashQAArrow">&rsaquo;</span>
-          </button>
-
-          <button type="button" className="dashQuickActionFigma" onClick={openPlanModal}>
-            <div className="dashQAIcon">{"\u2606"}</div>
-            <div className="dashQAContent">
-              <div className="dashQATitle">Plan Tomorrow’s Outfit</div>
-              <div className="dashQADesc">Get ahead of your schedule</div>
-            </div>
-            <span className="dashQAArrow">&rsaquo;</span>
-          </button>
-
-          <button type="button" className="dashQuickActionFigma" onClick={() => navigate("/history")}>
-            <div className="dashQAIcon">{"\u29D6"}</div>
-            <div className="dashQAContent">
-              <div className="dashQATitle">Browse Past Outfits</div>
-              <div className="dashQADesc">See what you’ve worn recently</div>
-            </div>
-            <span className="dashQAArrow">&rsaquo;</span>
-          </button>
-        </div>
-      </section>
+      <div className="dashQuickRow">
+        <button type="button" className="dashQuickBtn" onClick={goAddItem}>+ Add Item</button>
+        <button type="button" className="dashQuickBtn" onClick={openPlanModal}>{"\u2606"} Plan Outfit</button>
+        <button type="button" className="dashQuickBtn" onClick={() => navigate("/history")}>{"\u29D6"} History</button>
+      </div>
 
       {showPlanModal && ReactDOM.createPortal(
         <div className="modalOverlay" role="dialog" aria-modal="true">
