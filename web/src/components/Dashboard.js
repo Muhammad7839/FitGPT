@@ -508,7 +508,9 @@ function makeRecentSets(historyList) {
 }
 
 function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactSigs, recentItemCounts, weatherCat, timeCat, answers) {
-  const active = (Array.isArray(items) ? items : []).filter((x) => x && x.is_active !== false);
+  const active = (Array.isArray(items) ? items : []).filter(
+    (x) => x && x.is_active !== false && String(x.is_active) !== "false"
+  );
 
   if (active.length === 0) {
     return defaultOutfitSet(seedNumber);
