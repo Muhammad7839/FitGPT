@@ -7,7 +7,7 @@ import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  AreaChart, Area,
+  AreaChart, Area, Sector,
 } from "recharts";
 
 const COLOR_CSS = {
@@ -106,6 +106,23 @@ const PieLabelRender = ({ cx, cy, midAngle, innerRadius, outerRadius, percent })
   );
 };
 
+const ActivePieShape = (props) => {
+  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, stroke } = props;
+  return (
+    <Sector
+      cx={cx}
+      cy={cy}
+      innerRadius={innerRadius - 4}
+      outerRadius={outerRadius + 8}
+      startAngle={startAngle}
+      endAngle={endAngle}
+      fill={fill}
+      stroke={stroke || "none"}
+      style={{ transition: "all 800ms cubic-bezier(0.25, 1, 0.5, 1)", cursor: "pointer" }}
+    />
+  );
+};
+
 export function AnalyticsContent() {
   const { user } = useAuth();
   const theme = useThemeColors();
@@ -115,6 +132,8 @@ export function AnalyticsContent() {
   const [history, setHistory] = useState([]);
   const [saved, setSaved] = useState([]);
   const [planned, setPlanned] = useState([]);
+  const [activeCatIdx, setActiveCatIdx] = useState(-1);
+  const [activeColorIdx, setActiveColorIdx] = useState(-1);
 
   const refresh = async () => {
     setLoading(true);
@@ -387,6 +406,12 @@ export function AnalyticsContent() {
                       dataKey="value"
                       labelLine={false}
                       label={PieLabelRender}
+                      activeIndex={activeCatIdx}
+                      activeShape={ActivePieShape}
+                      onMouseEnter={(_, i) => setActiveCatIdx(i)}
+                      onMouseLeave={() => setActiveCatIdx(-1)}
+                      onClick={(_, i) => setActiveCatIdx(i === activeCatIdx ? -1 : i)}
+                      style={{ cursor: "pointer" }}
                     >
                       {categoryData.map((_, i) => (
                         <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
@@ -414,6 +439,12 @@ export function AnalyticsContent() {
                       dataKey="value"
                       labelLine={false}
                       label={PieLabelRender}
+                      activeIndex={activeColorIdx}
+                      activeShape={ActivePieShape}
+                      onMouseEnter={(_, i) => setActiveColorIdx(i)}
+                      onMouseLeave={() => setActiveColorIdx(-1)}
+                      onClick={(_, i) => setActiveColorIdx(i === activeColorIdx ? -1 : i)}
+                      style={{ cursor: "pointer" }}
                     >
                       {colorData.map((entry, i) => (
                         <Cell
