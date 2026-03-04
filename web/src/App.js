@@ -29,8 +29,16 @@ function loadCustomThemes() {
   return [];
 }
 
-/** Read the active theme, migrating from v1 if needed */
+/** Check whether the user has a saved account (JWT token present) */
+function hasAccount() {
+  return !!localStorage.getItem("fitgpt_token_v1");
+}
+
+/** Read the active theme, migrating from v1 if needed.
+ *  Guests always default to dark; persisted theme only loads for accounts. */
 function readTheme(customThemes) {
+  if (!hasAccount()) return getPresetTheme("dark");
+
   try {
     // Try v2 first
     const raw = localStorage.getItem(THEME_KEY);
@@ -62,9 +70,12 @@ export default function App() {
   const [activeTheme, setActiveTheme] = useState(() => readTheme(customThemes));
 
   // Apply theme whenever it changes — useLayoutEffect to prevent light-mode flash
+  // Only persist to localStorage for signed-in users; guests get dark by default each session
   useLayoutEffect(() => {
     applyTheme(activeTheme);
-    localStorage.setItem(THEME_KEY, JSON.stringify({ activeThemeId: activeTheme.id }));
+    if (hasAccount()) {
+      localStorage.setItem(THEME_KEY, JSON.stringify({ activeThemeId: activeTheme.id }));
+    }
   }, [activeTheme]);
 
   const setTheme = useCallback(
@@ -73,7 +84,7 @@ export default function App() {
         typeof themeOrId === "string"
           ? getPresetTheme(themeOrId) ||
             customThemes.find((t) => t.id === themeOrId) ||
-            getPresetTheme("light")
+            getPresetTheme(hasAccount() ? "light" : "dark")
           : themeOrId;
       setActiveTheme(theme);
     },
@@ -96,8 +107,9 @@ export default function App() {
         localStorage.setItem(CUSTOM_THEMES_KEY, JSON.stringify(next));
         return next;
       });
-      // If the deleted theme was active, fall back to classic
-      setActiveTheme((prev) => (prev.id === themeId ? getPresetTheme("light") : prev));
+      // If the deleted theme was active, fall back to default
+      const fallback = hasAccount() ? "light" : "dark";
+      setActiveTheme((prev) => (prev.id === themeId ? getPresetTheme(fallback) : prev));
     },
     []
   );

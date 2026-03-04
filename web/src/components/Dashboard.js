@@ -1407,12 +1407,8 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           </div>
         </div>
         <div className="dashHeroRight">
-          {user ? (
+          {user && (
             <button type="button" className="dashQuickBtn" onClick={handleLogout}>Logout</button>
-          ) : (
-            <button type="button" className="btn primary" onClick={() => navigate("/auth")}>
-              Sign in
-            </button>
           )}
         </div>
       </div>
