@@ -1679,6 +1679,38 @@ a {
   gap: 10px;
 }
 
+.dashHeroBar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.dashHeroLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dashHeroDate {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: -0.2px;
+}
+
+.dashHeroRight {
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .dashHeroBar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 .dashStrong {
   font-weight: 900;
 }
@@ -1701,6 +1733,11 @@ a {
   color: var(--muted);
   font-size: 13px;
   margin: 6px 0 10px;
+}
+
+/* Compact quick row when inside hero bar */
+.dashHeroLeft .dashQuickRow {
+  margin-top: 0;
 }
 
 .dashWeatherCard {
