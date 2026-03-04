@@ -1390,15 +1390,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   return (
     <div className="onboarding onboardingPage">
       <div className="dashHeaderBar">
-        <div className="brandBar" style={{ marginBottom: 0 }}>
-          <div className="brandLeft">
-            <div className="brandMark brandMarkSm">
-              <img className="dashLogo" src="/officialLogo.png" alt="FitGPT official logo" />
-            </div>
-            <div className="dashStrong">FitGPT</div>
-          </div>
-        </div>
-
         <div className="dashHeaderRight">
           {user ? (
             <button type="button" className="btn" onClick={handleLogout}>
