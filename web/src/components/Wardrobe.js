@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { wardrobeApi } from "../api/wardrobeApi";
 import { useAuth } from "../auth/AuthProvider";
@@ -1233,7 +1234,7 @@ export default function Wardrobe() {
         ) : null}
       </section>
 
-      {addOpen ? (
+      {addOpen ? ReactDOM.createPortal(
         <div className="modalOverlay" role="dialog" aria-modal="true">
           <div className="modalCard">
             <div className="modalTitle">Add wardrobe item</div>
@@ -1301,7 +1302,8 @@ export default function Wardrobe() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
       {bulkOpen ? (
@@ -1403,7 +1405,7 @@ export default function Wardrobe() {
         </div>
       ) : null}
 
-      {editOpen ? (
+      {editOpen ? ReactDOM.createPortal(
         <div className="modalOverlay" role="dialog" aria-modal="true">
           <div className="modalCard">
             <div className="modalTitle">Edit item</div>
@@ -1464,7 +1466,8 @@ export default function Wardrobe() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
       {confirmOpen ? (

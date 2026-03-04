@@ -174,6 +174,15 @@ const TUTORIAL_STEPS = [
     title: "Your Profile",
     description: "Click Profile to manage your account and preferences.",
   },
+  // ── Profile: Sign-in card ──
+  {
+    type: "spotlight",
+    route: "/profile",
+    selector: ".profileSignInCard",
+    title: "Sign In & Sync",
+    description:
+      "Create an account or sign in to save your wardrobe across devices, sync outfit history, and unlock your full profile.",
+  },
   // ── Profile page ──
   {
     type: "spotlight",
