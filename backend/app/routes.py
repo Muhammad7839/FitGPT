@@ -182,7 +182,7 @@ def create_wardrobe_item(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    require_onboarding_complete(current_user)
+
     return crud.create_clothing_item(db, item, current_user.id)
 
 
@@ -191,7 +191,7 @@ def get_my_wardrobe(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    require_onboarding_complete(current_user)
+
     return crud.get_clothing_items_for_user(db, current_user.id)
 
 
@@ -202,7 +202,7 @@ def update_wardrobe_item(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    require_onboarding_complete(current_user)
+
 
     db_item = crud.get_clothing_item_by_id(db, item_id)
 
@@ -221,7 +221,7 @@ def delete_wardrobe_item(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    require_onboarding_complete(current_user)
+
 
     db_item = crud.get_clothing_item_by_id(db, item_id)
 
@@ -243,7 +243,7 @@ def delete_wardrobe_item(
 def get_dashboard_context(
     current_user: models.User = Depends(get_current_user)
 ):
-    require_onboarding_complete(current_user)
+
     weather = get_weather()
     return {"weather": weather}
 
@@ -257,7 +257,7 @@ def get_recommendations(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    require_onboarding_complete(current_user)
+
 
     items = crud.get_clothing_items_for_user(db, current_user.id)
 
