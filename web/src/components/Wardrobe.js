@@ -249,7 +249,20 @@ export default function Wardrobe() {
           if (apiItems.length > 0) {
             setItems(apiItems);
           } else if (local.length > 0) {
+            // One-time sync: push local items to cloud if API is empty
             setItems(local);
+            for (const item of local) {
+              try {
+                await wardrobeApi.createItem({
+                  name: item.name,
+                  category: item.category,
+                  color: item.color,
+                  fit_type: item.fit_tag || item.fit_type || "regular",
+                  style_tag: item.style_tag || "casual",
+                  image_url: item.image_url || "",
+                });
+              } catch (_) { /* best-effort */ }
+            }
           } else {
             setItems([]);
           }
