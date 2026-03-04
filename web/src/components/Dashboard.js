@@ -1405,6 +1405,12 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
       <div className="dashTopRightDate">{formatToday()}</div>
 
+      <div className="dashQuickRow">
+        <button type="button" className="dashQuickBtn" onClick={goAddItem}>+ Add Item</button>
+        <button type="button" className="dashQuickBtn" onClick={openPlanModal}>{"\u2606"} Plan Outfit</button>
+        <button type="button" className="dashQuickBtn" onClick={() => navigate("/history")}>{"\u29D6"} History</button>
+      </div>
+
       <section className="card dashWide dashWeatherCard">
         <div className="dashWeatherHud">
           <div className="dashWeatherMain">
@@ -1682,12 +1688,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           </div>
         ) : null}
       </section>
-
-      <div className="dashQuickRow">
-        <button type="button" className="dashQuickBtn" onClick={goAddItem}>+ Add Item</button>
-        <button type="button" className="dashQuickBtn" onClick={openPlanModal}>{"\u2606"} Plan Outfit</button>
-        <button type="button" className="dashQuickBtn" onClick={() => navigate("/history")}>{"\u29D6"} History</button>
-      </div>
 
       {showPlanModal && ReactDOM.createPortal(
         <div className="modalOverlay" role="dialog" aria-modal="true">
