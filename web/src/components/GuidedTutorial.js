@@ -108,17 +108,29 @@ const TUTORIAL_STEPS = [
     type: "navigate",
     route: "/favorites",
     navHref: "/history",
+    navLabel: "Insights",
     title: "See Your Insights",
     description: "Click Insights to track what you've worn.",
   },
-  // ── Insights page ──
+  // ── Insights page: History tab ──
   {
     type: "spotlight",
     route: "/history",
-    selector: ".wardrobeTabs",
-    title: "History & Analytics",
+    navigateTo: "/history",
+    selector: ".historyStatsCard",
+    title: "Outfit History",
     description:
-      "Use these tabs to switch between History (every outfit you've worn) and Analytics (style stats, wear frequency, and pattern insights).",
+      "Every outfit you wear gets logged here. Track what you've worn, when you wore it, and build a personal style timeline.",
+  },
+  // ── Insights page: Analytics tab ──
+  {
+    type: "spotlight",
+    route: "/history",
+    navigateTo: "/history?tab=analytics",
+    selector: ".historyStatsCard",
+    title: "Style Analytics",
+    description:
+      "Dive into your style stats — see wear frequency, color distribution, category breakdowns, and pattern insights all at a glance.",
   },
   // ── Navigate to Saved ──
   {
@@ -208,6 +220,12 @@ export default function GuidedTutorial({ show, onDismiss }) {
   const isFinal = current.type === "done";
   const isNav = current.type === "navigate";
 
+  // Navigate when a step has navigateTo (e.g. switching tabs)
+  useEffect(() => {
+    if (!show || !current.navigateTo) return;
+    navigate(current.navigateTo);
+  }, [show, step]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Measure the target element
   const measure = useCallback(() => {
     if (!show) return;
@@ -218,7 +236,7 @@ export default function GuidedTutorial({ show, onDismiss }) {
     const id = setTimeout(() => {
       const el = queryTarget(sel);
       setTargetRect(getRect(el));
-    }, 120);
+    }, current.navigateTo ? 300 : 120);
     return () => clearTimeout(id);
   }, [show, current, step]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -268,8 +286,10 @@ export default function GuidedTutorial({ show, onDismiss }) {
   const handleBack = () => {
     if (step <= 0) return;
     const prevStep = TUTORIAL_STEPS[step - 1];
-    // Navigate to the previous step's route if it's different from the current page
-    if (prevStep.route && prevStep.route !== location.pathname) {
+    // Use navigateTo if the previous step has one, otherwise fall back to route
+    if (prevStep.navigateTo) {
+      navigate(prevStep.navigateTo);
+    } else if (prevStep.route && prevStep.route !== location.pathname) {
       navigate(prevStep.route);
     }
     setStep((s) => s - 1);
@@ -405,7 +425,7 @@ export default function GuidedTutorial({ show, onDismiss }) {
             {isFinal ? "" : stepLabel}
           </span>
           <button className="tutorialNextBtn" onClick={handleNext}>
-            {isFinal ? "Get Started" : isNav ? current.navHref.replace("/", "").replace("-", " ").replace(/\b\w/g, c => c.toUpperCase()) + " →" : "Next"}
+            {isFinal ? "Get Started" : isNav ? (current.navLabel || current.navHref.replace("/", "").replace("-", " ").replace(/\b\w/g, c => c.toUpperCase())) + " →" : "Next"}
           </button>
         </div>
 

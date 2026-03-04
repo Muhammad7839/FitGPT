@@ -143,6 +143,30 @@ export default function AppRoutes() {
       </PageTransition>
 
       <GuidedTutorial show={!!showTutorial} onDismiss={handleTutorialDismiss} />
+
+      {/* TEMP: testing buttons */}
+      <div style={{ position: "fixed", bottom: 8, right: 8, zIndex: 99999, display: "flex", gap: 6 }}>
+        <button
+          style={{ fontSize: 11, padding: "4px 8px", opacity: 0.7 }}
+          onClick={() => {
+            localStorage.removeItem("fitgpt_onboarding_answers_v1");
+            localStorage.removeItem("fitgpt_onboarded_v1");
+            localStorage.removeItem(TUTORIAL_DONE_KEY);
+            window.location.href = "/";
+          }}
+        >
+          Reset Guest
+        </button>
+        <button
+          style={{ fontSize: 11, padding: "4px 8px", opacity: 0.7 }}
+          onClick={() => {
+            localStorage.removeItem(TUTORIAL_DONE_KEY);
+            setJustOnboarded(true);
+          }}
+        >
+          Replay Tutorial
+        </button>
+      </div>
     </>
   );
 }
