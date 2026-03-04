@@ -4,8 +4,13 @@ import "./App.css";
 
 import AppRoutes from "./routes/AppRoutes";
 import { AuthProvider } from "./auth/AuthProvider";
+import { getPresetTheme, PRESET_THEMES } from "./theme/themeDefinitions";
+import { applyTheme } from "./theme/themeEngine";
+import ThemePicker from "./components/ThemePicker";
 
-const THEME_KEY = "fitgpt_theme_v1";
+const LEGACY_THEME_KEY = "fitgpt_theme_v1";
+const THEME_KEY = "fitgpt_theme_v2";
+const CUSTOM_THEMES_KEY = "fitgpt_custom_themes_v1";
 
 // One-time cleanup: remove stale wardrobe data from localStorage
 // that was blocking fresh sessionStorage data from being used
@@ -15,12 +20,35 @@ if (!localStorage.getItem(STALE_CLEANUP_KEY)) {
   localStorage.setItem(STALE_CLEANUP_KEY, "1");
 }
 
-function readTheme() {
+/** Load custom themes from localStorage */
+function loadCustomThemes() {
   try {
-    const raw = localStorage.getItem(THEME_KEY);
-    if (raw === "dark") return "dark";
+    const raw = localStorage.getItem(CUSTOM_THEMES_KEY);
+    if (raw) return JSON.parse(raw);
   } catch {}
-  return "light";
+  return [];
+}
+
+/** Read the active theme, migrating from v1 if needed */
+function readTheme(customThemes) {
+  try {
+    // Try v2 first
+    const raw = localStorage.getItem(THEME_KEY);
+    if (raw) {
+      const { activeThemeId } = JSON.parse(raw);
+      // Check presets
+      const preset = getPresetTheme(activeThemeId);
+      if (preset && preset.id === activeThemeId) return preset;
+      // Check custom themes
+      const custom = customThemes.find((t) => t.id === activeThemeId);
+      if (custom) return custom;
+    }
+
+    // Migrate from v1 ("light" / "dark")
+    const legacy = localStorage.getItem(LEGACY_THEME_KEY);
+    if (legacy === "dark") return getPresetTheme("dark");
+  } catch {}
+  return getPresetTheme("light");
 }
 
 const ThemeContext = createContext(null);
@@ -29,61 +57,66 @@ export function useTheme() {
   return useContext(ThemeContext);
 }
 
-function FloatingThemeToggle({ theme, onToggle }) {
-  const [animating, setAnimating] = useState(false);
+export default function App() {
+  const [customThemes, setCustomThemes] = useState(() => loadCustomThemes());
+  const [activeTheme, setActiveTheme] = useState(() => readTheme(customThemes));
 
-  const handleToggle = () => {
-    if (animating) return;
-    setAnimating(true);
+  // Apply theme whenever it changes
+  useEffect(() => {
+    applyTheme(activeTheme);
+    localStorage.setItem(THEME_KEY, JSON.stringify({ activeThemeId: activeTheme.id }));
+  }, [activeTheme]);
 
-    const next = theme === "light" ? "dark" : "light";
-    const overlay = document.createElement("div");
-    overlay.className = "themeWaterfallOverlay " + (next === "dark" ? "toDark" : "toLight");
-    document.body.appendChild(overlay);
+  const setTheme = useCallback(
+    (themeOrId) => {
+      const theme =
+        typeof themeOrId === "string"
+          ? getPresetTheme(themeOrId) ||
+            customThemes.find((t) => t.id === themeOrId) ||
+            getPresetTheme("light")
+          : themeOrId;
+      setActiveTheme(theme);
+    },
+    [customThemes]
+  );
 
-    setTimeout(() => onToggle(), 300);
-    setTimeout(() => overlay.classList.add("done"), 380);
-    setTimeout(() => {
-      overlay.remove();
-      setAnimating(false);
-    }, 720);
+  const saveCustomTheme = useCallback((theme) => {
+    setCustomThemes((prev) => {
+      const idx = prev.findIndex((t) => t.id === theme.id);
+      const next = idx >= 0 ? prev.map((t, i) => (i === idx ? theme : t)) : [...prev.slice(0, 4), theme];
+      localStorage.setItem(CUSTOM_THEMES_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const deleteCustomTheme = useCallback(
+    (themeId) => {
+      setCustomThemes((prev) => {
+        const next = prev.filter((t) => t.id !== themeId);
+        localStorage.setItem(CUSTOM_THEMES_KEY, JSON.stringify(next));
+        return next;
+      });
+      // If the deleted theme was active, fall back to classic
+      setActiveTheme((prev) => (prev.id === themeId ? getPresetTheme("light") : prev));
+    },
+    []
+  );
+
+  const ctxValue = {
+    theme: activeTheme,
+    themeBase: activeTheme.base,
+    setTheme,
+    customThemes,
+    saveCustomTheme,
+    deleteCustomTheme,
+    allThemes: [...PRESET_THEMES, ...customThemes],
   };
 
   return (
-    <button
-      type="button"
-      className={"globalThemeToggle" + (theme === "dark" ? " dark" : "")}
-      onClick={handleToggle}
-      disabled={animating}
-      aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-    >
-      <span className="globalThemeLabel">
-        {theme === "light" ? "Light" : "Dark"}
-      </span>
-      <span className="globalThemeTrack">
-        <span className="globalThemeThumb">
-          {theme === "light" ? "\u2600" : "\u263E"}
-        </span>
-      </span>
-    </button>
-  );
-}
-
-export default function App() {
-  const [theme, setTheme] = useState(() => readTheme());
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem(THEME_KEY, theme);
-  }, [theme]);
-
-  const toggleTheme = useCallback(() => setTheme((prev) => (prev === "light" ? "dark" : "light")), []);
-
-  return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+    <ThemeContext.Provider value={ctxValue}>
       <AuthProvider>
         <AppRoutes />
-        <FloatingThemeToggle theme={theme} onToggle={toggleTheme} />
+        <ThemePicker />
       </AuthProvider>
     </ThemeContext.Provider>
   );
