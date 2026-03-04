@@ -16,6 +16,8 @@ import Profile from "../components/Profile";
 import HistoryAnalytics from "../components/HistoryAnalytics";
 import Plans from "../components/Plans";
 import SavedOutfits from "../components/SavedOutfits";
+import ForgotPassword from "../components/ForgotPassword";
+import ResetPassword from "../components/ResetPassword";
 
 function loadAnswers(user) {
   try {
@@ -119,6 +121,8 @@ export default function AppRoutes() {
           <Route path="/auth" element={<AuthPrompt />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           <Route
             path="/dashboard"
