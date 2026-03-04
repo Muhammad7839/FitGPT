@@ -1,6 +1,6 @@
 // web/src/components/TopNav.js
 import React from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, Link } from "react-router-dom";
 import ThemePicker from "./ThemePicker";
 
 const NAV_ITEMS = [
@@ -25,6 +25,10 @@ export default function TopNav() {
   return (
     <header className="topNav">
       <nav className="topNavInner" aria-label="Main navigation">
+        <Link to="/dashboard" className="topNavBrand">
+          <img className="topNavLogo" src="/officialLogo.png" alt="FitGPT" />
+          <span className="topNavBrandName">FitGPT</span>
+        </Link>
         <div className="topNavLinks">
           {NAV_ITEMS.map(({ to, label }) => (
             <NavLink
