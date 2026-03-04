@@ -777,10 +777,11 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [recentExactSigs, setRecentExactSigs] = useState(() => new Set());
   const [recentItemCounts, setRecentItemCounts] = useState(() => new Map());
 
-  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherLoading, setWeatherLoading] = useState(() => !readWeatherOverride());
   const [weatherMsg, setWeatherMsg] = useState("");
   const [weatherTempF, setWeatherTempF] = useState(null);
   const [weatherCategory, setWeatherCategory] = useState(() => readWeatherOverride() || "mild");
+  const [dotCount, setDotCount] = useState(1);
   const [showWeatherPicker, setShowWeatherPicker] = useState(false);
 
   const [timeCategory, setTimeCategory] = useState(() => readTimeOverride() || timeCategoryFromDate(new Date()));
@@ -987,6 +988,13 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     };
 
   }, []);
+
+  // Dot animation for "Detecting Weather" text
+  useEffect(() => {
+    if (!weatherLoading) return;
+    const id = window.setInterval(() => setDotCount((c) => (c % 3) + 1), 400);
+    return () => window.clearInterval(id);
+  }, [weatherLoading]);
 
   // Fetch AI recommendations in background (debounced to avoid re-fires on mount)
   useEffect(() => {
@@ -1349,7 +1357,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   }
 
   const weatherLine = useMemo(() => {
-    const tempPart = Number.isFinite(Number(weatherTempF)) ? `${weatherTempF}°F` : "";
+    const tempPart = weatherTempF != null && Number.isFinite(Number(weatherTempF)) ? `${weatherTempF}°F` : "";
     const catPart = weatherCategory ? titleCase(weatherCategory) : "";
     const parts = [tempPart, catPart].filter(Boolean);
     return parts.length ? parts.join(" • ") : "Weather";
@@ -1413,17 +1421,26 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         <div className="dashWeatherHud">
           <div className="dashWeatherMain">
             <span className="dashWeatherEmoji">
-              {weatherCategory === "cold" ? "\u2744\uFE0F" :
+              {weatherLoading ? "\u26C5" :
+               weatherCategory === "cold" ? "\u2744\uFE0F" :
                weatherCategory === "cool" ? "\uD83C\uDF2C\uFE0F" :
                weatherCategory === "warm" ? "\u2600\uFE0F" :
                weatherCategory === "hot" ? "\uD83D\uDD25" : "\u26C5"}
             </span>
             <div className="dashWeatherInfo">
               <div className="dashWeatherTemp">
-                {Number.isFinite(Number(weatherTempF)) ? `${weatherTempF}\u00B0F` : titleCase(weatherCategory)}
+                {weatherLoading
+                  ? `Detecting Weather${".".repeat(dotCount)}`
+                  : weatherTempF != null && Number.isFinite(Number(weatherTempF))
+                    ? `${weatherTempF}\u00B0F`
+                    : titleCase(weatherCategory)}
               </div>
               <div className="dashWeatherLabel">
-                {Number.isFinite(Number(weatherTempF)) ? titleCase(weatherCategory) : "Today's Weather"}
+                {weatherLoading
+                  ? ""
+                  : weatherTempF != null && Number.isFinite(Number(weatherTempF))
+                    ? titleCase(weatherCategory)
+                    : "Today's Weather"}
               </div>
             </div>
           </div>
@@ -1435,7 +1452,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
               onClick={() => { setShowWeatherPicker((p) => !p); setShowTimePicker(false); }}
             >
               <span className="dashContextChipIcon">{"\u2601\uFE0F"}</span>
-              <span>{titleCase(weatherCategory)}</span>
+              <span>{weatherLoading ? `Detecting${".".repeat(dotCount)}` : titleCase(weatherCategory)}</span>
             </button>
 
             <button
@@ -1449,9 +1466,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           </div>
         </div>
 
-        {weatherLoading ? (
-          <div className="dashWeatherStatus">Detecting weather...</div>
-        ) : null}
         {weatherMsg && !weatherLoading ? (
           <div className="dashWeatherStatus">{weatherMsg}</div>
         ) : null}
