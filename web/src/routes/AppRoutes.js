@@ -3,6 +3,7 @@ import { Route, Routes, Navigate, useNavigate } from "react-router-dom";
 import PageTransition from "../components/PageTransition";
 import { useAuth } from "../auth/AuthProvider";
 import { userKey, ONBOARDING_ANSWERS_KEY, ONBOARDED_KEY } from "../utils/userStorage";
+import GuidedTutorial, { TUTORIAL_DONE_KEY } from "../components/GuidedTutorial";
 
 import AuthPrompt from "../components/AuthPrompt";
 import Login from "../components/Login";
@@ -74,10 +75,17 @@ export default function AppRoutes() {
     setOnboarded(isOnboarded(user));
   }, [user]);
 
+  const [justOnboarded, setJustOnboarded] = useState(false);
+
+  const showTutorial = justOnboarded && (() => {
+    try { return localStorage.getItem(TUTORIAL_DONE_KEY) !== "1"; } catch { return true; }
+  })();
+
   const handleOnboardingComplete = useCallback((finalAnswers) => {
     setAnswers(finalAnswers);
     saveAnswers(finalAnswers, user);
     setOnboarded(true);
+    setJustOnboarded(true);
   }, [user]);
 
   const handleResetOnboarding = useCallback(() => {
@@ -86,47 +94,55 @@ export default function AppRoutes() {
     setOnboarded(false);
   }, [user]);
 
+  const handleTutorialDismiss = useCallback(() => {
+    setJustOnboarded(false);
+  }, []);
+
   return (
-    <PageTransition>
-      <Routes>
-        <Route
-          path="/"
-          element={
-            onboarded ? (
-              <Navigate to="/dashboard" replace />
-            ) : (
-              <OnboardingWrapper
-                onComplete={handleOnboardingComplete}
-                savedAnswers={answers}
+    <>
+      <PageTransition>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              onboarded ? (
+                <Navigate to="/dashboard" replace />
+              ) : (
+                <OnboardingWrapper
+                  onComplete={handleOnboardingComplete}
+                  savedAnswers={answers}
+                />
+              )
+            }
+          />
+
+          <Route path="/auth" element={<AuthPrompt />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+
+          <Route
+            path="/dashboard"
+            element={
+              <Dashboard
+                answers={answers}
+                onResetOnboarding={handleResetOnboarding}
               />
-            )
-          }
-        />
+            }
+          />
+          <Route path="/wardrobe" element={<Wardrobe />} />
+          <Route path="/favorites" element={<Favorites />} />
+          <Route path="/profile" element={<Profile onResetOnboarding={handleResetOnboarding} />} />
+          <Route path="/history" element={<HistoryAnalytics />} />
+          <Route path="/plans" element={<Plans />} />
+          <Route path="/saved-outfits" element={<SavedOutfits />} />
+          <Route path="/analytics" element={<Navigate to="/history?tab=analytics" replace />} />
 
-        <Route path="/auth" element={<AuthPrompt />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+          <Route path="/onboarding" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </PageTransition>
 
-        <Route
-          path="/dashboard"
-          element={
-            <Dashboard
-              answers={answers}
-              onResetOnboarding={handleResetOnboarding}
-            />
-          }
-        />
-        <Route path="/wardrobe" element={<Wardrobe />} />
-        <Route path="/favorites" element={<Favorites />} />
-        <Route path="/profile" element={<Profile onResetOnboarding={handleResetOnboarding} />} />
-        <Route path="/history" element={<HistoryAnalytics />} />
-        <Route path="/plans" element={<Plans />} />
-        <Route path="/saved-outfits" element={<SavedOutfits />} />
-        <Route path="/analytics" element={<Navigate to="/history?tab=analytics" replace />} />
-
-        <Route path="/onboarding" element={<Navigate to="/" replace />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </PageTransition>
+      <GuidedTutorial show={!!showTutorial} onDismiss={handleTutorialDismiss} />
+    </>
   );
 }

@@ -145,12 +145,6 @@ export default function Profile({ onResetOnboarding = () => {} }) {
               <button className="btn" type="button" onClick={() => navigate("/dashboard")}>
                 Dashboard
               </button>
-              <button className="btn" type="button" onClick={() => navigate("/history")}>
-                Outfit history
-              </button>
-              <button className="btn" type="button" onClick={() => { onResetOnboarding(); navigate("/"); }}>
-                Redo Onboarding
-              </button>
             </div>
 
             {/* ── Style Preferences ── */}
@@ -233,22 +227,12 @@ export default function Profile({ onResetOnboarding = () => {} }) {
           </>
         ) : (
           <>
-            <div className="noteBox" style={{ marginTop: 16 }}>
-              Sign in to save outfits and access your profile.
-            </div>
-
-            <div className="loginButtons" style={{ marginTop: 18 }}>
+            <div className="profileSignInCard">
+              <div className="profileSignInIcon">&#x1F464;</div>
+              <div className="profileSignInTitle">You're browsing as a guest</div>
+              <div className="profileSignInSub">Sign in to save outfits, sync your wardrobe, and access your full profile.</div>
               <button className="btn primary" type="button" onClick={() => navigate("/login")}>
                 Sign in
-              </button>
-              <button className="btn" type="button" onClick={() => navigate("/dashboard")}>
-                Continue
-              </button>
-              <button className="btn" type="button" onClick={() => navigate("/history")}>
-                Outfit history
-              </button>
-              <button className="btn" type="button" onClick={() => { onResetOnboarding(); navigate("/"); }}>
-                Redo Onboarding
               </button>
             </div>
 
