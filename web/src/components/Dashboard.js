@@ -1389,26 +1389,24 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
   return (
     <div className="onboarding onboardingPage">
-      <div className="dashHeaderBar">
-        <div className="dashHeaderRight">
+      <div className="dashHeroBar">
+        <div className="dashHeroLeft">
+          <div className="dashHeroDate">{formatToday()}</div>
+          <div className="dashQuickRow">
+            <button type="button" className="dashQuickBtn" onClick={goAddItem}>+ Add Item</button>
+            <button type="button" className="dashQuickBtn" onClick={openPlanModal}>{"\u2606"} Plan Outfit</button>
+            <button type="button" className="dashQuickBtn" onClick={() => navigate("/history")}>{"\u29D6"} History</button>
+          </div>
+        </div>
+        <div className="dashHeroRight">
           {user ? (
-            <button type="button" className="btn" onClick={handleLogout}>
-              Logout
-            </button>
+            <button type="button" className="dashQuickBtn" onClick={handleLogout}>Logout</button>
           ) : (
             <button type="button" className="btn primary" onClick={() => navigate("/auth")}>
-              Sign in to save
+              Sign in
             </button>
           )}
         </div>
-      </div>
-
-      <div className="dashTopRightDate">{formatToday()}</div>
-
-      <div className="dashQuickRow">
-        <button type="button" className="dashQuickBtn" onClick={goAddItem}>+ Add Item</button>
-        <button type="button" className="dashQuickBtn" onClick={openPlanModal}>{"\u2606"} Plan Outfit</button>
-        <button type="button" className="dashQuickBtn" onClick={() => navigate("/history")}>{"\u29D6"} History</button>
       </div>
 
       <section className="card dashWide dashWeatherCard">
