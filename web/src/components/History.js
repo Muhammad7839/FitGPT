@@ -322,31 +322,41 @@ export function HistoryContent() {
       <section className="card dashWide historyStatsCard" style={{ marginTop: 18 }}>
         <div className="historyStatsTitle">This Month's Activity</div>
 
-        <div className="historyStatsGrid">
-          <div className="historyStatTile">
-            <div className="historyStatIcon">&#x1F455;</div>
-            <div className="historyStatNumber">{monthlyStats.outfitsWorn}</div>
-            <div className="historyStatLabel">Outfits Worn</div>
+        {monthlyStats.outfitsWorn === 0 ? (
+          <div className="historyStatsEmpty">
+            <div className="historyStatsEmptyIcon">&#x1F4C5;</div>
+            <div className="historyStatsEmptyTitle">No activity yet this month</div>
+            <div className="historyStatsEmptySub">
+              Wear an outfit from your recommendations to start tracking your style stats.
+            </div>
           </div>
+        ) : (
+          <div className="historyStatsGrid">
+            <div className="historyStatTile">
+              <div className="historyStatIcon">&#x1F455;</div>
+              <div className="historyStatNumber">{monthlyStats.outfitsWorn}</div>
+              <div className="historyStatLabel">Outfits Worn</div>
+            </div>
 
-          <div className="historyStatTile">
-            <div className="historyStatIcon">&#x2728;</div>
-            <div className="historyStatNumber">{monthlyStats.uniqueCombos}</div>
-            <div className="historyStatLabel">Unique Combos</div>
-          </div>
+            <div className="historyStatTile">
+              <div className="historyStatIcon">&#x2728;</div>
+              <div className="historyStatNumber">{monthlyStats.uniqueCombos}</div>
+              <div className="historyStatLabel">Unique Combos</div>
+            </div>
 
-          <div className="historyStatTile historyStatTileText">
-            <div className="historyStatIcon">&#x1F451;</div>
-            <div className="historyStatValue">{monthlyStats.mostWornItemName || "—"}</div>
-            <div className="historyStatLabel">Most Worn Item</div>
-          </div>
+            <div className="historyStatTile historyStatTileText">
+              <div className="historyStatIcon">&#x1F451;</div>
+              <div className="historyStatValue">{monthlyStats.mostWornItemName || "—"}</div>
+              <div className="historyStatLabel">Most Worn Item</div>
+            </div>
 
-          <div className="historyStatTile historyStatTileText">
-            <div className="historyStatIcon">&#x1F3AF;</div>
-            <div className="historyStatValue">{monthlyStats.topOccasion || "—"}</div>
-            <div className="historyStatLabel">Top Occasion</div>
+            <div className="historyStatTile historyStatTileText">
+              <div className="historyStatIcon">&#x1F3AF;</div>
+              <div className="historyStatValue">{monthlyStats.topOccasion || "—"}</div>
+              <div className="historyStatLabel">Top Occasion</div>
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       <div className="historyCallout">
