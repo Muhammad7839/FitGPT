@@ -571,7 +571,7 @@ function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactSigs, re
   );
 
   if (active.length === 0) {
-    return defaultOutfitSet(seedNumber);
+    return [];
   }
 
   const seed = typeof seedNumber === "number" && Number.isFinite(seedNumber) ? seedNumber : Date.now();
@@ -643,7 +643,7 @@ function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactSigs, re
   }
 
   // Always return exactly 3 options; pad by cloning if needed
-  if (!results.length) return defaultOutfitSet(seedNumber);
+  if (!results.length) return [];
   while (results.length < 3) {
     results.push(results[results.length - 1]);
   }
@@ -1129,10 +1129,10 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     return generatedOutfits;
   }, [generatedOutfits, reused, wardrobe, aiOutfits]);
 
-  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [selectedIdx, setSelectedIdx] = useState(null);
 
   const explanationText = useMemo(() => {
-    // Use AI explanation if available for this outfit index
+    if (selectedIdx == null) return "";
     if (aiSource === "ai" && !reused && aiExplanations[selectedIdx]) {
       return aiExplanations[selectedIdx];
     }
@@ -1183,7 +1183,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     const dd = String(tomorrow.getDate()).padStart(2, "0");
     setPlanDate(`${yyyy}-${mm}-${dd}`);
     setPlanOccasion("");
-    setPlanOptionIdx(selectedIdx);
+    setPlanOptionIdx(selectedIdx ?? 0);
     setShowPlanModal(true);
   };
 
@@ -1588,46 +1588,26 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             ) : null}
           </div>
           <div className="dashChip">{chipText}</div>
-          <div className="dashRecActions">
-            <button type="button" className="btn primary dashRecActionBtn" onClick={handleRefreshRecommendation} disabled={!canRefresh}>
-              Refresh
-            </button>
-            <button type="button" className="btn dashRecActionBtn" onClick={() => {
-              const outfit = outfits[selectedIdx] || outfits[0] || [];
-              if (!outfit.length) return;
-              const lines = outfit.map((item) => `${item.name}${item.color ? ` (${item.color})` : ""}`);
-              const text = `My FitGPT Outfit:\n${lines.join("\n")}`;
-              navigator.clipboard.writeText(text).then(() => {
-                setSaveMsg("Outfit copied to clipboard!");
-                window.setTimeout(() => setSaveMsg(""), 2500);
-              }).catch(() => {
-                setSaveMsg("Could not copy to clipboard.");
-                window.setTimeout(() => setSaveMsg(""), 2500);
-              });
-            }}>
-              Share
-            </button>
-          </div>
-        </div>
-
-        <div className="dashInfoBlock dashInfoBlockTop" aria-live="polite">
-          <div className="dashInfoTitle">
-            Why Option {String(selectedIdx + 1).padStart(2, "0")}?
-            {aiSource === "ai" && !reused ? <span className="dashAiBadge">AI Powered Suggestion</span> : null}
-          </div>
-          {aiLoading ? (
-            <div className="dashAiLoading">Thinking...</div>
-          ) : (
-            <div className="dashSubText" style={{ lineHeight: 1.45 }}>
-              <span key={`${selectedIdx}-${aiRefreshToken}-${recSeed}`} className="dashAiReveal">
-                {explanationText.split(" ").map((word, i) => (
-                  <React.Fragment key={i}>
-                    <span className="dashAiWord" style={{ animationDelay: `${i * 40}ms` }}>
-                      {word}
-                    </span>{" "}
-                  </React.Fragment>
-                ))}
-              </span>
+          {outfits.length > 0 && (
+            <div className="dashRecActions">
+              <button type="button" className="btn primary dashRecActionBtn" onClick={handleRefreshRecommendation} disabled={!canRefresh}>
+                Refresh
+              </button>
+              <button type="button" className="btn dashRecActionBtn" onClick={() => {
+                const outfit = outfits[selectedIdx ?? 0] || outfits[0] || [];
+                if (!outfit.length) return;
+                const lines = outfit.map((item) => `${item.name}${item.color ? ` (${item.color})` : ""}`);
+                const text = `My FitGPT Outfit:\n${lines.join("\n")}`;
+                navigator.clipboard.writeText(text).then(() => {
+                  setSaveMsg("Outfit copied to clipboard!");
+                  window.setTimeout(() => setSaveMsg(""), 2500);
+                }).catch(() => {
+                  setSaveMsg("Could not copy to clipboard.");
+                  window.setTimeout(() => setSaveMsg(""), 2500);
+                });
+              }}>
+                Share
+              </button>
             </div>
           )}
         </div>
@@ -1636,6 +1616,15 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           {!aiHasResolved ? (
             <div className="dashAiLoading" style={{ padding: "32px 0", textAlign: "center" }}>
               Generating your outfits...
+            </div>
+          ) : outfits.length === 0 ? (
+            <div className="dashEmptyWardrobe">
+              <div className="dashEmptyIcon">&#x1F455;</div>
+              <div className="dashEmptyTitle">Your wardrobe is empty</div>
+              <div className="dashEmptySub">Add some clothing items to get personalized outfit recommendations.</div>
+              <button className="btn primary" type="button" onClick={() => navigate("/wardrobe")}>
+                Add to Wardrobe
+              </button>
             </div>
           ) : outfits.map((outfit, idx) => {
             const sig = outfitSignature(outfit);
@@ -1753,6 +1742,31 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
               </button>
             </div>
           </div>
+        </div>,
+        document.body
+      )}
+
+      {selectedIdx != null && ReactDOM.createPortal(
+        <div className="dashWhyFloat" aria-live="polite">
+          <div className="dashInfoTitle">
+            Why Option {String(selectedIdx + 1).padStart(2, "0")}?
+            {aiSource === "ai" && !reused ? <span className="dashAiBadge">AI Powered Suggestion</span> : null}
+          </div>
+          {aiLoading ? (
+            <div className="dashAiLoading">Thinking...</div>
+          ) : (
+            <div className="dashSubText" style={{ lineHeight: 1.45 }}>
+              <span key={`${selectedIdx}-${aiRefreshToken}-${recSeed}`} className="dashAiReveal">
+                {explanationText.split(" ").map((word, i) => (
+                  <React.Fragment key={i}>
+                    <span className="dashAiWord" style={{ animationDelay: `${i * 40}ms` }}>
+                      {word}
+                    </span>{" "}
+                  </React.Fragment>
+                ))}
+              </span>
+            </div>
+          )}
         </div>,
         document.body
       )}

@@ -2138,6 +2138,34 @@ img.dashSquareImg {
   border-bottom: 1px solid rgba(139, 30, 30, 0.12);
 }
 
+.dashWhyFloat {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(920px, calc(100% - 32px));
+  padding: 14px 22px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(139, 30, 30, 0.18);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  z-index: 900;
+  animation: whyFloatIn 0.35s ease-out;
+}
+
+[data-theme="dark"] .dashWhyFloat {
+  background: rgba(30, 30, 36, 0.92);
+  border-color: rgba(196, 60, 60, 0.22);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+@keyframes whyFloatIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(16px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 .dashInfoTitle {
   font-weight: 900;
   margin-bottom: 6px;
@@ -2169,6 +2197,30 @@ img.dashSquareImg {
   font-style: italic;
   color: var(--muted);
   margin-bottom: 4px;
+}
+
+.dashEmptyWardrobe {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.dashEmptyIcon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.dashEmptyTitle {
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.dashEmptySub {
+  font-size: 13.5px;
+  color: var(--muted);
+  max-width: 320px;
+  margin: 0 auto 20px;
+  line-height: 1.45;
 }
 
 .dashAiReveal {
@@ -2504,6 +2556,39 @@ img.dashSquareImg {
   display: flex;
   gap: 10px;
   align-items: center;
+}
+
+.profileSignInCard {
+  margin-top: 20px;
+  padding: 32px 24px;
+  text-align: center;
+  border-radius: var(--radius-lg);
+  border: 1px dashed rgba(139, 30, 30, 0.2);
+  background: rgba(139, 30, 30, 0.03);
+}
+
+.profileSignInIcon {
+  font-size: 40px;
+  margin-bottom: 10px;
+}
+
+.profileSignInTitle {
+  font-size: 17px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.profileSignInSub {
+  font-size: 13.5px;
+  color: var(--muted);
+  max-width: 340px;
+  margin: 0 auto 18px;
+  line-height: 1.45;
+}
+
+[data-theme="dark"] .profileSignInCard {
+  border-color: rgba(196, 60, 60, 0.2);
+  background: rgba(196, 60, 60, 0.04);
 }
 
 .profileSection {
@@ -4371,5 +4456,193 @@ select:focus-visible {
     flex-direction: column;
     align-items: center;
   }
+}
+
+/* ── Guided Tutorial ──────────────────────────────────────── */
+.tutorialOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+.tutorialBackdropPane {
+  position: fixed;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+  transition: top 300ms ease, left 300ms ease, width 300ms ease, height 300ms ease,
+              right 300ms ease, bottom 300ms ease;
+}
+
+.tutorialBackdropSolid {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+}
+
+.tutorialSpotlightRing {
+  position: fixed;
+  border-radius: 8px;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-glow), 0 0 20px var(--accent-glow);
+  transition: top 300ms ease, left 300ms ease, width 300ms ease, height 300ms ease;
+  pointer-events: none;
+  z-index: 10000;
+}
+
+.tutorialTooltip {
+  position: fixed;
+  max-width: 460px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 20px 24px 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  z-index: 10001;
+  animation: tutorialFadeIn 250ms ease both;
+  pointer-events: auto;
+}
+
+.tutorialTooltipCenter {
+  max-width: 460px;
+  text-align: center;
+}
+
+@keyframes tutorialFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tutorialTooltipCenter {
+  animation-name: tutorialFadeInCenter;
+}
+
+@keyframes tutorialFadeInCenter {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.tutorialArrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  pointer-events: none;
+}
+
+.tutorialArrow--up {
+  top: -7px;
+  transform: translateX(-50%) rotate(45deg);
+  border-bottom: none;
+  border-right: none;
+}
+
+.tutorialArrow--down {
+  bottom: -7px;
+  transform: translateX(-50%) rotate(225deg);
+  border-bottom: none;
+  border-right: none;
+}
+
+.tutorialTooltipTitle {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.tutorialTooltipCenter .tutorialTooltipTitle {
+  font-size: 1.3rem;
+  margin-bottom: 10px;
+  color: var(--accent);
+}
+
+.tutorialTooltipDesc {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.tutorialTooltipFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tutorialStepCount {
+  font-size: 0.78rem;
+  color: var(--muted);
+  flex: 1;
+  text-align: center;
+}
+
+.tutorialBackBtn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.tutorialBackBtn:hover {
+  color: var(--text);
+  background: var(--bgSoft);
+}
+
+.tutorialSkipBtn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.tutorialSkipBtn:hover {
+  color: var(--text);
+  background: var(--bgSoft);
+}
+
+.tutorialNextBtn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 8px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.tutorialNextBtn:hover {
+  background: var(--accent-hover);
+}
+
+.tutorialNextBtn:active {
+  transform: scale(0.97);
+}
+
+/* Dark mode overrides */
+[data-theme="dark"] .tutorialTooltip {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.tutorialDoneIcon {
+  font-size: 2.4rem;
+  margin-bottom: 8px;
+}
+
+[data-theme="dark"] .tutorialBackdropSolid {
+  background: rgba(0, 0, 0, 0.7);
 }
 
