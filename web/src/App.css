@@ -2226,6 +2226,92 @@ img.dashSquareImg {
   color: var(--accent);
 }
 
+/* ── Top Navigation Bar ──────────────────────────────────── */
+.topNav {
+  position: sticky;
+  top: 0;
+  z-index: 800;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+[data-theme="dark"] .topNav {
+  background: rgba(20, 20, 24, 0.85);
+}
+
+.topNavInner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: 52px;
+}
+
+.topNavLinks {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.topNavLinks::-webkit-scrollbar {
+  display: none;
+}
+
+.topNavLink {
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.topNavLink:hover {
+  background: var(--accent-soft-2);
+  color: var(--text);
+}
+
+.topNavLinkActive {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent-outline);
+}
+
+.topNavRight {
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+/* When ThemePicker is inside the TopNav, remove fixed positioning */
+.themePickerInline {
+  position: static;
+}
+
+@media (max-width: 700px) {
+  .topNavInner {
+    height: 46px;
+    padding: 0 10px;
+  }
+
+  .topNavLink {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .themePickerName {
+    display: none;
+  }
+}
+
 .dashBottomNav {
   position: sticky;
   bottom: 0;

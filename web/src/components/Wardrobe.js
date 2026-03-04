@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { wardrobeApi } from "../api/wardrobeApi";
 import { useAuth } from "../auth/AuthProvider";
 import { loadWardrobe, saveWardrobe, userKey, ONBOARDING_ANSWERS_KEY } from "../utils/userStorage";
@@ -1489,29 +1489,6 @@ export default function Wardrobe() {
 
       {toast ? <div className="wardrobeToast">{toast}</div> : null}
 
-      <nav className="dashBottomNav" aria-label="Dashboard navigation">
-        <NavLink to="/dashboard" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          Home
-        </NavLink>
-        <NavLink to="/wardrobe" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          Wardrobe
-        </NavLink>
-        <NavLink to="/favorites" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          Favorites
-        </NavLink>
-        <NavLink to="/history" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          History
-        </NavLink>
-        <NavLink to="/saved-outfits" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          Saved
-        </NavLink>
-        <NavLink to="/plans" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          Plans
-        </NavLink>
-        <NavLink to="/profile" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          Profile
-        </NavLink>
-      </nav>
     </div>
   );
 }

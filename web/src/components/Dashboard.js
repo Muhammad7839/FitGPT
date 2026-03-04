@@ -1,7 +1,7 @@
 // web/src/components/Dashboard.js
 import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom";
-import { NavLink, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { logout } from "../api/authApi";
 import { useAuth } from "../auth/AuthProvider";
 import { savedOutfitsApi } from "../api/savedOutfitsApi";
@@ -1705,29 +1705,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         document.body
       )}
 
-      <nav className="dashBottomNav" aria-label="Dashboard navigation">
-        <NavLink to="/dashboard" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          Home
-        </NavLink>
-        <NavLink to="/wardrobe" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          Wardrobe
-        </NavLink>
-        <NavLink to="/favorites" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          Favorites
-        </NavLink>
-        <NavLink to="/history" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          History
-        </NavLink>
-        <NavLink to="/saved-outfits" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          Saved
-        </NavLink>
-        <NavLink to="/plans" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          Plans
-        </NavLink>
-        <NavLink to="/profile" className={({ isActive }) => `dashNavItem ${isActive ? "dashNavActive" : ""}`}>
-          Profile
-        </NavLink>
-      </nav>
     </div>
   );
 
