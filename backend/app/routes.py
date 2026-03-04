@@ -109,7 +109,11 @@ def forgot_password(body: schemas.ForgotPasswordRequest, db: Session = Depends(g
         )
         db.add(reset_token)
         db.commit()
-        send_password_reset_email(body.email, token)
+        try:
+            send_password_reset_email(body.email, token)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error("Failed to send reset email: %s", e)
     return {"message": "If an account exists, a reset link has been sent."}
 
 
