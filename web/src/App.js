@@ -6,7 +6,7 @@ import AppRoutes from "./routes/AppRoutes";
 import { AuthProvider } from "./auth/AuthProvider";
 import { getPresetTheme, PRESET_THEMES } from "./theme/themeDefinitions";
 import { applyTheme } from "./theme/themeEngine";
-import ThemePicker from "./components/ThemePicker";
+import TopNav from "./components/TopNav";
 
 const LEGACY_THEME_KEY = "fitgpt_theme_v1";
 const THEME_KEY = "fitgpt_theme_v2";
@@ -115,8 +115,8 @@ export default function App() {
   return (
     <ThemeContext.Provider value={ctxValue}>
       <AuthProvider>
+        <TopNav />
         <AppRoutes />
-        <ThemePicker />
       </AuthProvider>
     </ThemeContext.Provider>
   );

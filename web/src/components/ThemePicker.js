@@ -11,7 +11,7 @@ const CATEGORY_LABELS = {
   custom: "Custom",
 };
 
-export default function ThemePicker() {
+export default function ThemePicker({ inline }) {
   const { theme, setTheme, customThemes, deleteCustomTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const [animating, setAnimating] = useState(false);
@@ -62,7 +62,7 @@ export default function ThemePicker() {
 
   return (
     <>
-      <div className="themePicker" ref={ref}>
+      <div className={"themePicker" + (inline ? " themePickerInline" : "")} ref={ref}>
         <button
           type="button"
           className="themePickerPill"
