@@ -4646,3 +4646,40 @@ select:focus-visible {
   background: rgba(0, 0, 0, 0.7);
 }
 
+/* ── Page-flip transition for History/Analytics tabs ── */
+.tabFlip {
+  perspective: 1200px;
+  transform-origin: center center;
+  overflow: hidden;
+}
+
+.tabFlip--left {
+  animation: tabFlipLeft 400ms ease-out both;
+}
+
+.tabFlip--right {
+  animation: tabFlipRight 400ms ease-out both;
+}
+
+@keyframes tabFlipLeft {
+  0% {
+    opacity: 0;
+    transform: rotateY(-60deg) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: rotateY(0deg) scale(1);
+  }
+}
+
+@keyframes tabFlipRight {
+  0% {
+    opacity: 0;
+    transform: rotateY(60deg) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: rotateY(0deg) scale(1);
+  }
+}
+
