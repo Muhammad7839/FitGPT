@@ -2270,6 +2270,38 @@ img.dashSquareImg {
   height: 52px;
 }
 
+.topNavBrand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--text);
+  flex-shrink: 0;
+  margin-right: 12px;
+}
+
+.topNavLogo {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.topNavBrandName {
+  font-weight: 900;
+  font-size: 15px;
+  letter-spacing: -0.3px;
+}
+
+@media (max-width: 700px) {
+  .topNavBrandName {
+    display: none;
+  }
+  .topNavBrand {
+    margin-right: 6px;
+  }
+}
+
 .topNavLinks {
   display: flex;
   align-items: center;
