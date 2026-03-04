@@ -1541,6 +1541,28 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           </div>
         </div>
 
+        <div className="dashInfoBlock dashInfoBlockTop" aria-live="polite">
+          <div className="dashInfoTitle">
+            Why Option {String(selectedIdx + 1).padStart(2, "0")}?
+            {aiSource === "ai" && !reused ? <span className="dashAiBadge">AI Powered Suggestion</span> : null}
+          </div>
+          {aiLoading ? (
+            <div className="dashAiLoading">Thinking...</div>
+          ) : (
+            <div className="dashSubText" style={{ lineHeight: 1.45 }}>
+              <span key={`${selectedIdx}-${aiRefreshToken}-${recSeed}`} className="dashAiReveal">
+                {explanationText.split(" ").map((word, i) => (
+                  <React.Fragment key={i}>
+                    <span className="dashAiWord" style={{ animationDelay: `${i * 40}ms` }}>
+                      {word}
+                    </span>{" "}
+                  </React.Fragment>
+                ))}
+              </span>
+            </div>
+          )}
+        </div>
+
         <div key={recSeed} className="dashOutfitsAnimWrap">
           {!aiHasResolved ? (
             <div className="dashAiLoading" style={{ padding: "32px 0", textAlign: "center" }}>
@@ -1601,27 +1623,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           })}
         </div>
 
-        <div className="dashInfoBlock" aria-live="polite" style={{ marginTop: 12 }}>
-          <div className="dashInfoTitle">
-            Why Option {String(selectedIdx + 1).padStart(2, "0")}?
-            {aiSource === "ai" && !reused ? <span className="dashAiBadge">AI Powered Suggestion</span> : null}
-          </div>
-          {aiLoading ? (
-            <div className="dashAiLoading">Thinking...</div>
-          ) : (
-            <div className="dashSubText" style={{ lineHeight: 1.45 }}>
-              <span key={`${selectedIdx}-${aiRefreshToken}-${recSeed}`} className="dashAiReveal">
-                {explanationText.split(" ").map((word, i) => (
-                  <React.Fragment key={i}>
-                    <span className="dashAiWord" style={{ animationDelay: `${i * 40}ms` }}>
-                      {word}
-                    </span>{" "}
-                  </React.Fragment>
-                ))}
-              </span>
-            </div>
-          )}
-        </div>
 
 
         {saveMsg ? (
