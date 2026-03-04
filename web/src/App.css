@@ -1855,6 +1855,19 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dashRecActions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.dashRecActionBtn {
+  padding: 7px 16px;
+  font-size: 12px;
+  border-radius: 999px;
 }
 
 /* ── Option Labels (Skewed-style) ─────────────────────── */

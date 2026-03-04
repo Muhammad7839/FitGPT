@@ -1519,6 +1519,26 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             ) : null}
           </div>
           <div className="dashChip">{chipText}</div>
+          <div className="dashRecActions">
+            <button type="button" className="btn primary dashRecActionBtn" onClick={handleRefreshRecommendation} disabled={!canRefresh}>
+              Refresh
+            </button>
+            <button type="button" className="btn dashRecActionBtn" onClick={() => {
+              const outfit = outfits[selectedIdx] || outfits[0] || [];
+              if (!outfit.length) return;
+              const lines = outfit.map((item) => `${item.name}${item.color ? ` (${item.color})` : ""}`);
+              const text = `My FitGPT Outfit:\n${lines.join("\n")}`;
+              navigator.clipboard.writeText(text).then(() => {
+                setSaveMsg("Outfit copied to clipboard!");
+                window.setTimeout(() => setSaveMsg(""), 2500);
+              }).catch(() => {
+                setSaveMsg("Could not copy to clipboard.");
+                window.setTimeout(() => setSaveMsg(""), 2500);
+              });
+            }}>
+              Share
+            </button>
+          </div>
         </div>
 
         <div key={recSeed} className="dashOutfitsAnimWrap">
@@ -1603,27 +1623,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           )}
         </div>
 
-        <div className="dashActionRow">
-          <button type="button" className="btn primary" onClick={handleRefreshRecommendation} disabled={!canRefresh}>
-            Refresh suggestions
-          </button>
-
-          <button type="button" className="btn" onClick={() => {
-            const outfit = outfits[selectedIdx] || outfits[0] || [];
-            if (!outfit.length) return;
-            const lines = outfit.map((item) => `${item.name}${item.color ? ` (${item.color})` : ""}`);
-            const text = `My FitGPT Outfit:\n${lines.join("\n")}`;
-            navigator.clipboard.writeText(text).then(() => {
-              setSaveMsg("Outfit copied to clipboard!");
-              window.setTimeout(() => setSaveMsg(""), 2500);
-            }).catch(() => {
-              setSaveMsg("Could not copy to clipboard.");
-              window.setTimeout(() => setSaveMsg(""), 2500);
-            });
-          }}>
-            Share
-          </button>
-        </div>
 
         {saveMsg ? (
           <div className="noteBox" style={{ marginTop: 12 }}>
