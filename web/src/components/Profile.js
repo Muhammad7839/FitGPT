@@ -1,12 +1,29 @@
 // web/src/components/Profile.js
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { logout } from "../api/authApi";
-import { savedOutfitsApi } from "../api/savedOutfitsApi";
+import { userKey, ONBOARDING_ANSWERS_KEY } from "../utils/userStorage";
 
 const DEMO_AUTH_KEY = "fitgpt_demo_auth_v1";
-const REUSE_OUTFIT_KEY = "fitgpt_reuse_outfit_v1";
+
+const STYLE_OPTIONS = [
+  "Casual", "Professional", "Streetwear", "Athletic", "Minimalist", "Formal",
+];
+
+const COMFORT_OPTIONS = ["Balanced", "Relaxed", "Fitted", "Stretchy", "Layered"];
+
+const DRESS_FOR_OPTIONS = [
+  "Class / Campus", "Work", "Gym", "Date Night", "Errands", "Party / Event", "Travel",
+];
+
+const BODY_TYPE_OPTIONS = [
+  { id: "pear", label: "Pear", note: "Balance with structure on top." },
+  { id: "apple", label: "Apple", note: "Comfort + clean lines through the middle." },
+  { id: "hourglass", label: "Hourglass", note: "Highlight waist, keep proportions balanced." },
+  { id: "rectangle", label: "Rectangle", note: "Add shape with layers and contrast." },
+  { id: "inverted", label: "Inverted Triangle", note: "Balance shoulders with volume below." },
+];
 
 function safeParse(json) {
   try {
@@ -27,25 +44,6 @@ function writeDemoAuth(objOrNull) {
   else localStorage.setItem(DEMO_AUTH_KEY, JSON.stringify(objOrNull));
 }
 
-function formatDate(iso) {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return "";
-  }
-}
-
-function uniq(arr) {
-  const out = [];
-  for (const x of Array.isArray(arr) ? arr : []) {
-    if (!out.includes(x)) out.push(x);
-  }
-  return out;
-}
 
 export default function Profile({ onResetOnboarding = () => {} }) {
   const navigate = useNavigate();
@@ -56,9 +54,55 @@ export default function Profile({ onResetOnboarding = () => {} }) {
 
   const email = effectiveUser?.email || effectiveUser?.user?.email || effectiveUser?.demoEmail || "";
 
-  const [loadingSaved, setLoadingSaved] = useState(false);
-  const [savedOutfits, setSavedOutfits] = useState([]);
-  const [savedMsg, setSavedMsg] = useState("");
+  // ── Style preferences (loaded from onboarding answers) ──
+  const prefsKey = useMemo(() => userKey(ONBOARDING_ANSWERS_KEY, effectiveUser), [effectiveUser]);
+
+  const loadPrefs = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(prefsKey);
+      if (!raw) return { style: [], comfort: [], dressFor: [], bodyType: null };
+      const p = JSON.parse(raw);
+      return {
+        style: Array.isArray(p?.style) ? p.style : [],
+        comfort: Array.isArray(p?.comfort) ? p.comfort : [],
+        dressFor: Array.isArray(p?.dressFor) ? p.dressFor : [],
+        bodyType: p?.bodyType ?? null,
+      };
+    } catch {
+      return { style: [], comfort: [], dressFor: [], bodyType: null };
+    }
+  }, [prefsKey]);
+
+  const [prefs, setPrefs] = useState(loadPrefs);
+  const [prefsSaved, setPrefsSaved] = useState(false);
+
+  useEffect(() => {
+    setPrefs(loadPrefs());
+  }, [loadPrefs]);
+
+  const updatePrefs = useCallback((updater) => {
+    setPrefs((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      try {
+        localStorage.setItem(prefsKey, JSON.stringify(next));
+      } catch {}
+      setPrefsSaved(true);
+      setTimeout(() => setPrefsSaved(false), 1500);
+      return next;
+    });
+  }, [prefsKey]);
+
+  const togglePref = useCallback((key, value) => {
+    updatePrefs((prev) => {
+      const list = Array.isArray(prev[key]) ? prev[key] : [];
+      const exists = list.includes(value);
+      return { ...prev, [key]: exists ? list.filter((v) => v !== value) : [...list, value] };
+    });
+  }, [updatePrefs]);
+
+  const setBodyType = useCallback((id) => {
+    updatePrefs((prev) => ({ ...prev, bodyType: prev.bodyType === id ? null : id }));
+  }, [updatePrefs]);
 
   const handleLogout = async () => {
     try {
@@ -72,64 +116,13 @@ export default function Profile({ onResetOnboarding = () => {} }) {
     }
   };
 
-
-
-  const refreshSaved = async () => {
-    if (!effectiveUser) {
-      setSavedOutfits([]);
-      return;
-    }
-
-    setLoadingSaved(true);
-    setSavedMsg("");
-
-    try {
-      const res = await savedOutfitsApi.listSaved(effectiveUser);
-      const list = Array.isArray(res?.saved_outfits) ? res.saved_outfits : [];
-      setSavedOutfits(list);
-    } catch (e) {
-      setSavedOutfits([]);
-      setSavedMsg(e?.message || "Could not load saved outfits.");
-    } finally {
-      setLoadingSaved(false);
-    }
-  };
-
-  useEffect(() => {
-    refreshSaved();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [!!effectiveUser]);
-
-  const sortedSaved = useMemo(() => {
-    return [...savedOutfits].sort((a, b) => {
-      const da = (a?.created_at || "").toString();
-      const db = (b?.created_at || "").toString();
-      return db.localeCompare(da);
-    });
-  }, [savedOutfits]);
-
-  const reuseOutfit = (outfit) => {
-    const ids = uniq(outfit?.items || []).map((x) => (x ?? "").toString().trim()).filter(Boolean);
-    if (!ids.length) return;
-
-    sessionStorage.setItem(
-      REUSE_OUTFIT_KEY,
-      JSON.stringify({
-        items: savedOutfitsApi.normalizeItems(ids),
-        saved_outfit_id: outfit?.saved_outfit_id || "",
-      })
-    );
-
-    navigate("/dashboard");
-  };
-
   return (
     <div className="onboarding onboardingPage profilePage">
       <div className="card dashWide profileCard">
         <div className="profileHeaderRow">
           <div>
             <h1 className="heroTitle profileTitle">Profile</h1>
-            <p className="heroSub profileSub">Manage your account and saved outfits.</p>
+            <p className="heroSub profileSub">Manage your account and preferences.</p>
           </div>
 
           <div className="profileHeaderActions">
@@ -160,96 +153,81 @@ export default function Profile({ onResetOnboarding = () => {} }) {
               </button>
             </div>
 
+            {/* ── Style Preferences ── */}
             <div className="profileSection">
               <div className="profileSectionTop">
                 <div className="dashCardTitle" style={{ marginBottom: 0 }}>
-                  Saved Outfits
+                  Style Preferences
                 </div>
-
-                <button className="btn" type="button" onClick={refreshSaved} disabled={loadingSaved}>
-                  {loadingSaved ? "Loading..." : "Refresh"}
-                </button>
+                {prefsSaved && (
+                  <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 700 }}>Saved</span>
+                )}
               </div>
 
-              {savedMsg ? (
-                <div className="noteBox" style={{ marginTop: 12 }}>
-                  {savedMsg}
-                </div>
-              ) : null}
-
-              {!loadingSaved && sortedSaved.length === 0 ? (
-                <div className="profileEmpty">
-                  <div className="dashStrong">No saved outfits yet</div>
-                  <div className="dashSubText" style={{ marginTop: 6 }}>
-                    Save an outfit from your recommendations to see it here.
-                  </div>
-                  <div style={{ marginTop: 12 }}>
-                    <button className="btn primary" type="button" onClick={() => navigate("/dashboard")}>
-                      Go to recommendations
+              <div style={{ marginTop: 12 }}>
+                <div className="profilePrefLabel">Style</div>
+                <div className="pillGrid" style={{ marginTop: 8 }}>
+                  {STYLE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={prefs.style.includes(opt) ? "pill selected" : "pill"}
+                      onClick={() => togglePref("style", opt)}
+                    >
+                      {opt}
                     </button>
-                  </div>
+                  ))}
                 </div>
-              ) : null}
+              </div>
 
-              {sortedSaved.length ? (
-                <div className="savedOutfitsList">
-                  {sortedSaved.map((o) => {
-                    const details = Array.isArray(o?.item_details) ? o.item_details : [];
-                    const itemCount = Array.isArray(o?.items) ? o.items.length : 0;
-                    const createdAt = formatDate(o?.created_at);
-                    const title = o?.name ? o.name : "Saved outfit";
-
-                    return (
-                      <div key={o?.saved_outfit_id || o?.outfit_signature} className="savedOutfitCard">
-                        <div className="savedOutfitTop">
-                          <div className="savedOutfitTitle">{title}</div>
-                          <div className="savedOutfitMeta">
-                            {createdAt ? `${createdAt} • ` : ""}
-                            {itemCount} item{itemCount === 1 ? "" : "s"}
-                          </div>
-                        </div>
-
-                        <div className="savedOutfitItems" aria-label="Saved outfit items">
-                          {details.length > 0
-                            ? details.slice(0, 6).map((d, idx) => (
-                                <div
-                                  key={`${o?.saved_outfit_id || o?.outfit_signature}_${idx}`}
-                                  className="savedOutfitItemChip"
-                                >
-                                  {d?.image_url ? (
-                                    <img
-                                      className="savedOutfitItemImg"
-                                      src={d.image_url}
-                                      alt={d?.name || "Item"}
-                                    />
-                                  ) : (
-                                    <div className="savedOutfitItemPh" />
-                                  )}
-                                  <span className="savedOutfitItemName">
-                                    {d?.name || "Item"}
-                                  </span>
-                                </div>
-                              ))
-                            : (Array.isArray(o?.items) ? o.items : []).slice(0, 6).map((id, idx) => (
-                                <span
-                                  key={`${o?.saved_outfit_id || o?.outfit_signature}_${idx}`}
-                                  className="savedOutfitPill"
-                                >
-                                  {(id ?? "").toString().trim() || "item"}
-                                </span>
-                              ))}
-                        </div>
-
-                        <div className="savedOutfitActions">
-                          <button className="btn primary" type="button" onClick={() => reuseOutfit(o)}>
-                            Reuse
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+              <div style={{ marginTop: 16 }}>
+                <div className="profilePrefLabel">Comfort</div>
+                <div className="pillGrid" style={{ marginTop: 8 }}>
+                  {COMFORT_OPTIONS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={prefs.comfort.includes(opt) ? "pill selected" : "pill"}
+                      onClick={() => togglePref("comfort", opt)}
+                    >
+                      {opt}
+                    </button>
+                  ))}
                 </div>
-              ) : null}
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <div className="profilePrefLabel">Dressing For</div>
+                <div className="pillGrid" style={{ marginTop: 8 }}>
+                  {DRESS_FOR_OPTIONS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={prefs.dressFor.includes(opt) ? "pill selected" : "pill"}
+                      onClick={() => togglePref("dressFor", opt)}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <div className="profilePrefLabel">Body Type</div>
+                <div className="optionGrid" style={{ marginTop: 8 }}>
+                  {BODY_TYPE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      className={prefs.bodyType === opt.id ? "optionCard selected" : "optionCard"}
+                      onClick={() => setBodyType(opt.id)}
+                    >
+                      <div className="optionTitle">{opt.label}</div>
+                      <div className="optionNote">{opt.note}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
           </>
@@ -274,12 +252,83 @@ export default function Profile({ onResetOnboarding = () => {} }) {
               </button>
             </div>
 
+            {/* ── Style Preferences (guest) ── */}
             <div className="profileSection">
-              <div className="dashCardTitle" style={{ marginBottom: 8 }}>
-                Saved Outfits
+              <div className="profileSectionTop">
+                <div className="dashCardTitle" style={{ marginBottom: 0 }}>
+                  Style Preferences
+                </div>
+                {prefsSaved && (
+                  <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 700 }}>Saved</span>
+                )}
               </div>
-              <div className="dashSubText">Sign in to view saved outfits and reuse them.</div>
+
+              <div style={{ marginTop: 12 }}>
+                <div className="profilePrefLabel">Style</div>
+                <div className="pillGrid" style={{ marginTop: 8 }}>
+                  {STYLE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={prefs.style.includes(opt) ? "pill selected" : "pill"}
+                      onClick={() => togglePref("style", opt)}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <div className="profilePrefLabel">Comfort</div>
+                <div className="pillGrid" style={{ marginTop: 8 }}>
+                  {COMFORT_OPTIONS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={prefs.comfort.includes(opt) ? "pill selected" : "pill"}
+                      onClick={() => togglePref("comfort", opt)}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <div className="profilePrefLabel">Dressing For</div>
+                <div className="pillGrid" style={{ marginTop: 8 }}>
+                  {DRESS_FOR_OPTIONS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={prefs.dressFor.includes(opt) ? "pill selected" : "pill"}
+                      onClick={() => togglePref("dressFor", opt)}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <div className="profilePrefLabel">Body Type</div>
+                <div className="optionGrid" style={{ marginTop: 8 }}>
+                  {BODY_TYPE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      className={prefs.bodyType === opt.id ? "optionCard selected" : "optionCard"}
+                      onClick={() => setBodyType(opt.id)}
+                    >
+                      <div className="optionTitle">{opt.label}</div>
+                      <div className="optionNote">{opt.note}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
+
           </>
         )}
       </div>
