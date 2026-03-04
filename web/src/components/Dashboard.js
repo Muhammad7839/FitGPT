@@ -800,6 +800,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [planDate, setPlanDate] = useState("");
   const [planOccasion, setPlanOccasion] = useState("");
   const [planSaving, setPlanSaving] = useState(false);
+  const [planOptionIdx, setPlanOptionIdx] = useState(0);
 
   // Persist recSeed so recommendations survive navigation
   useEffect(() => {
@@ -1174,6 +1175,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     const dd = String(tomorrow.getDate()).padStart(2, "0");
     setPlanDate(`${yyyy}-${mm}-${dd}`);
     setPlanOccasion("");
+    setPlanOptionIdx(selectedIdx);
     setShowPlanModal(true);
   };
 
@@ -1184,7 +1186,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       return;
     }
 
-    const outfit = outfits[selectedIdx] || outfits[0] || [];
+    const outfit = outfits[planOptionIdx] || outfits[0] || [];
     if (!outfit.length) return;
 
     setPlanSaving(true);
@@ -1727,7 +1729,23 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         <div className="modalOverlay" role="dialog" aria-modal="true">
           <div className="modalCard">
             <div className="modalTitle">Plan This Outfit</div>
-            <div className="modalSub">Pick a date and occasion for this outfit.</div>
+            <div className="modalSub">Choose an outfit option, then pick a date and occasion.</div>
+
+            <div className="planOptionPicker">
+              {outfits.map((opt, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  className={"planOptionBtn" + (idx === planOptionIdx ? " active" : "")}
+                  onClick={() => setPlanOptionIdx(idx)}
+                >
+                  <span className="planOptionLabel">Option {String(idx + 1).padStart(2, "0")}</span>
+                  <span className="planOptionItems">
+                    {opt.map((item) => item.name).join(", ")}
+                  </span>
+                </button>
+              ))}
+            </div>
 
             <div style={{ marginTop: 16 }}>
               <label className="planModalLabel">Date</label>
