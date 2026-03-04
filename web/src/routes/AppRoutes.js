@@ -12,10 +12,9 @@ import Dashboard from "../components/Dashboard";
 import Wardrobe from "../components/Wardrobe";
 import Favorites from "../components/Favorites";
 import Profile from "../components/Profile";
-import History from "../components/History";
+import HistoryAnalytics from "../components/HistoryAnalytics";
 import Plans from "../components/Plans";
 import SavedOutfits from "../components/SavedOutfits";
-import Analytics from "../components/Analytics";
 
 function loadAnswers(user) {
   try {
@@ -120,10 +119,10 @@ export default function AppRoutes() {
         <Route path="/wardrobe" element={<Wardrobe />} />
         <Route path="/favorites" element={<Favorites />} />
         <Route path="/profile" element={<Profile onResetOnboarding={handleResetOnboarding} />} />
-        <Route path="/history" element={<History />} />
+        <Route path="/history" element={<HistoryAnalytics />} />
         <Route path="/plans" element={<Plans />} />
         <Route path="/saved-outfits" element={<SavedOutfits />} />
-        <Route path="/analytics" element={<Analytics />} />
+        <Route path="/analytics" element={<Navigate to="/history?tab=analytics" replace />} />
 
         <Route path="/onboarding" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />

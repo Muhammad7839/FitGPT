@@ -2988,6 +2988,15 @@ img.dashSquareImg {
   border-color: rgba(139, 30, 30, 0.45);
 }
 
+@keyframes tabFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.tabContentFadeIn {
+  animation: tabFadeIn 0.25s ease-out;
+}
+
 .wardrobeGrid {
   margin-top: 12px;
   display: grid;

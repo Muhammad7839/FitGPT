@@ -7,9 +7,8 @@ const NAV_ITEMS = [
   { to: "/dashboard", label: "Home" },
   { to: "/wardrobe", label: "Wardrobe" },
   { to: "/favorites", label: "Favorites" },
-  { to: "/history", label: "History" },
+  { to: "/history", label: "Insights" },
   { to: "/saved-outfits", label: "Saved" },
-  { to: "/analytics", label: "Analytics" },
   { to: "/plans", label: "Plans" },
   { to: "/profile", label: "Profile" },
 ];
