@@ -2464,6 +2464,31 @@ img.dashSquareImg {
   color: var(--accent);
   border: 1px solid var(--accent-outline);
 }
+.topNavProfileLink {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.topNavProfilePic {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid var(--accent, #8b1e1e);
+}
+.topNavProfilePicPlaceholder {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(139, 30, 30, 0.08);
+  color: var(--muted);
+}
+[data-theme="dark"] .topNavProfilePicPlaceholder {
+  background: rgba(255, 255, 255, 0.08);
+}
 
 .topNavRight {
   flex-shrink: 0;
@@ -2539,6 +2564,52 @@ img.dashSquareImg {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.profileAvatarRow {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.profileAvatar {
+  width: 144px;
+  height: 144px;
+  border-radius: 50%;
+  object-fit: cover;
+  cursor: pointer;
+  border: 3px solid var(--accent, #8b1e1e);
+  flex-shrink: 0;
+  transition: opacity 0.2s;
+}
+.profileAvatarWrap {
+  position: relative;
+  display: inline-block;
+}
+.profileAvatar:hover {
+  opacity: 0.8;
+}
+.profilePicMenuPreview {
+  display: flex;
+  justify-content: center;
+  margin: 18px 0;
+}
+.profilePicMenuActions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.profileAvatarPlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(139, 30, 30, 0.08);
+  color: var(--muted, #888);
+}
+[data-theme="dark"] .profileAvatarPlaceholder {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.45);
 }
 
 .profileTitle {
