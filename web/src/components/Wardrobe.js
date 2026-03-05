@@ -165,6 +165,22 @@ export default function Wardrobe() {
   }, [user]);
 
   const [backendOffline, setBackendOffline] = useState(false);
+
+  // Retry recovery when backendOffline is stuck — check every 5s until reachable
+  React.useEffect(() => {
+    if (!backendOffline || !user) return;
+    let alive = true;
+    const check = async () => {
+      try {
+        await wardrobeApi.getItems();
+        if (alive) setBackendOffline(false);
+      } catch {}
+    };
+    const t = setTimeout(check, 2000);
+    const iv = setInterval(check, 5000);
+    return () => { alive = false; clearTimeout(t); clearInterval(iv); };
+  }, [backendOffline, user]);
+
   const effectiveSignedIn = !!user && !backendOffline;
 
   const [items, setItems] = useState(() => loadWardrobe(user));
@@ -542,7 +558,8 @@ export default function Wardrobe() {
     setIsSaving(true);
 
     try {
-      if (!effectiveSignedIn) {
+      if (!user) {
+        // Guest mode — save locally only
         const dataUrl = await fileToDataUrl(pendingFile);
         const localItem = {
           id: uid(),
@@ -561,18 +578,26 @@ export default function Wardrobe() {
         setAddOpen(false);
         resetAddForm();
 
-        setToast(backendOffline ? "Saved locally for demo." : "Item added (guest mode).");
+        setToast("Item added (guest mode).");
         window.setTimeout(() => setToast(""), 2000);
         return;
       }
 
+      // Signed in — always try API first (even if backendOffline was previously set)
+      // Convert file to data URL so we send JSON (backend doesn't accept FormData)
+      let imageUrl = "";
+      try { imageUrl = await fileToDataUrl(pendingFile); } catch {}
       const created = await wardrobeApi.createItem({
         name,
         category: formCategory,
         color,
-        fit_tag,
-        imageFile: pendingFile,
+        fit_type: fit_tag || "regular",
+        style_tag: "casual",
+        image_url: imageUrl,
       });
+
+      // API succeeded — clear offline flag if it was stuck
+      if (backendOffline) setBackendOffline(false);
 
       const localShadow = {
         id: created?.id || uid(),
@@ -594,7 +619,7 @@ export default function Wardrobe() {
       setToast("Item added.");
       window.setTimeout(() => setToast(""), 2000);
     } catch (e) {
-      if (effectiveSignedIn && isNetworkError(e)) {
+      if (isNetworkError(e)) {
         setBackendOffline(true);
 
         let dataUrl = "";
@@ -621,8 +646,28 @@ export default function Wardrobe() {
         return;
       }
 
+      // Non-network API error (e.g. 422) — still save locally
+      let dataUrl = "";
+      try { dataUrl = await fileToDataUrl(pendingFile); } catch {}
+      const localItem = {
+        id: uid(),
+        name,
+        category: formCategory,
+        color,
+        fit_tag,
+        image_url: dataUrl,
+        is_active: true,
+        is_favorite: false,
+      };
+
+      setItemsAndSave((prev) => [localItem, ...prev]);
+
       setIsSaving(false);
-      setAddError(e?.message || "Upload failed. Please try again.");
+      setAddOpen(false);
+      resetAddForm();
+
+      setToast("Saved locally.");
+      window.setTimeout(() => setToast(""), 2000);
     }
   };
 
@@ -677,16 +722,22 @@ export default function Wardrobe() {
         is_favorite: false,
       }));
 
-      if (effectiveSignedIn) {
+      if (!!user) {
         for (const entry of bulkItems) {
           try {
+            let imgUrl = entry.preview || "";
+            if (!imgUrl && entry.file) {
+              try { imgUrl = await fileToDataUrl(entry.file); } catch {}
+            }
             await wardrobeApi.createItem({
               name: entry.name.trim(),
               category: entry.category,
               color: entry.color.trim(),
-              fit_tag: normalizeFitTag(entry.fitTag),
-              imageFile: entry.file,
+              fit_type: normalizeFitTag(entry.fitTag) || "regular",
+              style_tag: "casual",
+              image_url: imgUrl,
             });
+            if (backendOffline) setBackendOffline(false);
           } catch (e) {
             if (isNetworkError(e)) {
               setBackendOffline(true);
