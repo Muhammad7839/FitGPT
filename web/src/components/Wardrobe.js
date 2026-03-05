@@ -251,14 +251,25 @@ export default function Wardrobe() {
           } else if (local.length > 0) {
             // One-time sync: push local items to cloud if API is empty
             setItems(local);
+            const validCategories = ["top","bottom","shoes","outerwear","accessory"];
+            const validColors = ["black","white","gray","beige","red","blue","green","yellow","purple","orange"];
+            const validFits = ["slim","regular","oversized"];
+            const validStyles = ["casual","sporty","formal","street"];
+            const closest = (val, list, fallback) => {
+              if (!val) return fallback;
+              const v = val.toLowerCase().trim();
+              if (list.includes(v)) return v;
+              const match = list.find(l => v.includes(l) || l.includes(v));
+              return match || fallback;
+            };
             for (const item of local) {
               try {
                 await wardrobeApi.createItem({
-                  name: item.name,
-                  category: item.category,
-                  color: item.color,
-                  fit_type: item.fit_tag || item.fit_type || "regular",
-                  style_tag: item.style_tag || "casual",
+                  name: item.name || "Unnamed Item",
+                  category: closest(item.category, validCategories, "top"),
+                  color: closest(item.color, validColors, "black"),
+                  fit_type: closest(item.fit_tag || item.fit_type, validFits, "regular"),
+                  style_tag: closest(item.style_tag, validStyles, "casual"),
                   image_url: item.image_url || "",
                 });
               } catch (_) { /* best-effort */ }
