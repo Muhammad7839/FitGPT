@@ -33,11 +33,25 @@ class ClothingItem(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    name = Column(String, nullable=False)
     category = Column(String, nullable=False)
     color = Column(String, nullable=False)
+    season = Column(String, nullable=False, default="All")
+    comfort_level = Column(Integer, nullable=False, default=3)
     image_url = Column(String, nullable=True)
+    brand = Column(String, nullable=True)
+    is_available = Column(Boolean, nullable=False, default=True)
+    is_archived = Column(Boolean, nullable=False, default=False)
+    last_worn_timestamp = Column(Integer, nullable=True)
 
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     owner = relationship("User", back_populates="wardrobe_items")
+
+
+class OutfitHistory(Base):
+    __tablename__ = "outfit_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    item_ids_csv = Column(String, nullable=False)
+    worn_at_timestamp = Column(Integer, nullable=False)

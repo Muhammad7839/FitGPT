@@ -1,16 +1,17 @@
 package com.fitgpt.app.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.data.model.SavedOutfit
-import com.fitgpt.app.data.repository.FakeWardrobeRepository
 import com.fitgpt.app.data.repository.WardrobeRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
-class WardrobeViewModel : ViewModel() {
-
-    private val repository: WardrobeRepository = FakeWardrobeRepository()
+class WardrobeViewModel(
+    private val repository: WardrobeRepository
+) : ViewModel() {
 
     private val allItems = mutableListOf<ClothingItem>()
 
@@ -20,6 +21,11 @@ class WardrobeViewModel : ViewModel() {
     val wardrobeState: StateFlow<UiState<List<ClothingItem>>> =
         _wardrobeState
 
+    private val _recommendationState =
+        MutableStateFlow<UiState<List<ClothingItem>>>(UiState.Loading)
+    val recommendationState: StateFlow<UiState<List<ClothingItem>>> =
+        _recommendationState
+
     init {
         loadItems()
     }
@@ -27,84 +33,95 @@ class WardrobeViewModel : ViewModel() {
     /* ---------- LOAD ---------- */
 
     private fun loadItems() {
-        try {
-            allItems.clear()
-            allItems.addAll(repository.getWardrobeItems())
-            _wardrobeState.value = UiState.Success(allItems.toList())
-        } catch (e: Exception) {
-            _wardrobeState.value =
-                UiState.Error("Failed to load wardrobe items")
+        viewModelScope.launch {
+            try {
+                allItems.clear()
+                allItems.addAll(repository.getWardrobeItems())
+                _wardrobeState.value = UiState.Success(allItems.toList())
+            } catch (e: Exception) {
+                _wardrobeState.value =
+                    UiState.Error("Failed to load wardrobe items")
+            }
         }
     }
 
     /* ---------- CRUD ---------- */
 
     fun addItem(item: ClothingItem) {
-        try {
-            repository.addItem(item)
-            loadItems()
-        } catch (e: Exception) {
-            _wardrobeState.value =
-                UiState.Error("Failed to add item")
+        viewModelScope.launch {
+            try {
+                repository.addItem(item)
+                loadItems()
+            } catch (e: Exception) {
+                _wardrobeState.value =
+                    UiState.Error("Failed to add item")
+            }
         }
     }
 
     fun deleteItem(item: ClothingItem) {
-        try {
-            repository.deleteItem(item)
-            loadItems()
-        } catch (e: Exception) {
-            _wardrobeState.value =
-                UiState.Error("Failed to delete item")
+        viewModelScope.launch {
+            try {
+                repository.deleteItem(item)
+                loadItems()
+            } catch (e: Exception) {
+                _wardrobeState.value =
+                    UiState.Error("Failed to delete item")
+            }
         }
     }
 
     fun updateItem(item: ClothingItem) {
-        try {
-            repository.updateItem(item)
-            loadItems()
-        } catch (e: Exception) {
-            _wardrobeState.value =
-                UiState.Error("Failed to update item")
+        viewModelScope.launch {
+            try {
+                repository.updateItem(item)
+                loadItems()
+            } catch (e: Exception) {
+                _wardrobeState.value =
+                    UiState.Error("Failed to update item")
+            }
         }
     }
 
     /* ---------- Recommendation ---------- */
 
-    fun generateOutfit(): List<ClothingItem> {
-
-        val current =
-            (_wardrobeState.value as? UiState.Success)?.data
-                ?: return emptyList()
-
-        val available = current
-            .filter { it.isAvailable && !it.isArchived }
-            .sortedBy { it.lastWornTimestamp ?: 0L }
-
-        val tops = available.filter { it.category.equals("Top", true) }
-        val bottoms = available.filter { it.category.equals("Bottom", true) }
-
-        return listOfNotNull(
-            tops.firstOrNull(),
-            bottoms.firstOrNull()
-        )
+    fun fetchRecommendations(
+        manualTemp: Int? = null,
+        timeContext: String? = null,
+        planDate: String? = null,
+        exclude: String? = null,
+    ) {
+        _recommendationState.value = UiState.Loading
+        viewModelScope.launch {
+            try {
+                val recommendations = repository.getRecommendations(
+                    manualTemp = manualTemp,
+                    timeContext = timeContext,
+                    planDate = planDate,
+                    exclude = exclude
+                )
+                _recommendationState.value = UiState.Success(recommendations)
+            } catch (e: Exception) {
+                _recommendationState.value =
+                    UiState.Error("Failed to load recommendations")
+            }
+        }
     }
 
     fun markOutfitAsWorn(items: List<ClothingItem>) {
-
         val timestamp = System.currentTimeMillis()
-
-        try {
-            items.forEach { item ->
-                val updated = item.copy(
-                    lastWornTimestamp = timestamp
-                )
-                repository.updateItem(updated)
+        viewModelScope.launch {
+            try {
+                repository.markOutfitAsWorn(items, timestamp)
+                loadItems()
+                val currentRecs = (_recommendationState.value as? UiState.Success)?.data
+                if (currentRecs != null) {
+                    fetchRecommendations()
+                }
+            } catch (e: Exception) {
+                _wardrobeState.value =
+                    UiState.Error("Failed to update wear history")
             }
-            loadItems()
-        } catch (e: Exception) {
-            _wardrobeState.value =
-                UiState.Error("Failed to update wear history")
         }
     }
 

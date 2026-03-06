@@ -1,8 +1,11 @@
+"""API route definitions for auth, wardrobe, profile, and recommendation flows."""
+
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta
-from app.auth import get_current_user
 
 from app.database.database import get_db
 from app import schemas, crud, models
@@ -11,6 +14,10 @@ from app.auth import (
     create_access_token,
     get_current_user,
     ACCESS_TOKEN_EXPIRE_MINUTES
+)
+from app.recommendation_explanations import (
+    RecommendationContext,
+    build_recommendation_explanation,
 )
 
 router = APIRouter()
@@ -153,3 +160,53 @@ def update_my_profile(
 ):
     return crud.update_user_profile(db, current_user, updated_data)
 
+
+@router.get("/recommendations", response_model=schemas.RecommendationResponse)
+def get_recommendations(
+    manual_temp: Optional[int] = None,
+    time_context: Optional[str] = None,
+    plan_date: Optional[str] = None,
+    exclude: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    items = crud.get_recommendations_for_user(db, current_user.id)
+    explanation = build_recommendation_explanation(
+        user=current_user,
+        items=items,
+        context=RecommendationContext(
+            manual_temp=manual_temp,
+            time_context=time_context,
+            plan_date=plan_date,
+            exclude=exclude,
+        ),
+    )
+    return {
+        "items": items,
+        "explanation": explanation,
+    }
+
+
+@router.post("/outfits/history", response_model=schemas.OutfitHistoryResponse)
+def create_outfit_history(
+    payload: schemas.OutfitHistoryCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if not payload.item_ids:
+        raise HTTPException(status_code=400, detail="item_ids cannot be empty")
+
+    owned_item_count = db.query(models.ClothingItem).filter(
+        models.ClothingItem.owner_id == current_user.id,
+        models.ClothingItem.id.in_(payload.item_ids),
+    ).count()
+    if owned_item_count != len(set(payload.item_ids)):
+        raise HTTPException(status_code=403, detail="Some items do not belong to current user")
+
+    crud.save_outfit_history(
+        db=db,
+        user_id=current_user.id,
+        item_ids=payload.item_ids,
+        worn_at_timestamp=payload.worn_at_timestamp,
+    )
+    return {"detail": "Outfit history saved"}

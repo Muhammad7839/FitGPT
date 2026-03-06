@@ -83,7 +83,7 @@ fun WelcomeScreen(
             onClick = {
                 viewModel.markCompleted()
 
-                navController.navigate(Routes.WARDROBE) {
+                navController.navigate(Routes.LOGIN) {
                     popUpTo(Routes.ONBOARDING_WELCOME) { inclusive = true }
                 }
             },

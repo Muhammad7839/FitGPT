@@ -26,16 +26,16 @@ class FakeWardrobeRepository : WardrobeRepository {
 
     private val savedOutfits = mutableListOf<SavedOutfit>()
 
-    override fun getWardrobeItems(): List<ClothingItem> {
+    override suspend fun getWardrobeItems(): List<ClothingItem> {
         // Only return active (not archived) items
         return wardrobeItems.filter { !it.isArchived }
     }
 
-    override fun addItem(item: ClothingItem) {
+    override suspend fun addItem(item: ClothingItem) {
         wardrobeItems.add(item)
     }
 
-    override fun deleteItem(item: ClothingItem) {
+    override suspend fun deleteItem(item: ClothingItem) {
         // Soft delete (archive instead of remove)
         val index = wardrobeItems.indexOfFirst { it.id == item.id }
         if (index != -1) {
@@ -45,10 +45,36 @@ class FakeWardrobeRepository : WardrobeRepository {
         }
     }
 
-    override fun updateItem(item: ClothingItem) {
+    override suspend fun updateItem(item: ClothingItem) {
         val index = wardrobeItems.indexOfFirst { it.id == item.id }
         if (index != -1) {
             wardrobeItems[index] = item
+        }
+    }
+
+    override suspend fun getRecommendations(
+        manualTemp: Int?,
+        timeContext: String?,
+        planDate: String?,
+        exclude: String?
+    ): List<ClothingItem> {
+        val available = wardrobeItems
+            .filter { it.isAvailable && !it.isArchived }
+            .sortedBy { it.lastWornTimestamp ?: 0L }
+        val tops = available.filter { it.category.equals("Top", true) }
+        val bottoms = available.filter { it.category.equals("Bottom", true) }
+        val shoes = available.filter { it.category.equals("Shoes", true) }
+        return listOfNotNull(tops.firstOrNull(), bottoms.firstOrNull(), shoes.firstOrNull())
+    }
+
+    override suspend fun markOutfitAsWorn(items: List<ClothingItem>, wornAtTimestamp: Long) {
+        items.forEach { item ->
+            val index = wardrobeItems.indexOfFirst { it.id == item.id }
+            if (index != -1) {
+                wardrobeItems[index] = wardrobeItems[index].copy(
+                    lastWornTimestamp = wornAtTimestamp
+                )
+            }
         }
     }
 
