@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
+from app.config import SECRET_KEY, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 from app.database.database import get_db
 from app import models
 
@@ -27,10 +28,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # JWT Configuration
 # =============================
 
-SECRET_KEY = "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 
@@ -44,7 +41,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
     to_encode.update({"exp": expire})
 
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=JWT_ALGORITHM)
     return encoded_jwt
 
 
@@ -62,7 +59,7 @@ def get_current_user(
     )
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[JWT_ALGORITHM])
         user_id = payload.get("sub")
 
         if user_id is None:

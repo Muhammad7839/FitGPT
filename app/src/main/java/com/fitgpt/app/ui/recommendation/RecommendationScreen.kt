@@ -22,7 +22,11 @@ fun RecommendationScreen(
     navController: NavController,
     viewModel: WardrobeViewModel
 ) {
-    val state by viewModel.wardrobeState.collectAsState()
+    val state by viewModel.recommendationState.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.fetchRecommendations()
+    }
 
     when (state) {
 
@@ -44,11 +48,7 @@ fun RecommendationScreen(
 
         is UiState.Success -> {
 
-            val items = (state as UiState.Success<List<ClothingItem>>).data
-
-            val recommendedItems = remember(items) {
-                viewModel.generateOutfit()
-            }
+            val recommendedItems = (state as UiState.Success<List<ClothingItem>>).data
 
             Scaffold(
                 topBar = {

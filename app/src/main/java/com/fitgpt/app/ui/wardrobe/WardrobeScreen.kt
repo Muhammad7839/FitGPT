@@ -13,7 +13,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.navigation.Routes
@@ -24,7 +23,7 @@ import com.fitgpt.app.viewmodel.WardrobeViewModel
 @Composable
 fun WardrobeScreen(
     navController: NavController,
-    viewModel: WardrobeViewModel = viewModel()
+    viewModel: WardrobeViewModel
 ) {
 
     val uiState by viewModel.wardrobeState.collectAsState()

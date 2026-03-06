@@ -48,18 +48,42 @@ class TokenData(BaseModel):
 # =============================
 
 class ClothingItemCreate(BaseModel):
-    name: str
     category: str
     color: str
+    season: str
+    comfort_level: int
     image_url: Optional[str] = None
+    brand: Optional[str] = None
+    is_available: bool = True
+    is_archived: bool = False
+    last_worn_timestamp: Optional[int] = None
 
 
 class ClothingItemResponse(BaseModel):
     id: int
-    name: str
     category: str
     color: str
+    season: str
+    comfort_level: int
     image_url: Optional[str] = None
+    brand: Optional[str] = None
+    is_available: bool
+    is_archived: bool
+    last_worn_timestamp: Optional[int] = None
 
     class Config:
         from_attributes = True
+
+
+class RecommendationResponse(BaseModel):
+    items: list[ClothingItemResponse]
+    explanation: str
+
+
+class OutfitHistoryCreate(BaseModel):
+    item_ids: list[int]
+    worn_at_timestamp: int
+
+
+class OutfitHistoryResponse(BaseModel):
+    detail: str
