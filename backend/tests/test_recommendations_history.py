@@ -1,3 +1,5 @@
+"""Integration tests for recommendations and outfit history endpoints."""
+
 from conftest import register_and_login
 
 

@@ -1,3 +1,6 @@
+/**
+ * Main Android entry activity that hosts the Compose navigation graph.
+ */
 package com.fitgpt.app
 
 import android.os.Bundle

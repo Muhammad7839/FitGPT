@@ -1,3 +1,6 @@
+/**
+ * Coordinates wardrobe CRUD, recommendations, and wear-history actions for UI screens.
+ */
 package com.fitgpt.app.viewmodel
 
 import androidx.lifecycle.ViewModel
@@ -30,8 +33,6 @@ class WardrobeViewModel(
         loadItems()
     }
 
-    /* ---------- LOAD ---------- */
-
     private fun loadItems() {
         viewModelScope.launch {
             try {
@@ -44,8 +45,6 @@ class WardrobeViewModel(
             }
         }
     }
-
-    /* ---------- CRUD ---------- */
 
     fun addItem(item: ClothingItem) {
         viewModelScope.launch {
@@ -82,8 +81,6 @@ class WardrobeViewModel(
             }
         }
     }
-
-    /* ---------- Recommendation ---------- */
 
     fun fetchRecommendations(
         manualTemp: Int? = null,
@@ -125,8 +122,6 @@ class WardrobeViewModel(
         }
     }
 
-    /* ---------- Saved Outfits ---------- */
-
     fun saveOutfit(items: List<ClothingItem>) {
         val outfit = SavedOutfit(
             id = System.currentTimeMillis().toInt(),
@@ -138,8 +133,6 @@ class WardrobeViewModel(
     fun getSavedOutfits(): List<SavedOutfit> {
         return repository.getSavedOutfits()
     }
-
-    /* ---------- AI Explanation ---------- */
 
     fun generateExplanation(item: ClothingItem): String {
 

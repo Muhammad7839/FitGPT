@@ -1,3 +1,6 @@
+/**
+ * Color definitions used by the FitGPT Material theme.
+ */
 package com.fitgpt.app.ui.theme
 
 import androidx.compose.ui.graphics.Color

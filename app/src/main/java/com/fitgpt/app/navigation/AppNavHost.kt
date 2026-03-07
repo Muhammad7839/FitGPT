@@ -1,3 +1,6 @@
+/**
+ * App navigation graph and startup routing decisions (onboarding, auth, wardrobe).
+ */
 package com.fitgpt.app.navigation
 
 import androidx.compose.runtime.*
@@ -41,23 +44,14 @@ fun AppNavHost(
     val prefs = remember { PreferencesManager(context) }
     val tokenStore = remember { ServiceLocator.provideTokenStore(context) }
 
-    // -----------------------------
-    // Onboarding ViewModel
-    // -----------------------------
     val onboardingViewModel: OnboardingViewModel =
         viewModel(factory = OnboardingViewModelFactory(prefs))
 
-    // -----------------------------
-    // DataStore loading gate
-    // -----------------------------
     var isReady by remember { mutableStateOf(false) }
     var completed by remember { mutableStateOf(false) }
     var authReady by remember { mutableStateOf(false) }
     var hasToken by remember { mutableStateOf(false) }
 
-    // -----------------------------
-    // Shared Wardrobe ViewModel
-    // -----------------------------
     val wardrobeRepository = remember { ServiceLocator.provideWardrobeRepository(context) }
     val wardrobeViewModel: WardrobeViewModel? =
         if (hasToken) {
@@ -70,6 +64,7 @@ fun AppNavHost(
         viewModel(factory = AuthViewModelFactory(authRepository, tokenStore))
 
     LaunchedEffect(Unit) {
+        // Start route waits until onboarding completion and auth validity are known.
         onboardingViewModel.completed.collect { value ->
             completed = value
             isReady = true

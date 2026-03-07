@@ -1,3 +1,6 @@
+/**
+ * Retrofit-backed wardrobe repository used by the production app flow.
+ */
 package com.fitgpt.app.data.repository
 
 import com.fitgpt.app.data.model.ClothingItem

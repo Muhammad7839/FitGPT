@@ -1,3 +1,6 @@
+/**
+ * Adds the persisted bearer token to outbound API requests when available.
+ */
 package com.fitgpt.app.data.auth
 
 import kotlinx.coroutines.runBlocking
@@ -8,6 +11,7 @@ class AuthInterceptor(
     private val tokenStore: TokenStore
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
+        // Interceptors are synchronous; read the current token inline for each request.
         val token = runBlocking { tokenStore.getAccessToken() }
         val original = chain.request()
         if (token.isNullOrBlank()) {

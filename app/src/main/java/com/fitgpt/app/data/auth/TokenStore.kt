@@ -1,3 +1,6 @@
+/**
+ * Persists authentication tokens in DataStore for reuse across app launches.
+ */
 package com.fitgpt.app.data.auth
 
 import android.content.Context

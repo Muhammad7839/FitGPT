@@ -1,3 +1,6 @@
+/**
+ * Factory for AuthViewModel dependency injection.
+ */
 package com.fitgpt.app.viewmodel
 
 import androidx.lifecycle.ViewModel

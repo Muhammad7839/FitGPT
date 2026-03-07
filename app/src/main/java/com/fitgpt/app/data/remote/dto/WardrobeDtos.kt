@@ -1,3 +1,6 @@
+/**
+ * Transport models for wardrobe, recommendation, and outfit-history APIs.
+ */
 package com.fitgpt.app.data.remote.dto
 
 import com.google.gson.annotations.SerializedName

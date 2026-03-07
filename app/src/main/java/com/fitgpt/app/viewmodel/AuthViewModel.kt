@@ -1,3 +1,6 @@
+/**
+ * ViewModel for login actions and auth session state.
+ */
 package com.fitgpt.app.viewmodel
 
 import androidx.lifecycle.ViewModel

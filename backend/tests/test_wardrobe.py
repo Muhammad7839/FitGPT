@@ -1,3 +1,5 @@
+"""Integration tests for wardrobe CRUD behavior."""
+
 from conftest import register_and_login
 
 
@@ -40,3 +42,21 @@ def test_wardrobe_crud_flow(client):
     list_after_delete = client.get("/wardrobe/items", headers=auth)
     assert list_after_delete.status_code == 200
     assert list_after_delete.json() == []
+
+
+def test_wardrobe_partial_update_supports_edit_workflow(client):
+    token = register_and_login(client, "wardrobe-edit@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    create = client.post("/wardrobe/items", json=sample_item_payload(), headers=auth)
+    item_id = create.json()["id"]
+
+    update = client.put(
+        f"/wardrobe/items/{item_id}",
+        json={"color": "Olive"},
+        headers=auth,
+    )
+    assert update.status_code == 200
+    body = update.json()
+    assert body["color"] == "Olive"
+    assert body["category"] == "Top"

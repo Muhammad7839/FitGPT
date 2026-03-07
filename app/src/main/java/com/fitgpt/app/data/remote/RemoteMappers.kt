@@ -1,3 +1,6 @@
+/**
+ * Mapping helpers between backend DTOs and Android domain models.
+ */
 package com.fitgpt.app.data.remote
 
 import com.fitgpt.app.data.model.ClothingItem

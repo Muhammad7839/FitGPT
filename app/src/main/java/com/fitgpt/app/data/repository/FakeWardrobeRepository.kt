@@ -1,3 +1,6 @@
+/**
+ * In-memory wardrobe repository used by local tests and offline development paths.
+ */
 package com.fitgpt.app.data.repository
 
 import com.fitgpt.app.data.model.ClothingItem
@@ -27,7 +30,6 @@ class FakeWardrobeRepository : WardrobeRepository {
     private val savedOutfits = mutableListOf<SavedOutfit>()
 
     override suspend fun getWardrobeItems(): List<ClothingItem> {
-        // Only return active (not archived) items
         return wardrobeItems.filter { !it.isArchived }
     }
 
@@ -36,7 +38,6 @@ class FakeWardrobeRepository : WardrobeRepository {
     }
 
     override suspend fun deleteItem(item: ClothingItem) {
-        // Soft delete (archive instead of remove)
         val index = wardrobeItems.indexOfFirst { it.id == item.id }
         if (index != -1) {
             wardrobeItems[index] = wardrobeItems[index].copy(

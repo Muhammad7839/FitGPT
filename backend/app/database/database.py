@@ -1,3 +1,7 @@
+"""SQLAlchemy engine and session management for the FitGPT backend."""
+
+from collections.abc import Generator
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from app.config import DATABASE_URL
@@ -14,8 +18,8 @@ SessionLocal = sessionmaker(
 Base = declarative_base()
 
 
-# Dependency for routes later
-def get_db():
+def get_db() -> Generator:
+    """Yield a DB session for a single request lifecycle."""
     db = SessionLocal()
     try:
         yield db
