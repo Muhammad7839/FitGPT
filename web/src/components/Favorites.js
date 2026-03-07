@@ -72,7 +72,7 @@ export default function Favorites() {
           <div className="wardrobeSub">
             {isSignedIn ? "Your saved wardrobe items" : "Favorites (guest session)"}
             {!isSignedIn ? (
-              <button type="button" className="btn primary" onClick={() => navigate("/auth")} style={{ marginLeft: 12, fontSize: "0.85rem", padding: "6px 16px", verticalAlign: "middle" }}>
+              <button type="button" className="btn primary" onClick={() => navigate("/login")} style={{ marginLeft: 12, fontSize: "0.85rem", padding: "6px 16px", verticalAlign: "middle" }}>
                 Sign in to save permanently
               </button>
             ) : null}

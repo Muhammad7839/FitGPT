@@ -7,7 +7,6 @@ import { loadAnswers, saveAnswers, isOnboarded, clearOnboarding, isTutorialDone 
 import GuidedTutorial from "../components/GuidedTutorial";
 
 // Light routes — eagerly loaded (auth flow, small components)
-import AuthPrompt from "../components/AuthPrompt";
 import Login from "../components/Login";
 import Signup from "../components/Signup";
 import ForgotPassword from "../components/ForgotPassword";
@@ -105,7 +104,7 @@ export default function AppRoutes() {
             }
           />
 
-          <Route path="/auth" element={<AuthPrompt />} />
+          <Route path="/auth" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
