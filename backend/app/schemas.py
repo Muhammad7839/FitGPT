@@ -95,6 +95,10 @@ class TokenData(BaseModel):
     user_id: Optional[int] = None
 
 
+class GoogleAuthRequest(BaseModel):
+    id_token: str
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 

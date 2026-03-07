@@ -11,6 +11,7 @@ from app.auth import (
     verify_password,
     create_access_token,
     get_current_user,
+    verify_google_token,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
 from app.schemas import RecommendationResponse, AIRecommendationRequest, AIRecommendationResponse
@@ -91,6 +92,46 @@ def login_user_json(user: schemas.UserLogin, db: Session = Depends(get_db)):
 @auth_router.post("/login", response_model=schemas.Token)
 def auth_login_user_json(user: schemas.UserLogin, db: Session = Depends(get_db)):
     return _login(user, db)
+
+
+# =============================
+# Google OAuth  —  /auth/google/callback
+# =============================
+
+@auth_router.post("/google/callback", response_model=schemas.Token)
+def google_auth_callback(body: schemas.GoogleAuthRequest, db: Session = Depends(get_db)):
+    try:
+        idinfo = verify_google_token(body.id_token)
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail=f"Invalid Google token: {exc}")
+
+    email = idinfo.get("email")
+    google_id = idinfo.get("sub")
+
+    if not email or not google_id:
+        raise HTTPException(status_code=401, detail="Google token missing required fields")
+
+    # Try to find existing user by google_id
+    user = crud.get_user_by_google_id(db, google_id)
+
+    if not user:
+        # Try to find by email (link Google to existing email/password account)
+        user = crud.get_user_by_email(db, email)
+        if user:
+            user.google_id = google_id
+            if user.auth_provider == "email":
+                user.auth_provider = "both"
+            db.commit()
+        else:
+            user = crud.create_google_user(db, email, google_id)
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": str(user.id)},
+        expires_delta=access_token_expires
+    )
+
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 # =============================

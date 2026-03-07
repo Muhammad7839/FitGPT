@@ -26,6 +26,23 @@ app.add_middleware(
 
 Base.metadata.create_all(bind=engine)
 
+# Add columns that create_all won't add to existing tables
+from sqlalchemy import inspect, text
+with engine.connect() as conn:
+    inspector = inspect(engine)
+    existing = {c["name"] for c in inspector.get_columns("users")}
+    if "google_id" not in existing:
+        conn.execute(text("ALTER TABLE users ADD COLUMN google_id VARCHAR UNIQUE"))
+    if "auth_provider" not in existing:
+        conn.execute(text("ALTER TABLE users ADD COLUMN auth_provider VARCHAR DEFAULT 'email'"))
+    if existing and "hashed_password" in existing:
+        # Make hashed_password nullable for Google-only users
+        try:
+            conn.execute(text("ALTER TABLE users ALTER COLUMN hashed_password DROP NOT NULL"))
+        except Exception:
+            pass  # SQLite doesn't support ALTER COLUMN; column is already nullable in new DBs
+    conn.commit()
+
 app.include_router(router)
 app.include_router(auth_router)
 
