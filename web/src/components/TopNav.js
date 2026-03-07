@@ -17,7 +17,7 @@ const NAV_ITEMS = [
 ];
 
 // Pages where the top nav should NOT appear
-const HIDDEN_ROUTES = ["/", "/auth", "/login", "/signup", "/onboarding"];
+const HIDDEN_ROUTES = ["/", "/login", "/signup", "/onboarding"];
 
 export default function TopNav() {
   const { pathname } = useLocation();

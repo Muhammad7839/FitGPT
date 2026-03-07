@@ -78,7 +78,7 @@ export default function Login() {
             <p className="authSub">Welcome back. Let's get you styled.</p>
           </div>
 
-          <button type="button" className="btn" onClick={() => navigate("/auth")}>
+          <button type="button" className="btn" onClick={() => navigate("/dashboard")}>
             Back
           </button>
         </div>

@@ -81,7 +81,7 @@ export default function Signup() {
             <p className="authSub">Save your wardrobe, favorites, and outfit picks.</p>
           </div>
 
-          <button type="button" className="btn" onClick={() => navigate("/auth")}>
+          <button type="button" className="btn" onClick={() => navigate("/dashboard")}>
             Back
           </button>
         </div>
