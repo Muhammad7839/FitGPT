@@ -34,6 +34,25 @@ def get_user_by_email(db: Session, email: str):
     ).first()
 
 
+def get_user_by_google_id(db: Session, google_id: str):
+    return db.query(models.User).filter(
+        models.User.google_id == google_id
+    ).first()
+
+
+def create_google_user(db: Session, email: str, google_id: str):
+    db_user = models.User(
+        email=email,
+        google_id=google_id,
+        auth_provider="google",
+        hashed_password=None,
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+
 # =============================
 # User Profile Update
 # =============================

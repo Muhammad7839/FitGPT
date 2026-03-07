@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import GoogleSignInButton from "./GoogleSignInButton";
 
 export default function AuthPrompt() {
   const navigate = useNavigate();
@@ -21,6 +22,10 @@ export default function AuthPrompt() {
         </p>
 
         <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+          <GoogleSignInButton />
+
+          <div className="authDivider"><span>or</span></div>
+
           <button type="button" className="btn primary" onClick={() => navigate("/signup")}>
             Create account
           </button>

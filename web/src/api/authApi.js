@@ -109,6 +109,31 @@ import {
     return register(email, password);
   }
   
+  export async function loginWithGoogle(idToken) {
+    if (!hasApi()) throw new Error("API base URL is missing.");
+
+    const data = await callWithFallback(
+      "/auth/google/callback",
+      "/google/callback",
+      {
+        method: "POST",
+        body: JSON.stringify({ id_token: idToken }),
+      }
+    );
+
+    const token = extractToken(data);
+
+    if (!USE_COOKIES) {
+      if (!token) throw new Error("Google login succeeded but no token was returned.");
+      setToken(token);
+    } else {
+      if (token) setToken(token);
+    }
+
+    markSignedInEmail();
+    return { token: token || "", raw: data };
+  }
+
   export async function logout() {
     try {
       await apiFetch("/logout", { method: "POST" });

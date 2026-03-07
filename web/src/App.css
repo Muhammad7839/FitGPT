@@ -4933,3 +4933,24 @@ select:focus-visible {
   40% { opacity: 1; transform: scale(1.1); }
 }
 
+/* ── Auth divider ("or" separator) ── */
+.authDivider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+  color: var(--text-muted, #888);
+  font-size: 13px;
+}
+.authDivider::before,
+.authDivider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border, #ddd);
+}
+[data-theme="dark"] .authDivider::before,
+[data-theme="dark"] .authDivider::after {
+  background: var(--border, #444);
+}
+

@@ -8,6 +8,9 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests as google_requests
+
 from app.database.database import get_db
 from app import models
 
@@ -33,6 +36,8 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -80,3 +85,15 @@ def get_current_user(
         raise credentials_exception
 
     return user
+
+
+# =============================
+# Google OAuth Token Validation
+# =============================
+
+def verify_google_token(token: str) -> dict:
+    """Verify a Google ID token and return the decoded payload."""
+    idinfo = google_id_token.verify_oauth2_token(
+        token, google_requests.Request(), GOOGLE_CLIENT_ID
+    )
+    return idinfo
