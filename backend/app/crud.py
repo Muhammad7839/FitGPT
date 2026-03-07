@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -31,7 +32,7 @@ def create_user(db: Session, user: schemas.UserCreate):
     return db_user
 
 
-def get_or_create_google_user(db: Session, email: str, full_name: str | None):
+def get_or_create_google_user(db: Session, email: str, full_name: Optional[str]):
     """Return existing user by email or create one for first-time Google login."""
     existing_user = get_user_by_email(db, email)
     if existing_user:
@@ -131,24 +132,8 @@ def update_clothing_item(
     updated_data: schemas.ClothingItemUpdate
 ):
     """Update an existing wardrobe item with partial fields from UI edits."""
-    if updated_data.category is not None:
-        db_item.category = updated_data.category
-    if updated_data.color is not None:
-        db_item.color = updated_data.color
-    if updated_data.season is not None:
-        db_item.season = updated_data.season
-    if updated_data.comfort_level is not None:
-        db_item.comfort_level = updated_data.comfort_level
-    if updated_data.image_url is not None:
-        db_item.image_url = updated_data.image_url
-    if updated_data.brand is not None:
-        db_item.brand = updated_data.brand
-    if updated_data.is_available is not None:
-        db_item.is_available = updated_data.is_available
-    if updated_data.is_archived is not None:
-        db_item.is_archived = updated_data.is_archived
-    if updated_data.last_worn_timestamp is not None:
-        db_item.last_worn_timestamp = updated_data.last_worn_timestamp
+    for field_name, field_value in updated_data.model_dump(exclude_unset=True).items():
+        setattr(db_item, field_name, field_value)
 
     db.commit()
     db.refresh(db_item)
@@ -212,7 +197,7 @@ def save_saved_outfit(
     db: Session,
     user_id: int,
     item_ids: list[int],
-    saved_at_timestamp: int | None = None,
+    saved_at_timestamp: Optional[int] = None,
 ):
     """Persist a saved outfit row for the given user."""
     timestamp = saved_at_timestamp or int(datetime.utcnow().timestamp())

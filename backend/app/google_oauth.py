@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 from google.auth.transport import requests
 from google.oauth2 import id_token
@@ -15,7 +16,7 @@ class GoogleIdentity:
     """Minimal user identity parsed from a verified Google token."""
 
     email: str
-    full_name: str | None
+    full_name: Optional[str]
 
 
 class GoogleTokenValidationError(Exception):
