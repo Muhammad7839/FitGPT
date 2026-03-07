@@ -15,7 +15,7 @@ import ErrorBoundary from "./ErrorBoundary";
 import UpcomingPlanCard from "./UpcomingPlanCard";
 import { OPEN_ADD_ITEM_FLAG, REUSE_OUTFIT_KEY, EVT_PLANNED_OUTFITS_CHANGED } from "../utils/constants";
 import { readRecSeed, writeRecSeed, readTimeOverride, writeTimeOverride, readWeatherOverride, setWeatherOverride } from "../utils/userStorage";
-import { safeParse, formatToday, normalizeFitTag, setReuseOutfit } from "../utils/helpers";
+import { safeParse, formatToday, normalizeFitTag, setReuseOutfit, buildGoogleCalendarUrl } from "../utils/helpers";
 import { getWeatherContext } from "../api/weatherApi";
 import {
   titleCase, normalizeCategory, normalizeColorName, colorToCss,
@@ -80,11 +80,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
   const [upcomingPlan, setUpcomingPlan] = useState(null);
 
-  const [showPlanModal, setShowPlanModal] = useState(false);
-  const [planDate, setPlanDate] = useState("");
-  const [planOccasion, setPlanOccasion] = useState("");
-  const [planSaving, setPlanSaving] = useState(false);
-  const [planOptionIdx, setPlanOptionIdx] = useState(0);
 
   // Persist recSeed so recommendations survive navigation
   useEffect(() => {
@@ -439,29 +434,22 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   };
 
   const openPlanModal = () => {
+    const idx = selectedIdx ?? 0;
+    const outfit = outfits[idx] || outfits[0] || [];
+    if (!outfit.length) return;
+
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const yyyy = tomorrow.getFullYear();
     const mm = String(tomorrow.getMonth() + 1).padStart(2, "0");
     const dd = String(tomorrow.getDate()).padStart(2, "0");
-    setPlanDate(`${yyyy}-${mm}-${dd}`);
-    setPlanOccasion("");
-    setPlanOptionIdx(selectedIdx ?? 0);
-    setShowPlanModal(true);
-  };
+    const date = `${yyyy}-${mm}-${dd}`;
 
-  const handlePlanSave = async () => {
-    if (!planDate) {
-      setSaveMsg("Please pick a date.");
-      window.setTimeout(() => setSaveMsg(""), 2500);
-      return;
-    }
+    const itemNames = outfit.map((x) => x?.name).filter(Boolean);
+    const calUrl = buildGoogleCalendarUrl({ date, occasion: "", itemNames });
+    window.open(calUrl, "_blank", "noopener");
 
-    const outfit = outfits[planOptionIdx] || outfits[0] || [];
-    if (!outfit.length) return;
-
-    setPlanSaving(true);
-
+    // Also save locally so it shows in the app
     const itemIds = outfit.map((x) => x?.id).filter(Boolean);
     const itemDetails = outfit.map((x) => ({
       id: (x?.id ?? "").toString(),
@@ -471,24 +459,16 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       image_url: x?.image_url || "",
     }));
 
-    try {
-      await plannedOutfitsApi.planOutfit({
-        item_ids: itemIds,
-        item_details: itemDetails,
-        planned_date: planDate,
-        occasion: planOccasion,
-        source: "planner",
-      }, user);
+    plannedOutfitsApi.planOutfit({
+      item_ids: itemIds,
+      item_details: itemDetails,
+      planned_date: date,
+      occasion: "",
+      source: "planner",
+    }, user).catch(() => {});
 
-      setSaveMsg("Outfit planned!");
-      window.setTimeout(() => setSaveMsg(""), 2500);
-      setShowPlanModal(false);
-    } catch {
-      setSaveMsg("Could not save plan.");
-      window.setTimeout(() => setSaveMsg(""), 2500);
-    } finally {
-      setPlanSaving(false);
-    }
+    setSaveMsg("Opening Google Calendar...");
+    window.setTimeout(() => setSaveMsg(""), 2500);
   };
 
   const handleWearPlanNow = () => {
@@ -860,61 +840,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         ) : null}
       </section>
 
-      {showPlanModal && ReactDOM.createPortal(
-        <div className="modalOverlay" role="dialog" aria-modal="true">
-          <div className="modalCard">
-            <div className="modalTitle">Plan This Outfit</div>
-            <div className="modalSub">Choose an outfit option, then pick a date and occasion.</div>
-
-            <div className="planOptionPicker">
-              {outfits.map((opt, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  className={"planOptionBtn" + (idx === planOptionIdx ? " active" : "")}
-                  onClick={() => setPlanOptionIdx(idx)}
-                >
-                  <span className="planOptionLabel">Option {String(idx + 1).padStart(2, "0")}</span>
-                  <span className="planOptionItems">
-                    {opt.map((item) => item.name).join(", ")}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            <div style={{ marginTop: 16 }}>
-              <label className="planModalLabel">Date</label>
-              <input
-                type="date"
-                className="wardrobeInput"
-                value={planDate}
-                onChange={(e) => setPlanDate(e.target.value)}
-              />
-            </div>
-
-            <div style={{ marginTop: 12 }}>
-              <label className="planModalLabel">Occasion</label>
-              <input
-                type="text"
-                className="wardrobeInput"
-                placeholder="e.g. Work, Date night, Casual..."
-                value={planOccasion}
-                onChange={(e) => setPlanOccasion(e.target.value)}
-              />
-            </div>
-
-            <div className="modalActions" style={{ marginTop: 18 }}>
-              <button className="btn" onClick={() => setShowPlanModal(false)} disabled={planSaving}>
-                Cancel
-              </button>
-              <button className="btn primary" onClick={handlePlanSave} disabled={planSaving}>
-                {planSaving ? "Saving..." : "Save Plan"}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
 
       {selectedIdx != null && ReactDOM.createPortal(
         <div className="dashWhyFloat" aria-live="polite">

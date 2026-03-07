@@ -111,6 +111,34 @@ export function formatPlanDate(iso) {
   }
 }
 
+/** Build a Google Calendar event creation URL for a planned outfit. */
+export function buildGoogleCalendarUrl({ date, occasion, itemNames }) {
+  const title = occasion ? `FitGPT: ${occasion}` : "FitGPT: Outfit Plan";
+  const names = Array.isArray(itemNames) ? itemNames.filter(Boolean) : [];
+  const details = names.length > 0 ? `Outfit: ${names.join(", ")}` : "Planned outfit from FitGPT";
+
+  // Google Calendar uses all-day format: YYYYMMDD/YYYYMMDD (next day for end)
+  const d = (date || "").replace(/-/g, "");
+  const start = d || new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const end = (() => {
+    const dt = new Date((date || new Date().toISOString().slice(0, 10)) + "T00:00:00");
+    dt.setDate(dt.getDate() + 1);
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const dd = String(dt.getDate()).padStart(2, "0");
+    return `${y}${m}${dd}`;
+  })();
+
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: title,
+    dates: `${start}/${end}`,
+    details,
+  });
+
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
 export function labelFromSource(src) {
   const s = (src || "").toString().trim().toLowerCase();
   if (s === "planner") return "Planned";

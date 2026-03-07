@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { buildWardrobeMap, formatPlanDate, setReuseOutfit } from "../utils/helpers";
+import { buildWardrobeMap, formatPlanDate, setReuseOutfit, buildGoogleCalendarUrl } from "../utils/helpers";
 
 function UpcomingPlanCard({ plan, wardrobe, onWearNow }) {
   const navigate = useNavigate();
@@ -61,6 +61,13 @@ function UpcomingPlanCard({ plan, wardrobe, onWearNow }) {
       <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
         <button type="button" className="btn primary" onClick={handleWearNow}>
           Wear This Now
+        </button>
+        <button type="button" className="btn" onClick={() => {
+          const names = details.map((d) => d?.name).filter(Boolean);
+          const url = buildGoogleCalendarUrl({ date: plan.planned_date, occasion: plan.occasion, itemNames: names });
+          window.open(url, "_blank", "noopener");
+        }}>
+          Add to Google Calendar
         </button>
         <button type="button" className="btn" onClick={() => navigate("/plans")}>
           View All Plans
