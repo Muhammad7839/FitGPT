@@ -1,7 +1,7 @@
 // web/src/components/ThemePicker.js
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "../App";
-import { PRESET_THEMES, getThemesByCategory } from "../theme/themeDefinitions";
+import { getThemesByCategory } from "../theme/themeDefinitions";
 import CustomThemeEditor from "./CustomThemeEditor";
 
 const CATEGORY_LABELS = {

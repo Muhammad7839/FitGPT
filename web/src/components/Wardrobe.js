@@ -1,30 +1,18 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { wardrobeApi } from "../api/wardrobeApi";
 import { useAuth } from "../auth/AuthProvider";
-import { loadWardrobe, saveWardrobe, userKey, ONBOARDING_ANSWERS_KEY } from "../utils/userStorage";
+import { loadWardrobe, saveWardrobe, loadAnswers } from "../utils/userStorage";
 import { classifyFromUrl, preloadModel } from "../utils/classifyClothing";
+import { OPEN_ADD_ITEM_FLAG } from "../utils/constants";
+import { makeId, normalizeFitTag, fileToDataUrl } from "../utils/helpers";
 
-const CATEGORIES = ["All Items", "Tops", "Bottoms", "Outerwear", "Shoes", "Accessories"];
+import ItemFormFields, { CATEGORIES as ITEM_CATEGORIES, FIT_TAG_OPTIONS } from "./ItemFormFields";
+import WardrobeItemCard from "./WardrobeItemCard";
+import BulkUploadModal from "./BulkUploadModal";
 
-const FIT_TAG_OPTIONS = [
-  { value: "unknown", label: "Unknown" },
-  { value: "slim", label: "Slim" },
-  { value: "regular", label: "Regular" },
-  { value: "relaxed", label: "Relaxed" },
-  { value: "oversized", label: "Oversized" },
-  { value: "tailored", label: "Tailored" },
-  { value: "athletic", label: "Athletic" },
-  { value: "petite", label: "Petite" },
-  { value: "plus", label: "Plus" },
-];
-
-const OPEN_ADD_ITEM_FLAG = "fitgpt_open_add_item";
-
-function uid() {
-  return Math.random().toString(16).slice(2) + Date.now().toString(16);
-}
+const CATEGORIES = ["All Items", ...ITEM_CATEGORIES];
 
 function fileIsOk(file) {
   const isImage = file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp";
@@ -36,36 +24,6 @@ function fileToObjectUrl(file) {
   return URL.createObjectURL(file);
 }
 
-function fileToDataUrl(file, maxSize = 200) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
-      const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, w, h);
-      URL.revokeObjectURL(objectUrl);
-      resolve(canvas.toDataURL("image/jpeg", 0.7));
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("Could not load image"));
-    };
-    img.src = objectUrl;
-  });
-}
-
-function normalizeFitTag(raw) {
-  const v = (raw || "").toString().trim().toLowerCase();
-  if (!v) return "unknown";
-  const allowed = new Set(FIT_TAG_OPTIONS.map((x) => x.value));
-  return allowed.has(v) ? v : "unknown";
-}
 
 function fitLabel(value) {
   const v = normalizeFitTag(value);
@@ -114,13 +72,6 @@ function bodyFitRating(fitTag, bodyType, category) {
   return "good";
 }
 
-const RATING_META = {
-  great: { label: "Great Fit", cls: "bodyFitGreat" },
-  good:  { label: "Good Fit",  cls: "bodyFitGood" },
-  fair:  { label: "Okay Fit",  cls: "bodyFitFair" },
-  poor:  { label: "Not Ideal", cls: "bodyFitPoor" },
-  neutral: { label: "", cls: "" },
-};
 
 function isNetworkError(e) {
   const msg = (e?.message || "").toString().toLowerCase();
@@ -141,12 +92,8 @@ export default function Wardrobe() {
   const { user } = useAuth();
 
   const userBodyType = useMemo(() => {
-    try {
-      const key = userKey(ONBOARDING_ANSWERS_KEY, user);
-      const raw = localStorage.getItem(key);
-      if (raw) return JSON.parse(raw)?.bodyType || "rectangle";
-    } catch {}
-    return "rectangle";
+    const answers = loadAnswers(user);
+    return answers?.bodyType || "rectangle";
   }, [user]);
 
   const fileInputRef = useRef(null);
@@ -221,7 +168,7 @@ export default function Wardrobe() {
   const [isSaving, setIsSaving] = useState(false);
   const [addError, setAddError] = useState("");
   const [isClassifying, setIsClassifying] = useState(false);
-  const [userOverrodeCategory, setUserOverrodeCategory] = useState(false);
+
 
   // Bulk upload state
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -424,7 +371,6 @@ export default function Wardrobe() {
     setFormColor("");
     setFormFitTag("unknown");
     setAddError("");
-    setUserOverrodeCategory(false);
     setIsClassifying(false);
   };
 
@@ -448,21 +394,15 @@ export default function Wardrobe() {
       setFormColor("");
       setFormFitTag("unknown");
       setAddError("");
-      setUserOverrodeCategory(false);
-      setIsClassifying(true);
+        setIsClassifying(true);
 
       setAddOpen(true);
 
       // Run ML classification in the background
       classifyFromUrl(preview).then((result) => {
-        if (result.category) {
-          setUserOverrodeCategory((overrode) => {
-            if (!overrode) setFormCategory(result.category);
-            return overrode;
-          });
-        }
+        if (result.category) setFormCategory(result.category);
         setIsClassifying(false);
-      });
+      }).catch(() => setIsClassifying(false));
     } catch {
       setToast("Upload failed. Try again.");
       window.setTimeout(() => setToast(""), 2500);
@@ -488,7 +428,7 @@ export default function Wardrobe() {
           const preview = await fileToDataUrl(file);
           const niceName = file.name.replace(/\.[^/.]+$/, "");
           return {
-            _key: uid(),
+            _key: makeId(),
             file,
             preview,
             name: niceName,
@@ -516,6 +456,10 @@ export default function Wardrobe() {
                 category: result.category && !e.userOverrode ? result.category : e.category,
               };
             })
+          );
+        }).catch(() => {
+          setBulkItems((prev) =>
+            prev.map((e) => e._key === entry._key ? { ...e, classifying: false } : e)
           );
         });
       }
@@ -562,7 +506,7 @@ export default function Wardrobe() {
         // Guest mode — save locally only
         const dataUrl = await fileToDataUrl(pendingFile);
         const localItem = {
-          id: uid(),
+          id: makeId(),
           name,
           category: formCategory,
           color,
@@ -600,7 +544,7 @@ export default function Wardrobe() {
       if (backendOffline) setBackendOffline(false);
 
       const localShadow = {
-        id: created?.id || uid(),
+        id: created?.id || makeId(),
         name,
         category: formCategory,
         color,
@@ -625,7 +569,7 @@ export default function Wardrobe() {
         let dataUrl = "";
         try { dataUrl = await fileToDataUrl(pendingFile); } catch {}
         const localItem = {
-          id: uid(),
+          id: makeId(),
           name,
           category: formCategory,
           color,
@@ -650,7 +594,7 @@ export default function Wardrobe() {
       let dataUrl = "";
       try { dataUrl = await fileToDataUrl(pendingFile); } catch {}
       const localItem = {
-        id: uid(),
+        id: makeId(),
         name,
         category: formCategory,
         color,
@@ -712,7 +656,7 @@ export default function Wardrobe() {
 
     try {
       const newItems = bulkItems.map((entry) => ({
-        id: uid(),
+        id: makeId(),
         name: entry.name.trim(),
         category: entry.category,
         color: entry.color.trim(),
@@ -916,6 +860,18 @@ export default function Wardrobe() {
       // Ignore API errors — local update is already saved
     }
   };
+
+  const onTiltMove = useCallback((e) => {
+    const el = e.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width - 0.5;
+    const y = (e.clientY - rect.top) / rect.height - 0.5;
+    el.style.transform = `perspective(800px) rotateX(${-y * 8}deg) rotateY(${x * 8}deg) scale(1.02)`;
+  }, []);
+
+  const onTiltLeave = useCallback((e) => {
+    e.currentTarget.style.transform = "";
+  }, []);
 
   const toggleFavorite = async (id) => {
     const current = items.find((x) => x.id === id);
@@ -1138,167 +1094,25 @@ export default function Wardrobe() {
       </section>
 
       <section className={view === "grid" ? "wardrobeGrid" : "wardrobeList"}>
-        {filtered.map((it) =>
-          view === "grid" ? (
-            <div key={it.id} className="wardrobeCard">
-              <div className="wardrobeThumbWrap">
-                {it.image_url ? (
-                  <img className="wardrobeThumbImg" src={it.image_url} alt={it.name} />
-                ) : (
-                  <div className="wardrobeThumb" aria-hidden="true" />
-                )}
-              </div>
-
-              <div className="wardrobeCardBody">
-                <div className="wardrobeItemName">{it.name}</div>
-                <div className="wardrobeItemMeta">
-                  {it.category} · {it.color} · Fit: {fitLabel(it.fit_tag || it.fitTag || it.fit)}
-                </div>
-                {bodyFitOn && (() => {
-                  const r = bodyFitRating(it.fit_tag || it.fitTag || it.fit, userBodyType, it.category);
-                  const meta = RATING_META[r];
-                  return meta?.label ? <span className={`wardrobeBodyFitBadge ${meta.cls}`}>{meta.label}</span> : null;
-                })()}
-
-                <div className="wardrobeCardActions">
-                  <button
-                    type="button"
-                    className={it.is_favorite ? "wardrobeIconBtn fav active" : "wardrobeIconBtn fav"}
-                    onClick={() => toggleFavorite(it.id)}
-                    aria-label="Toggle favorite"
-                    title="Favorite"
-                  >
-                    {it.is_favorite ? "♥" : "♡"}
-                  </button>
-
-                  <button
-                    type="button"
-                    className="wardrobeIconBtn"
-                    onClick={() => openEdit(it)}
-                    aria-label="Edit item"
-                    title="Edit"
-                  >
-                    ✎
-                  </button>
-
-                  {tab === "active" ? (
-                    <button
-                      type="button"
-                      className="wardrobeIconBtn"
-                      onClick={() => archiveItem(it.id)}
-                      aria-label="Archive item"
-                      title="Archive"
-                      disabled={isItemBusy(it.id)}
-                    >
-                      {isItemBusy(it.id) ? "…" : "⤓"}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="wardrobeIconBtn"
-                      onClick={() => unarchiveItem(it.id)}
-                      aria-label="Unarchive item"
-                      title="Unarchive"
-                      disabled={isItemBusy(it.id)}
-                    >
-                      {isItemBusy(it.id) ? "…" : "⤒"}
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    className="wardrobeIconBtn danger"
-                    onClick={() => askDelete(it.id)}
-                    aria-label="Delete item"
-                    title="Delete"
-                  >
-                    🗑
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div key={it.id} className="wardrobeRowItem">
-              <div className="wardrobeRowLeft">
-                <div className="wardrobeThumbWrap sm">
-                  {it.image_url ? (
-                    <img className="wardrobeThumbImg sm" src={it.image_url} alt={it.name} />
-                  ) : (
-                    <div className="wardrobeThumb sm" aria-hidden="true" />
-                  )}
-                </div>
-
-                <div className="wardrobeRowText">
-                  <div className="wardrobeItemName">{it.name}</div>
-                  <div className="wardrobeItemMeta">
-                    {it.category} · {it.color} · Fit: {fitLabel(it.fit_tag || it.fitTag || it.fit)}
-                    {bodyFitOn && (() => {
-                      const r = bodyFitRating(it.fit_tag || it.fitTag || it.fit, userBodyType, it.category);
-                      const meta = RATING_META[r];
-                      return meta?.label ? <span className={`wardrobeBodyFitBadge inline ${meta.cls}`}>{meta.label}</span> : null;
-                    })()}
-                  </div>
-                </div>
-              </div>
-
-              <div className="wardrobeRowActions">
-                <button
-                  type="button"
-                  className={it.is_favorite ? "wardrobeIconBtn fav active" : "wardrobeIconBtn fav"}
-                  onClick={() => toggleFavorite(it.id)}
-                  aria-label="Toggle favorite"
-                  title="Favorite"
-                >
-                  {it.is_favorite ? "♥" : "♡"}
-                </button>
-
-                <button
-                  type="button"
-                  className="wardrobeIconBtn"
-                  onClick={() => openEdit(it)}
-                  aria-label="Edit item"
-                  title="Edit"
-                >
-                  ✎
-                </button>
-
-                {tab === "active" ? (
-                  <button
-                    type="button"
-                    className="wardrobeIconBtn"
-                    onClick={() => archiveItem(it.id)}
-                    aria-label="Archive item"
-                    title="Archive"
-                    disabled={isItemBusy(it.id)}
-                  >
-                    {isItemBusy(it.id) ? "…" : "⤓"}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="wardrobeIconBtn"
-                    onClick={() => unarchiveItem(it.id)}
-                    aria-label="Unarchive item"
-                    title="Unarchive"
-                    disabled={isItemBusy(it.id)}
-                  >
-                    {isItemBusy(it.id) ? "…" : "⤒"}
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  className="wardrobeIconBtn danger"
-                  onClick={() => askDelete(it.id)}
-                  aria-label="Delete item"
-                  title="Delete"
-                >
-                  🗑
-                </button>
-              </div>
-            </div>
-          )
-        )}
+        {filtered.map((it) => (
+          <WardrobeItemCard
+            key={it.id}
+            item={it}
+            view={view}
+            tab={tab}
+            bodyFitOn={bodyFitOn}
+            userBodyType={userBodyType}
+            bodyFitRating={bodyFitRating}
+            onToggleFavorite={toggleFavorite}
+            onEdit={openEdit}
+            onArchive={archiveItem}
+            onUnarchive={unarchiveItem}
+            onDelete={askDelete}
+            isItemBusy={isItemBusy}
+            onTiltMove={onTiltMove}
+            onTiltLeave={onTiltLeave}
+          />
+        ))}
 
         {!filtered.length ? (
           <div className="wardrobeEmpty">
@@ -1319,54 +1133,14 @@ export default function Wardrobe() {
               {pendingPreview ? <img className="wardrobeAddPreviewImg" src={pendingPreview} alt="Preview" /> : null}
             </div>
 
-            <div className="wardrobeAddForm">
-              <label className="wardrobeLabel">
-                Item name
-                <input
-                  className="wardrobeInput"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  placeholder="Example: White tee"
-                />
-              </label>
-
-              <label className="wardrobeLabel">
-                Category
-                <div style={{ position: "relative" }}>
-                  <select className="wardrobeInput" value={formCategory} onChange={(e) => { setFormCategory(e.target.value); setUserOverrodeCategory(true); }}>
-                    {CATEGORIES.filter((c) => c !== "All Items").map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                  {isClassifying && <span className="classifyingHint">Detecting...</span>}
-                </div>
-              </label>
-
-              <label className="wardrobeLabel">
-                Color
-                <input
-                  className="wardrobeInput"
-                  value={formColor}
-                  onChange={(e) => setFormColor(e.target.value)}
-                  placeholder="Example: Black"
-                />
-              </label>
-
-              <label className="wardrobeLabel">
-                Fit (optional)
-                <select className="wardrobeInput" value={formFitTag} onChange={(e) => setFormFitTag(e.target.value)}>
-                  {FIT_TAG_OPTIONS.map((x) => (
-                    <option key={x.value} value={x.value}>
-                      {x.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {addError ? <div className="wardrobeFormError">{addError}</div> : null}
-            </div>
+            <ItemFormFields
+              name={formName} onNameChange={setFormName}
+              category={formCategory} onCategoryChange={setFormCategory}
+              color={formColor} onColorChange={setFormColor}
+              fitTag={formFitTag} onFitTagChange={setFormFitTag}
+              isClassifying={isClassifying}
+              error={addError}
+            />
 
             <div className="modalActions">
               <button type="button" className="btnSecondary" onClick={cancelAdd} disabled={isSaving}>
@@ -1382,102 +1156,15 @@ export default function Wardrobe() {
       ) : null}
 
       {bulkOpen ? (
-        <div className="modalOverlay" role="dialog" aria-modal="true">
-          <div className="modalCard" style={{ maxHeight: "85vh", overflow: "auto", width: "min(680px, 96vw)" }}>
-            <div className="modalTitle">Add {bulkItems.length} item{bulkItems.length > 1 ? "s" : ""}</div>
-            <div className="modalSub">Review and fill in details for each item.</div>
-
-            <div style={{ display: "grid", gap: 14, marginTop: 12 }}>
-              {bulkItems.map((entry, idx) => (
-                <div
-                  key={entry._key}
-                  style={{
-                    border: "1px solid rgba(0,0,0,0.08)",
-                    borderRadius: 16,
-                    padding: 14,
-                    display: "grid",
-                    gridTemplateColumns: "80px 1fr auto",
-                    gap: 12,
-                    alignItems: "start",
-                    background: "#fff",
-                  }}
-                >
-                  <img
-                    src={entry.preview}
-                    alt={entry.name}
-                    style={{ width: 80, height: 80, borderRadius: 12, objectFit: "cover" }}
-                  />
-
-                  <div style={{ display: "grid", gap: 8 }}>
-                    <input
-                      className="wardrobeInput"
-                      placeholder="Item name"
-                      value={entry.name}
-                      onChange={(e) => updateBulkItem(entry._key, "name", e.target.value)}
-                    />
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <div style={{ flex: 1, position: "relative" }}>
-                        <select
-                          className="wardrobeInput"
-                          value={entry.category}
-                          onChange={(e) => updateBulkItem(entry._key, "category", e.target.value)}
-                          style={{ width: "100%" }}
-                        >
-                          {CATEGORIES.filter((c) => c !== "All Items").map((c) => (
-                            <option key={c} value={c}>{c}</option>
-                          ))}
-                        </select>
-                        {entry.classifying && <span className="classifyingHint">Detecting...</span>}
-                      </div>
-                      <input
-                        className="wardrobeInput"
-                        placeholder="Color"
-                        value={entry.color}
-                        onChange={(e) => updateBulkItem(entry._key, "color", e.target.value)}
-                        style={{ flex: 1 }}
-                      />
-                    </div>
-                    <select
-                      className="wardrobeInput"
-                      value={entry.fitTag}
-                      onChange={(e) => updateBulkItem(entry._key, "fitTag", e.target.value)}
-                    >
-                      {FIT_TAG_OPTIONS.map((x) => (
-                        <option key={x.value} value={x.value}>{x.label}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="wardrobeIconBtn danger"
-                    onClick={() => removeBulkItem(entry._key)}
-                    title="Remove"
-                    aria-label="Remove item"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {bulkError ? <div className="wardrobeFormError" style={{ marginTop: 10 }}>{bulkError}</div> : null}
-
-            <div className="modalActions">
-              <button type="button" className="btnSecondary" onClick={cancelBulk} disabled={isBulkSaving}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btnPrimary"
-                onClick={saveBulkItems}
-                disabled={isBulkSaving || !bulkItems.length}
-              >
-                {isBulkSaving ? "Saving..." : `Save ${bulkItems.length} item${bulkItems.length > 1 ? "s" : ""}`}
-              </button>
-            </div>
-          </div>
-        </div>
+        <BulkUploadModal
+          items={bulkItems}
+          onUpdateItem={updateBulkItem}
+          onRemoveItem={removeBulkItem}
+          onCancel={cancelBulk}
+          onSave={saveBulkItems}
+          isSaving={isBulkSaving}
+          error={bulkError}
+        />
       ) : null}
 
       {editOpen ? ReactDOM.createPortal(
@@ -1486,51 +1173,13 @@ export default function Wardrobe() {
             <div className="modalTitle">Edit item</div>
             <div className="modalSub">Update the details and save changes.</div>
 
-            <div className="wardrobeAddForm">
-              <label className="wardrobeLabel">
-                Item name
-                <input
-                  className="wardrobeInput"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  placeholder="Example: White tee"
-                />
-              </label>
-
-              <label className="wardrobeLabel">
-                Category
-                <select className="wardrobeInput" value={editCategory} onChange={(e) => setEditCategory(e.target.value)}>
-                  {CATEGORIES.filter((c) => c !== "All Items").map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="wardrobeLabel">
-                Color
-                <input
-                  className="wardrobeInput"
-                  value={editColor}
-                  onChange={(e) => setEditColor(e.target.value)}
-                  placeholder="Example: Black"
-                />
-              </label>
-
-              <label className="wardrobeLabel">
-                Fit (optional)
-                <select className="wardrobeInput" value={editFitTag} onChange={(e) => setEditFitTag(e.target.value)}>
-                  {FIT_TAG_OPTIONS.map((x) => (
-                    <option key={x.value} value={x.value}>
-                      {x.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {editError ? <div className="wardrobeFormError">{editError}</div> : null}
-            </div>
+            <ItemFormFields
+              name={editName} onNameChange={setEditName}
+              category={editCategory} onCategoryChange={setEditCategory}
+              color={editColor} onColorChange={setEditColor}
+              fitTag={editFitTag} onFitTagChange={setEditFitTag}
+              error={editError}
+            />
 
             <div className="modalActions">
               <button type="button" className="btnSecondary" onClick={cancelEdit} disabled={isUpdating}>

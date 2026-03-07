@@ -1,14 +1,6 @@
-const OVERRIDE_KEY = "fitgpt_weather_override_v1";
+import { readWeatherOverride } from "../utils/userStorage";
 
-function safeParse(json) {
-  try {
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
-export function tempCategoryFromF(tempF) {
+function tempCategoryFromF(tempF) {
   const t = Number(tempF);
   if (!Number.isFinite(t)) return "mild";
   if (t <= 40) return "cold";
@@ -16,34 +8,6 @@ export function tempCategoryFromF(tempF) {
   if (t <= 70) return "mild";
   if (t <= 85) return "warm";
   return "hot";
-}
-
-export function labelForTempCategory(cat) {
-  const c = (cat || "").toString().trim().toLowerCase();
-  if (c === "cold") return "Cold";
-  if (c === "cool") return "Cool";
-  if (c === "mild") return "Mild";
-  if (c === "warm") return "Warm";
-  if (c === "hot") return "Hot";
-  return "Mild";
-}
-
-export function readWeatherOverride() {
-  const raw = sessionStorage.getItem(OVERRIDE_KEY);
-  const parsed = raw ? safeParse(raw) : null;
-  const v = (parsed?.category || "").toString().trim().toLowerCase();
-  const allowed = new Set(["cold", "cool", "mild", "warm", "hot"]);
-  return allowed.has(v) ? v : null;
-}
-
-export function setWeatherOverride(categoryOrNull) {
-  const v = (categoryOrNull || "").toString().trim().toLowerCase();
-  const allowed = new Set(["cold", "cool", "mild", "warm", "hot"]);
-  if (!allowed.has(v)) {
-    sessionStorage.removeItem(OVERRIDE_KEY);
-    return;
-  }
-  sessionStorage.setItem(OVERRIDE_KEY, JSON.stringify({ category: v }));
 }
 
 async function getCoordsFromBrowser() {

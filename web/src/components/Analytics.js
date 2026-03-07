@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { loadWardrobe } from "../utils/userStorage";
+import { buildWardrobeMap, monthKey } from "../utils/helpers";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
 import { savedOutfitsApi } from "../api/savedOutfitsApi";
-import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
+
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -26,25 +27,10 @@ const CHART_PALETTE = [
   "#ff7043", "#7e57c2",
 ];
 
-function formatTodayTopRight() {
-  return new Date().toLocaleDateString(undefined, {
-    weekday: "long", month: "long", day: "numeric", year: "numeric",
-  });
-}
-
 function monthLabel(dateStr) {
   try {
     const d = new Date(dateStr);
     return d.toLocaleDateString(undefined, { month: "short" });
-  } catch {
-    return "";
-  }
-}
-
-function monthKey(dateStr) {
-  try {
-    const d = new Date(dateStr);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   } catch {
     return "";
   }
@@ -131,22 +117,19 @@ export function AnalyticsContent() {
   const [wardrobe, setWardrobe] = useState([]);
   const [history, setHistory] = useState([]);
   const [saved, setSaved] = useState([]);
-  const [planned, setPlanned] = useState([]);
   const [activeCatIdx, setActiveCatIdx] = useState(-1);
   const [activeColorIdx, setActiveColorIdx] = useState(-1);
 
   const refresh = async () => {
     setLoading(true);
     try {
-      const [histRes, savedRes, plannedRes] = await Promise.all([
+      const [histRes, savedRes] = await Promise.all([
         outfitHistoryApi.listHistory(user),
         savedOutfitsApi.listSaved(user),
-        plannedOutfitsApi.listPlanned(user),
       ]);
       setWardrobe(loadWardrobe(user));
       setHistory(Array.isArray(histRes?.history) ? histRes.history : []);
       setSaved(Array.isArray(savedRes?.saved_outfits) ? savedRes.saved_outfits : []);
-      setPlanned(Array.isArray(plannedRes?.planned_outfits) ? plannedRes.planned_outfits : []);
     } catch {
       setWardrobe(loadWardrobe(user));
     } finally {
@@ -159,14 +142,7 @@ export function AnalyticsContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const wardrobeById = useMemo(() => {
-    const map = new Map();
-    for (const it of wardrobe) {
-      const id = (it?.id ?? "").toString().trim();
-      if (id && !map.has(id)) map.set(id, it);
-    }
-    return map;
-  }, [wardrobe]);
+  const wardrobeById = useMemo(() => buildWardrobeMap(wardrobe), [wardrobe]);
 
   const activeItems = useMemo(
     () => wardrobe.filter((i) => i?.is_active !== false),

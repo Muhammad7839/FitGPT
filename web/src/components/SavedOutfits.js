@@ -1,40 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { savedOutfitsApi } from "../api/savedOutfitsApi";
 import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 import { loadWardrobe } from "../utils/userStorage";
-
-const REUSE_OUTFIT_KEY = "fitgpt_reuse_outfit_v1";
-
-function formatTodayTopRight() {
-  return new Date().toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatCardDate(iso) {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return "";
-  }
-}
-
-function labelFromSource(src) {
-  const s = (src || "").toString().trim().toLowerCase();
-  if (s === "planner") return "Planned";
-  if (s === "recommended") return "Recommended";
-  return "Saved";
-}
+import { EVT_SAVED_OUTFITS_CHANGED } from "../utils/constants";
+import { buildWardrobeMap, formatCardDate, labelFromSource, setReuseOutfit as setReuse } from "../utils/helpers";
 
 export default function SavedOutfits() {
   const navigate = useNavigate();
@@ -52,15 +24,7 @@ export default function SavedOutfits() {
 
   const wardrobe = useMemo(() => loadWardrobe(user), [user]);
 
-  const wardrobeById = useMemo(() => {
-    const map = new Map();
-    for (const it of Array.isArray(wardrobe) ? wardrobe : []) {
-      const id = (it?.id ?? "").toString().trim();
-      if (!id) continue;
-      if (!map.has(id)) map.set(id, it);
-    }
-    return map;
-  }, [wardrobe]);
+  const wardrobeById = useMemo(() => buildWardrobeMap(wardrobe), [wardrobe]);
 
   async function refresh() {
     setLoading(true);
@@ -87,11 +51,11 @@ export default function SavedOutfits() {
     const onChanged = () => refresh();
     const onFocus = () => refresh();
 
-    window.addEventListener("fitgpt:saved-outfits-changed", onChanged);
+    window.addEventListener(EVT_SAVED_OUTFITS_CHANGED, onChanged);
     window.addEventListener("focus", onFocus);
 
     return () => {
-      window.removeEventListener("fitgpt:saved-outfits-changed", onChanged);
+      window.removeEventListener(EVT_SAVED_OUTFITS_CHANGED, onChanged);
       window.removeEventListener("focus", onFocus);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -106,13 +70,7 @@ export default function SavedOutfits() {
   }, [saved]);
 
   function reuseOutfit(outfit) {
-    const items = savedOutfitsApi.normalizeItems(outfit?.items || []);
-    if (!items.length) return;
-
-    sessionStorage.setItem(
-      REUSE_OUTFIT_KEY,
-      JSON.stringify({ items, saved_outfit_id: outfit?.saved_outfit_id || "" })
-    );
+    setReuse(outfit?.items || [], outfit?.saved_outfit_id);
     navigate("/dashboard");
   }
 
@@ -195,6 +153,16 @@ export default function SavedOutfits() {
       setPlanSaving(false);
     }
   }
+
+  const onHoloMove = useCallback((e) => {
+    const el = e.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    const angle = Math.atan2(y - 0.5, x - 0.5) * (180 / Math.PI) + 180;
+    el.style.setProperty("--holo-angle", `${angle}deg`);
+    el.style.setProperty("--holo-spot", `${x * 100}% ${y * 100}%`);
+  }, []);
 
   return (
     <div className="onboarding onboardingPage">
@@ -303,7 +271,7 @@ export default function SavedOutfits() {
           const previewIds = itemIds.slice(0, 4);
 
           return (
-            <div key={o?.saved_outfit_id || o?.outfit_signature} className="historyCard">
+            <div key={o?.saved_outfit_id || o?.outfit_signature} className="historyCard" onPointerMove={onHoloMove}>
               <div className="historyCardLeft">
                 <div className="historyThumbGrid">
                   {previewIds.map((id) => {

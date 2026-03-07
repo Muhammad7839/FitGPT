@@ -1,49 +1,36 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Route, Routes, Navigate, useNavigate } from "react-router-dom";
 import PageTransition from "../components/PageTransition";
+import ErrorBoundary from "../components/ErrorBoundary";
 import { useAuth } from "../auth/AuthProvider";
-import { userKey, ONBOARDING_ANSWERS_KEY, ONBOARDED_KEY } from "../utils/userStorage";
-import GuidedTutorial, { TUTORIAL_DONE_KEY } from "../components/GuidedTutorial";
+import { loadAnswers, saveAnswers, isOnboarded, clearOnboarding, isTutorialDone } from "../utils/userStorage";
+import GuidedTutorial from "../components/GuidedTutorial";
 
+// Light routes — eagerly loaded (auth flow, small components)
 import AuthPrompt from "../components/AuthPrompt";
 import Login from "../components/Login";
 import Signup from "../components/Signup";
-import Onboarding from "../components/onboarding/Onboarding";
-import Dashboard from "../components/Dashboard";
-import Wardrobe from "../components/Wardrobe";
-import Favorites from "../components/Favorites";
-import Profile from "../components/Profile";
-import HistoryAnalytics from "../components/HistoryAnalytics";
-import Plans from "../components/Plans";
-import SavedOutfits from "../components/SavedOutfits";
 import ForgotPassword from "../components/ForgotPassword";
 import ResetPassword from "../components/ResetPassword";
 
-function loadAnswers(user) {
-  try {
-    const key = userKey(ONBOARDING_ANSWERS_KEY, user);
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
+// Heavy routes — lazy loaded
+const Onboarding = lazy(() => import("../components/onboarding/Onboarding"));
+const Dashboard = lazy(() => import("../components/Dashboard"));
+const Wardrobe = lazy(() => import("../components/Wardrobe"));
+const Favorites = lazy(() => import("../components/Favorites"));
+const Profile = lazy(() => import("../components/Profile"));
+const HistoryAnalytics = lazy(() => import("../components/HistoryAnalytics"));
+const Plans = lazy(() => import("../components/Plans"));
+const SavedOutfits = lazy(() => import("../components/SavedOutfits"));
 
-function saveAnswers(answers, user) {
-  try {
-    localStorage.setItem(userKey(ONBOARDING_ANSWERS_KEY, user), JSON.stringify(answers));
-    localStorage.setItem(userKey(ONBOARDED_KEY, user), "1");
-  } catch {}
-}
-
-function isOnboarded(user) {
-  return localStorage.getItem(userKey(ONBOARDED_KEY, user)) === "1";
-}
-
-function clearOnboarding(user) {
-  localStorage.removeItem(userKey(ONBOARDING_ANSWERS_KEY, user));
-  localStorage.removeItem(userKey(ONBOARDED_KEY, user));
+function RouteSpinner() {
+  return (
+    <div className="routeSpinner">
+      <div className="routeSpinnerDot" />
+      <div className="routeSpinnerDot" />
+      <div className="routeSpinnerDot" />
+    </div>
+  );
 }
 
 function OnboardingWrapper({ onComplete, savedAnswers }) {
@@ -79,9 +66,7 @@ export default function AppRoutes() {
 
   const [justOnboarded, setJustOnboarded] = useState(false);
 
-  const showTutorial = justOnboarded && (() => {
-    try { return localStorage.getItem(TUTORIAL_DONE_KEY) !== "1"; } catch { return true; }
-  })();
+  const showTutorial = justOnboarded && !isTutorialDone();
 
   const handleOnboardingComplete = useCallback((finalAnswers) => {
     setAnswers(finalAnswers);
@@ -102,6 +87,8 @@ export default function AppRoutes() {
 
   return (
     <>
+      <ErrorBoundary>
+      <Suspense fallback={<RouteSpinner />}>
       <PageTransition>
         <Routes>
           <Route
@@ -127,24 +114,28 @@ export default function AppRoutes() {
           <Route
             path="/dashboard"
             element={
-              <Dashboard
-                answers={answers}
-                onResetOnboarding={handleResetOnboarding}
-              />
+              <ErrorBoundary>
+                <Dashboard
+                  answers={answers}
+                  onResetOnboarding={handleResetOnboarding}
+                />
+              </ErrorBoundary>
             }
           />
-          <Route path="/wardrobe" element={<Wardrobe />} />
-          <Route path="/favorites" element={<Favorites />} />
-          <Route path="/profile" element={<Profile onResetOnboarding={handleResetOnboarding} />} />
-          <Route path="/history" element={<HistoryAnalytics />} />
-          <Route path="/plans" element={<Plans />} />
-          <Route path="/saved-outfits" element={<SavedOutfits />} />
+          <Route path="/wardrobe" element={<ErrorBoundary><Wardrobe /></ErrorBoundary>} />
+          <Route path="/favorites" element={<ErrorBoundary><Favorites /></ErrorBoundary>} />
+          <Route path="/profile" element={<ErrorBoundary><Profile onResetOnboarding={handleResetOnboarding} /></ErrorBoundary>} />
+          <Route path="/history" element={<ErrorBoundary><HistoryAnalytics /></ErrorBoundary>} />
+          <Route path="/plans" element={<ErrorBoundary><Plans /></ErrorBoundary>} />
+          <Route path="/saved-outfits" element={<ErrorBoundary><SavedOutfits /></ErrorBoundary>} />
           <Route path="/analytics" element={<Navigate to="/history?tab=analytics" replace />} />
 
           <Route path="/onboarding" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </PageTransition>
+      </Suspense>
+      </ErrorBoundary>
 
       <GuidedTutorial show={!!showTutorial} onDismiss={handleTutorialDismiss} />
 

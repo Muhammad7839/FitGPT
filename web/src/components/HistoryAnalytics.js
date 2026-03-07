@@ -2,15 +2,7 @@ import React, { useState, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { HistoryContent } from "./History";
 import { AnalyticsContent } from "./Analytics";
-
-function formatTodayTopRight() {
-  return new Date().toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}
+import ErrorBoundary from "./ErrorBoundary";
 
 const TABS = [
   { key: "history", label: "History" },
@@ -66,7 +58,7 @@ export default function HistoryAnalytics() {
       </div>
 
       <div key={activeTab} className={`tabFlip tabFlip--${direction}`}>
-        {activeTab === "history" ? <HistoryContent /> : <AnalyticsContent />}
+        {activeTab === "history" ? <HistoryContent /> : <ErrorBoundary><AnalyticsContent /></ErrorBoundary>}
       </div>
     </div>
   );

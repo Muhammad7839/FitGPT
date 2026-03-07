@@ -1,6 +1,6 @@
+import { TOKEN_KEY, AUTH_MODE_KEY } from "../utils/constants";
+
 const BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:8000";
-const TOKEN_KEY = "fitgpt_token_v1";
-const AUTH_MODE_KEY = "fitgpt_auth_mode_v1";
 
 const AUTH_STRATEGY = (process.env.REACT_APP_AUTH_STRATEGY || "token").toLowerCase();
 const USE_COOKIES = AUTH_STRATEGY === "cookies";
@@ -15,7 +15,7 @@ export function hasApi() {
   return base.length > 0;
 }
 
-export function getToken() {
+function getToken() {
   return localStorage.getItem(TOKEN_KEY) || "";
 }
 

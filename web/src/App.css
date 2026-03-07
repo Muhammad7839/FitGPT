@@ -156,8 +156,11 @@
 }
 
 [data-theme="dark"] .dashRecHeader {
-  background: rgba(196, 60, 60, 0.08);
   border-bottom-color: rgba(196, 60, 60, 0.14);
+}
+
+[data-theme="dark"] .dashRecHeaderGradient {
+  opacity: 0.45;
 }
 
 [data-theme="dark"] .dashChip {
@@ -173,7 +176,7 @@
 }
 
 [data-theme="dark"] .dashSquareTile:hover {
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.40), 0 0 0 6px rgba(196, 60, 60, 0.12);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45), 0 0 0 6px rgba(196, 60, 60, 0.12);
 }
 
 [data-theme="dark"] .dashInfoBlock {
@@ -358,6 +361,19 @@
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35), 0 0 0 6px rgba(196, 60, 60, 0.12);
 }
 
+[data-theme="dark"] .historyCard::before {
+  background: repeating-linear-gradient(
+    var(--holo-angle, 135deg),
+    rgba(255, 60, 60, 0.65) 0%,
+    rgba(255, 180, 0, 0.65) 8%,
+    rgba(255, 255, 70, 0.65) 16%,
+    rgba(70, 255, 120, 0.65) 24%,
+    rgba(70, 180, 255, 0.65) 32%,
+    rgba(180, 70, 255, 0.65) 40%,
+    rgba(255, 60, 60, 0.65) 50%
+  );
+}
+
 [data-theme="dark"] .historyThumbGrid {
   background: var(--surface);
   border-color: var(--surface-border);
@@ -422,6 +438,10 @@
 
 [data-theme="dark"] .historyItemsLine {
   color: rgba(232, 230, 227, 0.70);
+}
+
+[data-theme="dark"] .historyThumbLabel {
+  color: rgba(232, 230, 227, 0.82);
 }
 
 [data-theme="dark"] .historyStatLabel {
@@ -1901,7 +1921,7 @@ a {
 }
 
 .dashRecHeader {
-  background: rgba(139, 30, 30, 0.06);
+  position: relative;
   border-bottom: 1px solid rgba(139, 30, 30, 0.12);
   padding: 18px 22px;
   display: flex;
@@ -1909,6 +1929,19 @@ a {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  overflow: hidden;
+}
+
+.dashRecHeaderGradient {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.55;
+}
+
+.dashRecHeader > *:not(.dashRecHeaderGradient) {
+  position: relative;
+  z-index: 1;
 }
 
 .dashRecActions {
@@ -2047,13 +2080,14 @@ a {
 }
 
 .dashOutfitOption {
-  animation: outfitSlideIn 400ms ease both;
+  animation: outfitSlideIn 600ms cubic-bezier(0.23, 1, 0.32, 1) both;
   border-radius: var(--radius-sm);
   padding: 10px;
   margin-left: -10px;
   margin-right: -10px;
   border: 2px solid transparent;
   transition: border-color 180ms ease, background 180ms ease;
+  transform-style: preserve-3d;
 }
 
 .dashOutfitSelected {
@@ -2064,11 +2098,32 @@ a {
 @keyframes outfitSlideIn {
   from {
     opacity: 0;
-    transform: translateY(18px) scale(0.97);
+    transform: perspective(800px) rotateX(-12deg) translateY(24px) scale(0.95);
+  }
+  50% {
+    opacity: 1;
+    transform: perspective(800px) rotateX(3deg) translateY(-2px) scale(1.01);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: perspective(800px) rotateX(0) translateY(0) scale(1);
+  }
+}
+
+/* Individual tile 3D flip reveal */
+.dashTileReveal {
+  animation: tileReveal 650ms cubic-bezier(0.23, 1, 0.32, 1);
+  transform-style: preserve-3d;
+}
+
+@keyframes tileReveal {
+  from {
+    opacity: 0;
+    transform: perspective(600px) rotateY(-70deg) scale(0.85);
+  }
+  55% {
+    opacity: 1;
+    transform: perspective(600px) rotateY(8deg) scale(1.02);
   }
 }
 
@@ -2077,6 +2132,7 @@ a {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+  perspective: 800px;
 }
 
 .dashSquareTile {
@@ -2089,12 +2145,13 @@ a {
   place-items: center;
   gap: 12px;
   box-shadow: 0 10px 24px rgba(17, 24, 39, 0.08);
-  transition: transform 160ms ease, box-shadow 160ms ease;
+  transition: transform 300ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 160ms ease;
+  transform-style: preserve-3d;
+  will-change: transform;
 }
 
 .dashSquareTile:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 40px rgba(17, 24, 39, 0.12), 0 0 0 6px rgba(139, 30, 30, 0.10);
+  box-shadow: 0 20px 50px rgba(17, 24, 39, 0.15), 0 0 0 6px rgba(139, 30, 30, 0.10);
 }
 
 .dashSquareImg {
@@ -3182,15 +3239,16 @@ img.dashSquareImg {
   background: #ffffff;
   overflow: hidden;
   box-shadow: 0 12px 30px rgba(17, 24, 39, 0.08);
-  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  transition: transform 300ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 160ms ease, border-color 160ms ease;
+  transform-style: preserve-3d;
+  will-change: transform;
   display: flex;
   flex-direction: column;
 }
 
 .wardrobeCard:hover {
-  transform: translateY(-2px);
   border-color: rgba(139, 30, 30, 0.28);
-  box-shadow: 0 18px 44px rgba(17, 24, 39, 0.12), 0 0 0 6px rgba(139, 30, 30, 0.10);
+  box-shadow: 0 20px 50px rgba(17, 24, 39, 0.15), 0 0 0 6px rgba(139, 30, 30, 0.10);
 }
 
 .wardrobeThumbWrap {
@@ -3694,6 +3752,7 @@ img.dashSquareImg {
 }
 
 .historyCard {
+  position: relative;
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 18px;
   background: #fff;
@@ -3704,6 +3763,7 @@ img.dashSquareImg {
   align-items: center;
   box-shadow: 0 12px 30px rgba(17, 24, 39, 0.08);
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  overflow: hidden;
 }
 
 .historyCard:hover {
@@ -3711,6 +3771,53 @@ img.dashSquareImg {
   border-color: rgba(139, 30, 30, 0.22);
   box-shadow: 0 18px 44px rgba(17, 24, 39, 0.12), 0 0 0 6px rgba(139, 30, 30, 0.10);
 }
+
+/* ── Holographic shimmer ── */
+.historyCard::before,
+.historyCard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 350ms ease;
+  z-index: 4;
+}
+
+/* Rainbow gradient layer — rotates with cursor angle */
+.historyCard::before {
+  background: repeating-linear-gradient(
+    var(--holo-angle, 135deg),
+    rgba(255, 40, 40, 0.55) 0%,
+    rgba(255, 170, 0, 0.55) 8%,
+    rgba(255, 255, 50, 0.55) 16%,
+    rgba(50, 255, 100, 0.55) 24%,
+    rgba(50, 170, 255, 0.55) 32%,
+    rgba(170, 50, 255, 0.55) 40%,
+    rgba(255, 40, 40, 0.55) 50%
+  );
+  mix-blend-mode: soft-light;
+}
+
+/* Specular highlight — follows cursor position */
+.historyCard::after {
+  background: radial-gradient(
+    circle at var(--holo-spot, 50% 50%),
+    rgba(255, 255, 255, 0.35) 0%,
+    rgba(255, 255, 255, 0.10) 35%,
+    transparent 60%
+  );
+  mix-blend-mode: soft-light;
+}
+
+.historyCard:hover::before {
+  opacity: 0.35;
+}
+.historyCard:hover::after {
+  opacity: 0.3;
+}
+
 
 .historyCardLeft {
   display: flex;
@@ -4788,5 +4895,41 @@ select:focus-visible {
     opacity: 1;
     transform: rotateY(0deg) scale(1);
   }
+}
+
+/* ── ErrorBoundary fallback ── */
+.errorBoundaryFallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--muted);
+  min-height: 180px;
+}
+.errorBoundaryIcon { font-size: 32px; }
+.errorBoundaryMsg { font-size: 15px; font-weight: 600; color: var(--text); }
+
+/* ── Route loading spinner ── */
+.routeSpinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+}
+.routeSpinnerDot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--accent, #8b1e1e);
+  margin: 0 5px;
+  animation: routePulse 1.2s ease-in-out infinite;
+}
+.routeSpinnerDot:nth-child(2) { animation-delay: 0.15s; }
+.routeSpinnerDot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes routePulse {
+  0%, 80%, 100% { opacity: 0.25; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1.1); }
 }
 

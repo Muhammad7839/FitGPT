@@ -2,31 +2,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
-import { savedOutfitsApi } from "../api/savedOutfitsApi";
+
 import { loadWardrobe } from "../utils/userStorage";
-
-const REUSE_OUTFIT_KEY = "fitgpt_reuse_outfit_v1";
-
-function formatTodayTopRight() {
-  return new Date().toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatCardDate(iso) {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return "";
-  }
-}
+import { buildWardrobeMap, formatCardDate, idsSignature, labelFromSource, monthKey, setReuseOutfit } from "../utils/helpers";
 
 function withinDays(iso, days) {
   if (!days) return true;
@@ -37,36 +15,9 @@ function withinDays(iso, days) {
   return now - t <= ms;
 }
 
-function labelFromSource(src) {
-  const s = (src || "").toString().trim().toLowerCase();
-  if (s === "planner") return "Planned";
-  return "Recommended";
-}
-
-function setReuseOutfit(itemIds, historyId) {
-  const ids = savedOutfitsApi.normalizeItems(itemIds);
-  sessionStorage.setItem(
-    REUSE_OUTFIT_KEY,
-    JSON.stringify({
-      items: ids,
-      saved_outfit_id: historyId || "",
-    })
-  );
-}
-
-function monthKey(dateObj) {
-  return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
-}
 
 function isSameMonth(iso, nowDate) {
-  const t = new Date(iso).getTime();
-  if (!Number.isFinite(t)) return false;
-  return monthKey(new Date(iso)) === monthKey(nowDate);
-}
-
-function signatureFromIds(ids) {
-  const norm = savedOutfitsApi.normalizeItems(ids);
-  return norm.join("|");
+  return monthKey(iso) !== "" && monthKey(iso) === monthKey(nowDate);
 }
 
 export function HistoryContent() {
@@ -81,15 +32,7 @@ export function HistoryContent() {
 
   const wardrobe = useMemo(() => loadWardrobe(user), [user]);
 
-  const wardrobeById = useMemo(() => {
-    const map = new Map();
-    for (const it of Array.isArray(wardrobe) ? wardrobe : []) {
-      const id = (it?.id ?? "").toString().trim();
-      if (!id) continue;
-      if (!map.has(id)) map.set(id, it);
-    }
-    return map;
-  }, [wardrobe]);
+  const wardrobeById = useMemo(() => buildWardrobeMap(wardrobe), [wardrobe]);
 
   const refresh = async () => {
     setLoading(true);
@@ -135,7 +78,7 @@ export function HistoryContent() {
 
     const uniqueCombos = new Set(
       monthEntries.map((h) =>
-        signatureFromIds(Array.isArray(h?.item_ids) ? h.item_ids : [])
+        idsSignature(Array.isArray(h?.item_ids) ? h.item_ids : [])
       )
     ).size;
 

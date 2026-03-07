@@ -1,5 +1,6 @@
 import { apiFetch, hasApi } from "./apiFetch";
-import { userKey, OUTFIT_HISTORY_KEY } from "../utils/userStorage";
+import { makeLocalStore, getUserId, OUTFIT_HISTORY_KEY } from "../utils/userStorage";
+import { makeId, normalizeItems } from "../utils/helpers";
 
 const USE_LOCAL_FALLBACK = true;
 
@@ -8,57 +9,9 @@ const PATHS = {
   create: "/outfit-history",
 };
 
-function safeParse(json) {
-  try {
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
-function readLocal(user) {
-  const key = userKey(OUTFIT_HISTORY_KEY, user);
-  const raw = localStorage.getItem(key);
-  const parsed = raw ? safeParse(raw) : null;
-  return Array.isArray(parsed) ? parsed : [];
-}
-
-function writeLocal(list, user) {
-  const key = userKey(OUTFIT_HISTORY_KEY, user);
-  localStorage.setItem(key, JSON.stringify(Array.isArray(list) ? list : []));
-}
-
-function makeId() {
-  return Math.random().toString(16).slice(2) + Date.now().toString(16);
-}
-
-function normalizeItems(items) {
-  const cleaned = (Array.isArray(items) ? items : [])
-    .map((x) => (x ?? "").toString().trim())
-    .filter(Boolean);
-
-  cleaned.sort();
-  return cleaned;
-}
-
-function pickUserId(payload) {
-  const u = payload?.user;
-  const id =
-    u?.id ??
-    u?.user_id ??
-    u?.user?.id ??
-    u?.user?.user_id ??
-    u?.email ??
-    u?.user?.email ??
-    "";
-
-  const s = (id ?? "").toString().trim();
-  return s || "local-user";
-}
+const { read: readLocal, write: writeLocal } = makeLocalStore(OUTFIT_HISTORY_KEY);
 
 export const outfitHistoryApi = {
-  normalizeItems,
-
   async listHistory(user) {
     if (USE_LOCAL_FALLBACK) {
       return { history: readLocal(user) };
@@ -107,7 +60,7 @@ export const outfitHistoryApi = {
 
       const record = {
         history_id: makeId(),
-        user_id: pickUserId(payload),
+        user_id: getUserId(user) || "local-user",
         item_ids: normalized,
         worn_at: new Date().toISOString(),
         source: payload?.source || "recommendation",

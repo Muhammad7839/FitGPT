@@ -16,7 +16,6 @@ const LABEL_TO_CATEGORY = {
   polo: "Tops",
   sweater: "Tops",
   sweatshirt: "Tops",
-  cardigan: "Tops",
   pullover: "Tops",
   tank: "Tops",
   blouse: "Tops",
