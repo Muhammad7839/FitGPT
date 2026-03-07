@@ -4,43 +4,8 @@ import ReactDOM from "react-dom";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { logout } from "../api/authApi";
-import { userKey, ONBOARDING_ANSWERS_KEY } from "../utils/userStorage";
-
-const DEMO_AUTH_KEY = "fitgpt_demo_auth_v1";
-const PROFILE_PIC_KEY = "fitgpt_profile_pic_v1";
-
-function fileToDataUrl(file, maxSize = 300) {
-  // Preserve GIFs as-is to keep animation
-  if (file.type === "image/gif") {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error("Failed to read file"));
-      reader.readAsDataURL(file);
-    });
-  }
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
-      const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, w, h);
-      URL.revokeObjectURL(objectUrl);
-      resolve(canvas.toDataURL("image/jpeg", 0.7));
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("Failed to load image"));
-    };
-    img.src = objectUrl;
-  });
-}
+import { readDemoAuth, writeDemoAuth, loadProfilePic, saveProfilePic, loadAnswers, saveAnswers } from "../utils/userStorage";
+import { fileToDataUrl } from "../utils/helpers";
 
 const STYLE_OPTIONS = [
   "Casual", "Professional", "Streetwear", "Athletic", "Minimalist", "Formal",
@@ -60,25 +25,7 @@ const BODY_TYPE_OPTIONS = [
   { id: "inverted", label: "Inverted Triangle", note: "Balance shoulders with volume below." },
 ];
 
-function safeParse(json) {
-  try {
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
-function readDemoAuth() {
-  const raw = localStorage.getItem(DEMO_AUTH_KEY);
-  const parsed = raw ? safeParse(raw) : null;
-  return parsed && typeof parsed === "object" ? parsed : null;
-}
-
-function writeDemoAuth(objOrNull) {
-  if (!objOrNull) localStorage.removeItem(DEMO_AUTH_KEY);
-  else localStorage.setItem(DEMO_AUTH_KEY, JSON.stringify(objOrNull));
-}
-
+const DEFAULT_PREFS = { style: [], comfort: [], dressFor: [], bodyType: null };
 
 export default function Profile({ onResetOnboarding = () => {} }) {
   const navigate = useNavigate();
@@ -90,13 +37,12 @@ export default function Profile({ onResetOnboarding = () => {} }) {
   const email = effectiveUser?.email || effectiveUser?.user?.email || effectiveUser?.demoEmail || "";
 
   // ── Profile picture ──
-  const picKey = useMemo(() => userKey(PROFILE_PIC_KEY, effectiveUser), [effectiveUser]);
-  const [profilePic, setProfilePic] = useState(() => localStorage.getItem(picKey) || "");
+  const [profilePic, setProfilePic] = useState(() => loadProfilePic(effectiveUser));
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    setProfilePic(localStorage.getItem(picKey) || "");
-  }, [picKey]);
+    setProfilePic(loadProfilePic(effectiveUser));
+  }, [effectiveUser]);
 
   const handlePicSelect = async (e) => {
     const file = e.target.files?.[0];
@@ -110,23 +56,16 @@ export default function Profile({ onResetOnboarding = () => {} }) {
   };
 
   // ── Style preferences (loaded from onboarding answers) ──
-  const prefsKey = useMemo(() => userKey(ONBOARDING_ANSWERS_KEY, effectiveUser), [effectiveUser]);
-
   const loadPrefs = useCallback(() => {
-    try {
-      const raw = localStorage.getItem(prefsKey);
-      if (!raw) return { style: [], comfort: [], dressFor: [], bodyType: null };
-      const p = JSON.parse(raw);
-      return {
-        style: Array.isArray(p?.style) ? p.style : [],
-        comfort: Array.isArray(p?.comfort) ? p.comfort : [],
-        dressFor: Array.isArray(p?.dressFor) ? p.dressFor : [],
-        bodyType: p?.bodyType ?? null,
-      };
-    } catch {
-      return { style: [], comfort: [], dressFor: [], bodyType: null };
-    }
-  }, [prefsKey]);
+    const p = loadAnswers(effectiveUser);
+    if (!p) return DEFAULT_PREFS;
+    return {
+      style: Array.isArray(p?.style) ? p.style : [],
+      comfort: Array.isArray(p?.comfort) ? p.comfort : [],
+      dressFor: Array.isArray(p?.dressFor) ? p.dressFor : [],
+      bodyType: p?.bodyType ?? null,
+    };
+  }, [effectiveUser]);
 
   const [prefs, setPrefs] = useState(loadPrefs);
   const [prefsSaved, setPrefsSaved] = useState(false);
@@ -150,14 +89,12 @@ export default function Profile({ onResetOnboarding = () => {} }) {
   const updatePrefs = useCallback((updater) => {
     setPrefs((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      try {
-        localStorage.setItem(prefsKey, JSON.stringify(next));
-      } catch {}
+      saveAnswers(next, effectiveUser);
       setPrefsSaved(true);
       setTimeout(() => setPrefsSaved(false), 1500);
       return next;
     });
-  }, [prefsKey]);
+  }, [effectiveUser]);
 
   const togglePref = useCallback((key, value) => {
     updatePrefs((prev) => {
@@ -604,14 +541,8 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 type="button"
                 disabled={pendingPic === null}
                 onClick={() => {
-                  if (pendingPic === "") {
-                    localStorage.removeItem(picKey);
-                    setProfilePic("");
-                  } else {
-                    localStorage.setItem(picKey, pendingPic);
-                    setProfilePic(pendingPic);
-                  }
-                  window.dispatchEvent(new Event("fitgpt:profile-pic-changed"));
+                  saveProfilePic(pendingPic || "", effectiveUser);
+                  setProfilePic(pendingPic || "");
                   setPendingPic(null);
                   setShowPicMenu(false);
                 }}

@@ -3,22 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 import { loadWardrobe } from "../utils/userStorage";
-import { savedOutfitsApi } from "../api/savedOutfitsApi";
-
-const REUSE_OUTFIT_KEY = "fitgpt_reuse_outfit_v1";
-
-function formatCardDate(iso) {
-  try {
-    return new Date(iso + "T00:00:00").toLocaleDateString(undefined, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return iso || "";
-  }
-}
+import { EVT_PLANNED_OUTFITS_CHANGED } from "../utils/constants";
+import { buildWardrobeMap, formatPlanDate, setReuseOutfit } from "../utils/helpers";
 
 export default function Plans() {
   const navigate = useNavigate();
@@ -30,15 +16,7 @@ export default function Plans() {
 
   const wardrobe = useMemo(() => loadWardrobe(user), [user]);
 
-  const wardrobeById = useMemo(() => {
-    const map = new Map();
-    for (const it of Array.isArray(wardrobe) ? wardrobe : []) {
-      const id = (it?.id ?? "").toString().trim();
-      if (!id) continue;
-      if (!map.has(id)) map.set(id, it);
-    }
-    return map;
-  }, [wardrobe]);
+  const wardrobeById = useMemo(() => buildWardrobeMap(wardrobe), [wardrobe]);
 
   const refresh = async () => {
     setLoading(true);
@@ -57,8 +35,8 @@ export default function Plans() {
     refresh();
 
     const onChanged = () => refresh();
-    window.addEventListener("fitgpt:planned-outfits-changed", onChanged);
-    return () => window.removeEventListener("fitgpt:planned-outfits-changed", onChanged);
+    window.addEventListener(EVT_PLANNED_OUTFITS_CHANGED, onChanged);
+    return () => window.removeEventListener(EVT_PLANNED_OUTFITS_CHANGED, onChanged);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -77,13 +55,7 @@ export default function Plans() {
   }, [planned, today]);
 
   const handleWearThis = (plan) => {
-    const itemIds = Array.isArray(plan?.item_ids) ? plan.item_ids : [];
-    if (!itemIds.length) return;
-    const normalized = savedOutfitsApi.normalizeItems(itemIds);
-    sessionStorage.setItem(
-      REUSE_OUTFIT_KEY,
-      JSON.stringify({ items: normalized, saved_outfit_id: plan?.planned_id || "" })
-    );
+    setReuseOutfit(plan?.item_ids || [], plan?.planned_id);
     navigate("/dashboard");
   };
 
@@ -105,7 +77,7 @@ export default function Plans() {
       <div key={p?.planned_id} className="plannedCard">
         <div className="plannedCardTop">
           <div>
-            <div className="plannedCardDate">{formatCardDate(p?.planned_date)}</div>
+            <div className="plannedCardDate">{formatPlanDate(p?.planned_date)}</div>
             {p?.occasion && <div className="plannedCardOccasion">{p.occasion}</div>}
           </div>
           <span className="historyBadge planned">Planned</span>

@@ -1,7 +1,6 @@
 // web/src/components/Register.js
 import React, { useState } from "react";
-
-const ACCOUNTS_KEY = "fitgpt_accounts_v1";
+import { ACCOUNTS_KEY } from "../utils/constants";
 
 function getAccounts() {
   try {

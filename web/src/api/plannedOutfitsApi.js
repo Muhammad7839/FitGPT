@@ -1,41 +1,8 @@
-import { userKey, PLANNED_OUTFITS_KEY } from "../utils/userStorage";
+import { makeLocalStore, PLANNED_OUTFITS_KEY } from "../utils/userStorage";
+import { EVT_PLANNED_OUTFITS_CHANGED } from "../utils/constants";
+import { makeId, normalizeItems, idsSignature } from "../utils/helpers";
 
-function safeParse(json) {
-  try {
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
-function readLocal(user) {
-  const key = userKey(PLANNED_OUTFITS_KEY, user);
-  const raw = localStorage.getItem(key);
-  const parsed = raw ? safeParse(raw) : null;
-  return Array.isArray(parsed) ? parsed : [];
-}
-
-function writeLocal(list, user) {
-  const key = userKey(PLANNED_OUTFITS_KEY, user);
-  localStorage.setItem(key, JSON.stringify(Array.isArray(list) ? list : []));
-  window.dispatchEvent(new Event("fitgpt:planned-outfits-changed"));
-}
-
-function makeId() {
-  return Math.random().toString(16).slice(2) + Date.now().toString(16);
-}
-
-function normalizeItems(items) {
-  const cleaned = (Array.isArray(items) ? items : [])
-    .map((x) => (x ?? "").toString().trim())
-    .filter(Boolean);
-  cleaned.sort();
-  return cleaned;
-}
-
-function signatureFromItems(items) {
-  return normalizeItems(items).join("|");
-}
+const { read: readLocal, write: writeLocal } = makeLocalStore(PLANNED_OUTFITS_KEY, EVT_PLANNED_OUTFITS_CHANGED);
 
 export const plannedOutfitsApi = {
   async listPlanned(user) {
@@ -59,7 +26,7 @@ export const plannedOutfitsApi = {
       notes: payload?.notes || "",
       created_at: new Date().toISOString(),
       source: payload?.source || "planner",
-      outfit_signature: signatureFromItems(normalized),
+      outfit_signature: idsSignature(normalized),
     };
 
     const list = readLocal(user);

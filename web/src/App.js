@@ -1,5 +1,5 @@
 // web/src/App.js
-import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useLayoutEffect, useState } from "react";
 import "./App.css";
 
 import AppRoutes from "./routes/AppRoutes";
@@ -7,16 +7,9 @@ import { AuthProvider } from "./auth/AuthProvider";
 import { getPresetTheme, PRESET_THEMES } from "./theme/themeDefinitions";
 import { applyTheme } from "./theme/themeEngine";
 import TopNav from "./components/TopNav";
-
-const LEGACY_THEME_KEY = "fitgpt_theme_v1";
-const THEME_KEY = "fitgpt_theme_v2";
-const CUSTOM_THEMES_KEY = "fitgpt_custom_themes_v1";
-
-// One-time cleanup: remove stale wardrobe data from localStorage
-// that was blocking fresh sessionStorage data from being used
-const STALE_CLEANUP_KEY = "fitgpt_stale_cleanup_v2";
+import { LEGACY_THEME_KEY, THEME_KEY, CUSTOM_THEMES_KEY, STALE_CLEANUP_KEY, TOKEN_KEY, WARDROBE_KEY } from "./utils/constants";
 if (!localStorage.getItem(STALE_CLEANUP_KEY)) {
-  localStorage.removeItem("fitgpt_wardrobe_v1");
+  localStorage.removeItem(WARDROBE_KEY);
   localStorage.setItem(STALE_CLEANUP_KEY, "1");
 }
 
@@ -31,7 +24,7 @@ function loadCustomThemes() {
 
 /** Check whether the user has a saved account (JWT token present) */
 function hasAccount() {
-  return !!localStorage.getItem("fitgpt_token_v1");
+  return !!localStorage.getItem(TOKEN_KEY);
 }
 
 /** Read the active theme, migrating from v1 if needed.

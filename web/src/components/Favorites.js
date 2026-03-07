@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
-import { loadWardrobe, saveWardrobe } from "../utils/userStorage";
+import { saveWardrobe } from "../utils/userStorage";
+import useWardrobe from "../hooks/useWardrobe";
 
 function normalizeId(id) {
   return (id ?? "").toString().trim();
@@ -31,33 +32,8 @@ export default function Favorites() {
   const isSignedIn = Boolean(user);
   const navigate = useNavigate();
 
-  const [items, setItems] = useState(() => loadWardrobe(user));
+  const items = useWardrobe(user);
   const [query, setQuery] = useState("");
-
-  useEffect(() => {
-    setItems(loadWardrobe(user));
-  }, [user]);
-
-  useEffect(() => {
-    const refresh = () => setItems(loadWardrobe(user));
-
-    const onStorage = (e) => {
-      if (e.key?.startsWith("fitgpt_wardrobe") || e.key?.startsWith("fitgpt_guest_wardrobe")) refresh();
-    };
-
-    const onFocus = () => refresh();
-    const onGuestWardrobeChanged = () => refresh();
-
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("focus", onFocus);
-    window.addEventListener("fitgpt:guest-wardrobe-changed", onGuestWardrobeChanged);
-
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener("fitgpt:guest-wardrobe-changed", onGuestWardrobeChanged);
-    };
-  }, [user]);
 
   const favorites = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -83,7 +59,6 @@ export default function Favorites() {
       return { ...it, is_favorite: false };
     });
 
-    setItems(next);
     saveWardrobe(next, user);
   };
 

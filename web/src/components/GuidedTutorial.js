@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { useNavigate, useLocation } from "react-router-dom";
 
-export const TUTORIAL_DONE_KEY = "fitgpt_tutorial_done_v1";
+import { markTutorialDone } from "../utils/userStorage";
 
 /*
   Step types:
@@ -271,9 +271,7 @@ export default function GuidedTutorial({ show, onDismiss }) {
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const finish = useCallback(() => {
-    try {
-      localStorage.setItem(TUTORIAL_DONE_KEY, "1");
-    } catch {}
+    markTutorialDone();
     onDismiss();
   }, [onDismiss]);
 
@@ -312,7 +310,7 @@ export default function GuidedTutorial({ show, onDismiss }) {
     if (tooltipRef.current) {
       setTooltipHeight(tooltipRef.current.offsetHeight);
     }
-  });
+  }, [step]);
 
   if (!show) return null;
 

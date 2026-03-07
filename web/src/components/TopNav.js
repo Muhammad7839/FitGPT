@@ -3,9 +3,8 @@ import React, { useMemo, useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import ThemePicker from "./ThemePicker";
 import { useAuth } from "../auth/AuthProvider";
-import { userKey } from "../utils/userStorage";
-
-const PROFILE_PIC_KEY = "fitgpt_profile_pic_v1";
+import { readDemoAuth, loadProfilePic } from "../utils/userStorage";
+import { EVT_PROFILE_PIC_CHANGED } from "../utils/constants";
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Home" },
@@ -23,20 +22,17 @@ const HIDDEN_ROUTES = ["/", "/auth", "/login", "/signup", "/onboarding"];
 export default function TopNav() {
   const { pathname } = useLocation();
   const { user } = useAuth();
-  const demoUser = useMemo(() => {
-    try { const r = localStorage.getItem("fitgpt_demo_auth_v1"); return r ? JSON.parse(r) : null; } catch { return null; }
-  }, []);
+  const demoUser = useMemo(() => readDemoAuth(), []);
   const effectiveUser = user || demoUser;
-  const picKey = useMemo(() => userKey(PROFILE_PIC_KEY, effectiveUser), [effectiveUser]);
-  const [profilePic, setProfilePic] = useState(() => localStorage.getItem(picKey) || "");
+  const [profilePic, setProfilePic] = useState(() => loadProfilePic(effectiveUser));
   const isGif = profilePic.startsWith("data:image/gif");
 
   useEffect(() => {
-    setProfilePic(localStorage.getItem(picKey) || "");
-    const onPicChange = () => setProfilePic(localStorage.getItem(picKey) || "");
-    window.addEventListener("fitgpt:profile-pic-changed", onPicChange);
-    return () => window.removeEventListener("fitgpt:profile-pic-changed", onPicChange);
-  }, [picKey]);
+    setProfilePic(loadProfilePic(effectiveUser));
+    const onPicChange = () => setProfilePic(loadProfilePic(effectiveUser));
+    window.addEventListener(EVT_PROFILE_PIC_CHANGED, onPicChange);
+    return () => window.removeEventListener(EVT_PROFILE_PIC_CHANGED, onPicChange);
+  }, [effectiveUser]);
 
   // Freeze GIF to a static first frame for the nav; animate on hover
   const [frozenPic, setFrozenPic] = useState("");

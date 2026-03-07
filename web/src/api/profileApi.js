@@ -1,25 +1,7 @@
 import { apiFetch, hasApi } from "./apiFetch";
-import { userKey, PROFILE_KEY } from "../utils/userStorage";
+import { makeObjectStore, PROFILE_KEY } from "../utils/userStorage";
 
-function safeParse(json) {
-  try {
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
-function loadLocalProfile(user) {
-  const key = userKey(PROFILE_KEY, user);
-  const raw = localStorage.getItem(key);
-  const parsed = raw ? safeParse(raw) : null;
-  return parsed && typeof parsed === "object" ? parsed : {};
-}
-
-function saveLocalProfile(next, user) {
-  const key = userKey(PROFILE_KEY, user);
-  localStorage.setItem(key, JSON.stringify(next));
-}
+const { read: loadLocalProfile, write: saveLocalProfile } = makeObjectStore(PROFILE_KEY);
 
 export async function saveProfileDraft(draft, user) {
 

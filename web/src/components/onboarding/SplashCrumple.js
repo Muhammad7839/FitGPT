@@ -156,8 +156,7 @@ function drawBackground(ctx, W, H) {
 
 /** Draw the splash with entry animations based on elapsed time */
 function drawIntroFrame(ctx, W, H, layout, logoImg, elapsed) {
-  const { cx, logoSize, titleSize, subSize, skipSize, top, titleY, subY, skipY } =
-    layout;
+  const { cx, logoSize, titleSize, subSize, top, titleY, subY } = layout;
 
   drawBackground(ctx, W, H);
 
@@ -207,8 +206,7 @@ function renderFullSplash(buf, W, H, layout, logoImg) {
   buf.width = W;
   buf.height = H;
   const ctx = buf.getContext("2d");
-  const { cx, logoSize, titleSize, subSize, skipSize, top, titleY, subY, skipY } =
-    layout;
+  const { cx, logoSize, titleSize, subSize, top, titleY, subY } = layout;
 
   drawBackground(ctx, W, H);
 

@@ -1,5 +1,7 @@
 import { apiFetch, hasApi } from "./apiFetch";
-import { userKey, SAVED_OUTFITS_KEY } from "../utils/userStorage";
+import { makeLocalStore, SAVED_OUTFITS_KEY } from "../utils/userStorage";
+import { EVT_SAVED_OUTFITS_CHANGED } from "../utils/constants";
+import { makeId, normalizeItems, idsSignature } from "../utils/helpers";
 
 const USE_LOCAL_FALLBACK = true;
 
@@ -8,43 +10,7 @@ const PATHS = {
   create: "/saved-outfits",
 };
 
-function safeParse(json) {
-  try {
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
-function readLocal(user) {
-  const key = userKey(SAVED_OUTFITS_KEY, user);
-  const raw = localStorage.getItem(key);
-  const parsed = raw ? safeParse(raw) : null;
-  return Array.isArray(parsed) ? parsed : [];
-}
-
-function writeLocal(list, user) {
-  const key = userKey(SAVED_OUTFITS_KEY, user);
-  localStorage.setItem(key, JSON.stringify(Array.isArray(list) ? list : []));
-  window.dispatchEvent(new Event("fitgpt:saved-outfits-changed"));
-}
-
-function normalizeItems(items) {
-  const cleaned = (Array.isArray(items) ? items : [])
-    .map((x) => (x ?? "").toString().trim())
-    .filter(Boolean);
-
-  cleaned.sort();
-  return cleaned;
-}
-
-function signatureFromItems(items) {
-  return normalizeItems(items).join("|");
-}
-
-function makeId() {
-  return Math.random().toString(16).slice(2) + Date.now().toString(16);
-}
+const { read: readLocal, write: writeLocal } = makeLocalStore(SAVED_OUTFITS_KEY, EVT_SAVED_OUTFITS_CHANGED);
 
 export const savedOutfitsApi = {
   normalizeItems,
@@ -73,7 +39,7 @@ export const savedOutfitsApi = {
   async saveOutfit(payload, user) {
     const itemIds = Array.isArray(payload?.items) ? payload.items : [];
     const normalized = normalizeItems(itemIds);
-    const sig = signatureFromItems(normalized);
+    const sig = idsSignature(normalized);
 
     if (!sig) {
       return { created: false, message: "Nothing to save." };
