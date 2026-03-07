@@ -1,3 +1,6 @@
+/**
+ * Login UI that authenticates users and navigates on successful token persistence.
+ */
 package com.fitgpt.app.ui.auth
 
 import androidx.compose.foundation.layout.Arrangement

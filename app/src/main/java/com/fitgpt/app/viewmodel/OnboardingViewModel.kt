@@ -1,3 +1,6 @@
+/**
+ * Exposes onboarding completion state and persists onboarding completion events.
+ */
 package com.fitgpt.app.viewmodel
 
 import androidx.lifecycle.ViewModel

@@ -1,3 +1,6 @@
+/**
+ * Covers in-memory repository behavior used by local tests.
+ */
 package com.fitgpt.app.data.repository
 
 import com.fitgpt.app.data.model.ClothingItem

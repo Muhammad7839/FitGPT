@@ -1,3 +1,6 @@
+/**
+ * Screen for editing an existing wardrobe item identified by route itemId.
+ */
 package com.fitgpt.app.ui.edititem
 
 import androidx.compose.foundation.layout.*

@@ -1,3 +1,6 @@
+/**
+ * Verifies DTO/domain mapping for remote wardrobe payloads.
+ */
 package com.fitgpt.app.data.remote
 
 import com.fitgpt.app.data.model.ClothingItem

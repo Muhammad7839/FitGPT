@@ -1,3 +1,6 @@
+/**
+ * Encapsulates preference reads/writes so ViewModels avoid direct DataStore access.
+ */
 package com.fitgpt.app.data
 
 import android.content.Context
@@ -19,6 +22,7 @@ class PreferencesManager(
         }
 
     suspend fun setOnboardingCompleted() {
+        // Persist onboarding completion once the user finishes the welcome flow.
         context.dataStore.edit { preferences ->
             preferences[ONBOARDING_COMPLETED] = true
         }

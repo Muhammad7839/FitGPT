@@ -1,3 +1,6 @@
+/**
+ * Retrofit contract for FitGPT backend endpoints used by Android.
+ */
 package com.fitgpt.app.data.remote
 
 import com.fitgpt.app.data.remote.dto.ClothingItemCreateRequest

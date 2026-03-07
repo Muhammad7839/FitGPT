@@ -1,3 +1,6 @@
+/**
+ * Minimal service locator wiring API clients and repository instances.
+ */
 package com.fitgpt.app.di
 
 import android.content.Context

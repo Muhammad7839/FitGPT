@@ -9,6 +9,8 @@ from app import models
 
 @dataclass(frozen=True)
 class RecommendationContext:
+    """Optional request context used when composing recommendation explanations."""
+
     manual_temp: Optional[int]
     time_context: Optional[str]
     plan_date: Optional[str]
@@ -16,6 +18,7 @@ class RecommendationContext:
 
 
 def _normalize_text(value: Optional[str]) -> Optional[str]:
+    """Trim user-provided text and normalize empty values to None."""
     if not value:
         return None
     normalized = value.strip()
@@ -23,6 +26,7 @@ def _normalize_text(value: Optional[str]) -> Optional[str]:
 
 
 def _parse_exclusions(raw_exclude: Optional[str]) -> list[str]:
+    """Split a comma-delimited exclusion list into clean tokens."""
     cleaned = _normalize_text(raw_exclude)
     if not cleaned:
         return []
@@ -30,6 +34,7 @@ def _parse_exclusions(raw_exclude: Optional[str]) -> list[str]:
 
 
 def _format_plan_date(raw_date: Optional[str]) -> Optional[str]:
+    """Format an ISO date string for human-readable explanations."""
     cleaned = _normalize_text(raw_date)
     if not cleaned:
         return None
@@ -46,6 +51,7 @@ def build_recommendation_explanation(
     items: list[models.ClothingItem],
     context: RecommendationContext,
 ) -> str:
+    """Compose an explanation string from user profile, items, and request context."""
     if not items:
         return "No available items to recommend yet."
 

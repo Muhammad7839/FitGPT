@@ -37,6 +37,7 @@ def override_get_db() -> Generator:
 
 @pytest.fixture(autouse=True)
 def reset_db():
+    """Reset database schema for each test for full isolation."""
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     app.dependency_overrides[get_db] = override_get_db
@@ -46,10 +47,12 @@ def reset_db():
 
 @pytest.fixture
 def client():
+    """Return a TestClient bound to the app with DB overrides applied."""
     return TestClient(app)
 
 
 def register_and_login(client: TestClient, email: str, password: str) -> str:
+    """Create a user and return its access token."""
     register = client.post("/register", json={"email": email, "password": password})
     assert register.status_code == 200
 

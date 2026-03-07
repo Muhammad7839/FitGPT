@@ -1,3 +1,6 @@
+/**
+ * Screen for creating a new wardrobe item and posting it through the ViewModel.
+ */
 package com.fitgpt.app.ui.additem
 
 import androidx.compose.foundation.layout.*

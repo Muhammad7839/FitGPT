@@ -1,3 +1,6 @@
+/**
+ * Main wardrobe screen showing item list, delete/edit actions, and recommendation entry.
+ */
 package com.fitgpt.app.ui.wardrobe
 
 import androidx.compose.foundation.layout.*

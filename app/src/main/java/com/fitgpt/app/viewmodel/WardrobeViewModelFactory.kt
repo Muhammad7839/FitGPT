@@ -1,3 +1,6 @@
+/**
+ * Factory for creating WardrobeViewModel with repository dependencies.
+ */
 package com.fitgpt.app.viewmodel
 
 import androidx.lifecycle.ViewModel

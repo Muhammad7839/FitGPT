@@ -1,3 +1,6 @@
+/**
+ * Transport models for authentication and profile responses.
+ */
 package com.fitgpt.app.data.remote.dto
 
 import com.google.gson.annotations.SerializedName

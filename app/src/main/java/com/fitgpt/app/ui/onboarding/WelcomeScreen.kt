@@ -1,3 +1,6 @@
+/**
+ * Introductory onboarding screen shown before authentication and wardrobe access.
+ */
 package com.fitgpt.app.ui.onboarding
 
 import androidx.compose.foundation.layout.*

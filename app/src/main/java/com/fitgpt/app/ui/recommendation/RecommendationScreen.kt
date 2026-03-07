@@ -1,3 +1,6 @@
+/**
+ * Recommendation UI that fetches outfits from backend and records wear history.
+ */
 @file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.fitgpt.app.ui.recommendation
@@ -55,7 +58,7 @@ fun RecommendationScreen(
                     TopAppBar(
                         title = { Text("Outfit Recommendation") },
                         actions = {
-                            IconButton(onClick = { /* future refresh logic */ }) {
+                            IconButton(onClick = { viewModel.fetchRecommendations() }) {
                                 Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                             }
                         }

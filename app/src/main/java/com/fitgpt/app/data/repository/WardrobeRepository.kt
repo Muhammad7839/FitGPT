@@ -1,3 +1,6 @@
+/**
+ * Wardrobe data contract consumed by ViewModels.
+ */
 package com.fitgpt.app.data.repository
 
 import com.fitgpt.app.data.model.ClothingItem
@@ -17,7 +20,6 @@ interface WardrobeRepository {
     ): List<ClothingItem>
     suspend fun markOutfitAsWorn(items: List<ClothingItem>, wornAtTimestamp: Long)
 
-    // Saved outfits
     fun saveOutfit(outfit: SavedOutfit)
     fun getSavedOutfits(): List<SavedOutfit>
 }

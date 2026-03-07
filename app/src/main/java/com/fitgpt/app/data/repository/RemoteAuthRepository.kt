@@ -1,3 +1,6 @@
+/**
+ * Retrofit-backed auth repository that talks to backend login/session endpoints.
+ */
 package com.fitgpt.app.data.repository
 
 import com.fitgpt.app.data.remote.ApiService

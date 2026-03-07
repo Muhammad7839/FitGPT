@@ -1,3 +1,6 @@
+/**
+ * Authentication data-access abstraction used by the auth ViewModel.
+ */
 package com.fitgpt.app.data.repository
 
 import com.fitgpt.app.data.remote.dto.TokenResponse

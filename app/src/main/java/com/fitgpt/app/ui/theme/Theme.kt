@@ -1,3 +1,6 @@
+/**
+ * Material 3 theme setup shared across all Compose screens.
+ */
 package com.fitgpt.app.ui.theme
 
 import android.app.Activity
