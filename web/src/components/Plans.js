@@ -4,7 +4,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 import { loadWardrobe } from "../utils/userStorage";
 import { EVT_PLANNED_OUTFITS_CHANGED } from "../utils/constants";
-import { buildWardrobeMap, formatPlanDate, setReuseOutfit } from "../utils/helpers";
+import { buildWardrobeMap, formatPlanDate, setReuseOutfit, buildGoogleCalendarUrl } from "../utils/helpers";
 
 export default function Plans() {
   const navigate = useNavigate();
@@ -113,6 +113,13 @@ export default function Plans() {
         <div className="historyActions" style={{ marginTop: 10 }}>
           <button className="btn primary" onClick={() => handleWearThis(p)}>
             Wear This
+          </button>
+          <button className="btn" onClick={() => {
+            const names = (Array.isArray(p?.item_details) ? p.item_details : []).map((d) => d?.name).filter(Boolean);
+            const url = buildGoogleCalendarUrl({ date: p?.planned_date, occasion: p?.occasion, itemNames: names });
+            window.open(url, "_blank", "noopener");
+          }}>
+            Add to Google Calendar
           </button>
           <button className="btn" onClick={() => handleRemove(p?.planned_id)}>
             Remove
