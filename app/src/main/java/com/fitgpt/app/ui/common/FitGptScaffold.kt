@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -41,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.fitgpt.app.R
 import com.fitgpt.app.navigation.Routes
+import com.fitgpt.app.ui.theme.FitgptAccentDeep
 
 /**
  * Shared shell used by top-level screens to mirror the web app IA.
@@ -80,7 +82,7 @@ fun FitGptScaffold(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = colorScheme.surface.copy(alpha = 0.92f),
+                    containerColor = colorScheme.surface.copy(alpha = 0.94f),
                     titleContentColor = colorScheme.onSurface
                 ),
                 modifier = Modifier.statusBarsPadding()
@@ -88,7 +90,8 @@ fun FitGptScaffold(
         },
         bottomBar = {
             NavigationBar(
-                containerColor = colorScheme.surface.copy(alpha = 0.95f)
+                containerColor = colorScheme.surface.copy(alpha = 0.95f),
+                tonalElevation = 8.dp
             ) {
                 topLevelItems.forEach { item ->
                     NavigationBarItem(
@@ -102,7 +105,14 @@ fun FitGptScaffold(
                             }
                         },
                         icon = { Icon(item.icon, contentDescription = item.label) },
-                        label = { Text(item.label) }
+                        label = { Text(item.label) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = colorScheme.primary,
+                            selectedTextColor = colorScheme.primary,
+                            indicatorColor = colorScheme.primary.copy(alpha = 0.14f),
+                            unselectedIconColor = colorScheme.onSurfaceVariant,
+                            unselectedTextColor = colorScheme.onSurfaceVariant
+                        )
                     )
                 }
             }
@@ -116,7 +126,8 @@ fun FitGptScaffold(
                 backgroundTop = colorScheme.background,
                 backgroundBottom = colorScheme.surfaceVariant.copy(alpha = 0.84f),
                 accent = colorScheme.primary,
-                accentSoft = colorScheme.primary.copy(alpha = 0.8f)
+                accentSoft = colorScheme.primary.copy(alpha = 0.8f),
+                accentDeep = FitgptAccentDeep
             )
             Box(
                 modifier = Modifier

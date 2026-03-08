@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -42,6 +41,7 @@ import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.ui.common.MAX_LOCAL_IMAGE_BYTES
 import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SectionHeader
+import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.ui.common.isImagePayloadAllowed
 import com.fitgpt.app.ui.common.parseComfortLevel
 import com.fitgpt.app.ui.common.validateClothingItemForm
@@ -131,8 +131,7 @@ fun AddItemScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Card(
-                shape = RoundedCornerShape(16.dp),
+            WebCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(

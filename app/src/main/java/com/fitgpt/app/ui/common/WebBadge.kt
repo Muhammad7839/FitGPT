@@ -1,5 +1,6 @@
 package com.fitgpt.app.ui.common
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,12 +20,18 @@ fun WebBadge(
     background: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
     content: Color = MaterialTheme.colorScheme.onSurface
 ) {
+    val shape = RoundedCornerShape(999.dp)
     Text(
         text = text,
         modifier = Modifier
             .background(
                 color = background,
-                shape = RoundedCornerShape(999.dp)
+                shape = shape
+            )
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                shape = shape
             )
             .padding(horizontal = 10.dp, vertical = 4.dp),
         style = MaterialTheme.typography.labelLarge,

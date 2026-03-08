@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.Image
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +37,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.fitgpt.app.BuildConfig
 import com.fitgpt.app.R
+import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.AuthState
 import com.fitgpt.app.viewmodel.AuthViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -120,7 +120,7 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        WebCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = "Sign in",
