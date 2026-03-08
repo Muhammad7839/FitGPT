@@ -196,3 +196,42 @@ def test_planned_outfits_crud_flow(client):
     delete_plan = client.delete(f"/outfits/planned/{plan_id}", headers=auth)
     assert delete_plan.status_code == 200
     assert delete_plan.json()["outfits"] == []
+
+
+def test_outfit_history_rejects_invalid_item_ids(client):
+    token = register_and_login(client, "history-invalid-ids@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
+
+    duplicate = client.post(
+        "/outfits/history",
+        headers=auth,
+        json={"item_ids": [top["id"], top["id"]], "worn_at_timestamp": 1730000000},
+    )
+    assert duplicate.status_code == 422
+
+    negative = client.post(
+        "/outfits/history",
+        headers=auth,
+        json={"item_ids": [-1], "worn_at_timestamp": 1730000000},
+    )
+    assert negative.status_code == 422
+
+
+def test_planned_outfit_requires_valid_date_format(client):
+    token = register_and_login(client, "planned-date-format@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
+
+    response = client.post(
+        "/outfits/planned",
+        headers=auth,
+        json={
+            "item_ids": [top["id"]],
+            "planned_date": "04-01-2026",
+            "occasion": "Work",
+        },
+    )
+    assert response.status_code == 422

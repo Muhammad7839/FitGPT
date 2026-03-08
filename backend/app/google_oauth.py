@@ -47,7 +47,7 @@ def verify_google_id_token(token_value: str) -> GoogleIdentity:
     email = str(claims.get("email", "")).strip().lower()
     if not email:
         raise GoogleTokenValidationError("Google token is missing email")
-    if claims.get("email_verified") is False:
+    if claims.get("email_verified") is not True:
         raise GoogleTokenValidationError("Google email is not verified")
 
     full_name_claim = claims.get("name")

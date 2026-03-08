@@ -1,9 +1,10 @@
 /**
- * Minimal service locator wiring API clients and repository instances.
+ * Manual DI container wiring Retrofit clients and repository instances.
  */
 package com.fitgpt.app.di
 
 import android.content.Context
+import com.fitgpt.app.BuildConfig
 import com.fitgpt.app.data.auth.AuthInterceptor
 import com.fitgpt.app.data.auth.TokenStore
 import com.fitgpt.app.data.remote.ApiService
@@ -17,9 +18,10 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 
 object ServiceLocator {
-    private const val BASE_URL = "http://10.0.2.2:8000/"
+    private const val FALLBACK_BASE_URL = "http://10.0.2.2:8000/"
 
     @Volatile
     private var tokenStore: TokenStore? = null
@@ -69,7 +71,7 @@ object ServiceLocator {
     private fun provideApiService(context: Context): ApiService {
         return apiService ?: synchronized(this) {
             apiService ?: Retrofit.Builder()
-                .baseUrl(BASE_URL)
+                .baseUrl(BuildConfig.API_BASE_URL.ifBlank { FALLBACK_BASE_URL })
                 .client(buildHttpClient(context))
                 .addConverterFactory(GsonConverterFactory.create())
                 .build()
@@ -80,11 +82,19 @@ object ServiceLocator {
 
     private fun buildHttpClient(context: Context): OkHttpClient {
         val logger = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            redactHeader("Authorization")
+            level = if (BuildConfig.DEBUG) {
+                HttpLoggingInterceptor.Level.BASIC
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
         }
         return OkHttpClient.Builder()
             .addInterceptor(AuthInterceptor(provideTokenStore(context)))
             .addInterceptor(logger)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .writeTimeout(20, TimeUnit.SECONDS)
             .build()
     }
 }

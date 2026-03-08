@@ -28,6 +28,7 @@ from app.weather import (
     fetch_current_temperature_f,
     fetch_current_weather,
 )
+from app.config import EXPOSE_RESET_TOKEN_IN_RESPONSE, MAX_UPLOAD_IMAGE_BYTES
 
 router = APIRouter()
 UPLOADS_DIR = Path("uploads")
@@ -119,6 +120,11 @@ def login_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
         )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is inactive"
+        )
 
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
@@ -167,15 +173,19 @@ def forgot_password(
     db: Session = Depends(get_db)
 ):
     user = crud.get_user_by_email(db, payload.email)
+    detail = "If the account exists, reset instructions were issued"
     if not user:
         return {
-            "detail": "If the account exists, a reset token has been generated",
+            "detail": detail,
             "reset_token": None,
         }
 
     token = crud.create_password_reset_token(db, user)
+    if not EXPOSE_RESET_TOKEN_IN_RESPONSE:
+        token = None
+
     return {
-        "detail": "Reset token generated",
+        "detail": detail,
         "reset_token": token,
     }
 
@@ -252,8 +262,25 @@ def upload_wardrobe_image(
     filename = f"user_{current_user.id}_{uuid4().hex}{extension}"
     destination = UPLOADS_DIR / filename
 
-    with destination.open("wb") as output:
-        output.write(image.file.read())
+    bytes_written = 0
+    try:
+        with destination.open("wb") as output:
+            while True:
+                chunk = image.file.read(1024 * 1024)
+                if not chunk:
+                    break
+                bytes_written += len(chunk)
+                if bytes_written > MAX_UPLOAD_IMAGE_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail="Image exceeds max upload size",
+                    )
+                output.write(chunk)
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    finally:
+        image.file.close()
 
     return {"image_url": f"/uploads/{filename}"}
 

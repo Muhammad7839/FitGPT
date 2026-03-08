@@ -1,5 +1,5 @@
 /**
- * Adds the persisted bearer token to outbound API requests when available.
+ * Adds the persisted bearer token to authenticated outbound API requests.
  */
 package com.fitgpt.app.data.auth
 

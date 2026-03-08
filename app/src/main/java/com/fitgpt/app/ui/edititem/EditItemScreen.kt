@@ -1,3 +1,6 @@
+/**
+ * Screen for editing existing wardrobe items and replacing media safely.
+ */
 package com.fitgpt.app.ui.edititem
 
 import android.Manifest
@@ -34,8 +37,12 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.ui.common.MAX_LOCAL_IMAGE_BYTES
 import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SectionHeader
+import com.fitgpt.app.ui.common.isImagePayloadAllowed
+import com.fitgpt.app.ui.common.parseComfortLevel
+import com.fitgpt.app.ui.common.validateClothingItemForm
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import java.io.ByteArrayOutputStream
@@ -84,6 +91,7 @@ fun EditItemScreen(
             var brand by remember { mutableStateOf(item.brand.orEmpty()) }
             var imageUrl by remember { mutableStateOf(item.imageUrl.orEmpty()) }
             var cameraMessage by remember { mutableStateOf<String?>(null) }
+            var formError by remember { mutableStateOf<String?>(null) }
 
             val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
                 if (bitmap == null) {
@@ -91,6 +99,10 @@ fun EditItemScreen(
                     return@rememberLauncherForActivityResult
                 }
                 val bytes = bitmapToJpegBytes(bitmap)
+                if (!isImagePayloadAllowed(bytes.size)) {
+                    cameraMessage = "Image is too large (max ${MAX_LOCAL_IMAGE_BYTES / (1024 * 1024)}MB)"
+                    return@rememberLauncherForActivityResult
+                }
                 val fileName = "camera_${System.currentTimeMillis()}.jpg"
                 viewModel.uploadImage(bytes = bytes, fileName = fileName, mimeType = "image/jpeg")
                 cameraMessage = null
@@ -107,6 +119,10 @@ fun EditItemScreen(
             val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
                 if (uri == null) return@rememberLauncherForActivityResult
                 val bytes = readBytes(context, uri) ?: return@rememberLauncherForActivityResult
+                if (!isImagePayloadAllowed(bytes.size)) {
+                    cameraMessage = "Image is too large (max ${MAX_LOCAL_IMAGE_BYTES / (1024 * 1024)}MB)"
+                    return@rememberLauncherForActivityResult
+                }
                 val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
                 val extension = when (mimeType) {
                     "image/png" -> ".png"
@@ -237,13 +253,24 @@ fun EditItemScreen(
 
                     Button(
                         onClick = {
+                            val validationError = validateClothingItemForm(
+                                category = category,
+                                color = color,
+                                season = season,
+                                comfortText = comfort
+                            )
+                            if (validationError != null) {
+                                formError = validationError
+                                return@Button
+                            }
+                            formError = null
                             viewModel.updateItem(
                                 item.copy(
-                                    category = category,
-                                    color = color,
-                                    season = season,
-                                    comfortLevel = comfort.toIntOrNull() ?: 3,
-                                    brand = brand.takeIf { it.isNotBlank() },
+                                    category = category.trim(),
+                                    color = color.trim(),
+                                    season = season.trim(),
+                                    comfortLevel = parseComfortLevel(comfort),
+                                    brand = brand.trim().takeIf { it.isNotBlank() },
                                     imageUrl = imageUrl.takeIf { it.isNotBlank() }
                                 )
                             )
@@ -252,6 +279,12 @@ fun EditItemScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Save Changes")
+                    }
+                    formError?.let {
+                        Text(
+                            text = it,
+                            color = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
             }

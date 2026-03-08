@@ -1,3 +1,5 @@
+"""SQLAlchemy ORM entities for users, wardrobe items, and outfit records."""
+
 from sqlalchemy import Column, Integer, String, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 

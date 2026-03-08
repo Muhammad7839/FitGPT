@@ -1,5 +1,5 @@
 /**
- * Main Android entry activity that hosts the Compose navigation graph.
+ * Main Android entry activity that wires theme preferences and hosts Compose navigation.
  */
 package com.fitgpt.app
 

@@ -31,6 +31,7 @@ import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebBadge
+import com.fitgpt.app.ui.common.isValidPlanDate
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 
 /**
@@ -44,6 +45,7 @@ fun PlansScreen(
     val plans by viewModel.plannedState.collectAsState()
     var planDate by remember { mutableStateOf("") }
     var occasion by remember { mutableStateOf("") }
+    var planError by remember { mutableStateOf<String?>(null) }
 
     FitGptScaffold(
         navController = navController,
@@ -82,18 +84,27 @@ fun PlansScreen(
                     )
                     Button(
                         onClick = {
-                            if (planDate.isNotBlank()) {
-                                viewModel.planCurrentRecommendation(
-                                    planDate = planDate,
-                                    occasion = occasion
-                                )
-                                planDate = ""
-                                occasion = ""
+                            if (!isValidPlanDate(planDate)) {
+                                planError = "Date must be in YYYY-MM-DD format"
+                                return@Button
                             }
+                            planError = null
+                            viewModel.planCurrentRecommendation(
+                                planDate = planDate.trim(),
+                                occasion = occasion
+                            )
+                            planDate = ""
+                            occasion = ""
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Save Plan")
+                    }
+                    planError?.let {
+                        Text(
+                            text = it,
+                            color = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
             }

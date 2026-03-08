@@ -74,11 +74,12 @@ fun ForgotPasswordScreen(
                         color = MaterialTheme.colorScheme.error
                     )
                     AuthState.Success -> {
-                        Text(
-                            "Reset token generated.",
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        generatedToken?.let { token ->
+                        val token = generatedToken
+                        if (!token.isNullOrBlank()) {
+                            Text(
+                                "Reset token generated.",
+                                color = MaterialTheme.colorScheme.primary
+                            )
                             Text(
                                 text = "Token: $token",
                                 style = MaterialTheme.typography.bodySmall,
@@ -90,6 +91,11 @@ fun ForgotPasswordScreen(
                             ) {
                                 Text("Go to reset screen")
                             }
+                        } else {
+                            Text(
+                                "If this account exists, reset instructions were issued.",
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                     AuthState.Idle -> Unit

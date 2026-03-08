@@ -49,7 +49,7 @@ def test_google_login_creates_new_user(client, monkeypatch):
 
     monkeypatch.setattr("app.routes.verify_google_id_token", lambda _: Identity())
 
-    response = client.post("/login/google", json={"id_token": "fake"})
+    response = client.post("/login/google", json={"id_token": "fake-token-value-0000000000"})
     assert response.status_code == 200
     token = response.json()["access_token"]
 
@@ -67,7 +67,7 @@ def test_google_login_returns_existing_user(client, monkeypatch):
 
     monkeypatch.setattr("app.routes.verify_google_id_token", lambda _: Identity())
 
-    response = client.post("/login/google", json={"id_token": "fake"})
+    response = client.post("/login/google", json={"id_token": "fake-token-value-1111111111"})
     assert response.status_code == 200
     token = response.json()["access_token"]
 
@@ -81,7 +81,7 @@ def test_google_login_invalid_or_expired_token_handling(client, monkeypatch):
         raise GoogleTokenValidationError("Invalid Google token")
 
     monkeypatch.setattr("app.routes.verify_google_id_token", invalid_verify)
-    invalid_response = client.post("/login/google", json={"id_token": "bad"})
+    invalid_response = client.post("/login/google", json={"id_token": "bad-token-value-2222222222"})
     assert invalid_response.status_code == 400
     assert invalid_response.json()["detail"] == "Invalid Google token"
 
@@ -89,12 +89,13 @@ def test_google_login_invalid_or_expired_token_handling(client, monkeypatch):
         raise GoogleTokenValidationError("Google token has expired", is_expired=True)
 
     monkeypatch.setattr("app.routes.verify_google_id_token", expired_verify)
-    expired_response = client.post("/login/google", json={"id_token": "expired"})
+    expired_response = client.post("/login/google", json={"id_token": "expired-token-value-33333333"})
     assert expired_response.status_code == 401
     assert expired_response.json()["detail"] == "Google token has expired"
 
 
-def test_forgot_and_reset_password_flow(client):
+def test_forgot_and_reset_password_flow(client, monkeypatch):
+    monkeypatch.setattr("app.routes.EXPOSE_RESET_TOKEN_IN_RESPONSE", True)
     register_and_login(client, "resetme@example.com", "password123")
 
     forgot = client.post("/forgot-password", json={"email": "resetme@example.com"})
@@ -127,7 +128,17 @@ def test_forgot_and_reset_password_flow(client):
 def test_reset_password_rejects_invalid_token(client):
     response = client.post(
         "/reset-password",
-        json={"token": "invalid-token", "new_password": "newpass456"},
+        json={"token": "invalid-token-value-12345", "new_password": "newpass456"},
     )
     assert response.status_code == 400
     assert response.json()["detail"] == "Invalid or expired reset token"
+
+
+def test_forgot_password_hides_reset_token_when_exposure_disabled(client):
+    register_and_login(client, "reset-hidden@example.com", "password123")
+
+    forgot = client.post("/forgot-password", json={"email": "reset-hidden@example.com"})
+    assert forgot.status_code == 200
+    body = forgot.json()
+    assert body["reset_token"] is None
+    assert body["detail"] == "If the account exists, reset instructions were issued"

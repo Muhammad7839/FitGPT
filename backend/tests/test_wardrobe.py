@@ -111,3 +111,33 @@ def test_wardrobe_image_upload_returns_static_url(client):
     uploaded_path = Path(image_url.lstrip("/"))
     if uploaded_path.exists():
         uploaded_path.unlink()
+
+
+def test_wardrobe_image_upload_rejects_unsupported_content_type(client):
+    token = register_and_login(client, "wardrobe-upload-invalid@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+    files = {"image": ("item.gif", b"fake-gif-binary", "image/gif")}
+
+    response = client.post("/wardrobe/items/image", headers=auth, files=files)
+    assert response.status_code == 400
+    assert "Only JPEG, PNG, and WEBP images are allowed" in response.json()["detail"]
+
+
+def test_wardrobe_image_upload_rejects_oversized_files(client):
+    token = register_and_login(client, "wardrobe-upload-oversize@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+    files = {"image": ("item.jpg", b"x" * (5 * 1024 * 1024 + 1), "image/jpeg")}
+
+    response = client.post("/wardrobe/items/image", headers=auth, files=files)
+    assert response.status_code == 413
+    assert response.json()["detail"] == "Image exceeds max upload size"
+
+
+def test_wardrobe_create_rejects_out_of_range_comfort(client):
+    token = register_and_login(client, "wardrobe-bad-comfort@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+    payload = sample_item_payload()
+    payload["comfort_level"] = 6
+
+    response = client.post("/wardrobe/items", json=payload, headers=auth)
+    assert response.status_code == 422
