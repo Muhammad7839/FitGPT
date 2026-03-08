@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -27,6 +25,7 @@ import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebBadge
+import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 
@@ -79,7 +78,7 @@ fun DashboardScreen(
                 }
             }
 
-            Card(modifier = Modifier.fillMaxWidth()) {
+            WebCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -126,7 +125,7 @@ fun DashboardScreen(
                 }
             }
 
-            Card(modifier = Modifier.fillMaxWidth()) {
+            WebCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -221,12 +220,10 @@ private fun QuickActionCard(
     subtitle: String,
     onClick: () -> Unit
 ) {
-    Card(
+    WebCard(
         modifier = modifier,
         onClick = onClick,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+        accentTop = false
     ) {
         Column(
             modifier = Modifier.padding(12.dp),

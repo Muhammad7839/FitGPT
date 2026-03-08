@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -31,6 +30,7 @@ import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebBadge
+import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.ui.common.isValidPlanDate
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 
@@ -64,7 +64,7 @@ fun PlansScreen(
                 subtitle = "Manage your upcoming outfit plans"
             )
 
-            Card(modifier = Modifier.fillMaxWidth()) {
+            WebCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -133,7 +133,10 @@ fun PlansScreen(
 
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(plans) { plan ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                    WebCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        accentTop = false
+                    ) {
                         Column(
                             modifier = Modifier.padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)

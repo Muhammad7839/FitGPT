@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -32,6 +31,7 @@ import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebBadge
+import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import java.text.SimpleDateFormat
@@ -119,7 +119,10 @@ fun HistoryScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(history) { entry ->
-                            Card(modifier = Modifier.fillMaxWidth()) {
+                            WebCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                accentTop = false
+                            ) {
                                 Column(modifier = Modifier.padding(14.dp)) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                         entry.items.take(4).forEach { item ->
@@ -216,7 +219,10 @@ fun HistoryScreen(
 
 @Composable
 private fun AnalyticsCard(label: String, value: String) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    WebCard(
+        modifier = Modifier.fillMaxWidth(),
+        accentTop = false
+    ) {
         Column(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)

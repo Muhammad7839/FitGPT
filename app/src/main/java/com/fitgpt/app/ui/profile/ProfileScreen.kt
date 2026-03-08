@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +29,7 @@ import com.fitgpt.app.data.model.ThemeMode
 import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.SectionHeader
+import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.ProfileViewModel
 import com.fitgpt.app.viewmodel.UiState
 import kotlinx.coroutines.launch
@@ -99,7 +99,10 @@ fun ProfileScreen(
                         subtitle = "Manage your account and preferences"
                     )
 
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                    WebCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        accentTop = false
+                    ) {
                         Column(
                             modifier = Modifier.padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -130,7 +133,7 @@ fun ProfileScreen(
                         }
                     }
 
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                    WebCard(modifier = Modifier.fillMaxWidth()) {
                         Column(
                             modifier = Modifier.padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)

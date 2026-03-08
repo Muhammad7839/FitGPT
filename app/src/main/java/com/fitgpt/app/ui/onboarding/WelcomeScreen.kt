@@ -15,6 +15,7 @@ import com.fitgpt.app.R
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.fitgpt.app.navigation.Routes
+import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.OnboardingViewModel
 
 @Composable
@@ -59,7 +60,10 @@ fun WelcomeScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
 
-            Card(modifier = Modifier.fillMaxWidth()) {
+            WebCard(
+                modifier = Modifier.fillMaxWidth(),
+                accentTop = false
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Upload Your Wardrobe", style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(4.dp))
@@ -70,7 +74,10 @@ fun WelcomeScreen(
                 }
             }
 
-            Card(modifier = Modifier.fillMaxWidth()) {
+            WebCard(
+                modifier = Modifier.fillMaxWidth(),
+                accentTop = false
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Get Daily Suggestions", style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(4.dp))
@@ -81,7 +88,10 @@ fun WelcomeScreen(
                 }
             }
 
-            Card(modifier = Modifier.fillMaxWidth()) {
+            WebCard(
+                modifier = Modifier.fillMaxWidth(),
+                accentTop = false
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Save Favorites", style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(4.dp))

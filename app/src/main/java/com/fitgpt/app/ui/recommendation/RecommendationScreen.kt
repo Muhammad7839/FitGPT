@@ -21,6 +21,7 @@ import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SectionHeader
+import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 
@@ -91,7 +92,7 @@ fun RecommendationScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                    WebCard(modifier = Modifier.fillMaxWidth()) {
                         Column(
                             modifier = Modifier.padding(12.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -180,7 +181,7 @@ fun RecommendationScreen(
                         is UiState.Success -> {
                             val weather = currentWeather.data
                             if (weather != null) {
-                                Card(modifier = Modifier.fillMaxWidth()) {
+                                WebCard(modifier = Modifier.fillMaxWidth()) {
                                     Column(
                                         modifier = Modifier.padding(12.dp),
                                         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -292,7 +293,7 @@ private fun RecommendationCard(
     item: ClothingItem,
     explanation: String
 ) {
-    Card(
+    WebCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(

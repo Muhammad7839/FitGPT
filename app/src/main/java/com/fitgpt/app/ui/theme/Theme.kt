@@ -6,6 +6,7 @@ package com.fitgpt.app.ui.theme
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -13,8 +14,17 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 
 private val ColorWhite = Color(0xFFFFFFFF)
+private val FitGptShapes = Shapes(
+    extraSmall = RoundedCornerShape(12.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(18.dp),
+    large = RoundedCornerShape(22.dp),
+    extraLarge = RoundedCornerShape(22.dp)
+)
 
 private val DarkColorScheme = darkColorScheme(
     primary = FitgptDarkAccent,
@@ -68,6 +78,7 @@ fun FitGPTTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = FitGptShapes,
         content = content
     )
 }

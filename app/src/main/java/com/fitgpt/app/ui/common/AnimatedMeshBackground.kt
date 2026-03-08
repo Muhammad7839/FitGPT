@@ -25,7 +25,8 @@ fun AnimatedMeshBackground(
     backgroundTop: Color,
     backgroundBottom: Color,
     accent: Color,
-    accentSoft: Color
+    accentSoft: Color,
+    accentDeep: Color = accent
 ) {
     val transition = rememberInfiniteTransition(label = "mesh-bg")
     val t1 by transition.animateFloat(
@@ -45,6 +46,15 @@ fun AnimatedMeshBackground(
             repeatMode = RepeatMode.Reverse
         ),
         label = "mesh-2"
+    )
+    val t3 by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 18000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "mesh-3"
     )
 
     Canvas(
@@ -77,6 +87,22 @@ fun AnimatedMeshBackground(
             ),
             radius = w * 0.72f,
             center = Offset(w * (0.86f - 0.2f * t2), h * 0.08f)
+        )
+
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(accentDeep.copy(alpha = 0.12f), Color.Transparent),
+                center = Offset(w * (0.45f + 0.25f * t3), h * (0.34f + 0.08f * t1)),
+                radius = w * 0.68f
+            ),
+            radius = w * 0.68f,
+            center = Offset(w * (0.45f + 0.25f * t3), h * (0.34f + 0.08f * t1))
+        )
+
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(Color.Transparent, backgroundBottom.copy(alpha = 0.22f))
+            )
         )
     }
 }

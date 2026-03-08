@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,6 +26,7 @@ import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebBadge
+import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 
@@ -94,7 +94,10 @@ fun SavedOutfitsScreen(
 
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(saved) { outfit ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                    WebCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        accentTop = false
+                    ) {
                         Column(
                             modifier = Modifier.padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
