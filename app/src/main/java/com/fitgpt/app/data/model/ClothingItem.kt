@@ -1,8 +1,14 @@
 package com.fitgpt.app.data.model
 
+/**
+ * Wardrobe item model used across repository, state, and Compose screens.
+ */
 data class ClothingItem(
     val id: Int,
+    val name: String? = null,
     val category: String,
+    val clothingType: String? = null,
+    val fitTag: String? = null,
     val color: String,
     val season: String,
     val comfortLevel: Int,

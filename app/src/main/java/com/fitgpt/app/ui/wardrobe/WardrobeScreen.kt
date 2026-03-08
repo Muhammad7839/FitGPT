@@ -27,6 +27,7 @@ import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.UiState
+import com.fitgpt.app.viewmodel.WardrobeFilters
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,8 +42,36 @@ fun WardrobeScreen(
     var showArchived by remember { mutableStateOf(false) }
     var favoritesOnly by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf("All") }
+    var colorFilter by remember { mutableStateOf("") }
+    var clothingTypeFilter by remember { mutableStateOf("") }
+    var seasonFilter by remember { mutableStateOf("") }
+    var fitTagFilter by remember { mutableStateOf("") }
 
     var itemToDelete by remember { mutableStateOf<ClothingItem?>(null) }
+
+    LaunchedEffect(
+        query,
+        showArchived,
+        favoritesOnly,
+        selectedCategory,
+        colorFilter,
+        clothingTypeFilter,
+        seasonFilter,
+        fitTagFilter
+    ) {
+        viewModel.applyWardrobeFilters(
+            WardrobeFilters(
+                includeArchived = showArchived,
+                search = query.trim().takeIf { it.isNotBlank() },
+                category = selectedCategory.takeUnless { it.equals("All", ignoreCase = true) },
+                color = colorFilter.trim().takeIf { it.isNotBlank() },
+                clothingType = clothingTypeFilter.trim().takeIf { it.isNotBlank() },
+                season = seasonFilter.trim().takeIf { it.isNotBlank() },
+                fitTag = fitTagFilter.trim().takeIf { it.isNotBlank() },
+                favoritesOnly = favoritesOnly
+            )
+        )
+    }
 
     FitGptScaffold(
         navController = navController,
@@ -86,6 +115,42 @@ fun WardrobeScreen(
                 value = query,
                 onValueChange = { query = it },
                 label = { Text("Search items") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = colorFilter,
+                onValueChange = { colorFilter = it },
+                label = { Text("Color filter") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            OutlinedTextField(
+                value = clothingTypeFilter,
+                onValueChange = { clothingTypeFilter = it },
+                label = { Text("Type filter") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            OutlinedTextField(
+                value = seasonFilter,
+                onValueChange = { seasonFilter = it },
+                label = { Text("Season filter") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            OutlinedTextField(
+                value = fitTagFilter,
+                onValueChange = { fitTagFilter = it },
+                label = { Text("Fit tag filter") },
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -148,26 +213,14 @@ fun WardrobeScreen(
                 }
 
                 is UiState.Success -> {
-
                     val items = (uiState as UiState.Success<List<ClothingItem>>).data
-                    val filteredItems = items.filter { item ->
-                        val matchesTab = if (showArchived) item.isArchived else !item.isArchived
-                        val matchesFavorite = !favoritesOnly || item.isFavorite
-                        val matchesCategory = selectedCategory.equals("All", true) ||
-                            item.category.equals(selectedCategory, true)
-                        val q = query.trim().lowercase()
-                        val matchesQuery = q.isBlank() || buildString {
-                            append(item.category.lowercase())
-                            append(" ")
-                            append(item.color.lowercase())
-                            append(" ")
-                            append(item.season.lowercase())
-                            item.brand?.let { append(" ${it.lowercase()}") }
-                        }.contains(q)
-                        matchesTab && matchesFavorite && matchesCategory && matchesQuery
+                    val displayItems = if (showArchived) {
+                        items.filter { it.isArchived }
+                    } else {
+                        items.filter { !it.isArchived }
                     }
 
-                    if (filteredItems.isEmpty()) {
+                    if (displayItems.isEmpty()) {
                         EmptyStateCard(
                             title = "No items found",
                             subtitle = "Try changing filters or add a new item."
@@ -176,7 +229,7 @@ fun WardrobeScreen(
                         LazyColumn(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(filteredItems) { item ->
+                            items(displayItems) { item ->
                                 WardrobeItemCard(
                                     item = item,
                                     viewModel = viewModel,
@@ -256,14 +309,14 @@ fun WardrobeItemCard(
             Column(modifier = Modifier.weight(1f)) {
 
                 Text(
-                    text = "${item.category} • ${item.color}",
+                    text = "${item.name ?: item.category} • ${item.color}",
                     style = MaterialTheme.typography.titleMedium
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "${item.season} • Comfort ${item.comfortLevel}",
+                    text = "${item.season} • ${item.clothingType ?: "Type n/a"} • Fit ${item.fitTag ?: "n/a"}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

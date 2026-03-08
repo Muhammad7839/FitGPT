@@ -84,7 +84,10 @@ fun EditItemScreen(
                 return
             }
 
+            var name by remember { mutableStateOf(item.name.orEmpty()) }
             var category by remember { mutableStateOf(item.category) }
+            var clothingType by remember { mutableStateOf(item.clothingType.orEmpty()) }
+            var fitTag by remember { mutableStateOf(item.fitTag.orEmpty()) }
             var color by remember { mutableStateOf(item.color) }
             var season by remember { mutableStateOf(item.season) }
             var comfort by remember { mutableStateOf(item.comfortLevel.toString()) }
@@ -156,9 +159,30 @@ fun EditItemScreen(
                     )
 
                     OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Name") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
                         value = category,
                         onValueChange = { category = it },
                         label = { Text("Category") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = clothingType,
+                        onValueChange = { clothingType = it },
+                        label = { Text("Clothing Type") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = fitTag,
+                        onValueChange = { fitTag = it },
+                        label = { Text("Fit Tag") },
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -266,7 +290,10 @@ fun EditItemScreen(
                             formError = null
                             viewModel.updateItem(
                                 item.copy(
+                                    name = name.trim().takeIf { it.isNotBlank() },
                                     category = category.trim(),
+                                    clothingType = clothingType.trim().takeIf { it.isNotBlank() },
+                                    fitTag = fitTag.trim().takeIf { it.isNotBlank() },
                                     color = color.trim(),
                                     season = season.trim(),
                                     comfortLevel = parseComfortLevel(comfort),

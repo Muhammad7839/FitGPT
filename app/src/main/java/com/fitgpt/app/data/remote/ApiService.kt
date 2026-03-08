@@ -5,13 +5,19 @@ package com.fitgpt.app.data.remote
 
 import com.fitgpt.app.data.remote.dto.ClothingItemCreateRequest
 import com.fitgpt.app.data.remote.dto.ClothingItemDto
+import com.fitgpt.app.data.remote.dto.BulkCreateClothingItemsRequestDto
+import com.fitgpt.app.data.remote.dto.BulkCreateClothingItemsResponseDto
+import com.fitgpt.app.data.remote.dto.FavoriteToggleRequestDto
 import com.fitgpt.app.data.remote.dto.ForgotPasswordRequest
 import com.fitgpt.app.data.remote.dto.ForgotPasswordResponse
 import com.fitgpt.app.data.remote.dto.GoogleLoginRequest
+import com.fitgpt.app.data.remote.dto.ImageBatchUploadResponseDto
 import com.fitgpt.app.data.remote.dto.ImageUploadResponseDto
 import com.fitgpt.app.data.remote.dto.MessageResponse
 import com.fitgpt.app.data.remote.dto.OutfitHistoryRequest
 import com.fitgpt.app.data.remote.dto.OutfitHistoryListResponseDto
+import com.fitgpt.app.data.remote.dto.PlannedOutfitAssignmentRequestDto
+import com.fitgpt.app.data.remote.dto.PlannedOutfitAssignmentResponseDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.PlannedOutfitListResponseDto
 import com.fitgpt.app.data.remote.dto.RecommendationResponseDto
@@ -20,6 +26,7 @@ import com.fitgpt.app.data.remote.dto.ResetPasswordRequest
 import com.fitgpt.app.data.remote.dto.SavedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.SavedOutfitListResponseDto
 import com.fitgpt.app.data.remote.dto.TokenResponse
+import com.fitgpt.app.data.remote.dto.UserProfileSummaryResponse
 import com.fitgpt.app.data.remote.dto.UserProfileUpdateRequest
 import com.fitgpt.app.data.remote.dto.UserResponse
 import com.fitgpt.app.data.remote.dto.WeatherCurrentResponseDto
@@ -73,15 +80,38 @@ interface ApiService {
         @Body payload: UserProfileUpdateRequest
     ): UserResponse
 
+    @POST("onboarding/complete")
+    suspend fun completeOnboarding(
+        @Body payload: UserProfileUpdateRequest
+    ): UserResponse
+
+    @GET("me/summary")
+    suspend fun getProfileSummary(): UserProfileSummaryResponse
+
     @GET("wardrobe/items")
     suspend fun getWardrobeItems(
-        @Query("include_archived") includeArchived: Boolean = false
+        @Query("include_archived") includeArchived: Boolean = false,
+        @Query("search") search: String? = null,
+        @Query("category") category: String? = null,
+        @Query("color") color: String? = null,
+        @Query("clothing_type") clothingType: String? = null,
+        @Query("season") season: String? = null,
+        @Query("fit_tag") fitTag: String? = null,
+        @Query("favorites_only") favoritesOnly: Boolean = false
     ): List<ClothingItemDto>
+
+    @GET("wardrobe/items/favorites")
+    suspend fun getFavoriteWardrobeItems(): List<ClothingItemDto>
 
     @POST("wardrobe/items")
     suspend fun addWardrobeItem(
         @Body payload: ClothingItemCreateRequest
     ): ClothingItemDto
+
+    @POST("wardrobe/items/bulk")
+    suspend fun addWardrobeItemsBulk(
+        @Body payload: BulkCreateClothingItemsRequestDto
+    ): BulkCreateClothingItemsResponseDto
 
     @Multipart
     @POST("wardrobe/items/image")
@@ -89,10 +119,22 @@ interface ApiService {
         @Part image: MultipartBody.Part
     ): ImageUploadResponseDto
 
+    @Multipart
+    @POST("wardrobe/items/images")
+    suspend fun uploadWardrobeImages(
+        @Part images: List<MultipartBody.Part>
+    ): ImageBatchUploadResponseDto
+
     @PUT("wardrobe/items/{itemId}")
     suspend fun updateWardrobeItem(
         @Path("itemId") itemId: Int,
         @Body payload: ClothingItemCreateRequest
+    ): ClothingItemDto
+
+    @POST("wardrobe/items/{itemId}/favorite")
+    suspend fun toggleWardrobeFavorite(
+        @Path("itemId") itemId: Int,
+        @Body payload: FavoriteToggleRequestDto
     ): ClothingItemDto
 
     @DELETE("wardrobe/items/{itemId}")
@@ -107,11 +149,17 @@ interface ApiService {
         @Query("plan_date") planDate: String? = null,
         @Query("exclude") exclude: String? = null,
         @Query("weather_city") weatherCity: String? = null,
+        @Query("weather_lat") weatherLat: Double? = null,
+        @Query("weather_lon") weatherLon: Double? = null,
+        @Query("weather_category") weatherCategory: String? = null,
+        @Query("occasion") occasion: String? = null,
     ): RecommendationResponseDto
 
     @GET("weather/current")
     suspend fun getCurrentWeather(
-        @Query("city") city: String
+        @Query("city") city: String? = null,
+        @Query("lat") lat: Double? = null,
+        @Query("lon") lon: Double? = null
     ): WeatherCurrentResponseDto
 
     @POST("outfits/history")
@@ -145,6 +193,11 @@ interface ApiService {
     suspend fun savePlannedOutfit(
         @Body payload: PlannedOutfitCreateRequest
     ): PlannedOutfitListResponseDto
+
+    @PUT("outfits/planned/assign")
+    suspend fun assignPlannedOutfit(
+        @Body payload: PlannedOutfitAssignmentRequestDto
+    ): PlannedOutfitAssignmentResponseDto
 
     @DELETE("outfits/planned/{outfitId}")
     suspend fun deletePlannedOutfit(

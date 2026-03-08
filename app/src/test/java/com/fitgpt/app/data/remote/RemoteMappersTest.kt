@@ -15,7 +15,10 @@ class RemoteMappersTest {
     fun dtoToDomain_mapsAllFields() {
         val dto = ClothingItemDto(
             id = 5,
+            name = "Oxford Shirt",
             category = "Top",
+            clothingType = "shirt",
+            fitTag = "regular",
             color = "Black",
             season = "Winter",
             comfortLevel = 4,
@@ -30,7 +33,10 @@ class RemoteMappersTest {
         val model = dto.toDomain()
 
         assertEquals(5, model.id)
+        assertEquals("Oxford Shirt", model.name)
         assertEquals("Top", model.category)
+        assertEquals("shirt", model.clothingType)
+        assertEquals("regular", model.fitTag)
         assertEquals("Black", model.color)
         assertEquals("Winter", model.season)
         assertEquals(4, model.comfortLevel)
@@ -44,7 +50,10 @@ class RemoteMappersTest {
     fun domainToCreateRequest_mapsAllFields() {
         val model = ClothingItem(
             id = 9,
+            name = "Classic Chino",
             category = "Bottom",
+            clothingType = "pants",
+            fitTag = "slim",
             color = "Blue",
             season = "All",
             comfortLevel = 3,
@@ -57,7 +66,10 @@ class RemoteMappersTest {
         )
 
         val request = model.toCreateRequest()
+        assertEquals("Classic Chino", request.name)
         assertEquals("Bottom", request.category)
+        assertEquals("pants", request.clothingType)
+        assertEquals("slim", request.fitTag)
         assertEquals("Blue", request.color)
         assertEquals(3, request.comfortLevel)
         assertEquals("Levi's", request.brand)

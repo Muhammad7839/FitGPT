@@ -42,6 +42,114 @@ def test_get_me_and_update_profile(client):
     assert body["onboarding_complete"] is True
 
 
+def test_onboarding_complete_allows_skipped_preferences(client):
+    token = register_and_login(client, "onboarding-skip@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    response = client.post("/onboarding/complete", headers=auth, json={})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["onboarding_complete"] is True
+    assert body["body_type"] == "unspecified"
+    assert body["lifestyle"] == "casual"
+    assert body["comfort_preference"] == "medium"
+
+
+def test_profile_summary_returns_preferences_and_counts(client):
+    token = register_and_login(client, "summary@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    top = client.post(
+        "/wardrobe/items",
+        json={
+            "name": "Oxford Shirt",
+            "category": "Top",
+            "clothing_type": "shirt",
+            "fit_tag": "regular",
+            "color": "White",
+            "season": "All",
+            "comfort_level": 4,
+            "image_url": None,
+            "brand": "Uniqlo",
+            "is_available": True,
+            "is_favorite": False,
+            "is_archived": False,
+            "last_worn_timestamp": None,
+        },
+        headers=auth,
+    )
+    bottom = client.post(
+        "/wardrobe/items",
+        json={
+            "name": "Chino Pants",
+            "category": "Bottom",
+            "clothing_type": "pants",
+            "fit_tag": "regular",
+            "color": "Navy",
+            "season": "All",
+            "comfort_level": 4,
+            "image_url": None,
+            "brand": "Levi's",
+            "is_available": True,
+            "is_favorite": False,
+            "is_archived": False,
+            "last_worn_timestamp": None,
+        },
+        headers=auth,
+    )
+    assert top.status_code == 200
+    assert bottom.status_code == 200
+    top_id = top.json()["id"]
+    bottom_id = bottom.json()["id"]
+
+    favorite = client.post(
+        f"/wardrobe/items/{top_id}/favorite",
+        headers=auth,
+        json={"is_favorite": True},
+    )
+    assert favorite.status_code == 200
+
+    saved = client.post(
+        "/outfits/saved",
+        headers=auth,
+        json={"item_ids": [top_id, bottom_id], "saved_at_timestamp": 1731111111},
+    )
+    assert saved.status_code == 200
+
+    planned = client.post(
+        "/outfits/planned",
+        headers=auth,
+        json={
+            "item_ids": [top_id, bottom_id],
+            "planned_date": "2026-04-30",
+            "occasion": "Work",
+            "created_at_timestamp": 1732222222,
+        },
+    )
+    assert planned.status_code == 200
+
+    history = client.post(
+        "/outfits/history",
+        headers=auth,
+        json={"item_ids": [top_id, bottom_id], "worn_at_timestamp": 1733333333},
+    )
+    assert history.status_code == 200
+
+    summary = client.get("/me/summary", headers=auth)
+    assert summary.status_code == 200
+    body = summary.json()
+    assert body["email"] == "summary@example.com"
+    assert body["body_type"] == "unspecified"
+    assert body["lifestyle"] == "casual"
+    assert body["comfort_preference"] == "medium"
+    assert body["wardrobe_count"] == 2
+    assert body["active_wardrobe_count"] == 2
+    assert body["favorite_count"] == 1
+    assert body["saved_outfit_count"] == 1
+    assert body["planned_outfit_count"] == 1
+    assert body["history_count"] == 1
+
+
 def test_google_login_creates_new_user(client, monkeypatch):
     class Identity:
         email = "google-new@example.com"

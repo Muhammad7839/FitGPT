@@ -182,6 +182,24 @@ fun ProfileScreen(
                             }
                         }
                     }
+
+                    WebCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        accentTop = false
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("Profile Summary", style = MaterialTheme.typography.titleMedium)
+                            Text("Wardrobe items: ${profile.wardrobeCount}")
+                            Text("Active items: ${profile.activeWardrobeCount}")
+                            Text("Favorites: ${profile.favoriteCount}")
+                            Text("Saved outfits: ${profile.savedOutfitCount}")
+                            Text("Planned outfits: ${profile.plannedOutfitCount}")
+                            Text("History entries: ${profile.historyCount}")
+                        }
+                    }
                 }
             }
         }
@@ -189,5 +207,5 @@ fun ProfileScreen(
 }
 
 private fun com.fitgpt.app.data.model.UserProfile.idHash(): String {
-    return "${email}_${bodyType}_${lifestyle}_${comfortPreference}_${onboardingComplete}"
+    return "${id}_${email}_${bodyType}_${lifestyle}_${comfortPreference}_${onboardingComplete}"
 }

@@ -16,6 +16,8 @@ class RecommendationContext:
     plan_date: Optional[str]
     exclude: Optional[str]
     weather_city: Optional[str]
+    weather_category: Optional[str]
+    occasion: Optional[str]
 
 
 def _normalize_text(value: Optional[str]) -> Optional[str]:
@@ -67,6 +69,9 @@ def build_recommendation_explanation(
     if context.time_context:
         parts.append(f"It is tuned for a {context.time_context.lower()} plan.")
 
+    if context.occasion:
+        parts.append(f"It is also balanced for a {context.occasion.lower()} occasion.")
+
     if context.manual_temp is not None:
         if context.weather_city:
             parts.append(
@@ -76,6 +81,8 @@ def build_recommendation_explanation(
             parts.append(
                 f"The layering balance is adjusted for around {context.manual_temp}F."
             )
+    elif context.weather_category:
+        parts.append(f"The outfit mix targets {context.weather_category.lower()} weather conditions.")
 
     plan_date = _format_plan_date(context.plan_date)
     if plan_date:

@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.data.repository.UploadImagePayload
 import com.fitgpt.app.ui.common.MAX_LOCAL_IMAGE_BYTES
 import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SectionHeader
@@ -54,7 +55,10 @@ fun AddItemScreen(
     navController: NavController,
     viewModel: WardrobeViewModel
 ) {
+    var name by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
+    var clothingType by remember { mutableStateOf("") }
+    var fitTag by remember { mutableStateOf("") }
     var color by remember { mutableStateOf("") }
     var season by remember { mutableStateOf("") }
     var comfort by remember { mutableStateOf("") }
@@ -65,6 +69,7 @@ fun AddItemScreen(
 
     val context = LocalContext.current
     val imageUploadState by viewModel.imageUploadState.collectAsState()
+    val batchUploadState by viewModel.batchImageUploadState.collectAsState()
 
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
         if (bitmap == null) {
@@ -106,6 +111,28 @@ fun AddItemScreen(
         viewModel.uploadImage(bytes = bytes, fileName = fileName, mimeType = mimeType)
     }
 
+    val multiPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        if (uris.isNullOrEmpty()) return@rememberLauncherForActivityResult
+        val payloads = uris.mapNotNull { uri ->
+            val bytes = readBytes(context, uri) ?: return@mapNotNull null
+            if (!isImagePayloadAllowed(bytes.size)) {
+                return@mapNotNull null
+            }
+            val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+            val extension = when (mimeType) {
+                "image/png" -> ".png"
+                "image/webp" -> ".webp"
+                else -> ".jpg"
+            }
+            UploadImagePayload(
+                bytes = bytes,
+                fileName = "batch_${System.currentTimeMillis()}$extension",
+                mimeType = mimeType
+            )
+        }
+        viewModel.uploadImagesBatch(payloads)
+    }
+
     LaunchedEffect(imageUploadState) {
         val upload = imageUploadState
         if (upload is UiState.Success && !upload.data.isNullOrBlank()) {
@@ -140,9 +167,30 @@ fun AddItemScreen(
                 ) {
 
                     OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Name (optional)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
                         value = category,
                         onValueChange = { category = it },
                         label = { Text("Category") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = clothingType,
+                        onValueChange = { clothingType = it },
+                        label = { Text("Clothing Type (optional)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = fitTag,
+                        onValueChange = { fitTag = it },
+                        label = { Text("Fit Tag (optional)") },
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -179,6 +227,13 @@ fun AddItemScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Pick Image")
+                    }
+
+                    Button(
+                        onClick = { multiPicker.launch("image/*") },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Pick Multiple Images")
                     }
 
                     Row(
@@ -238,6 +293,25 @@ fun AddItemScreen(
                                 .height(180.dp)
                         )
                     }
+
+                    when (val batch = batchUploadState) {
+                        UiState.Loading -> {
+                            Text("Uploading selected images...")
+                        }
+                        is UiState.Error -> {
+                            Text(batch.message, color = MaterialTheme.colorScheme.error)
+                        }
+                        is UiState.Success -> {
+                            if (batch.data.isNotEmpty()) {
+                                val success = batch.data.count { it.status == "success" }
+                                val failed = batch.data.size - success
+                                Text(
+                                    "Batch upload complete: $success success, $failed failed",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -259,7 +333,10 @@ fun AddItemScreen(
                     viewModel.addItem(
                         ClothingItem(
                             id = System.currentTimeMillis().toInt(),
+                            name = name.trim().takeIf { it.isNotBlank() },
                             category = category.trim(),
+                            clothingType = clothingType.trim().takeIf { it.isNotBlank() },
+                            fitTag = fitTag.trim().takeIf { it.isNotBlank() },
                             color = color.trim(),
                             season = season.trim(),
                             comfortLevel = parseComfortLevel(comfort),
