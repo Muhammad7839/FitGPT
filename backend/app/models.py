@@ -10,6 +10,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     email = Column(String, unique=True, index=True, nullable=False)
+    full_name = Column(String, nullable=True)
     hashed_password = Column(String, nullable=False)
 
     # --- Profile / Preferences ---
@@ -19,6 +20,8 @@ class User(Base):
 
     is_active = Column(Boolean, default=True)
     onboarding_complete = Column(Boolean, default=False)
+    reset_token_hash = Column(String, nullable=True)
+    reset_token_expires_at = Column(Integer, nullable=True)
 
 
     wardrobe_items = relationship(
@@ -40,6 +43,7 @@ class ClothingItem(Base):
     image_url = Column(String, nullable=True)
     brand = Column(String, nullable=True)
     is_available = Column(Boolean, nullable=False, default=True)
+    is_favorite = Column(Boolean, nullable=False, default=False)
     is_archived = Column(Boolean, nullable=False, default=False)
     last_worn_timestamp = Column(Integer, nullable=True)
 
@@ -55,3 +59,23 @@ class OutfitHistory(Base):
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     item_ids_csv = Column(String, nullable=False)
     worn_at_timestamp = Column(Integer, nullable=False)
+
+
+class SavedOutfit(Base):
+    __tablename__ = "saved_outfits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    item_ids_csv = Column(String, nullable=False)
+    saved_at_timestamp = Column(Integer, nullable=False)
+
+
+class PlannedOutfit(Base):
+    __tablename__ = "planned_outfits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    item_ids_csv = Column(String, nullable=False)
+    planned_date = Column(String, nullable=False)
+    occasion = Column(String, nullable=True)
+    created_at_timestamp = Column(Integer, nullable=False)

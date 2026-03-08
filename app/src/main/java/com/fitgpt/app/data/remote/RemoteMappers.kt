@@ -14,6 +14,7 @@ fun ClothingItemDto.toDomain(): ClothingItem {
         imageUrl = imageUrl,
         brand = brand,
         isAvailable = isAvailable,
+        isFavorite = isFavorite,
         isArchived = isArchived,
         lastWornTimestamp = lastWornTimestamp,
     )
@@ -28,6 +29,7 @@ fun ClothingItem.toCreateRequest(): ClothingItemCreateRequest {
         imageUrl = imageUrl,
         brand = brand,
         isAvailable = isAvailable,
+        isFavorite = isFavorite,
         isArchived = isArchived,
         lastWornTimestamp = lastWornTimestamp,
     )

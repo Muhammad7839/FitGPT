@@ -2,12 +2,15 @@ package com.fitgpt.app.ui.wardrobe
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +19,10 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.navigation.Routes
+import com.fitgpt.app.ui.common.EmptyStateCard
+import com.fitgpt.app.ui.common.FitGptScaffold
+import com.fitgpt.app.ui.common.RemoteImagePreview
+import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 
@@ -27,15 +34,17 @@ fun WardrobeScreen(
 ) {
 
     val uiState by viewModel.wardrobeState.collectAsState()
+    var query by remember { mutableStateOf("") }
+    var showArchived by remember { mutableStateOf(false) }
+    var favoritesOnly by remember { mutableStateOf(false) }
+    var selectedCategory by remember { mutableStateOf("All") }
 
     var itemToDelete by remember { mutableStateOf<ClothingItem?>(null) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Your Wardrobe") }
-            )
-        },
+    FitGptScaffold(
+        navController = navController,
+        currentRoute = Routes.WARDROBE,
+        title = "Your Wardrobe",
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { navController.navigate(Routes.ADD_ITEM) }
@@ -54,10 +63,9 @@ fun WardrobeScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            Text(
-                text = "Manage your clothing and get smart outfit suggestions",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            SectionHeader(
+                title = "Your Wardrobe",
+                subtitle = "Manage your clothing and get smart outfit suggestions"
             )
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -70,6 +78,58 @@ fun WardrobeScreen(
             }
 
             Spacer(modifier = Modifier.height(20.dp))
+
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                label = { Text("Search items") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = !showArchived,
+                    onClick = { showArchived = false },
+                    label = { Text("Active") }
+                )
+                FilterChip(
+                    selected = showArchived,
+                    onClick = { showArchived = true },
+                    label = { Text("Archived") }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = !favoritesOnly,
+                    onClick = { favoritesOnly = false },
+                    label = { Text("All items") }
+                )
+                FilterChip(
+                    selected = favoritesOnly,
+                    onClick = { favoritesOnly = true },
+                    label = { Text("Favorites") }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            val categoryFilters = listOf("All", "Top", "Bottom", "Shoes", "Outerwear", "Accessories")
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(categoryFilters) { category ->
+                    FilterChip(
+                        selected = selectedCategory.equals(category, ignoreCase = true),
+                        onClick = { selectedCategory = category },
+                        label = { Text(category) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
 
             when (uiState) {
 
@@ -87,21 +147,48 @@ fun WardrobeScreen(
                 is UiState.Success -> {
 
                     val items = (uiState as UiState.Success<List<ClothingItem>>).data
+                    val filteredItems = items.filter { item ->
+                        val matchesTab = if (showArchived) item.isArchived else !item.isArchived
+                        val matchesFavorite = !favoritesOnly || item.isFavorite
+                        val matchesCategory = selectedCategory.equals("All", true) ||
+                            item.category.equals(selectedCategory, true)
+                        val q = query.trim().lowercase()
+                        val matchesQuery = q.isBlank() || buildString {
+                            append(item.category.lowercase())
+                            append(" ")
+                            append(item.color.lowercase())
+                            append(" ")
+                            append(item.season.lowercase())
+                            item.brand?.let { append(" ${it.lowercase()}") }
+                        }.contains(q)
+                        matchesTab && matchesFavorite && matchesCategory && matchesQuery
+                    }
 
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(items) { item ->
-                            WardrobeItemCard(
-                                item = item,
-                                viewModel = viewModel,
-                                onEdit = {
-                                    navController.navigate("${Routes.EDIT_ITEM}/${item.id}")
-                                },
-                                onDelete = {
-                                    itemToDelete = item
-                                }
-                            )
+                    if (filteredItems.isEmpty()) {
+                        EmptyStateCard(
+                            title = "No items found",
+                            subtitle = "Try changing filters or add a new item."
+                        )
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(filteredItems) { item ->
+                                WardrobeItemCard(
+                                    item = item,
+                                    viewModel = viewModel,
+                                    onEdit = {
+                                        navController.navigate("${Routes.EDIT_ITEM}/${item.id}")
+                                    },
+                                    onDelete = {
+                                        itemToDelete = item
+                                    },
+                                    onToggleFavorite = {
+                                        viewModel.toggleFavorite(item.id)
+                                    },
+                                    isFavorite = viewModel.isFavorite(item.id)
+                                )
+                            }
                         }
                     }
                 }
@@ -138,7 +225,9 @@ fun WardrobeItemCard(
     item: ClothingItem,
     viewModel: WardrobeViewModel,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    isFavorite: Boolean
 ) {
 
     val explanation = viewModel.generateExplanation(item)
@@ -156,6 +245,13 @@ fun WardrobeItemCard(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            RemoteImagePreview(
+                imageUrl = item.imageUrl,
+                contentDescription = item.category,
+                modifier = Modifier.size(72.dp)
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
 
@@ -182,6 +278,13 @@ fun WardrobeItemCard(
 
             IconButton(onClick = onEdit) {
                 Icon(Icons.Default.Edit, contentDescription = "Edit")
+            }
+
+            IconButton(onClick = onToggleFavorite) {
+                Icon(
+                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = "Favorite"
+                )
             }
 
             IconButton(onClick = onDelete) {

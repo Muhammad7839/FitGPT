@@ -27,6 +27,18 @@ class AuthViewModel(
     private val _loginState = MutableStateFlow<AuthState>(AuthState.Idle)
     val loginState: StateFlow<AuthState> = _loginState
 
+    private val _registerState = MutableStateFlow<AuthState>(AuthState.Idle)
+    val registerState: StateFlow<AuthState> = _registerState
+
+    private val _forgotPasswordState = MutableStateFlow<AuthState>(AuthState.Idle)
+    val forgotPasswordState: StateFlow<AuthState> = _forgotPasswordState
+
+    private val _resetPasswordState = MutableStateFlow<AuthState>(AuthState.Idle)
+    val resetPasswordState: StateFlow<AuthState> = _resetPasswordState
+
+    private val _lastResetToken = MutableStateFlow<String?>(null)
+    val lastResetToken: StateFlow<String?> = _lastResetToken
+
     fun login(email: String, password: String) {
         if (email.isBlank() || password.isBlank()) {
             _loginState.value = AuthState.Error("Email and password are required")
@@ -48,6 +60,106 @@ class AuthViewModel(
                 _loginState.value = AuthState.Error(message)
             } catch (e: Exception) {
                 _loginState.value = AuthState.Error("Network error during login")
+            }
+        }
+    }
+
+    fun loginWithGoogleToken(idToken: String) {
+        if (idToken.isBlank()) {
+            _loginState.value = AuthState.Error("Google ID token is required")
+            return
+        }
+
+        _loginState.value = AuthState.Loading
+        viewModelScope.launch {
+            try {
+                val token = repository.loginWithGoogle(idToken)
+                tokenStore.saveToken(token)
+                _loginState.value = AuthState.Success
+            } catch (e: HttpException) {
+                _loginState.value = AuthState.Error("Google login failed (${e.code()})")
+            } catch (e: Exception) {
+                _loginState.value = AuthState.Error("Network error during Google login")
+            }
+        }
+    }
+
+    fun register(email: String, password: String, confirmPassword: String) {
+        if (email.isBlank() || password.isBlank()) {
+            _registerState.value = AuthState.Error("Email and password are required")
+            return
+        }
+        if (password != confirmPassword) {
+            _registerState.value = AuthState.Error("Passwords do not match")
+            return
+        }
+        if (password.length < 6) {
+            _registerState.value = AuthState.Error("Password must be at least 6 characters")
+            return
+        }
+
+        _registerState.value = AuthState.Loading
+        viewModelScope.launch {
+            try {
+                repository.register(email = email, password = password)
+                val token = repository.login(email = email, password = password)
+                tokenStore.saveToken(token)
+                _registerState.value = AuthState.Success
+            } catch (e: HttpException) {
+                val message = when (e.code()) {
+                    400 -> "Registration failed (email may already exist)"
+                    else -> "Registration failed (${e.code()})"
+                }
+                _registerState.value = AuthState.Error(message)
+            } catch (e: Exception) {
+                _registerState.value = AuthState.Error("Network error during registration")
+            }
+        }
+    }
+
+    fun forgotPassword(email: String) {
+        if (email.isBlank()) {
+            _forgotPasswordState.value = AuthState.Error("Email is required")
+            return
+        }
+
+        _forgotPasswordState.value = AuthState.Loading
+        viewModelScope.launch {
+            try {
+                val (_, resetToken) = repository.forgotPassword(email)
+                _lastResetToken.value = resetToken
+                _forgotPasswordState.value = AuthState.Success
+            } catch (e: HttpException) {
+                _forgotPasswordState.value = AuthState.Error("Forgot password failed (${e.code()})")
+            } catch (e: Exception) {
+                _forgotPasswordState.value = AuthState.Error("Network error during forgot password")
+            }
+        }
+    }
+
+    fun resetPassword(token: String, newPassword: String, confirmPassword: String) {
+        if (token.isBlank() || newPassword.isBlank() || confirmPassword.isBlank()) {
+            _resetPasswordState.value = AuthState.Error("All fields are required")
+            return
+        }
+        if (newPassword != confirmPassword) {
+            _resetPasswordState.value = AuthState.Error("Passwords do not match")
+            return
+        }
+        if (newPassword.length < 6) {
+            _resetPasswordState.value = AuthState.Error("Password must be at least 6 characters")
+            return
+        }
+
+        _resetPasswordState.value = AuthState.Loading
+        viewModelScope.launch {
+            try {
+                repository.resetPassword(token, newPassword)
+                _resetPasswordState.value = AuthState.Success
+            } catch (e: HttpException) {
+                _resetPasswordState.value = AuthState.Error("Reset failed (${e.code()})")
+            } catch (e: Exception) {
+                _resetPasswordState.value = AuthState.Error("Network error during reset password")
             }
         }
     }

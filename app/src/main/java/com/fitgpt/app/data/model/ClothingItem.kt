@@ -13,6 +13,7 @@ data class ClothingItem(
     // New fields
     val brand: String? = null,                 // Future barcode + brand preference
     val isAvailable: Boolean = true,           // Laundry / unavailable flag
+    val isFavorite: Boolean = false,           // Favorite marker synced with backend
     val isArchived: Boolean = false,           // Soft delete instead of hard delete
     val lastWornTimestamp: Long? = null,       // Rotation tracking
     val createdAt: Long = System.currentTimeMillis()

@@ -1,6 +1,13 @@
+import uuid
+import hashlib
+from datetime import datetime
+from typing import Optional
+
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app import models, schemas
 from passlib.context import CryptContext
+from app.config import RESET_TOKEN_EXPIRE_MINUTES
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -28,10 +35,68 @@ def create_user(db: Session, user: schemas.UserCreate):
     return db_user
 
 
+def get_or_create_google_user(db: Session, email: str, full_name: Optional[str]):
+    existing_user = get_user_by_email(db, email)
+    if existing_user:
+        if full_name and not existing_user.full_name:
+            existing_user.full_name = full_name
+            db.commit()
+            db.refresh(existing_user)
+        return existing_user
+
+    generated_password = uuid.uuid4().hex
+    db_user = models.User(
+        email=email,
+        full_name=full_name,
+        hashed_password=hash_password(generated_password),
+    )
+    db.add(db_user)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return get_user_by_email(db, email)
+    db.refresh(db_user)
+    return db_user
+
+
 def get_user_by_email(db: Session, email: str):
     return db.query(models.User).filter(
         models.User.email == email
     ).first()
+
+
+def _hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def create_password_reset_token(db: Session, db_user: models.User) -> str:
+    token = uuid.uuid4().hex
+    expires_at = int(datetime.utcnow().timestamp()) + (RESET_TOKEN_EXPIRE_MINUTES * 60)
+    db_user.reset_token_hash = _hash_reset_token(token)
+    db_user.reset_token_expires_at = expires_at
+    db.commit()
+    db.refresh(db_user)
+    return token
+
+
+def get_user_by_reset_token(db: Session, token: str):
+    token_hash = _hash_reset_token(token)
+    now = int(datetime.utcnow().timestamp())
+    return db.query(models.User).filter(
+        models.User.reset_token_hash == token_hash,
+        models.User.reset_token_expires_at.is_not(None),
+        models.User.reset_token_expires_at >= now,
+    ).first()
+
+
+def reset_user_password(db: Session, db_user: models.User, new_password: str):
+    db_user.hashed_password = hash_password(new_password)
+    db_user.reset_token_hash = None
+    db_user.reset_token_expires_at = None
+    db.commit()
+    db.refresh(db_user)
+    return db_user
 
 
 # =============================
@@ -74,6 +139,7 @@ def create_clothing_item(db: Session, item: schemas.ClothingItemCreate, user_id:
         image_url=item.image_url,
         brand=item.brand,
         is_available=item.is_available,
+        is_favorite=item.is_favorite,
         is_archived=item.is_archived,
         last_worn_timestamp=item.last_worn_timestamp,
         owner_id=user_id
@@ -86,11 +152,13 @@ def create_clothing_item(db: Session, item: schemas.ClothingItemCreate, user_id:
     return db_item
 
 
-def get_clothing_items_for_user(db: Session, user_id: int):
-    return db.query(models.ClothingItem).filter(
+def get_clothing_items_for_user(db: Session, user_id: int, include_archived: bool = False):
+    query = db.query(models.ClothingItem).filter(
         models.ClothingItem.owner_id == user_id,
-        models.ClothingItem.is_archived == False  # noqa: E712
-    ).all()
+    )
+    if not include_archived:
+        query = query.filter(models.ClothingItem.is_archived.is_(False))
+    return query.all()
 
 
 def get_clothing_item_by_id(db: Session, item_id: int):
@@ -102,17 +170,10 @@ def get_clothing_item_by_id(db: Session, item_id: int):
 def update_clothing_item(
     db: Session,
     db_item: models.ClothingItem,
-    updated_data: schemas.ClothingItemCreate
+    updated_data: schemas.ClothingItemUpdate
 ):
-    db_item.category = updated_data.category
-    db_item.color = updated_data.color
-    db_item.season = updated_data.season
-    db_item.comfort_level = updated_data.comfort_level
-    db_item.image_url = updated_data.image_url
-    db_item.brand = updated_data.brand
-    db_item.is_available = updated_data.is_available
-    db_item.is_archived = updated_data.is_archived
-    db_item.last_worn_timestamp = updated_data.last_worn_timestamp
+    for field_name, field_value in updated_data.model_dump(exclude_unset=True).items():
+        setattr(db_item, field_name, field_value)
 
     db.commit()
     db.refresh(db_item)
@@ -167,3 +228,86 @@ def save_outfit_history(
     db.commit()
     db.refresh(history)
     return history
+
+
+def get_outfit_history_for_user(db: Session, user_id: int):
+    return db.query(models.OutfitHistory).filter(
+        models.OutfitHistory.owner_id == user_id
+    ).order_by(models.OutfitHistory.worn_at_timestamp.desc()).all()
+
+
+def clear_outfit_history_for_user(db: Session, user_id: int):
+    db.query(models.OutfitHistory).filter(
+        models.OutfitHistory.owner_id == user_id
+    ).delete()
+    db.commit()
+
+
+def save_saved_outfit(
+    db: Session,
+    user_id: int,
+    item_ids: list[int],
+    saved_at_timestamp: Optional[int] = None,
+):
+    timestamp = saved_at_timestamp or int(datetime.utcnow().timestamp())
+    outfit = models.SavedOutfit(
+        owner_id=user_id,
+        item_ids_csv=",".join(str(item_id) for item_id in item_ids),
+        saved_at_timestamp=timestamp,
+    )
+    db.add(outfit)
+    db.commit()
+    db.refresh(outfit)
+    return outfit
+
+
+def get_saved_outfits_for_user(db: Session, user_id: int):
+    return db.query(models.SavedOutfit).filter(
+        models.SavedOutfit.owner_id == user_id
+    ).order_by(models.SavedOutfit.saved_at_timestamp.desc()).all()
+
+
+def delete_saved_outfit(db: Session, user_id: int, outfit_id: int) -> bool:
+    deleted = db.query(models.SavedOutfit).filter(
+        models.SavedOutfit.owner_id == user_id,
+        models.SavedOutfit.id == outfit_id,
+    ).delete()
+    db.commit()
+    return deleted > 0
+
+
+def save_planned_outfit(
+    db: Session,
+    user_id: int,
+    item_ids: list[int],
+    planned_date: str,
+    occasion: Optional[str] = None,
+    created_at_timestamp: Optional[int] = None,
+):
+    timestamp = created_at_timestamp or int(datetime.utcnow().timestamp())
+    outfit = models.PlannedOutfit(
+        owner_id=user_id,
+        item_ids_csv=",".join(str(item_id) for item_id in item_ids),
+        planned_date=planned_date,
+        occasion=occasion,
+        created_at_timestamp=timestamp,
+    )
+    db.add(outfit)
+    db.commit()
+    db.refresh(outfit)
+    return outfit
+
+
+def get_planned_outfits_for_user(db: Session, user_id: int):
+    return db.query(models.PlannedOutfit).filter(
+        models.PlannedOutfit.owner_id == user_id
+    ).order_by(models.PlannedOutfit.planned_date.asc()).all()
+
+
+def delete_planned_outfit(db: Session, user_id: int, outfit_id: int) -> bool:
+    deleted = db.query(models.PlannedOutfit).filter(
+        models.PlannedOutfit.owner_id == user_id,
+        models.PlannedOutfit.id == outfit_id,
+    ).delete()
+    db.commit()
+    return deleted > 0

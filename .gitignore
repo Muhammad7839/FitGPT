@@ -1,6 +1,7 @@
 # Python
 backend/venv/
 backend/.venv/
+backend/.env
 backend/__pycache__/
 backend/*.db
 backend/*.sqlite3
