@@ -1,3 +1,5 @@
+"""Data-access helpers for users, wardrobe items, and outfit workflows."""
+
 import uuid
 import hashlib
 from datetime import datetime

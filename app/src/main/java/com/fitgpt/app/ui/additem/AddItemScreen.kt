@@ -1,3 +1,6 @@
+/**
+ * Screen for creating wardrobe items with gallery/camera upload support.
+ */
 package com.fitgpt.app.ui.additem
 
 import android.Manifest
@@ -36,8 +39,12 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.ui.common.MAX_LOCAL_IMAGE_BYTES
 import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SectionHeader
+import com.fitgpt.app.ui.common.isImagePayloadAllowed
+import com.fitgpt.app.ui.common.parseComfortLevel
+import com.fitgpt.app.ui.common.validateClothingItemForm
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import java.io.ByteArrayOutputStream
@@ -54,6 +61,7 @@ fun AddItemScreen(
     var brand by remember { mutableStateOf("") }
     var imageUrl by remember { mutableStateOf("") }
     var cameraMessage by remember { mutableStateOf<String?>(null) }
+    var formError by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
     val imageUploadState by viewModel.imageUploadState.collectAsState()
@@ -64,6 +72,10 @@ fun AddItemScreen(
             return@rememberLauncherForActivityResult
         }
         val bytes = bitmapToJpegBytes(bitmap)
+        if (!isImagePayloadAllowed(bytes.size)) {
+            cameraMessage = "Image is too large (max ${MAX_LOCAL_IMAGE_BYTES / (1024 * 1024)}MB)"
+            return@rememberLauncherForActivityResult
+        }
         val fileName = "camera_${System.currentTimeMillis()}.jpg"
         viewModel.uploadImage(bytes = bytes, fileName = fileName, mimeType = "image/jpeg")
         cameraMessage = null
@@ -80,6 +92,10 @@ fun AddItemScreen(
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         val bytes = readBytes(context, uri) ?: return@rememberLauncherForActivityResult
+        if (!isImagePayloadAllowed(bytes.size)) {
+            cameraMessage = "Image is too large (max ${MAX_LOCAL_IMAGE_BYTES / (1024 * 1024)}MB)"
+            return@rememberLauncherForActivityResult
+        }
         val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
         val extension = when (mimeType) {
             "image/png" -> ".png"
@@ -230,14 +246,25 @@ fun AddItemScreen(
 
             Button(
                 onClick = {
+                    val validationError = validateClothingItemForm(
+                        category = category,
+                        color = color,
+                        season = season,
+                        comfortText = comfort
+                    )
+                    if (validationError != null) {
+                        formError = validationError
+                        return@Button
+                    }
+                    formError = null
                     viewModel.addItem(
                         ClothingItem(
                             id = System.currentTimeMillis().toInt(),
-                            category = category,
-                            color = color,
-                            season = season,
-                            comfortLevel = comfort.toIntOrNull() ?: 3,
-                            brand = brand.takeIf { it.isNotBlank() },
+                            category = category.trim(),
+                            color = color.trim(),
+                            season = season.trim(),
+                            comfortLevel = parseComfortLevel(comfort),
+                            brand = brand.trim().takeIf { it.isNotBlank() },
                             imageUrl = imageUrl.takeIf { it.isNotBlank() }
                         )
                     )
@@ -247,6 +274,13 @@ fun AddItemScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Save Item")
+            }
+            formError?.let {
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
         }
     }

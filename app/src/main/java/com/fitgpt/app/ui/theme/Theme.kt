@@ -17,9 +17,9 @@ import androidx.compose.ui.platform.LocalContext
 private val ColorWhite = Color(0xFFFFFFFF)
 
 private val DarkColorScheme = darkColorScheme(
-    primary = FitgptAccent,
+    primary = FitgptDarkAccent,
     onPrimary = FitgptDarkText,
-    secondary = FitgptAccentHover,
+    secondary = FitgptDarkAccentHover,
     onSecondary = FitgptDarkText,
     tertiary = FitgptSuccess,
     background = FitgptDarkBackground,

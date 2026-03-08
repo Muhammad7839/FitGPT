@@ -16,7 +16,10 @@ android {
         versionCode = 1
         versionName = "1.0"
         val googleWebClientId = project.findProperty("GOOGLE_WEB_CLIENT_ID") as String? ?: ""
+        val apiBaseUrlRaw = project.findProperty("API_BASE_URL") as String? ?: "http://10.0.2.2:8000/"
+        val apiBaseUrl = if (apiBaseUrlRaw.endsWith("/")) apiBaseUrlRaw else "$apiBaseUrlRaw/"
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
