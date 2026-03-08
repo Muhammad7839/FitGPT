@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -44,7 +45,9 @@ fun PlansScreen(
 ) {
     val plans by viewModel.plannedState.collectAsState()
     var planDate by remember { mutableStateOf("") }
+    var planDatesCsv by remember { mutableStateOf("") }
     var occasion by remember { mutableStateOf("") }
+    var replaceExisting by remember { mutableStateOf(true) }
     var planError by remember { mutableStateOf<String?>(null) }
 
     FitGptScaffold(
@@ -82,6 +85,22 @@ fun PlansScreen(
                         label = { Text("Occasion") },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    OutlinedTextField(
+                        value = planDatesCsv,
+                        onValueChange = { planDatesCsv = it },
+                        label = { Text("Assign dates CSV (YYYY-MM-DD,...)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = replaceExisting,
+                            onCheckedChange = { replaceExisting = it }
+                        )
+                        Text("Replace existing entries on same date")
+                    }
                     Button(
                         onClick = {
                             if (!isValidPlanDate(planDate)) {
@@ -99,6 +118,27 @@ fun PlansScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Save Plan")
+                    }
+                    Button(
+                        onClick = {
+                            val parsedDates = planDatesCsv
+                                .split(",")
+                                .map { it.trim() }
+                                .filter { it.isNotEmpty() }
+                            if (parsedDates.isEmpty() || parsedDates.any { !isValidPlanDate(it) }) {
+                                planError = "Assignment dates must be YYYY-MM-DD, comma-separated"
+                                return@Button
+                            }
+                            planError = null
+                            viewModel.assignCurrentRecommendationToDates(
+                                plannedDates = parsedDates,
+                                occasion = occasion.takeIf { it.isNotBlank() },
+                                replaceExisting = replaceExisting
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Assign to Dates")
                     }
                     planError?.let {
                         Text(

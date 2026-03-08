@@ -6,6 +6,7 @@ package com.fitgpt.app.data.model
 data class WeatherSnapshot(
     val city: String,
     val temperatureF: Int,
+    val weatherCategory: String,
     val condition: String,
     val description: String
 )

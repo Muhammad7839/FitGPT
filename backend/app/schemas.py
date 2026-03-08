@@ -10,6 +10,11 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 # User Schemas
 # =============================
 
+DEFAULT_BODY_TYPE = "unspecified"
+DEFAULT_LIFESTYLE = "casual"
+DEFAULT_COMFORT_PREFERENCE = "medium"
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)
@@ -34,11 +39,35 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserProfileSummaryResponse(BaseModel):
+    id: int
+    email: EmailStr
+    full_name: Optional[str] = None
+    body_type: str
+    lifestyle: str
+    comfort_preference: str
+    onboarding_complete: bool
+    wardrobe_count: int
+    active_wardrobe_count: int
+    favorite_count: int
+    saved_outfit_count: int
+    planned_outfit_count: int
+    history_count: int
+
+
 class UserProfileUpdate(BaseModel):
-    body_type: Optional[str] = None
-    lifestyle: Optional[str] = None
-    comfort_preference: Optional[str] = None
+    body_type: Optional[str] = Field(default=None, max_length=64)
+    lifestyle: Optional[str] = Field(default=None, max_length=64)
+    comfort_preference: Optional[str] = Field(default=None, max_length=64)
     onboarding_complete: Optional[bool] = None
+
+    @field_validator("body_type", "lifestyle", "comfort_preference")
+    @classmethod
+    def normalize_optional_profile_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        cleaned = value.strip()
+        return cleaned or None
 
 
 # =============================
@@ -89,7 +118,10 @@ class ResetPasswordResponse(BaseModel):
 # =============================
 
 class ClothingItemCreate(BaseModel):
+    name: Optional[str] = Field(default=None, max_length=128)
     category: str = Field(min_length=1, max_length=64)
+    clothing_type: Optional[str] = Field(default=None, max_length=64)
+    fit_tag: Optional[str] = Field(default=None, max_length=32)
     color: str = Field(min_length=1, max_length=64)
     season: str = Field(min_length=1, max_length=32)
     comfort_level: int = Field(ge=1, le=5)
@@ -108,7 +140,7 @@ class ClothingItemCreate(BaseModel):
             raise ValueError("value cannot be blank")
         return cleaned
 
-    @field_validator("image_url", "brand")
+    @field_validator("name", "clothing_type", "fit_tag", "image_url", "brand")
     @classmethod
     def validate_optional_text(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
@@ -119,7 +151,10 @@ class ClothingItemCreate(BaseModel):
 
 class ClothingItemResponse(BaseModel):
     id: int
+    name: Optional[str] = None
     category: str
+    clothing_type: Optional[str] = None
+    fit_tag: Optional[str] = None
     color: str
     season: str
     comfort_level: int
@@ -134,7 +169,10 @@ class ClothingItemResponse(BaseModel):
 
 
 class ClothingItemUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, max_length=128)
     category: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    clothing_type: Optional[str] = Field(default=None, max_length=64)
+    fit_tag: Optional[str] = Field(default=None, max_length=32)
     color: Optional[str] = Field(default=None, min_length=1, max_length=64)
     season: Optional[str] = Field(default=None, min_length=1, max_length=32)
     comfort_level: Optional[int] = Field(default=None, ge=1, le=5)
@@ -155,7 +193,7 @@ class ClothingItemUpdate(BaseModel):
             raise ValueError("value cannot be blank")
         return cleaned
 
-    @field_validator("image_url", "brand")
+    @field_validator("name", "clothing_type", "fit_tag", "image_url", "brand")
     @classmethod
     def validate_optional_free_text(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
@@ -164,14 +202,51 @@ class ClothingItemUpdate(BaseModel):
         return cleaned or None
 
 
+class FavoriteToggleRequest(BaseModel):
+    is_favorite: bool
+
+
+class BulkCreateClothingItemsRequest(BaseModel):
+    items: list[ClothingItemCreate] = Field(min_length=1, max_length=100)
+
+
+class BulkCreateItemResult(BaseModel):
+    index: int
+    status: str
+    item: Optional[ClothingItemResponse] = None
+    error: Optional[str] = None
+
+
+class BulkCreateClothingItemsResponse(BaseModel):
+    results: list[BulkCreateItemResult]
+
+
+class ImageUploadResponse(BaseModel):
+    image_url: str
+
+
+class ImageBatchUploadEntry(BaseModel):
+    file_name: str
+    status: str
+    image_url: Optional[str] = None
+    error: Optional[str] = None
+
+
+class ImageBatchUploadResponse(BaseModel):
+    results: list[ImageBatchUploadEntry]
+
+
 class RecommendationResponse(BaseModel):
     items: list[ClothingItemResponse]
     explanation: str
+    weather_category: Optional[str] = None
+    occasion: Optional[str] = None
 
 
 class WeatherCurrentResponse(BaseModel):
     city: str
     temperature_f: int
+    weather_category: str
     condition: str
     description: str
 
@@ -262,6 +337,47 @@ class PlannedOutfitCreate(BaseModel):
         return cleaned or None
 
 
+class PlannedOutfitAssignmentRequest(BaseModel):
+    item_ids: list[int] = Field(min_length=1, max_length=32)
+    planned_dates: list[str] = Field(min_length=1, max_length=31)
+    occasion: Optional[str] = Field(default=None, max_length=128)
+    replace_existing: bool = True
+    created_at_timestamp: Optional[int] = Field(default=None, gt=0)
+
+    @field_validator("item_ids")
+    @classmethod
+    def validate_assignment_item_ids(cls, value: list[int]) -> list[int]:
+        if len(set(value)) != len(value):
+            raise ValueError("item_ids must be unique")
+        if any(item_id <= 0 for item_id in value):
+            raise ValueError("item_ids must contain positive integers")
+        return value
+
+    @field_validator("planned_dates")
+    @classmethod
+    def validate_planned_dates(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw_value in values:
+            cleaned = raw_value.strip()
+            try:
+                datetime.strptime(cleaned, "%Y-%m-%d")
+            except ValueError as exc:
+                raise ValueError("planned_dates must use YYYY-MM-DD format") from exc
+            if cleaned not in seen:
+                normalized.append(cleaned)
+                seen.add(cleaned)
+        return normalized
+
+    @field_validator("occasion")
+    @classmethod
+    def validate_assignment_occasion(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        cleaned = value.strip()
+        return cleaned or None
+
+
 class PlannedOutfitEntry(BaseModel):
     id: int
     item_ids: list[int]
@@ -274,5 +390,7 @@ class PlannedOutfitListResponse(BaseModel):
     outfits: list[PlannedOutfitEntry]
 
 
-class ImageUploadResponse(BaseModel):
-    image_url: str
+class PlannedOutfitAssignmentResponse(BaseModel):
+    detail: str
+    planned_dates: list[str]
+    outfits: list[PlannedOutfitEntry]

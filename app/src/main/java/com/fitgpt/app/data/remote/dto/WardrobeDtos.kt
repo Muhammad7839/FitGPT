@@ -7,7 +7,12 @@ import com.google.gson.annotations.SerializedName
 
 data class ClothingItemDto(
     val id: Int,
+    val name: String?,
     val category: String,
+    @SerializedName("clothing_type")
+    val clothingType: String?,
+    @SerializedName("fit_tag")
+    val fitTag: String?,
     val color: String,
     val season: String,
     @SerializedName("comfort_level")
@@ -26,7 +31,12 @@ data class ClothingItemDto(
 )
 
 data class ClothingItemCreateRequest(
+    val name: String?,
     val category: String,
+    @SerializedName("clothing_type")
+    val clothingType: String?,
+    @SerializedName("fit_tag")
+    val fitTag: String?,
     val color: String,
     val season: String,
     @SerializedName("comfort_level")
@@ -46,15 +56,25 @@ data class ClothingItemCreateRequest(
 
 data class RecommendationResponseDto(
     val items: List<ClothingItemDto>,
-    val explanation: String
+    val explanation: String,
+    @SerializedName("weather_category")
+    val weatherCategory: String?,
+    val occasion: String?
 )
 
 data class WeatherCurrentResponseDto(
     val city: String,
     @SerializedName("temperature_f")
     val temperatureF: Int,
+    @SerializedName("weather_category")
+    val weatherCategory: String,
     val condition: String,
     val description: String
+)
+
+data class FavoriteToggleRequestDto(
+    @SerializedName("is_favorite")
+    val isFavorite: Boolean
 )
 
 data class OutfitHistoryRequest(
@@ -120,7 +140,52 @@ data class PlannedOutfitListResponseDto(
     val outfits: List<PlannedOutfitEntryDto>
 )
 
+data class PlannedOutfitAssignmentRequestDto(
+    @SerializedName("item_ids")
+    val itemIds: List<Int>,
+    @SerializedName("planned_dates")
+    val plannedDates: List<String>,
+    val occasion: String? = null,
+    @SerializedName("replace_existing")
+    val replaceExisting: Boolean = true
+)
+
+data class PlannedOutfitAssignmentResponseDto(
+    val detail: String,
+    @SerializedName("planned_dates")
+    val plannedDates: List<String>,
+    val outfits: List<PlannedOutfitEntryDto>
+)
+
 data class ImageUploadResponseDto(
     @SerializedName("image_url")
     val imageUrl: String
+)
+
+data class ImageBatchUploadEntryDto(
+    @SerializedName("file_name")
+    val fileName: String,
+    val status: String,
+    @SerializedName("image_url")
+    val imageUrl: String?,
+    val error: String?
+)
+
+data class ImageBatchUploadResponseDto(
+    val results: List<ImageBatchUploadEntryDto>
+)
+
+data class BulkCreateClothingItemsRequestDto(
+    val items: List<ClothingItemCreateRequest>
+)
+
+data class BulkCreateItemResultDto(
+    val index: Int,
+    val status: String,
+    val item: ClothingItemDto?,
+    val error: String?
+)
+
+data class BulkCreateClothingItemsResponseDto(
+    val results: List<BulkCreateItemResultDto>
 )

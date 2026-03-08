@@ -54,6 +54,30 @@ data class UserResponse(
     val onboardingComplete: Boolean
 )
 
+data class UserProfileSummaryResponse(
+    val id: Int,
+    val email: String,
+    @SerializedName("body_type")
+    val bodyType: String,
+    val lifestyle: String,
+    @SerializedName("comfort_preference")
+    val comfortPreference: String,
+    @SerializedName("onboarding_complete")
+    val onboardingComplete: Boolean,
+    @SerializedName("wardrobe_count")
+    val wardrobeCount: Int,
+    @SerializedName("active_wardrobe_count")
+    val activeWardrobeCount: Int,
+    @SerializedName("favorite_count")
+    val favoriteCount: Int,
+    @SerializedName("saved_outfit_count")
+    val savedOutfitCount: Int,
+    @SerializedName("planned_outfit_count")
+    val plannedOutfitCount: Int,
+    @SerializedName("history_count")
+    val historyCount: Int
+)
+
 data class UserProfileUpdateRequest(
     @SerializedName("body_type")
     val bodyType: String? = null,

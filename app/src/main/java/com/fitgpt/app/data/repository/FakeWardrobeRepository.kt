@@ -4,6 +4,7 @@ import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
+import com.fitgpt.app.data.model.UploadResult
 import com.fitgpt.app.data.model.WeatherSnapshot
 
 class FakeWardrobeRepository : WardrobeRepository {
@@ -31,20 +32,58 @@ class FakeWardrobeRepository : WardrobeRepository {
     private val historyEntries = mutableListOf<OutfitHistoryEntry>()
     private val plannedOutfits = mutableListOf<PlannedOutfit>()
 
-    override suspend fun getWardrobeItems(includeArchived: Boolean): List<ClothingItem> {
-        return if (includeArchived) {
-            wardrobeItems.toList()
-        } else {
-            wardrobeItems.filter { !it.isArchived }
-        }
+    override suspend fun getWardrobeItems(
+        includeArchived: Boolean,
+        search: String?,
+        category: String?,
+        color: String?,
+        clothingType: String?,
+        season: String?,
+        fitTag: String?,
+        favoritesOnly: Boolean
+    ): List<ClothingItem> {
+        val normalizedSearch = search?.trim()?.lowercase().orEmpty()
+        return wardrobeItems
+            .asSequence()
+            .filter { includeArchived || !it.isArchived }
+            .filter { !favoritesOnly || it.isFavorite }
+            .filter { category.isNullOrBlank() || it.category.contains(category, ignoreCase = true) }
+            .filter { color.isNullOrBlank() || it.color.contains(color, ignoreCase = true) }
+            .filter { clothingType.isNullOrBlank() || (it.clothingType ?: "").contains(clothingType, ignoreCase = true) }
+            .filter { season.isNullOrBlank() || it.season.contains(season, ignoreCase = true) }
+            .filter { fitTag.isNullOrBlank() || (it.fitTag ?: "").contains(fitTag, ignoreCase = true) }
+            .filter {
+                normalizedSearch.isBlank() ||
+                    listOfNotNull(it.name, it.category, it.color, it.season, it.clothingType, it.fitTag, it.brand)
+                        .joinToString(" ")
+                        .lowercase()
+                        .contains(normalizedSearch)
+            }
+            .toList()
     }
 
     override suspend fun addItem(item: ClothingItem) {
         wardrobeItems.add(item)
     }
 
+    override suspend fun addItemsBulk(items: List<ClothingItem>): List<ClothingItem> {
+        wardrobeItems.addAll(items)
+        return items
+    }
+
     override suspend fun uploadImage(bytes: ByteArray, fileName: String, mimeType: String): String {
         return "https://example.com/uploads/$fileName"
+    }
+
+    override suspend fun uploadImagesBatch(images: List<UploadImagePayload>): List<UploadResult> {
+        return images.map { image ->
+            UploadResult(
+                fileName = image.fileName,
+                status = "success",
+                imageUrl = "https://example.com/uploads/${image.fileName}",
+                error = null
+            )
+        }
     }
 
     override suspend fun deleteItem(item: ClothingItem) {
@@ -64,12 +103,28 @@ class FakeWardrobeRepository : WardrobeRepository {
         }
     }
 
+    override suspend fun setFavorite(itemId: Int, isFavorite: Boolean): ClothingItem {
+        val index = wardrobeItems.indexOfFirst { it.id == itemId }
+        if (index == -1) error("item not found")
+        val updated = wardrobeItems[index].copy(isFavorite = isFavorite)
+        wardrobeItems[index] = updated
+        return updated
+    }
+
+    override suspend fun getFavoriteItems(): List<ClothingItem> {
+        return wardrobeItems.filter { it.isFavorite && !it.isArchived }
+    }
+
     override suspend fun getRecommendations(
         manualTemp: Int?,
         timeContext: String?,
         planDate: String?,
         exclude: String?,
-        weatherCity: String?
+        weatherCity: String?,
+        weatherLat: Double?,
+        weatherLon: Double?,
+        weatherCategory: String?,
+        occasion: String?
     ): List<ClothingItem> {
         val available = wardrobeItems
             .filter { it.isAvailable && !it.isArchived }
@@ -80,10 +135,11 @@ class FakeWardrobeRepository : WardrobeRepository {
         return listOfNotNull(tops.firstOrNull(), bottoms.firstOrNull(), shoes.firstOrNull())
     }
 
-    override suspend fun getCurrentWeather(city: String): WeatherSnapshot {
+    override suspend fun getCurrentWeather(city: String?, lat: Double?, lon: Double?): WeatherSnapshot {
         return WeatherSnapshot(
-            city = city,
+            city = city ?: "Current location",
             temperatureF = 72,
+            weatherCategory = "warm",
             condition = "Clear",
             description = "clear sky"
         )
@@ -146,6 +202,29 @@ class FakeWardrobeRepository : WardrobeRepository {
                 occasion = occasion
             )
         )
+    }
+
+    override suspend fun assignOutfitToDates(
+        itemIds: List<Int>,
+        plannedDates: List<String>,
+        occasion: String?,
+        replaceExisting: Boolean
+    ) {
+        plannedDates.forEach { date ->
+            if (replaceExisting) {
+                plannedOutfits.removeAll { it.planDate == date }
+            }
+            val outfitItems = wardrobeItems.filter { itemIds.contains(it.id) }
+            plannedOutfits.add(
+                0,
+                PlannedOutfit(
+                    id = System.currentTimeMillis(),
+                    items = outfitItems,
+                    planDate = date,
+                    occasion = occasion.orEmpty()
+                )
+            )
+        }
     }
 
     override suspend fun getPlannedOutfits(): List<PlannedOutfit> {

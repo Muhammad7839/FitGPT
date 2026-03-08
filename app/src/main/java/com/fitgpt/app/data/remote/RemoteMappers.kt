@@ -10,7 +10,10 @@ import com.fitgpt.app.data.remote.dto.ClothingItemDto
 fun ClothingItemDto.toDomain(): ClothingItem {
     return ClothingItem(
         id = id,
+        name = name,
         category = category,
+        clothingType = clothingType,
+        fitTag = fitTag,
         color = color,
         season = season,
         comfortLevel = comfortLevel,
@@ -25,7 +28,10 @@ fun ClothingItemDto.toDomain(): ClothingItem {
 
 fun ClothingItem.toCreateRequest(): ClothingItemCreateRequest {
     return ClothingItemCreateRequest(
+        name = name,
         category = category,
+        clothingType = clothingType,
+        fitTag = fitTag,
         color = color,
         season = season,
         comfortLevel = comfortLevel,

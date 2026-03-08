@@ -18,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,6 +33,7 @@ import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.UiState
+import com.fitgpt.app.viewmodel.WardrobeFilters
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 
 /**
@@ -43,6 +45,14 @@ fun FavoritesScreen(
     viewModel: WardrobeViewModel
 ) {
     val uiState by viewModel.wardrobeState.collectAsState()
+    LaunchedEffect(Unit) {
+        viewModel.applyWardrobeFilters(
+            WardrobeFilters(
+                includeArchived = false,
+                favoritesOnly = true
+            )
+        )
+    }
 
     val items = (uiState as? UiState.Success<List<com.fitgpt.app.data.model.ClothingItem>>)
         ?.data

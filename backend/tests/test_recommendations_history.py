@@ -1,9 +1,13 @@
 from conftest import register_and_login
+from app.weather import WeatherLookupError
 
 
 def item(category: str, color: str):
     return {
+        "name": f"{category} {color}",
         "category": category,
+        "clothing_type": None,
+        "fit_tag": None,
         "color": color,
         "season": "All",
         "comfort_level": 3,
@@ -235,3 +239,142 @@ def test_planned_outfit_requires_valid_date_format(client):
         },
     )
     assert response.status_code == 422
+
+
+def test_planner_assign_replaces_existing_entries(client):
+    token = register_and_login(client, "planner-replace@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
+    bottom = client.post("/wardrobe/items", json=item("Bottom", "Blue"), headers=auth).json()
+    shoes = client.post("/wardrobe/items", json=item("Shoes", "White"), headers=auth).json()
+
+    first = client.put(
+        "/outfits/planned/assign",
+        headers=auth,
+        json={
+            "item_ids": [top["id"], bottom["id"]],
+            "planned_dates": ["2026-05-01"],
+            "occasion": "Work",
+            "replace_existing": True,
+        },
+    )
+    assert first.status_code == 200
+
+    second = client.put(
+        "/outfits/planned/assign",
+        headers=auth,
+        json={
+            "item_ids": [top["id"], shoes["id"]],
+            "planned_dates": ["2026-05-01"],
+            "occasion": "Event",
+            "replace_existing": True,
+        },
+    )
+    assert second.status_code == 200
+    outfits = second.json()["outfits"]
+    same_day = [entry for entry in outfits if entry["planned_date"] == "2026-05-01"]
+    assert len(same_day) == 1
+    assert same_day[0]["item_ids"] == [top["id"], shoes["id"]]
+
+
+def test_planner_assign_allows_multiple_entries_when_replace_disabled(client):
+    token = register_and_login(client, "planner-append@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
+    bottom = client.post("/wardrobe/items", json=item("Bottom", "Blue"), headers=auth).json()
+    shoes = client.post("/wardrobe/items", json=item("Shoes", "White"), headers=auth).json()
+
+    first = client.put(
+        "/outfits/planned/assign",
+        headers=auth,
+        json={
+            "item_ids": [top["id"], bottom["id"]],
+            "planned_dates": ["2026-05-02"],
+            "replace_existing": False,
+        },
+    )
+    assert first.status_code == 200
+
+    second = client.put(
+        "/outfits/planned/assign",
+        headers=auth,
+        json={
+            "item_ids": [top["id"], shoes["id"]],
+            "planned_dates": ["2026-05-02"],
+            "replace_existing": False,
+        },
+    )
+    assert second.status_code == 200
+    outfits = second.json()["outfits"]
+    same_day = [entry for entry in outfits if entry["planned_date"] == "2026-05-02"]
+    assert len(same_day) == 2
+
+
+def test_recommendations_accept_weather_category_when_lookup_fails(client, monkeypatch):
+    token = register_and_login(client, "weather-fallback@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
+    client.post("/wardrobe/items", json=item("Bottom", "Blue"), headers=auth).json()
+    client.post("/wardrobe/items", json=item("Shoes", "White"), headers=auth).json()
+
+    def fail_lookup(*_args, **_kwargs):
+        raise WeatherLookupError("lookup failed")
+
+    monkeypatch.setattr("app.routes.fetch_current_weather", fail_lookup)
+
+    response = client.get(
+        "/recommendations",
+        headers=auth,
+        params={"weather_city": "Boston", "weather_category": "cool", "occasion": "Office"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["weather_category"] == "cool"
+    assert body["occasion"] == "Office"
+    assert "office" in body["explanation"].lower()
+
+
+def test_cold_recommendations_prioritize_outerwear_and_avoid_light_items(client):
+    token = register_and_login(client, "temp-logic@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    client.post(
+        "/wardrobe/items",
+        headers=auth,
+        json=item("Top", "Black") | {"name": "Heavy Sweater", "clothing_type": "sweater"},
+    )
+    client.post(
+        "/wardrobe/items",
+        headers=auth,
+        json=item("Bottom", "Navy") | {"name": "Warm Pants", "clothing_type": "pants"},
+    )
+    client.post(
+        "/wardrobe/items",
+        headers=auth,
+        json=item("Bottom", "Khaki") | {"name": "Running Shorts", "clothing_type": "shorts"},
+    )
+    client.post(
+        "/wardrobe/items",
+        headers=auth,
+        json=item("Shoes", "Brown") | {"name": "Boots", "clothing_type": "boots"},
+    )
+    client.post(
+        "/wardrobe/items",
+        headers=auth,
+        json=item("Shoes", "Black") | {"name": "Beach Sandals", "clothing_type": "sandals"},
+    )
+    client.post(
+        "/wardrobe/items",
+        headers=auth,
+        json=item("Outerwear", "Gray") | {"name": "Winter Coat", "clothing_type": "coat"},
+    )
+
+    reco = client.get("/recommendations", headers=auth, params={"weather_category": "cold"})
+    assert reco.status_code == 200
+    names = [entry["name"].lower() for entry in reco.json()["items"]]
+    assert any("coat" in name for name in names)
+    assert all("short" not in name for name in names)
+    assert all("sandal" not in name for name in names)

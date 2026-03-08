@@ -12,13 +12,20 @@ class RemoteProfileRepository(
 ) : ProfileRepository {
 
     override suspend fun getProfile(): UserProfile {
-        val response = api.getCurrentUser()
+        val response = api.getProfileSummary()
         return UserProfile(
+            id = response.id,
             email = response.email,
             bodyType = response.bodyType,
             lifestyle = response.lifestyle,
             comfortPreference = response.comfortPreference,
-            onboardingComplete = response.onboardingComplete
+            onboardingComplete = response.onboardingComplete,
+            wardrobeCount = response.wardrobeCount,
+            activeWardrobeCount = response.activeWardrobeCount,
+            favoriteCount = response.favoriteCount,
+            savedOutfitCount = response.savedOutfitCount,
+            plannedOutfitCount = response.plannedOutfitCount,
+            historyCount = response.historyCount
         )
     }
 
@@ -28,7 +35,7 @@ class RemoteProfileRepository(
         comfortPreference: String,
         onboardingComplete: Boolean
     ): UserProfile {
-        val response = api.updateMyProfile(
+        api.updateMyProfile(
             UserProfileUpdateRequest(
                 bodyType = bodyType,
                 lifestyle = lifestyle,
@@ -36,12 +43,20 @@ class RemoteProfileRepository(
                 onboardingComplete = onboardingComplete
             )
         )
+        val summary = api.getProfileSummary()
         return UserProfile(
-            email = response.email,
-            bodyType = response.bodyType,
-            lifestyle = response.lifestyle,
-            comfortPreference = response.comfortPreference,
-            onboardingComplete = response.onboardingComplete
+            id = summary.id,
+            email = summary.email,
+            bodyType = summary.bodyType,
+            lifestyle = summary.lifestyle,
+            comfortPreference = summary.comfortPreference,
+            onboardingComplete = summary.onboardingComplete,
+            wardrobeCount = summary.wardrobeCount,
+            activeWardrobeCount = summary.activeWardrobeCount,
+            favoriteCount = summary.favoriteCount,
+            savedOutfitCount = summary.savedOutfitCount,
+            plannedOutfitCount = summary.plannedOutfitCount,
+            historyCount = summary.historyCount
         )
     }
 }

@@ -16,6 +16,7 @@ class FakeWardrobeRepositoryTest {
         val repo = FakeWardrobeRepository()
         val item = ClothingItem(
             id = 99,
+            name = "Running Shoe",
             category = "Shoes",
             color = "White",
             season = "All",
@@ -33,6 +34,9 @@ class FakeWardrobeRepositoryTest {
         repo.deleteItem(item)
         items = repo.getWardrobeItems()
         assertTrue(items.none { it.id == 99 })
+
+        val withArchived = repo.getWardrobeItems(includeArchived = true)
+        assertTrue(withArchived.any { it.id == 99 && it.isArchived })
     }
 
     @Test
@@ -41,6 +45,7 @@ class FakeWardrobeRepositoryTest {
         repo.addItem(
             ClothingItem(
                 id = 3,
+                name = "Daily Sneaker",
                 category = "Shoes",
                 color = "White",
                 season = "All",
@@ -53,5 +58,28 @@ class FakeWardrobeRepositoryTest {
         assertTrue(categories.contains("top"))
         assertTrue(categories.contains("bottom"))
         assertTrue(categories.contains("shoes"))
+    }
+
+    @Test
+    fun assignOutfitToDates_replacesEntriesWhenRequested() = runTest {
+        val repo = FakeWardrobeRepository()
+        val itemIds = repo.getWardrobeItems().map { it.id }
+
+        repo.assignOutfitToDates(
+            itemIds = itemIds,
+            plannedDates = listOf("2026-05-01"),
+            occasion = "Work",
+            replaceExisting = true
+        )
+        repo.assignOutfitToDates(
+            itemIds = itemIds.take(1),
+            plannedDates = listOf("2026-05-01"),
+            occasion = "Gym",
+            replaceExisting = true
+        )
+
+        val plans = repo.getPlannedOutfits().filter { it.planDate == "2026-05-01" }
+        assertEquals(1, plans.size)
+        assertEquals("Gym", plans.first().occasion)
     }
 }

@@ -38,7 +38,10 @@ class ClothingItem(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
+    name = Column(String, nullable=True)
     category = Column(String, nullable=False)
+    clothing_type = Column(String, nullable=True)
+    fit_tag = Column(String, nullable=True)
     color = Column(String, nullable=False)
     season = Column(String, nullable=False, default="All")
     comfort_level = Column(Integer, nullable=False, default=3)

@@ -34,9 +34,11 @@ fun RecommendationScreen(
     val weatherState by viewModel.weatherState.collectAsState()
     var manualTempInput by rememberSaveable { mutableStateOf("") }
     var weatherCity by rememberSaveable { mutableStateOf("") }
+    var weatherCategory by rememberSaveable { mutableStateOf("") }
     var timeContext by rememberSaveable { mutableStateOf("") }
     var planDate by rememberSaveable { mutableStateOf("") }
     var exclude by rememberSaveable { mutableStateOf("") }
+    var occasion by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         viewModel.fetchRecommendations()
@@ -117,6 +119,13 @@ fun RecommendationScreen(
                                 singleLine = true
                             )
                             OutlinedTextField(
+                                value = weatherCategory,
+                                onValueChange = { weatherCategory = it },
+                                label = { Text("Weather category (cold/cool/mild/warm/hot)") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
                                 value = timeContext,
                                 onValueChange = { timeContext = it },
                                 label = { Text("Time context (morning/evening)") },
@@ -137,6 +146,13 @@ fun RecommendationScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
+                            OutlinedTextField(
+                                value = occasion,
+                                onValueChange = { occasion = it },
+                                label = { Text("Occasion (work, gym, event)") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
 
                             OutlinedButton(
                                 onClick = {
@@ -149,7 +165,9 @@ fun RecommendationScreen(
                                         timeContext = timeContext.nullIfBlank(),
                                         planDate = planDate.nullIfBlank(),
                                         exclude = exclude.nullIfBlank(),
-                                        weatherCity = city
+                                        weatherCity = city,
+                                        weatherCategory = weatherCategory.nullIfBlank(),
+                                        occasion = occasion.nullIfBlank()
                                     )
                                 },
                                 modifier = Modifier.fillMaxWidth()
@@ -191,7 +209,7 @@ fun RecommendationScreen(
                                             style = MaterialTheme.typography.titleSmall
                                         )
                                         Text(
-                                            text = "${weather.temperatureF}F • ${weather.condition}",
+                                            text = "${weather.temperatureF}F • ${weather.condition} • ${weather.weatherCategory}",
                                             style = MaterialTheme.typography.bodyMedium
                                         )
                                         Text(
@@ -268,7 +286,9 @@ fun RecommendationScreen(
                                 timeContext = timeContext.nullIfBlank(),
                                 planDate = planDate.nullIfBlank(),
                                 exclude = exclude.nullIfBlank(),
-                                weatherCity = city
+                                weatherCity = city,
+                                weatherCategory = weatherCategory.nullIfBlank(),
+                                occasion = occasion.nullIfBlank()
                             )
                         },
                         modifier = Modifier.fillMaxWidth()
