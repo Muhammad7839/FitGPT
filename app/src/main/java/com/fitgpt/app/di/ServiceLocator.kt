@@ -8,7 +8,9 @@ import com.fitgpt.app.data.auth.AuthInterceptor
 import com.fitgpt.app.data.auth.TokenStore
 import com.fitgpt.app.data.remote.ApiService
 import com.fitgpt.app.data.repository.AuthRepository
+import com.fitgpt.app.data.repository.ProfileRepository
 import com.fitgpt.app.data.repository.RemoteAuthRepository
+import com.fitgpt.app.data.repository.RemoteProfileRepository
 import com.fitgpt.app.data.repository.RemoteWardrobeRepository
 import com.fitgpt.app.data.repository.WardrobeRepository
 import okhttp3.OkHttpClient
@@ -31,6 +33,9 @@ object ServiceLocator {
     @Volatile
     private var wardrobeRepository: WardrobeRepository? = null
 
+    @Volatile
+    private var profileRepository: ProfileRepository? = null
+
     fun provideTokenStore(context: Context): TokenStore {
         return tokenStore ?: synchronized(this) {
             tokenStore ?: TokenStore(context).also { tokenStore = it }
@@ -50,6 +55,14 @@ object ServiceLocator {
             wardrobeRepository ?: RemoteWardrobeRepository(
                 api = provideApiService(context),
             ).also { wardrobeRepository = it }
+        }
+    }
+
+    fun provideProfileRepository(context: Context): ProfileRepository {
+        return profileRepository ?: synchronized(this) {
+            profileRepository ?: RemoteProfileRepository(
+                api = provideApiService(context)
+            ).also { profileRepository = it }
         }
     }
 

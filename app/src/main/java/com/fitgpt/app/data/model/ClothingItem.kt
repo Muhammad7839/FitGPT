@@ -1,6 +1,3 @@
-/**
- * Domain model used by UI and repositories to represent a wardrobe item.
- */
 package com.fitgpt.app.data.model
 
 data class ClothingItem(
@@ -10,12 +7,14 @@ data class ClothingItem(
     val season: String,
     val comfortLevel: Int,
 
+    // Optional image
     val imageUrl: String? = null,
 
-    val brand: String? = null,
-    val isAvailable: Boolean = true,
-    val isArchived: Boolean = false,
-    // Used by recommendation ordering so recently worn items rotate out.
-    val lastWornTimestamp: Long? = null,
+    // New fields
+    val brand: String? = null,                 // Future barcode + brand preference
+    val isAvailable: Boolean = true,           // Laundry / unavailable flag
+    val isFavorite: Boolean = false,           // Favorite marker synced with backend
+    val isArchived: Boolean = false,           // Soft delete instead of hard delete
+    val lastWornTimestamp: Long? = null,       // Rotation tracking
     val createdAt: Long = System.currentTimeMillis()
 )

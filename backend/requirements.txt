@@ -8,5 +8,6 @@ pydantic==2.11.7
 email-validator==2.2.0
 python-multipart==0.0.20
 google-auth==2.40.3
+requests==2.32.4
 pytest==8.4.1
 httpx==0.28.1
