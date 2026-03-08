@@ -1,5 +1,3 @@
-"""SQLAlchemy ORM models for users, wardrobe items, and outfit history."""
-
 from sqlalchemy import Column, Integer, String, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 
@@ -7,8 +5,6 @@ from app.database.database import Base
 
 
 class User(Base):
-    """User account and profile preferences."""
-
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -17,12 +13,15 @@ class User(Base):
     full_name = Column(String, nullable=True)
     hashed_password = Column(String, nullable=False)
 
+    # --- Profile / Preferences ---
     body_type = Column(String, default="unspecified")
     lifestyle = Column(String, default="casual")
     comfort_preference = Column(String, default="medium")
 
     is_active = Column(Boolean, default=True)
     onboarding_complete = Column(Boolean, default=False)
+    reset_token_hash = Column(String, nullable=True)
+    reset_token_expires_at = Column(Integer, nullable=True)
 
 
     wardrobe_items = relationship(
@@ -33,8 +32,6 @@ class User(Base):
 
 
 class ClothingItem(Base):
-    """Wardrobe item belonging to a user."""
-
     __tablename__ = "clothing_items"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -46,6 +43,7 @@ class ClothingItem(Base):
     image_url = Column(String, nullable=True)
     brand = Column(String, nullable=True)
     is_available = Column(Boolean, nullable=False, default=True)
+    is_favorite = Column(Boolean, nullable=False, default=False)
     is_archived = Column(Boolean, nullable=False, default=False)
     last_worn_timestamp = Column(Integer, nullable=True)
 
@@ -55,8 +53,6 @@ class ClothingItem(Base):
 
 
 class OutfitHistory(Base):
-    """Tracks outfits that users marked as worn."""
-
     __tablename__ = "outfit_history"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -66,11 +62,20 @@ class OutfitHistory(Base):
 
 
 class SavedOutfit(Base):
-    """Stores user-saved outfit combinations for retrieval in the UI."""
-
     __tablename__ = "saved_outfits"
 
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     item_ids_csv = Column(String, nullable=False)
     saved_at_timestamp = Column(Integer, nullable=False)
+
+
+class PlannedOutfit(Base):
+    __tablename__ = "planned_outfits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    item_ids_csv = Column(String, nullable=False)
+    planned_date = Column(String, nullable=False)
+    occasion = Column(String, nullable=True)
+    created_at_timestamp = Column(Integer, nullable=False)

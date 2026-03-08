@@ -15,22 +15,43 @@ import androidx.navigation.navArgument
 import com.fitgpt.app.data.PreferencesManager
 import com.fitgpt.app.di.ServiceLocator
 import com.fitgpt.app.ui.additem.AddItemScreen
+import com.fitgpt.app.ui.auth.ForgotPasswordScreen
 import com.fitgpt.app.ui.auth.LoginScreen
+import com.fitgpt.app.ui.auth.ResetPasswordScreen
+import com.fitgpt.app.ui.auth.SignupScreen
+import com.fitgpt.app.ui.dashboard.DashboardScreen
 import com.fitgpt.app.ui.edititem.EditItemScreen
+import com.fitgpt.app.ui.favorites.FavoritesScreen
+import com.fitgpt.app.ui.history.HistoryScreen
 import com.fitgpt.app.ui.onboarding.WelcomeScreen
+import com.fitgpt.app.ui.plans.PlansScreen
+import com.fitgpt.app.ui.profile.ProfileScreen
 import com.fitgpt.app.ui.recommendation.RecommendationScreen
+import com.fitgpt.app.ui.saved.SavedOutfitsScreen
 import com.fitgpt.app.ui.wardrobe.WardrobeScreen
 import com.fitgpt.app.viewmodel.AuthViewModel
 import com.fitgpt.app.viewmodel.AuthViewModelFactory
 import com.fitgpt.app.viewmodel.OnboardingViewModel
 import com.fitgpt.app.viewmodel.OnboardingViewModelFactory
+import com.fitgpt.app.viewmodel.ProfileViewModel
+import com.fitgpt.app.viewmodel.ProfileViewModelFactory
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import com.fitgpt.app.viewmodel.WardrobeViewModelFactory
 
 object Routes {
     const val ONBOARDING_WELCOME = "onboarding_welcome"
     const val LOGIN = "login"
+    const val SIGNUP = "signup"
+    const val FORGOT_PASSWORD = "forgot_password"
+    const val RESET_PASSWORD = "reset_password"
+    const val RESET_PASSWORD_ROUTE = "reset_password?token={token}"
+    const val DASHBOARD = "dashboard"
     const val WARDROBE = "wardrobe"
+    const val FAVORITES = "favorites"
+    const val SAVED_OUTFITS = "saved_outfits"
+    const val HISTORY = "history"
+    const val PLANS = "plans"
+    const val PROFILE = "profile"
     const val ADD_ITEM = "add_item"
     const val EDIT_ITEM = "edit_item"
     const val RECOMMENDATION = "recommendation"
@@ -62,6 +83,13 @@ fun AppNavHost(
     val authRepository = remember { ServiceLocator.provideAuthRepository(context) }
     val authViewModel: AuthViewModel =
         viewModel(factory = AuthViewModelFactory(authRepository, tokenStore))
+    val profileRepository = remember { ServiceLocator.provideProfileRepository(context) }
+    val profileViewModel: ProfileViewModel? =
+        if (hasToken) {
+            viewModel(factory = ProfileViewModelFactory(profileRepository))
+        } else {
+            null
+        }
 
     LaunchedEffect(Unit) {
         // Start route waits until onboarding completion and auth validity are known.
@@ -88,7 +116,7 @@ fun AppNavHost(
 
     val startDestination =
         if (!completed) Routes.ONBOARDING_WELCOME
-        else if (hasToken) Routes.WARDROBE
+        else if (hasToken) Routes.DASHBOARD
         else Routes.LOGIN
 
     NavHost(
@@ -108,16 +136,109 @@ fun AppNavHost(
                 viewModel = authViewModel,
                 onLoginSuccess = {
                     hasToken = true
-                    navController.navigate(Routes.WARDROBE) {
+                    navController.navigate(Routes.DASHBOARD) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
+                },
+                onCreateAccountClick = {
+                    navController.navigate(Routes.SIGNUP)
+                },
+                onForgotPasswordClick = {
+                    navController.navigate(Routes.FORGOT_PASSWORD)
                 }
+            )
+        }
+
+        composable(Routes.SIGNUP) {
+            SignupScreen(
+                viewModel = authViewModel,
+                onSignupSuccess = {
+                    hasToken = true
+                    navController.navigate(Routes.DASHBOARD) {
+                        popUpTo(Routes.LOGIN) { inclusive = true }
+                    }
+                },
+                onBackToLoginClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Routes.FORGOT_PASSWORD) {
+            ForgotPasswordScreen(
+                navController = navController,
+                viewModel = authViewModel
+            )
+        }
+
+        composable(
+            route = Routes.RESET_PASSWORD_ROUTE,
+            arguments = listOf(
+                navArgument("token") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                    nullable = true
+                }
+            )
+        ) { backStackEntry ->
+            ResetPasswordScreen(
+                navController = navController,
+                viewModel = authViewModel,
+                initialToken = backStackEntry.arguments?.getString("token").orEmpty()
+            )
+        }
+
+        composable(Routes.DASHBOARD) {
+            val vm = wardrobeViewModel ?: return@composable
+            DashboardScreen(
+                navController = navController,
+                viewModel = vm
             )
         }
 
         composable(Routes.WARDROBE) {
             val vm = wardrobeViewModel ?: return@composable
             WardrobeScreen(
+                navController = navController,
+                viewModel = vm
+            )
+        }
+
+        composable(Routes.FAVORITES) {
+            val vm = wardrobeViewModel ?: return@composable
+            FavoritesScreen(
+                navController = navController,
+                viewModel = vm
+            )
+        }
+
+        composable(Routes.SAVED_OUTFITS) {
+            val vm = wardrobeViewModel ?: return@composable
+            SavedOutfitsScreen(
+                navController = navController,
+                viewModel = vm
+            )
+        }
+
+        composable(Routes.HISTORY) {
+            val vm = wardrobeViewModel ?: return@composable
+            HistoryScreen(
+                navController = navController,
+                viewModel = vm
+            )
+        }
+
+        composable(Routes.PLANS) {
+            val vm = wardrobeViewModel ?: return@composable
+            PlansScreen(
+                navController = navController,
+                viewModel = vm
+            )
+        }
+
+        composable(Routes.PROFILE) {
+            val vm = profileViewModel ?: return@composable
+            ProfileScreen(
                 navController = navController,
                 viewModel = vm
             )

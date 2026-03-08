@@ -22,6 +22,7 @@ class RemoteMappersTest {
             imageUrl = "https://example.com/item.png",
             brand = "Uniqlo",
             isAvailable = true,
+            isFavorite = true,
             isArchived = false,
             lastWornTimestamp = 12345L
         )
@@ -36,6 +37,7 @@ class RemoteMappersTest {
         assertEquals("Uniqlo", model.brand)
         assertEquals(12345L, model.lastWornTimestamp)
         assertTrue(model.isAvailable)
+        assertTrue(model.isFavorite)
     }
 
     @Test
@@ -49,6 +51,7 @@ class RemoteMappersTest {
             imageUrl = null,
             brand = "Levi's",
             isAvailable = true,
+            isFavorite = true,
             isArchived = false,
             lastWornTimestamp = null
         )
@@ -58,5 +61,6 @@ class RemoteMappersTest {
         assertEquals("Blue", request.color)
         assertEquals(3, request.comfortLevel)
         assertEquals("Levi's", request.brand)
+        assertTrue(request.isFavorite)
     }
 }

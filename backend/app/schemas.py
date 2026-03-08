@@ -1,20 +1,17 @@
-"""Pydantic request/response models used by API routes."""
-
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, EmailStr
 from typing import Optional
 
-class UserCreate(BaseModel):
-    """Payload for account registration."""
 
+# =============================
+# User Schemas
+# =============================
+
+class UserCreate(BaseModel):
     email: EmailStr
     password: str
 
 
 class UserResponse(BaseModel):
-    """Serialized user profile returned from API endpoints."""
-
-    model_config = ConfigDict(from_attributes=True)
-
     id: int
     email: EmailStr
     body_type: str
@@ -22,36 +19,57 @@ class UserResponse(BaseModel):
     comfort_preference: str
     onboarding_complete: bool
 
+    class Config:
+        from_attributes = True
+
 
 class UserProfileUpdate(BaseModel):
-    """Partial update payload for onboarding/profile preferences."""
-
     body_type: Optional[str] = None
     lifestyle: Optional[str] = None
     comfort_preference: Optional[str] = None
     onboarding_complete: Optional[bool] = None
 
-class Token(BaseModel):
-    """JWT bearer token response."""
 
+# =============================
+# Auth Schemas
+# =============================
+
+class Token(BaseModel):
     access_token: str
     token_type: str
 
 
 class TokenData(BaseModel):
-    """Decoded token payload content."""
-
     user_id: Optional[int] = None
 
 
 class GoogleLoginRequest(BaseModel):
-    """Payload for Google ID token login."""
-
     id_token: str
 
-class ClothingItemCreate(BaseModel):
-    """Create/update payload for a wardrobe item."""
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    detail: str
+    reset_token: Optional[str] = None
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+class ResetPasswordResponse(BaseModel):
+    detail: str
+
+
+# =============================
+# Clothing Schemas
+# =============================
+
+class ClothingItemCreate(BaseModel):
     category: str
     color: str
     season: str
@@ -59,15 +77,12 @@ class ClothingItemCreate(BaseModel):
     image_url: Optional[str] = None
     brand: Optional[str] = None
     is_available: bool = True
+    is_favorite: bool = False
     is_archived: bool = False
     last_worn_timestamp: Optional[int] = None
 
 
 class ClothingItemResponse(BaseModel):
-    """Wardrobe item returned to API consumers."""
-
-    model_config = ConfigDict(from_attributes=True)
-
     id: int
     category: str
     color: str
@@ -76,13 +91,15 @@ class ClothingItemResponse(BaseModel):
     image_url: Optional[str] = None
     brand: Optional[str] = None
     is_available: bool
+    is_favorite: bool
     is_archived: bool
     last_worn_timestamp: Optional[int] = None
 
+    class Config:
+        from_attributes = True
+
 
 class ClothingItemUpdate(BaseModel):
-    """Partial update payload for a wardrobe item edited from UI workflows."""
-
     category: Optional[str] = None
     color: Optional[str] = None
     season: Optional[str] = None
@@ -90,46 +107,75 @@ class ClothingItemUpdate(BaseModel):
     image_url: Optional[str] = None
     brand: Optional[str] = None
     is_available: Optional[bool] = None
+    is_favorite: Optional[bool] = None
     is_archived: Optional[bool] = None
     last_worn_timestamp: Optional[int] = None
 
 
 class RecommendationResponse(BaseModel):
-    """Recommendation response containing selected items and explanation."""
-
     items: list[ClothingItemResponse]
     explanation: str
 
 
-class OutfitHistoryCreate(BaseModel):
-    """Payload for recording an outfit as worn."""
+class WeatherCurrentResponse(BaseModel):
+    city: str
+    temperature_f: int
+    condition: str
+    description: str
 
+
+class OutfitHistoryCreate(BaseModel):
     item_ids: list[int]
     worn_at_timestamp: int
 
 
 class OutfitHistoryResponse(BaseModel):
-    """Simple acknowledgement response for history recording."""
-
     detail: str
 
 
-class SavedOutfitCreate(BaseModel):
-    """Payload for saving a recommended outfit."""
+class OutfitHistoryEntry(BaseModel):
+    id: int
+    item_ids: list[int]
+    worn_at_timestamp: int
 
+
+class OutfitHistoryListResponse(BaseModel):
+    history: list[OutfitHistoryEntry]
+
+
+class SavedOutfitCreate(BaseModel):
     item_ids: list[int]
     saved_at_timestamp: Optional[int] = None
 
 
 class SavedOutfitEntry(BaseModel):
-    """Saved outfit returned to clients."""
-
     id: int
     item_ids: list[int]
     saved_at_timestamp: int
 
 
 class SavedOutfitListResponse(BaseModel):
-    """Collection response for saved outfits."""
-
     outfits: list[SavedOutfitEntry]
+
+
+class PlannedOutfitCreate(BaseModel):
+    item_ids: list[int]
+    planned_date: str
+    occasion: Optional[str] = None
+    created_at_timestamp: Optional[int] = None
+
+
+class PlannedOutfitEntry(BaseModel):
+    id: int
+    item_ids: list[int]
+    planned_date: str
+    occasion: Optional[str] = None
+    created_at_timestamp: int
+
+
+class PlannedOutfitListResponse(BaseModel):
+    outfits: list[PlannedOutfitEntry]
+
+
+class ImageUploadResponse(BaseModel):
+    image_url: str

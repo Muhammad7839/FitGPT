@@ -1,6 +1,4 @@
-"""Google OAuth helpers for verifying ID tokens and extracting profile claims."""
-
-from __future__ import annotations
+"""Google OAuth helpers for validating ID tokens and extracting identity claims."""
 
 from dataclasses import dataclass
 from typing import Optional
@@ -13,14 +11,14 @@ from app.config import GOOGLE_CLIENT_ID
 
 @dataclass(frozen=True)
 class GoogleIdentity:
-    """Minimal user identity parsed from a verified Google token."""
+    """Identity claims needed to map Google login to a local account."""
 
     email: str
     full_name: Optional[str]
 
 
 class GoogleTokenValidationError(Exception):
-    """Raised when a Google ID token is invalid for login."""
+    """Raised when Google token verification fails for login."""
 
     def __init__(self, message: str, *, is_expired: bool = False):
         super().__init__(message)
@@ -28,7 +26,7 @@ class GoogleTokenValidationError(Exception):
 
 
 def verify_google_id_token(token_value: str) -> GoogleIdentity:
-    """Validate Google ID token signature/audience and return identity claims."""
+    """Verify signature/audience and return normalized identity claims."""
     if not GOOGLE_CLIENT_ID:
         raise GoogleTokenValidationError("Google OAuth is not configured")
 
@@ -39,10 +37,11 @@ def verify_google_id_token(token_value: str) -> GoogleIdentity:
             GOOGLE_CLIENT_ID,
         )
     except ValueError as exc:
-        message = str(exc).lower()
+        lowered = str(exc).lower()
+        expired = "expired" in lowered
         raise GoogleTokenValidationError(
-            "Google token has expired" if "expired" in message else "Invalid Google token",
-            is_expired="expired" in message,
+            "Google token has expired" if expired else "Invalid Google token",
+            is_expired=expired,
         ) from exc
 
     email = str(claims.get("email", "")).strip().lower()
@@ -51,10 +50,11 @@ def verify_google_id_token(token_value: str) -> GoogleIdentity:
     if claims.get("email_verified") is False:
         raise GoogleTokenValidationError("Google email is not verified")
 
-    full_name = claims.get("name")
-    if isinstance(full_name, str):
-        full_name = full_name.strip() or None
-    else:
+    full_name_claim = claims.get("name")
+    full_name = (
+        full_name_claim.strip() if isinstance(full_name_claim, str) else None
+    )
+    if full_name == "":
         full_name = None
 
     return GoogleIdentity(email=email, full_name=full_name)

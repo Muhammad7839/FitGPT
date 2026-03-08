@@ -1,5 +1,3 @@
-"""Integration tests for auth and profile endpoints."""
-
 from app.google_oauth import GoogleTokenValidationError
 
 from conftest import register_and_login
@@ -45,14 +43,11 @@ def test_get_me_and_update_profile(client):
 
 
 def test_google_login_creates_new_user(client, monkeypatch):
-    def fake_verify(_: str):
-        class Identity:
-            email = "google-new@example.com"
-            full_name = "Google New"
+    class Identity:
+        email = "google-new@example.com"
+        full_name = "Google New"
 
-        return Identity()
-
-    monkeypatch.setattr("app.routes.verify_google_id_token", fake_verify)
+    monkeypatch.setattr("app.routes.verify_google_id_token", lambda _: Identity())
 
     response = client.post("/login/google", json={"id_token": "fake"})
     assert response.status_code == 200
@@ -66,14 +61,11 @@ def test_google_login_creates_new_user(client, monkeypatch):
 def test_google_login_returns_existing_user(client, monkeypatch):
     register_and_login(client, "google-existing@example.com", "password123")
 
-    def fake_verify(_: str):
-        class Identity:
-            email = "google-existing@example.com"
-            full_name = "Existing User"
+    class Identity:
+        email = "google-existing@example.com"
+        full_name = "Existing User"
 
-        return Identity()
-
-    monkeypatch.setattr("app.routes.verify_google_id_token", fake_verify)
+    monkeypatch.setattr("app.routes.verify_google_id_token", lambda _: Identity())
 
     response = client.post("/login/google", json={"id_token": "fake"})
     assert response.status_code == 200
@@ -100,3 +92,42 @@ def test_google_login_invalid_or_expired_token_handling(client, monkeypatch):
     expired_response = client.post("/login/google", json={"id_token": "expired"})
     assert expired_response.status_code == 401
     assert expired_response.json()["detail"] == "Google token has expired"
+
+
+def test_forgot_and_reset_password_flow(client):
+    register_and_login(client, "resetme@example.com", "password123")
+
+    forgot = client.post("/forgot-password", json={"email": "resetme@example.com"})
+    assert forgot.status_code == 200
+    reset_token = forgot.json()["reset_token"]
+    assert reset_token
+
+    reset = client.post(
+        "/reset-password",
+        json={"token": reset_token, "new_password": "newpass456"},
+    )
+    assert reset.status_code == 200
+    assert reset.json()["detail"] == "Password reset successful"
+
+    old_login = client.post(
+        "/login",
+        data={"username": "resetme@example.com", "password": "password123"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert old_login.status_code == 401
+
+    new_login = client.post(
+        "/login",
+        data={"username": "resetme@example.com", "password": "newpass456"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert new_login.status_code == 200
+
+
+def test_reset_password_rejects_invalid_token(client):
+    response = client.post(
+        "/reset-password",
+        json={"token": "invalid-token", "new_password": "newpass456"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid or expired reset token"
