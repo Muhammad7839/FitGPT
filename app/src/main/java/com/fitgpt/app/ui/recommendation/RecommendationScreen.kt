@@ -2,11 +2,16 @@
 
 package com.fitgpt.app.ui.recommendation
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
@@ -14,8 +19,11 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
+import com.fitgpt.app.data.location.GpsLocationProvider
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.ui.common.FitGptScaffold
@@ -24,6 +32,7 @@ import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun RecommendationScreen(
@@ -39,6 +48,57 @@ fun RecommendationScreen(
     var planDate by rememberSaveable { mutableStateOf("") }
     var exclude by rememberSaveable { mutableStateOf("") }
     var occasion by rememberSaveable { mutableStateOf("") }
+    var locationMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val gpsLocationProvider = remember(context) { GpsLocationProvider(context) }
+
+    fun applyContextRequest(
+        city: String?,
+        lat: Double?,
+        lon: Double?
+    ) {
+        if (lat != null && lon != null) {
+            viewModel.fetchWeather(lat = lat, lon = lon)
+        } else if (city != null) {
+            viewModel.fetchWeather(city = city)
+        }
+
+        viewModel.fetchRecommendations(
+            manualTemp = manualTempInput.trim().toIntOrNull(),
+            timeContext = timeContext.nullIfBlank(),
+            planDate = planDate.nullIfBlank(),
+            exclude = exclude.nullIfBlank(),
+            weatherCity = city,
+            weatherLat = lat,
+            weatherLon = lon,
+            weatherCategory = weatherCategory.nullIfBlank(),
+            occasion = occasion.nullIfBlank()
+        )
+    }
+
+    fun loadUsingCurrentLocation() {
+        scope.launch {
+            locationMessage = "Detecting location..."
+            val coordinates = gpsLocationProvider.getCurrentCoordinates()
+            if (coordinates == null) {
+                locationMessage = "Location unavailable. You can still use city manually."
+                return@launch
+            }
+            locationMessage = "Using current location weather."
+            applyContextRequest(city = null, lat = coordinates.lat, lon = coordinates.lon)
+        }
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            loadUsingCurrentLocation()
+        } else {
+            locationMessage = "Location permission denied."
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.fetchRecommendations()
@@ -156,18 +216,10 @@ fun RecommendationScreen(
 
                             OutlinedButton(
                                 onClick = {
-                                    val city = weatherCity.nullIfBlank()
-                                    if (city != null) {
-                                        viewModel.fetchWeather(city)
-                                    }
-                                    viewModel.fetchRecommendations(
-                                        manualTemp = manualTempInput.trim().toIntOrNull(),
-                                        timeContext = timeContext.nullIfBlank(),
-                                        planDate = planDate.nullIfBlank(),
-                                        exclude = exclude.nullIfBlank(),
-                                        weatherCity = city,
-                                        weatherCategory = weatherCategory.nullIfBlank(),
-                                        occasion = occasion.nullIfBlank()
+                                    applyContextRequest(
+                                        city = weatherCity.nullIfBlank(),
+                                        lat = null,
+                                        lon = null
                                     )
                                 },
                                 modifier = Modifier.fillMaxWidth()
@@ -175,6 +227,38 @@ fun RecommendationScreen(
                                 Icon(Icons.Default.Refresh, contentDescription = null)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Apply context")
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    val hasPermission = ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.ACCESS_FINE_LOCATION
+                                    ) == PackageManager.PERMISSION_GRANTED ||
+                                        ContextCompat.checkSelfPermission(
+                                            context,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                        ) == PackageManager.PERMISSION_GRANTED
+
+                                    if (hasPermission) {
+                                        loadUsingCurrentLocation()
+                                    } else {
+                                        locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.LocationOn, contentDescription = null)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Use Current Location")
+                            }
+
+                            locationMessage?.let { message ->
+                                Text(
+                                    text = message,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -277,18 +361,10 @@ fun RecommendationScreen(
 
                     OutlinedButton(
                         onClick = {
-                            val city = weatherCity.nullIfBlank()
-                            if (city != null) {
-                                viewModel.fetchWeather(city)
-                            }
-                            viewModel.fetchRecommendations(
-                                manualTemp = manualTempInput.trim().toIntOrNull(),
-                                timeContext = timeContext.nullIfBlank(),
-                                planDate = planDate.nullIfBlank(),
-                                exclude = exclude.nullIfBlank(),
-                                weatherCity = city,
-                                weatherCategory = weatherCategory.nullIfBlank(),
-                                occasion = occasion.nullIfBlank()
+                            applyContextRequest(
+                                city = weatherCity.nullIfBlank(),
+                                lat = null,
+                                lon = null
                             )
                         },
                         modifier = Modifier.fillMaxWidth()
