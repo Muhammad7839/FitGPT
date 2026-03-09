@@ -10,8 +10,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -34,11 +41,15 @@ import com.fitgpt.app.ui.common.WebBadge
 import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.ui.common.isValidPlanDate
 import com.fitgpt.app.viewmodel.WardrobeViewModel
+import java.time.Instant
+import java.time.ZoneId
+import androidx.compose.material3.rememberDatePickerState
 
 /**
  * Plans section that schedules the current recommended outfit for a future date.
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun PlansScreen(
     navController: NavController,
     viewModel: WardrobeViewModel
@@ -49,6 +60,8 @@ fun PlansScreen(
     var occasion by remember { mutableStateOf("") }
     var replaceExisting by remember { mutableStateOf(true) }
     var planError by remember { mutableStateOf<String?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState()
 
     FitGptScaffold(
         navController = navController,
@@ -77,7 +90,15 @@ fun PlansScreen(
                         value = planDate,
                         onValueChange = { planDate = it },
                         label = { Text("Plan date (YYYY-MM-DD)") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        trailingIcon = {
+                            IconButton(onClick = { showDatePicker = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.DateRange,
+                                    contentDescription = "Open calendar"
+                                )
+                            }
+                        }
                     )
                     OutlinedTextField(
                         value = occasion,
@@ -146,6 +167,11 @@ fun PlansScreen(
                             color = MaterialTheme.colorScheme.error
                         )
                     }
+                    Text(
+                        text = "Tap the calendar icon for quick selection or type manually.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
@@ -225,4 +251,38 @@ fun PlansScreen(
             }
         }
     }
+
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val selectedDate = datePickerState.selectedDateMillis?.let(::millisToIsoDate)
+                        if (selectedDate != null) {
+                            planDate = selectedDate
+                            planError = null
+                        }
+                        showDatePicker = false
+                    }
+                ) {
+                    Text("Use Date")
+                }
+            },
+            dismissButton = {
+                Button(onClick = { showDatePicker = false }) {
+                    Text("Cancel")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+}
+
+private fun millisToIsoDate(millis: Long): String {
+    return Instant.ofEpochMilli(millis)
+        .atZone(ZoneId.systemDefault())
+        .toLocalDate()
+        .toString()
 }

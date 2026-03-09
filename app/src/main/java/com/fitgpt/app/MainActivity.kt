@@ -21,7 +21,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val preferencesManager = remember { PreferencesManager(applicationContext) }
-            val themeMode by preferencesManager.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
+            val themeMode by preferencesManager.themeMode.collectAsState(initial = ThemeMode.DARK)
 
             val darkTheme = when (themeMode) {
                 ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()

@@ -3,6 +3,7 @@
  */
 package com.fitgpt.app.ui.wardrobe
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -46,6 +47,7 @@ fun WardrobeScreen(
     var clothingTypeFilter by remember { mutableStateOf("") }
     var seasonFilter by remember { mutableStateOf("") }
     var fitTagFilter by remember { mutableStateOf("") }
+    var showAdvancedFilters by remember { mutableStateOf(false) }
 
     var itemToDelete by remember { mutableStateOf<ClothingItem?>(null) }
 
@@ -120,43 +122,12 @@ fun WardrobeScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            OutlinedTextField(
-                value = colorFilter,
-                onValueChange = { colorFilter = it },
-                label = { Text("Color filter") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            OutlinedTextField(
-                value = clothingTypeFilter,
-                onValueChange = { clothingTypeFilter = it },
-                label = { Text("Type filter") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            OutlinedTextField(
-                value = seasonFilter,
-                onValueChange = { seasonFilter = it },
-                label = { Text("Season filter") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            OutlinedTextField(
-                value = fitTagFilter,
-                onValueChange = { fitTagFilter = it },
-                label = { Text("Fit tag filter") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = showAdvancedFilters,
+                    onClick = { showAdvancedFilters = !showAdvancedFilters },
+                    label = { Text(if (showAdvancedFilters) "Hide filters" else "Filters") }
+                )
                 FilterChip(
                     selected = !showArchived,
                     onClick = { showArchived = false },
@@ -167,6 +138,38 @@ fun WardrobeScreen(
                     onClick = { showArchived = true },
                     label = { Text("Archived") }
                 )
+            }
+
+            AnimatedVisibility(visible = showAdvancedFilters) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedTextField(
+                        value = colorFilter,
+                        onValueChange = { colorFilter = it },
+                        label = { Text("Color filter") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = clothingTypeFilter,
+                        onValueChange = { clothingTypeFilter = it },
+                        label = { Text("Type filter") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = seasonFilter,
+                        onValueChange = { seasonFilter = it },
+                        label = { Text("Season filter") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = fitTagFilter,
+                        onValueChange = { fitTagFilter = it },
+                        label = { Text("Fit tag filter") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))

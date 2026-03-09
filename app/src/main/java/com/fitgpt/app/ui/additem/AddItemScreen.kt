@@ -8,11 +8,11 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,9 +21,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,6 +35,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -49,7 +54,11 @@ import com.fitgpt.app.ui.common.validateClothingItemForm
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.launch
 
+private const val UPLOAD_LOG_TAG = "FitGPTUpload"
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddItemScreen(
     navController: NavController,
@@ -66,6 +75,10 @@ fun AddItemScreen(
     var imageUrl by remember { mutableStateOf("") }
     var cameraMessage by remember { mutableStateOf<String?>(null) }
     var formError by remember { mutableStateOf<String?>(null) }
+    var batchAutoCreateMessage by remember { mutableStateOf<String?>(null) }
+    var showPhotoOptions by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     val context = LocalContext.current
     val imageUploadState by viewModel.imageUploadState.collectAsState()
@@ -74,23 +87,28 @@ fun AddItemScreen(
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
         if (bitmap == null) {
             cameraMessage = "Camera capture cancelled"
+            Log.i(UPLOAD_LOG_TAG, "camera capture cancelled")
             return@rememberLauncherForActivityResult
         }
         val bytes = bitmapToJpegBytes(bitmap)
         if (!isImagePayloadAllowed(bytes.size)) {
             cameraMessage = "Image is too large (max ${MAX_LOCAL_IMAGE_BYTES / (1024 * 1024)}MB)"
+            Log.w(UPLOAD_LOG_TAG, "camera image rejected size=${bytes.size}")
             return@rememberLauncherForActivityResult
         }
         val fileName = "camera_${System.currentTimeMillis()}.jpg"
+        Log.i(UPLOAD_LOG_TAG, "camera image accepted size=${bytes.size}")
         viewModel.uploadImage(bytes = bytes, fileName = fileName, mimeType = "image/jpeg")
         cameraMessage = null
     }
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
+            Log.i(UPLOAD_LOG_TAG, "camera permission granted")
             cameraLauncher.launch(null)
         } else {
             cameraMessage = "Camera permission denied"
+            Log.w(UPLOAD_LOG_TAG, "camera permission denied")
         }
     }
 
@@ -99,6 +117,7 @@ fun AddItemScreen(
         val bytes = readBytes(context, uri) ?: return@rememberLauncherForActivityResult
         if (!isImagePayloadAllowed(bytes.size)) {
             cameraMessage = "Image is too large (max ${MAX_LOCAL_IMAGE_BYTES / (1024 * 1024)}MB)"
+            Log.w(UPLOAD_LOG_TAG, "gallery image rejected size=${bytes.size}")
             return@rememberLauncherForActivityResult
         }
         val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
@@ -108,6 +127,7 @@ fun AddItemScreen(
             else -> ".jpg"
         }
         val fileName = "item_${System.currentTimeMillis()}$extension"
+        Log.i(UPLOAD_LOG_TAG, "gallery image selected mime=$mimeType size=${bytes.size}")
         viewModel.uploadImage(bytes = bytes, fileName = fileName, mimeType = mimeType)
     }
 
@@ -116,6 +136,7 @@ fun AddItemScreen(
         val payloads = uris.mapNotNull { uri ->
             val bytes = readBytes(context, uri) ?: return@mapNotNull null
             if (!isImagePayloadAllowed(bytes.size)) {
+                Log.w(UPLOAD_LOG_TAG, "batch image rejected size=${bytes.size}")
                 return@mapNotNull null
             }
             val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
@@ -130,6 +151,7 @@ fun AddItemScreen(
                 mimeType = mimeType
             )
         }
+        Log.i(UPLOAD_LOG_TAG, "batch upload selected count=${payloads.size}")
         viewModel.uploadImagesBatch(payloads)
     }
 
@@ -137,10 +159,134 @@ fun AddItemScreen(
         val upload = imageUploadState
         if (upload is UiState.Success && !upload.data.isNullOrBlank()) {
             imageUrl = upload.data
+            Log.i(UPLOAD_LOG_TAG, "single upload success urlSet=true")
         }
     }
 
-    Scaffold { padding ->
+    LaunchedEffect(batchUploadState) {
+        val batch = batchUploadState
+        if (batch !is UiState.Success || batch.data.isEmpty()) return@LaunchedEffect
+
+        val successfulImageUrls = batch.data
+            .filter { it.status.equals("success", ignoreCase = true) }
+            .mapNotNull { it.imageUrl?.trim()?.takeIf(String::isNotEmpty) }
+
+        if (successfulImageUrls.isEmpty()) {
+            batchAutoCreateMessage = "No valid images were uploaded."
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar("No valid images were uploaded.")
+            }
+            viewModel.clearBatchUploadState()
+            return@LaunchedEffect
+        }
+
+        val validationError = validateClothingItemForm(
+            category = category,
+            color = color,
+            season = season,
+            comfortText = comfort
+        )
+        if (validationError != null) {
+            formError = "Fill required fields before multi-photo save: $validationError"
+            imageUrl = successfulImageUrls.first()
+            batchAutoCreateMessage = "Images uploaded. Complete fields and tap Save Item for single-item flow."
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar("Images uploaded. Fill required fields to save items.")
+            }
+            viewModel.clearBatchUploadState()
+            return@LaunchedEffect
+        }
+
+        val baseName = name.trim().takeIf { it.isNotBlank() }
+        val baseComfort = parseComfortLevel(comfort)
+        val timestamp = System.currentTimeMillis().toInt()
+        val items = successfulImageUrls.mapIndexed { index, url ->
+            ClothingItem(
+                id = timestamp + index,
+                name = buildBatchItemName(
+                    baseName = baseName,
+                    category = category.trim(),
+                    index = index,
+                    total = successfulImageUrls.size
+                ),
+                category = category.trim(),
+                clothingType = clothingType.trim().takeIf { it.isNotBlank() },
+                fitTag = fitTag.trim().takeIf { it.isNotBlank() },
+                color = color.trim(),
+                season = season.trim(),
+                comfortLevel = baseComfort,
+                brand = brand.trim().takeIf { it.isNotBlank() },
+                imageUrl = url
+            )
+        }
+
+        Log.i(
+            UPLOAD_LOG_TAG,
+            "batch auto-create start successCount=${items.size} total=${batch.data.size}"
+        )
+        formError = null
+        viewModel.addItemsBulk(items)
+        imageUrl = successfulImageUrls.first()
+        batchAutoCreateMessage = "Added ${items.size} item(s) from selected photos."
+        coroutineScope.launch {
+            snackbarHostState.showSnackbar("Added ${items.size} item(s) to wardrobe.")
+        }
+        viewModel.clearBatchUploadState()
+    }
+
+    if (showPhotoOptions) {
+        ModalBottomSheet(
+            onDismissRequest = { showPhotoOptions = false }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("Add Photo", style = MaterialTheme.typography.titleMedium)
+                Button(
+                    onClick = {
+                        showPhotoOptions = false
+                        val granted = ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.CAMERA
+                        ) == PackageManager.PERMISSION_GRANTED
+                        if (granted) {
+                            cameraLauncher.launch(null)
+                        } else {
+                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Take Photo")
+                }
+                Button(
+                    onClick = {
+                        showPhotoOptions = false
+                        picker.launch("image/*")
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Choose from Gallery")
+                }
+                Button(
+                    onClick = {
+                        showPhotoOptions = false
+                        multiPicker.launch("image/*")
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Choose Multiple")
+                }
+            }
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+    ) { padding ->
 
         Column(
             modifier = Modifier
@@ -223,39 +369,10 @@ fun AddItemScreen(
                     )
 
                     Button(
-                        onClick = { picker.launch("image/*") },
+                        onClick = { showPhotoOptions = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Pick Image")
-                    }
-
-                    Button(
-                        onClick = { multiPicker.launch("image/*") },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Pick Multiple Images")
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                val granted = ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.CAMERA
-                                ) == PackageManager.PERMISSION_GRANTED
-                                if (granted) {
-                                    cameraLauncher.launch(null)
-                                } else {
-                                    cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Take Photo")
-                        }
+                        Text("Add Photo")
                     }
 
                     when (val upload = imageUploadState) {
@@ -283,6 +400,13 @@ fun AddItemScreen(
                             color = MaterialTheme.colorScheme.error
                         )
                     }
+                    batchAutoCreateMessage?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
                     if (imageUrl.isNotBlank()) {
                         RemoteImagePreview(
@@ -305,8 +429,11 @@ fun AddItemScreen(
                             if (batch.data.isNotEmpty()) {
                                 val success = batch.data.count { it.status == "success" }
                                 val failed = batch.data.size - success
+                                if (imageUrl.isBlank()) {
+                                    imageUrl = batch.data.firstOrNull { !it.imageUrl.isNullOrBlank() }?.imageUrl.orEmpty()
+                                }
                                 Text(
-                                    "Batch upload complete: $success success, $failed failed",
+                                    "Batch upload complete: $success success, $failed failed. Auto-saving successful images...",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
@@ -370,4 +497,20 @@ private fun bitmapToJpegBytes(bitmap: Bitmap): ByteArray {
     val output = ByteArrayOutputStream()
     bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
     return output.toByteArray()
+}
+
+private fun buildBatchItemName(
+    baseName: String?,
+    category: String,
+    index: Int,
+    total: Int
+): String {
+    val cleanedBaseName = baseName?.trim().orEmpty()
+    val fallback = "$category Photo"
+    return when {
+        cleanedBaseName.isNotEmpty() && total == 1 -> cleanedBaseName
+        cleanedBaseName.isNotEmpty() -> "$cleanedBaseName #${index + 1}"
+        total == 1 -> fallback
+        else -> "$fallback #${index + 1}"
+    }
 }

@@ -149,7 +149,7 @@ def test_weather_current_endpoint_returns_snapshot(client, monkeypatch):
 
     monkeypatch.setattr(
         "app.routes.fetch_current_weather",
-        lambda _city: type(
+        lambda **_kwargs: type(
             "Snapshot",
             (),
             {
@@ -167,6 +167,20 @@ def test_weather_current_endpoint_returns_snapshot(client, monkeypatch):
     assert body["city"] == "Boston"
     assert body["temperature_f"] == 52
     assert body["condition"] == "Clouds"
+
+
+def test_weather_current_endpoint_maps_provider_errors(client, monkeypatch):
+    token = register_and_login(client, "weather-error-map@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    def quota_error(**_kwargs):
+        raise WeatherLookupError("Weather service quota exceeded", status_code=503)
+
+    monkeypatch.setattr("app.routes.fetch_current_weather", quota_error)
+
+    response = client.get("/weather/current", headers=auth, params={"city": "Boston"})
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Weather service quota exceeded"
 
 
 def test_planned_outfits_crud_flow(client):

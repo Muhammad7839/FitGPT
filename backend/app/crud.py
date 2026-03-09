@@ -146,6 +146,7 @@ def build_profile_summary(db: Session, db_user: models.User) -> dict:
         "id": db_user.id,
         "email": db_user.email,
         "full_name": db_user.full_name,
+        "avatar_url": db_user.avatar_url,
         "body_type": db_user.body_type,
         "lifestyle": db_user.lifestyle,
         "comfort_preference": db_user.comfort_preference,

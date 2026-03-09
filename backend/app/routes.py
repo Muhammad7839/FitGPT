@@ -86,7 +86,7 @@ def _ensure_owned_items(db: Session, user_id: int, item_ids: list[int]) -> None:
         raise HTTPException(status_code=403, detail="Some items do not belong to current user")
 
 
-def _store_uploaded_image(image: UploadFile, user_id: int) -> str:
+def _store_uploaded_image(image: UploadFile, user_id: int, *, prefix: str = "item") -> str:
     content_type = (image.content_type or "").lower()
     if content_type not in {"image/jpeg", "image/png", "image/webp"}:
         raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WEBP images are allowed")
@@ -97,7 +97,7 @@ def _store_uploaded_image(image: UploadFile, user_id: int) -> str:
     elif content_type == "image/webp":
         extension = ".webp"
 
-    filename = f"user_{user_id}_{uuid4().hex}{extension}"
+    filename = f"{prefix}_{user_id}_{uuid4().hex}{extension}"
     destination = UPLOADS_DIR / filename
 
     bytes_written = 0
@@ -120,7 +120,7 @@ def _store_uploaded_image(image: UploadFile, user_id: int) -> str:
     finally:
         image.file.close()
 
-    logger.info("Stored wardrobe image for user=%s file=%s bytes=%s", user_id, filename, bytes_written)
+    logger.info("Stored uploaded image for user=%s file=%s bytes=%s", user_id, filename, bytes_written)
     return f"/uploads/{filename}"
 
 
@@ -251,6 +251,21 @@ def update_my_profile(
 ):
     updated_user = crud.update_user_profile(db, current_user, updated_data)
     return updated_user
+
+
+@router.post("/me/avatar", response_model=schemas.AvatarUploadResponse)
+def upload_my_avatar(
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    avatar_url = _store_uploaded_image(image, current_user.id, prefix="avatar")
+    current_user.avatar_url = avatar_url
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    logger.info("Updated avatar for user_id=%s", current_user.id)
+    return {"avatar_url": avatar_url}
 
 
 @router.post("/onboarding/complete", response_model=schemas.UserResponse)
@@ -462,9 +477,9 @@ def get_current_weather(
         if lat is not None and lon is not None:
             weather = fetch_current_weather(city=city, lat=lat, lon=lon)
         else:
-            weather = fetch_current_weather(city)
+            weather = fetch_current_weather(city=city)
     except WeatherLookupError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=getattr(exc, "status_code", 400), detail=str(exc)) from exc
     weather_category = getattr(weather, "weather_category", None)
     if not weather_category:
         weather_category = map_temperature_to_category(int(weather.temperature_f))
@@ -503,7 +518,7 @@ def get_recommendations(
         except WeatherLookupError as exc:
             logger.warning("Weather lookup failed for recommendation: %s", exc)
             if not normalized_weather_category:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                raise HTTPException(status_code=getattr(exc, "status_code", 400), detail=str(exc)) from exc
 
     if effective_temp is None and (normalized_city or (weather_lat is not None and weather_lon is not None)):
         try:
@@ -518,7 +533,7 @@ def get_recommendations(
         except WeatherLookupError as exc:
             logger.warning("Weather lookup failed for recommendation: %s", exc)
             if not normalized_weather_category:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                raise HTTPException(status_code=getattr(exc, "status_code", 400), detail=str(exc)) from exc
 
     if effective_temp is not None and not normalized_weather_category:
         normalized_weather_category = map_temperature_to_category(effective_temp)
