@@ -45,6 +45,8 @@ data class TokenResponse(
 data class UserResponse(
     val id: Int,
     val email: String,
+    @SerializedName("avatar_url")
+    val avatarUrl: String? = null,
     @SerializedName("body_type")
     val bodyType: String,
     val lifestyle: String,
@@ -57,6 +59,8 @@ data class UserResponse(
 data class UserProfileSummaryResponse(
     val id: Int,
     val email: String,
+    @SerializedName("avatar_url")
+    val avatarUrl: String? = null,
     @SerializedName("body_type")
     val bodyType: String,
     val lifestyle: String,
@@ -76,6 +80,11 @@ data class UserProfileSummaryResponse(
     val plannedOutfitCount: Int,
     @SerializedName("history_count")
     val historyCount: Int
+)
+
+data class AvatarUploadResponse(
+    @SerializedName("avatar_url")
+    val avatarUrl: String
 )
 
 data class UserProfileUpdateRequest(

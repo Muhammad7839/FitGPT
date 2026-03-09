@@ -11,6 +11,10 @@ from app.config import OPENWEATHER_API_KEY, OPENWEATHER_TIMEOUT_SECONDS
 class WeatherLookupError(Exception):
     """Raised when weather information cannot be resolved for recommendations."""
 
+    def __init__(self, message: str, *, status_code: int = 400):
+        super().__init__(message)
+        self.status_code = status_code
+
 
 @dataclass(frozen=True)
 class WeatherSnapshot:
@@ -53,7 +57,7 @@ def _validate_lookup_inputs(city: Optional[str], lat: Optional[float], lon: Opti
 
 def _fetch_weather_payload(*, city: Optional[str], lat: Optional[float], lon: Optional[float]) -> dict[str, Any]:
     if not OPENWEATHER_API_KEY:
-        raise WeatherLookupError("Weather API is not configured")
+        raise WeatherLookupError("Weather service is not configured", status_code=503)
 
     params: dict[str, Any] = {
         "appid": OPENWEATHER_API_KEY,
@@ -72,12 +76,18 @@ def _fetch_weather_payload(*, city: Optional[str], lat: Optional[float], lon: Op
             timeout=OPENWEATHER_TIMEOUT_SECONDS,
         )
     except requests.RequestException as exc:
-        raise WeatherLookupError("Weather lookup failed") from exc
+        raise WeatherLookupError("Weather network unavailable", status_code=503) from exc
 
     if response.status_code == 404:
-        raise WeatherLookupError("Requested location was not found")
+        raise WeatherLookupError("Requested location was not found", status_code=400)
+    if response.status_code in {401, 403}:
+        raise WeatherLookupError("Weather service authentication failed", status_code=502)
+    if response.status_code == 429:
+        raise WeatherLookupError("Weather service quota exceeded", status_code=503)
+    if response.status_code >= 500:
+        raise WeatherLookupError("Weather provider is unavailable", status_code=503)
     if not response.ok:
-        raise WeatherLookupError("Weather lookup failed")
+        raise WeatherLookupError("Weather lookup failed", status_code=400)
 
     payload: dict[str, Any] = response.json()
     return payload

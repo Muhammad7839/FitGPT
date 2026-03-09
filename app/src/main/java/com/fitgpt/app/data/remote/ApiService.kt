@@ -26,6 +26,7 @@ import com.fitgpt.app.data.remote.dto.ResetPasswordRequest
 import com.fitgpt.app.data.remote.dto.SavedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.SavedOutfitListResponseDto
 import com.fitgpt.app.data.remote.dto.TokenResponse
+import com.fitgpt.app.data.remote.dto.AvatarUploadResponse
 import com.fitgpt.app.data.remote.dto.UserProfileSummaryResponse
 import com.fitgpt.app.data.remote.dto.UserProfileUpdateRequest
 import com.fitgpt.app.data.remote.dto.UserResponse
@@ -87,6 +88,12 @@ interface ApiService {
 
     @GET("me/summary")
     suspend fun getProfileSummary(): UserProfileSummaryResponse
+
+    @Multipart
+    @POST("me/avatar")
+    suspend fun uploadMyAvatar(
+        @Part image: MultipartBody.Part
+    ): AvatarUploadResponse
 
     @GET("wardrobe/items")
     suspend fun getWardrobeItems(

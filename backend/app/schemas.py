@@ -31,6 +31,7 @@ class UserCreate(BaseModel):
 class UserResponse(BaseModel):
     id: int
     email: EmailStr
+    avatar_url: Optional[str] = None
     body_type: str
     lifestyle: str
     comfort_preference: str
@@ -43,6 +44,7 @@ class UserProfileSummaryResponse(BaseModel):
     id: int
     email: EmailStr
     full_name: Optional[str] = None
+    avatar_url: Optional[str] = None
     body_type: str
     lifestyle: str
     comfort_preference: str
@@ -223,6 +225,10 @@ class BulkCreateClothingItemsResponse(BaseModel):
 
 class ImageUploadResponse(BaseModel):
     image_url: str
+
+
+class AvatarUploadResponse(BaseModel):
+    avatar_url: str
 
 
 class ImageBatchUploadEntry(BaseModel):

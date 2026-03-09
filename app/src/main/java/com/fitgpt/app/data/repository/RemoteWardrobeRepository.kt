@@ -46,7 +46,9 @@ class RemoteWardrobeRepository(
             season = season,
             fitTag = fitTag,
             favoritesOnly = favoritesOnly
-        ).map { it.toDomain() }
+        ).map { dto ->
+            dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl))
+        }
         cachedItemsById = cachedItemsById + items.associateBy { it.id }
         return items
     }
@@ -69,7 +71,7 @@ class RemoteWardrobeRepository(
             filename = fileName,
             body = body
         )
-        return api.uploadWardrobeImage(part).imageUrl
+        return resolveApiUrl(api.uploadWardrobeImage(part).imageUrl).orEmpty()
     }
 
     override suspend fun uploadImagesBatch(images: List<UploadImagePayload>): List<UploadResult> {
@@ -84,7 +86,7 @@ class RemoteWardrobeRepository(
             UploadResult(
                 fileName = it.fileName,
                 status = it.status,
-                imageUrl = it.imageUrl,
+                imageUrl = resolveApiUrl(it.imageUrl),
                 error = it.error
             )
         }
@@ -106,7 +108,9 @@ class RemoteWardrobeRepository(
     }
 
     override suspend fun getFavoriteItems(): List<ClothingItem> {
-        return api.getFavoriteWardrobeItems().map { it.toDomain() }
+        return api.getFavoriteWardrobeItems().map { dto ->
+            dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl))
+        }
     }
 
     override suspend fun getRecommendations(
@@ -130,7 +134,9 @@ class RemoteWardrobeRepository(
             weatherLon = weatherLon,
             weatherCategory = weatherCategory,
             occasion = occasion
-        ).items.map { it.toDomain() }
+        ).items.map { dto ->
+            dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl))
+        }
     }
 
     override suspend fun getCurrentWeather(city: String?, lat: Double?, lon: Double?): WeatherSnapshot {

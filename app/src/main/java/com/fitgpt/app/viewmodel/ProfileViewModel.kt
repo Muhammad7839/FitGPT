@@ -17,6 +17,8 @@ class ProfileViewModel(
 
     private val _profileState = MutableStateFlow<UiState<UserProfile>>(UiState.Loading)
     val profileState: StateFlow<UiState<UserProfile>> = _profileState
+    private val _avatarUploadState = MutableStateFlow<UiState<String?>>(UiState.Success(null))
+    val avatarUploadState: StateFlow<UiState<String?>> = _avatarUploadState
 
     init {
         refresh()
@@ -51,6 +53,23 @@ class ProfileViewModel(
                 _profileState.value = UiState.Success(updated)
             } catch (e: Exception) {
                 _profileState.value = UiState.Error("Failed to update profile")
+            }
+        }
+    }
+
+    fun uploadAvatar(bytes: ByteArray, fileName: String, mimeType: String) {
+        _avatarUploadState.value = UiState.Loading
+        viewModelScope.launch {
+            try {
+                val avatarUrl = repository.uploadAvatar(
+                    bytes = bytes,
+                    fileName = fileName,
+                    mimeType = mimeType
+                )
+                _avatarUploadState.value = UiState.Success(avatarUrl)
+                refresh()
+            } catch (e: Exception) {
+                _avatarUploadState.value = UiState.Error("Failed to upload avatar")
             }
         }
     }

@@ -13,4 +13,5 @@ interface ProfileRepository {
         comfortPreference: String,
         onboardingComplete: Boolean
     ): UserProfile
+    suspend fun uploadAvatar(bytes: ByteArray, fileName: String, mimeType: String): String
 }

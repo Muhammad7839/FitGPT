@@ -3,6 +3,7 @@
  */
 package com.fitgpt.app.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fitgpt.app.data.model.ClothingItem
@@ -16,6 +17,7 @@ import com.fitgpt.app.data.repository.WardrobeRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 data class WardrobeFilters(
     val includeArchived: Boolean = true,
@@ -28,12 +30,35 @@ data class WardrobeFilters(
     val favoritesOnly: Boolean = false
 )
 
+enum class WeatherStatusType {
+    IDLE,
+    LOADING,
+    USING_LOCATION,
+    PERMISSION_NEEDED,
+    MANUAL_CITY_FALLBACK,
+    UNAVAILABLE,
+    AVAILABLE
+}
+
+enum class WeatherRequestSource {
+    AUTO_DASHBOARD,
+    LOCATION,
+    MANUAL_CITY
+}
+
+data class WeatherUiStatus(
+    val type: WeatherStatusType,
+    val message: String
+)
+
 class WardrobeViewModel(
     private val repository: WardrobeRepository
 ) : ViewModel() {
+    private val weatherLogTag = "FitGPTWeather"
 
     private val allItems = mutableListOf<ClothingItem>()
     private var currentFilters = WardrobeFilters()
+    private var latestWeatherSnapshot: WeatherSnapshot? = null
 
     private val _wardrobeState = MutableStateFlow<UiState<List<ClothingItem>>>(UiState.Loading)
     val wardrobeState: StateFlow<UiState<List<ClothingItem>>> = _wardrobeState
@@ -59,6 +84,13 @@ class WardrobeViewModel(
 
     private val _weatherState = MutableStateFlow<UiState<WeatherSnapshot?>>(UiState.Success(null))
     val weatherState: StateFlow<UiState<WeatherSnapshot?>> = _weatherState
+    private val _weatherUiStatus = MutableStateFlow(
+        WeatherUiStatus(
+            type = WeatherStatusType.IDLE,
+            message = "Weather not set"
+        )
+    )
+    val weatherUiStatus: StateFlow<WeatherUiStatus> = _weatherUiStatus
 
     init {
         refreshWardrobe()
@@ -186,14 +218,14 @@ class WardrobeViewModel(
         viewModelScope.launch {
             try {
                 val recommendations = repository.getRecommendations(
-                    manualTemp = manualTemp,
+                    manualTemp = manualTemp ?: latestWeatherSnapshot?.temperatureF,
                     timeContext = timeContext,
                     planDate = planDate,
                     exclude = exclude,
                     weatherCity = weatherCity,
                     weatherLat = weatherLat,
                     weatherLon = weatherLon,
-                    weatherCategory = weatherCategory,
+                    weatherCategory = weatherCategory ?: latestWeatherSnapshot?.weatherCategory,
                     occasion = occasion
                 )
                 _recommendationState.value = UiState.Success(recommendations)
@@ -203,24 +235,92 @@ class WardrobeViewModel(
         }
     }
 
-    fun fetchWeather(city: String? = null, lat: Double? = null, lon: Double? = null) {
+    fun markWeatherPermissionNeeded() {
+        _weatherUiStatus.value = WeatherUiStatus(
+            type = WeatherStatusType.PERMISSION_NEEDED,
+            message = "Permission needed"
+        )
+        Log.i(weatherLogTag, "permission needed for weather")
+    }
+
+    fun markWeatherManualFallback() {
+        _weatherUiStatus.value = WeatherUiStatus(
+            type = WeatherStatusType.MANUAL_CITY_FALLBACK,
+            message = "Manual city fallback"
+        )
+        Log.i(weatherLogTag, "manual city fallback set")
+    }
+
+    fun fetchWeather(
+        city: String? = null,
+        lat: Double? = null,
+        lon: Double? = null,
+        source: WeatherRequestSource = WeatherRequestSource.MANUAL_CITY
+    ) {
         if ((city == null || city.isBlank()) && (lat == null || lon == null)) {
-            _weatherState.value = UiState.Success(null)
+            _weatherState.value = UiState.Success(latestWeatherSnapshot)
+            _weatherUiStatus.value = WeatherUiStatus(
+                type = if (latestWeatherSnapshot == null) WeatherStatusType.IDLE else WeatherStatusType.AVAILABLE,
+                message = if (latestWeatherSnapshot == null) "Weather not set" else "Weather ready"
+            )
             return
         }
 
         _weatherState.value = UiState.Loading
+        _weatherUiStatus.value = WeatherUiStatus(
+            type = when (source) {
+                WeatherRequestSource.LOCATION, WeatherRequestSource.AUTO_DASHBOARD -> WeatherStatusType.USING_LOCATION
+                WeatherRequestSource.MANUAL_CITY -> WeatherStatusType.LOADING
+            },
+            message = when (source) {
+                WeatherRequestSource.LOCATION, WeatherRequestSource.AUTO_DASHBOARD -> "Using location"
+                WeatherRequestSource.MANUAL_CITY -> "Loading"
+            }
+        )
+        Log.i(
+            weatherLogTag,
+            "weather fetch start source=$source cityProvided=${!city.isNullOrBlank()} hasLatLon=${lat != null && lon != null}"
+        )
         viewModelScope.launch {
             try {
-                _weatherState.value = UiState.Success(
-                    repository.getCurrentWeather(
-                        city = city?.trim()?.takeIf { it.isNotEmpty() },
-                        lat = lat,
-                        lon = lon
-                    )
+                val weather = repository.getCurrentWeather(
+                    city = city?.trim()?.takeIf { it.isNotEmpty() },
+                    lat = lat,
+                    lon = lon
                 )
-            } catch (_: Exception) {
-                _weatherState.value = UiState.Error("Failed to load weather")
+                latestWeatherSnapshot = weather
+                _weatherState.value = UiState.Success(weather)
+                _weatherUiStatus.value = WeatherUiStatus(
+                    type = WeatherStatusType.AVAILABLE,
+                    message = "Weather ready"
+                )
+                Log.i(weatherLogTag, "weather fetch success city=${weather.city} tempF=${weather.temperatureF}")
+            } catch (exception: Exception) {
+                val safeError = resolveWeatherErrorMessage(exception)
+                when {
+                    latestWeatherSnapshot != null -> {
+                        _weatherState.value = UiState.Success(latestWeatherSnapshot)
+                        _weatherUiStatus.value = WeatherUiStatus(
+                            type = WeatherStatusType.UNAVAILABLE,
+                            message = "Unavailable"
+                        )
+                    }
+                    source == WeatherRequestSource.LOCATION || source == WeatherRequestSource.AUTO_DASHBOARD -> {
+                        _weatherState.value = UiState.Success(null)
+                        _weatherUiStatus.value = WeatherUiStatus(
+                            type = WeatherStatusType.MANUAL_CITY_FALLBACK,
+                            message = "Manual city fallback"
+                        )
+                    }
+                    else -> {
+                        _weatherState.value = UiState.Error(safeError)
+                        _weatherUiStatus.value = WeatherUiStatus(
+                            type = WeatherStatusType.UNAVAILABLE,
+                            message = "Unavailable"
+                        )
+                    }
+                }
+                Log.w(weatherLogTag, "weather fetch failed source=$source reason=$safeError")
             }
         }
     }
@@ -389,5 +489,25 @@ class WardrobeViewModel(
         val comfortText = if (item.comfortLevel >= 4) "high comfort" else "moderate comfort"
         val brandText = item.brand?.let { "from $it" } ?: ""
         return "This $brandText piece works well for ${item.season.lowercase()} and provides $comfortText."
+    }
+
+    private fun resolveWeatherErrorMessage(exception: Exception): String {
+        return when (exception) {
+            is HttpException -> {
+                val errorBody = runCatching { exception.response()?.errorBody()?.string().orEmpty() }
+                    .getOrDefault("")
+                when {
+                    errorBody.contains("quota", ignoreCase = true) -> "Weather service quota exceeded"
+                    errorBody.contains("authentication", ignoreCase = true) -> "Weather service authentication failed"
+                    errorBody.contains("not found", ignoreCase = true) -> "Requested location was not found"
+                    exception.code() == 400 -> "Requested location was not found"
+                    exception.code() == 401 -> "Weather service authentication failed"
+                    exception.code() == 429 -> "Weather service quota exceeded"
+                    exception.code() == 502 || exception.code() == 503 -> "Weather service unavailable"
+                    else -> "Weather unavailable"
+                }
+            }
+            else -> "Weather unavailable"
+        }
     }
 }

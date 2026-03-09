@@ -13,6 +13,7 @@ class User(Base):
 
     email = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=True)
+    avatar_url = Column(String, nullable=True)
     hashed_password = Column(String, nullable=False)
 
     # --- Profile / Preferences ---

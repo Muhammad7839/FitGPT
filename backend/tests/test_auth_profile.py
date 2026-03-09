@@ -1,6 +1,15 @@
+from pathlib import Path
+
 from app.google_oauth import GoogleTokenValidationError
 
 from conftest import register_and_login
+
+
+def _cleanup_uploaded_file(image_url: str):
+    filename = image_url.replace("/uploads/", "", 1).strip("/")
+    upload_path = Path(__file__).resolve().parents[1] / "uploads" / filename
+    if upload_path.exists():
+        upload_path.unlink()
 
 
 def test_register_and_login_success(client):
@@ -25,6 +34,7 @@ def test_get_me_and_update_profile(client):
     me = client.get("/me", headers=auth)
     assert me.status_code == 200
     assert me.json()["email"] == "user3@example.com"
+    assert me.json()["avatar_url"] is None
 
     update = client.put(
         "/me/profile",
@@ -40,6 +50,7 @@ def test_get_me_and_update_profile(client):
     body = update.json()
     assert body["body_type"] == "athletic"
     assert body["onboarding_complete"] is True
+    assert body["avatar_url"] is None
 
 
 def test_onboarding_complete_allows_skipped_preferences(client):
@@ -139,6 +150,7 @@ def test_profile_summary_returns_preferences_and_counts(client):
     assert summary.status_code == 200
     body = summary.json()
     assert body["email"] == "summary@example.com"
+    assert body["avatar_url"] is None
     assert body["body_type"] == "unspecified"
     assert body["lifestyle"] == "casual"
     assert body["comfort_preference"] == "medium"
@@ -250,3 +262,75 @@ def test_forgot_password_hides_reset_token_when_exposure_disabled(client):
     body = forgot.json()
     assert body["reset_token"] is None
     assert body["detail"] == "If the account exists, reset instructions were issued"
+
+
+def test_avatar_upload_updates_me_and_summary_and_persists_after_relogin(client):
+    token = register_and_login(client, "avatar@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    upload = client.post(
+        "/me/avatar",
+        headers=auth,
+        files={"image": ("avatar.png", b"avatar-bytes", "image/png")},
+    )
+    assert upload.status_code == 200
+    avatar_url = upload.json()["avatar_url"]
+    assert avatar_url.startswith("/uploads/avatar_")
+
+    me = client.get("/me", headers=auth)
+    assert me.status_code == 200
+    assert me.json()["avatar_url"] == avatar_url
+
+    summary = client.get("/me/summary", headers=auth)
+    assert summary.status_code == 200
+    assert summary.json()["avatar_url"] == avatar_url
+
+    relogin = client.post(
+        "/login",
+        data={"username": "avatar@example.com", "password": "password123"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert relogin.status_code == 200
+    relogin_token = relogin.json()["access_token"]
+    me_after_relogin = client.get(
+        "/me",
+        headers={"Authorization": f"Bearer {relogin_token}"},
+    )
+    assert me_after_relogin.status_code == 200
+    assert me_after_relogin.json()["avatar_url"] == avatar_url
+
+    _cleanup_uploaded_file(avatar_url)
+
+
+def test_avatar_upload_rejects_invalid_content_type(client):
+    token = register_and_login(client, "avatar-invalid@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    response = client.post(
+        "/me/avatar",
+        headers=auth,
+        files={"image": ("avatar.gif", b"gif-bytes", "image/gif")},
+    )
+    assert response.status_code == 400
+    assert "Only JPEG, PNG, and WEBP images are allowed" in response.json()["detail"]
+
+
+def test_avatar_upload_rejects_oversized_file(client):
+    token = register_and_login(client, "avatar-oversize@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    response = client.post(
+        "/me/avatar",
+        headers=auth,
+        files={"image": ("avatar.jpg", b"x" * (5 * 1024 * 1024 + 1), "image/jpeg")},
+    )
+    assert response.status_code == 413
+    assert response.json()["detail"] == "Image exceeds max upload size"
+
+
+def test_avatar_upload_requires_auth(client):
+    response = client.post(
+        "/me/avatar",
+        files={"image": ("avatar.jpg", b"jpeg-bytes", "image/jpeg")},
+    )
+    assert response.status_code == 401

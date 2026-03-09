@@ -1,14 +1,21 @@
+/**
+ * Profile page for account identity and preference management, separated from app settings.
+ */
 package com.fitgpt.app.ui.profile
 
+import android.content.Context
+import android.net.Uri
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -18,35 +25,58 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.fitgpt.app.data.PreferencesManager
-import com.fitgpt.app.data.model.ThemeMode
+import com.fitgpt.app.ui.common.MAX_LOCAL_IMAGE_BYTES
+import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebCard
+import com.fitgpt.app.ui.common.isImagePayloadAllowed
 import com.fitgpt.app.viewmodel.ProfileViewModel
 import com.fitgpt.app.viewmodel.UiState
-import kotlinx.coroutines.launch
 
-/**
- * Profile page with backend-backed user profile updates.
- */
+private const val UPLOAD_LOG_TAG = "FitGPTUpload"
+
 @Composable
 fun ProfileScreen(
     navController: NavController,
     viewModel: ProfileViewModel
 ) {
     val state by viewModel.profileState.collectAsState()
+    val avatarUploadState by viewModel.avatarUploadState.collectAsState()
     val context = LocalContext.current
-    val preferencesManager = remember { PreferencesManager(context) }
-    val themeMode by preferencesManager.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
-    val scope = rememberCoroutineScope()
+    var avatarError by remember { mutableStateOf<String?>(null) }
+
+    val avatarPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val bytes = readBytes(context, uri)
+        if (bytes == null) {
+            avatarError = "Unable to read selected image"
+            return@rememberLauncherForActivityResult
+        }
+        if (!isImagePayloadAllowed(bytes.size)) {
+            avatarError = "Image is too large (max ${MAX_LOCAL_IMAGE_BYTES / (1024 * 1024)}MB)"
+            Log.w(UPLOAD_LOG_TAG, "avatar image rejected size=${bytes.size}")
+            return@rememberLauncherForActivityResult
+        }
+        avatarError = null
+        val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+        val extension = when (mimeType) {
+            "image/png" -> ".png"
+            "image/webp" -> ".webp"
+            else -> ".jpg"
+        }
+        val fileName = "avatar_${System.currentTimeMillis()}$extension"
+        Log.i(UPLOAD_LOG_TAG, "avatar upload start mime=$mimeType size=${bytes.size}")
+        viewModel.uploadAvatar(bytes = bytes, fileName = fileName, mimeType = mimeType)
+    }
 
     FitGptScaffold(
         navController = navController,
@@ -96,7 +126,7 @@ fun ProfileScreen(
                 ) {
                     SectionHeader(
                         title = "Profile",
-                        subtitle = "Manage your account and preferences"
+                        subtitle = "Manage your account and saved preferences."
                     )
 
                     WebCard(
@@ -107,27 +137,42 @@ fun ProfileScreen(
                             modifier = Modifier.padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("Appearance", style = MaterialTheme.typography.titleMedium)
+                            Text("Account", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                text = "Match the web style with system, light, or dark mode.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = profile.email,
+                                style = MaterialTheme.typography.bodyMedium
                             )
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FilterChip(
-                                    selected = themeMode == ThemeMode.SYSTEM,
-                                    onClick = { scope.launch { preferencesManager.setThemeMode(ThemeMode.SYSTEM) } },
-                                    label = { Text("System") }
+                            RemoteImagePreview(
+                                imageUrl = profile.avatarUrl,
+                                contentDescription = "Profile avatar",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(160.dp)
+                            )
+                            Button(
+                                onClick = { avatarPickerLauncher.launch("image/*") },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Upload Photo")
+                            }
+                            when (val uploadState = avatarUploadState) {
+                                UiState.Loading -> CircularProgressIndicator()
+                                is UiState.Error -> Text(
+                                    text = uploadState.message,
+                                    color = MaterialTheme.colorScheme.error
                                 )
-                                FilterChip(
-                                    selected = themeMode == ThemeMode.LIGHT,
-                                    onClick = { scope.launch { preferencesManager.setThemeMode(ThemeMode.LIGHT) } },
-                                    label = { Text("Light") }
-                                )
-                                FilterChip(
-                                    selected = themeMode == ThemeMode.DARK,
-                                    onClick = { scope.launch { preferencesManager.setThemeMode(ThemeMode.DARK) } },
-                                    label = { Text("Dark") }
+                                is UiState.Success -> if (!uploadState.data.isNullOrBlank()) {
+                                    Text(
+                                        text = "Photo saved",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            avatarError?.let {
+                                Text(
+                                    text = it,
+                                    color = MaterialTheme.colorScheme.error
                                 )
                             }
                         }
@@ -138,7 +183,7 @@ fun ProfileScreen(
                             modifier = Modifier.padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("Signed in as ${profile.email}", style = MaterialTheme.typography.titleMedium)
+                            Text("Profile preferences", style = MaterialTheme.typography.titleMedium)
 
                             OutlinedTextField(
                                 value = bodyType,
@@ -206,6 +251,10 @@ fun ProfileScreen(
     }
 }
 
+private fun readBytes(context: Context, uri: Uri): ByteArray? {
+    return context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+}
+
 private fun com.fitgpt.app.data.model.UserProfile.idHash(): String {
-    return "${id}_${email}_${bodyType}_${lifestyle}_${comfortPreference}_${onboardingComplete}"
+    return "${id}_${email}_${avatarUrl}_${bodyType}_${lifestyle}_${comfortPreference}_${onboardingComplete}"
 }

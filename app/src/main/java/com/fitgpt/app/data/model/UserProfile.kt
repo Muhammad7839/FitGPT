@@ -6,6 +6,7 @@ package com.fitgpt.app.data.model
 data class UserProfile(
     val id: Int,
     val email: String,
+    val avatarUrl: String? = null,
     val bodyType: String,
     val lifestyle: String,
     val comfortPreference: String,

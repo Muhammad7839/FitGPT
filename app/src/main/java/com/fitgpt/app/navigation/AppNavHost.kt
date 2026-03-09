@@ -3,6 +3,7 @@
  */
 package com.fitgpt.app.navigation
 
+import android.util.Log
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -23,11 +24,13 @@ import com.fitgpt.app.ui.dashboard.DashboardScreen
 import com.fitgpt.app.ui.edititem.EditItemScreen
 import com.fitgpt.app.ui.favorites.FavoritesScreen
 import com.fitgpt.app.ui.history.HistoryScreen
+import com.fitgpt.app.ui.more.MoreScreen
 import com.fitgpt.app.ui.onboarding.WelcomeScreen
 import com.fitgpt.app.ui.plans.PlansScreen
 import com.fitgpt.app.ui.profile.ProfileScreen
 import com.fitgpt.app.ui.recommendation.RecommendationScreen
 import com.fitgpt.app.ui.saved.SavedOutfitsScreen
+import com.fitgpt.app.ui.settings.SettingsScreen
 import com.fitgpt.app.ui.wardrobe.WardrobeScreen
 import com.fitgpt.app.viewmodel.AuthViewModel
 import com.fitgpt.app.viewmodel.AuthViewModelFactory
@@ -37,6 +40,8 @@ import com.fitgpt.app.viewmodel.ProfileViewModel
 import com.fitgpt.app.viewmodel.ProfileViewModelFactory
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import com.fitgpt.app.viewmodel.WardrobeViewModelFactory
+
+private const val NAV_LOG_TAG = "FitGPTNav"
 
 object Routes {
     const val ONBOARDING_WELCOME = "onboarding_welcome"
@@ -52,6 +57,8 @@ object Routes {
     const val HISTORY = "history"
     const val PLANS = "plans"
     const val PROFILE = "profile"
+    const val MORE = "more"
+    const val SETTINGS = "settings"
     const val ADD_ITEM = "add_item"
     const val EDIT_ITEM = "edit_item"
     const val RECOMMENDATION = "recommendation"
@@ -90,6 +97,16 @@ fun AppNavHost(
         } else {
             null
         }
+
+    DisposableEffect(navController) {
+        val listener = androidx.navigation.NavController.OnDestinationChangedListener { _, destination, _ ->
+            Log.i(NAV_LOG_TAG, "route=${destination.route}")
+        }
+        navController.addOnDestinationChangedListener(listener)
+        onDispose {
+            navController.removeOnDestinationChangedListener(listener)
+        }
+    }
 
     LaunchedEffect(Unit) {
         // Start route waits until onboarding completion and auth validity are known.
@@ -242,6 +259,14 @@ fun AppNavHost(
                 navController = navController,
                 viewModel = vm
             )
+        }
+
+        composable(Routes.MORE) {
+            MoreScreen(navController = navController)
+        }
+
+        composable(Routes.SETTINGS) {
+            SettingsScreen(navController = navController)
         }
 
         composable(Routes.ADD_ITEM) {

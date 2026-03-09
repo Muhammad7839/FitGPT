@@ -22,11 +22,7 @@ class PreferencesManager(
         }
 
     val themeMode: Flow<ThemeMode> = context.dataStore.data.map { preferences ->
-        when (preferences[THEME_MODE]) {
-            ThemeMode.LIGHT.name -> ThemeMode.LIGHT
-            ThemeMode.DARK.name -> ThemeMode.DARK
-            else -> ThemeMode.SYSTEM
-        }
+        mapStoredThemeMode(preferences[THEME_MODE])
     }
 
     suspend fun setOnboardingCompleted() {
@@ -39,5 +35,14 @@ class PreferencesManager(
         context.dataStore.edit { preferences ->
             preferences[THEME_MODE] = mode.name
         }
+    }
+}
+
+internal fun mapStoredThemeMode(value: String?): ThemeMode {
+    return when (value) {
+        ThemeMode.LIGHT.name -> ThemeMode.LIGHT
+        ThemeMode.DARK.name -> ThemeMode.DARK
+        ThemeMode.SYSTEM.name -> ThemeMode.SYSTEM
+        else -> ThemeMode.DARK
     }
 }

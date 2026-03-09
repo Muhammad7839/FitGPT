@@ -1,9 +1,5 @@
 package com.fitgpt.app.ui.common
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,14 +12,13 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.fitgpt.app.R
 import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.ui.theme.FitgptAccentDeep
@@ -53,6 +49,8 @@ fun FitGptScaffold(
     navController: NavController,
     currentRoute: String,
     title: String,
+    showMoreAction: Boolean = true,
+    showBottomBar: Boolean = true,
     floatingActionButton: @Composable (() -> Unit)? = null,
     content: @Composable (PaddingValues) -> Unit
 ) {
@@ -85,35 +83,56 @@ fun FitGptScaffold(
                     containerColor = colorScheme.surface.copy(alpha = 0.94f),
                     titleContentColor = colorScheme.onSurface
                 ),
+                actions = {
+                    if (showMoreAction && currentRoute != Routes.MORE && currentRoute != Routes.SETTINGS) {
+                        IconButton(
+                            onClick = {
+                                navController.navigate(Routes.MORE) {
+                                    launchSingleTop = true
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More"
+                            )
+                        }
+                    }
+                },
                 modifier = Modifier.statusBarsPadding()
             )
         },
         bottomBar = {
-            NavigationBar(
-                containerColor = colorScheme.surface.copy(alpha = 0.95f),
-                tonalElevation = 8.dp
-            ) {
-                topLevelItems.forEach { item ->
-                    NavigationBarItem(
-                        selected = currentRoute == item.route,
-                        onClick = {
-                            if (currentRoute != item.route) {
-                                navController.navigate(item.route) {
-                                    popUpTo(Routes.DASHBOARD)
-                                    launchSingleTop = true
+            if (showBottomBar) {
+                NavigationBar(
+                    containerColor = colorScheme.surface.copy(alpha = 0.95f),
+                    tonalElevation = 8.dp
+                ) {
+                    topLevelItems.forEach { item ->
+                        NavigationBarItem(
+                            selected = currentRoute == item.route,
+                            onClick = {
+                                if (currentRoute != item.route) {
+                                    navController.navigate(item.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 }
-                            }
-                        },
-                        icon = { Icon(item.icon, contentDescription = item.label) },
-                        label = { Text(item.label) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = colorScheme.primary,
-                            selectedTextColor = colorScheme.primary,
-                            indicatorColor = colorScheme.primary.copy(alpha = 0.14f),
-                            unselectedIconColor = colorScheme.onSurfaceVariant,
-                            unselectedTextColor = colorScheme.onSurfaceVariant
+                            },
+                            icon = { Icon(item.icon, contentDescription = item.label) },
+                            label = { Text(item.label) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = colorScheme.primary,
+                                selectedTextColor = colorScheme.primary,
+                                indicatorColor = colorScheme.primary.copy(alpha = 0.14f),
+                                unselectedIconColor = colorScheme.onSurfaceVariant,
+                                unselectedTextColor = colorScheme.onSurfaceVariant
+                            )
                         )
-                    )
+                    }
                 }
             }
         },
@@ -129,19 +148,7 @@ fun FitGptScaffold(
                 accentSoft = colorScheme.primary.copy(alpha = 0.8f),
                 accentDeep = FitgptAccentDeep
             )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(0.dp))
-            ) {
-                AnimatedContent(
-                    targetState = currentRoute,
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
-                    label = "route-fade"
-                ) {
-                    content(padding)
-                }
-            }
+            Box(modifier = Modifier.fillMaxSize()) { content(padding) }
         }
     }
 }
@@ -155,9 +162,6 @@ private data class TopLevelNavItem(
 private val topLevelItems = listOf(
     TopLevelNavItem(Routes.DASHBOARD, "Home", Icons.Default.Home),
     TopLevelNavItem(Routes.WARDROBE, "Wardrobe", Icons.AutoMirrored.Filled.List),
-    TopLevelNavItem(Routes.FAVORITES, "Favorites", Icons.Default.Favorite),
-    TopLevelNavItem(Routes.SAVED_OUTFITS, "Saved", Icons.Default.Star),
-    TopLevelNavItem(Routes.HISTORY, "History", Icons.Default.Info),
-    TopLevelNavItem(Routes.PLANS, "Plans", Icons.Default.DateRange),
+    TopLevelNavItem(Routes.RECOMMENDATION, "Recommend", Icons.Default.Star),
     TopLevelNavItem(Routes.PROFILE, "Profile", Icons.Default.Person)
 )

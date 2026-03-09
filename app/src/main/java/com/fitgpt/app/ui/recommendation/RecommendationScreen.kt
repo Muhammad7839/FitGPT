@@ -4,6 +4,7 @@ package com.fitgpt.app.ui.recommendation
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -32,7 +33,10 @@ import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
+import com.fitgpt.app.viewmodel.WeatherRequestSource
 import kotlinx.coroutines.launch
+
+private const val LOCATION_LOG_TAG = "FitGPTLocation"
 
 @Composable
 fun RecommendationScreen(
@@ -41,6 +45,7 @@ fun RecommendationScreen(
 ) {
     val state by viewModel.recommendationState.collectAsState()
     val weatherState by viewModel.weatherState.collectAsState()
+    val weatherUiStatus by viewModel.weatherUiStatus.collectAsState()
     var manualTempInput by rememberSaveable { mutableStateOf("") }
     var weatherCity by rememberSaveable { mutableStateOf("") }
     var weatherCategory by rememberSaveable { mutableStateOf("") }
@@ -59,9 +64,9 @@ fun RecommendationScreen(
         lon: Double?
     ) {
         if (lat != null && lon != null) {
-            viewModel.fetchWeather(lat = lat, lon = lon)
+            viewModel.fetchWeather(lat = lat, lon = lon, source = WeatherRequestSource.LOCATION)
         } else if (city != null) {
-            viewModel.fetchWeather(city = city)
+            viewModel.fetchWeather(city = city, source = WeatherRequestSource.MANUAL_CITY)
         }
 
         viewModel.fetchRecommendations(
@@ -80,12 +85,16 @@ fun RecommendationScreen(
     fun loadUsingCurrentLocation() {
         scope.launch {
             locationMessage = "Detecting location..."
+            Log.i(LOCATION_LOG_TAG, "recommendation screen location requested")
             val coordinates = gpsLocationProvider.getCurrentCoordinates()
             if (coordinates == null) {
                 locationMessage = "Location unavailable. You can still use city manually."
+                viewModel.markWeatherManualFallback()
+                Log.w(LOCATION_LOG_TAG, "recommendation location unavailable")
                 return@launch
             }
             locationMessage = "Using current location weather."
+            Log.i(LOCATION_LOG_TAG, "recommendation location resolved")
             applyContextRequest(city = null, lat = coordinates.lat, lon = coordinates.lon)
         }
     }
@@ -97,6 +106,8 @@ fun RecommendationScreen(
             loadUsingCurrentLocation()
         } else {
             locationMessage = "Location permission denied."
+            viewModel.markWeatherPermissionNeeded()
+            Log.w(LOCATION_LOG_TAG, "recommendation location permission denied")
         }
     }
 
@@ -128,7 +139,7 @@ fun RecommendationScreen(
 
             FitGptScaffold(
                 navController = navController,
-                currentRoute = Routes.DASHBOARD,
+                currentRoute = Routes.RECOMMENDATION,
                 title = "Outfit Recommendation"
             ) { paddingValues ->
 
@@ -260,6 +271,11 @@ fun RecommendationScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
+                            Text(
+                                text = "Weather status: ${weatherUiStatus.message}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
 

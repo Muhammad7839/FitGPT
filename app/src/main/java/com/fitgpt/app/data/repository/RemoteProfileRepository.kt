@@ -3,6 +3,9 @@ package com.fitgpt.app.data.repository
 import com.fitgpt.app.data.model.UserProfile
 import com.fitgpt.app.data.remote.ApiService
 import com.fitgpt.app.data.remote.dto.UserProfileUpdateRequest
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * Retrofit-backed profile repository.
@@ -16,6 +19,7 @@ class RemoteProfileRepository(
         return UserProfile(
             id = response.id,
             email = response.email,
+            avatarUrl = resolveApiUrl(response.avatarUrl),
             bodyType = response.bodyType,
             lifestyle = response.lifestyle,
             comfortPreference = response.comfortPreference,
@@ -47,6 +51,7 @@ class RemoteProfileRepository(
         return UserProfile(
             id = summary.id,
             email = summary.email,
+            avatarUrl = resolveApiUrl(summary.avatarUrl),
             bodyType = summary.bodyType,
             lifestyle = summary.lifestyle,
             comfortPreference = summary.comfortPreference,
@@ -58,5 +63,15 @@ class RemoteProfileRepository(
             plannedOutfitCount = summary.plannedOutfitCount,
             historyCount = summary.historyCount
         )
+    }
+
+    override suspend fun uploadAvatar(bytes: ByteArray, fileName: String, mimeType: String): String {
+        val body = bytes.toRequestBody(mimeType.toMediaTypeOrNull())
+        val part = MultipartBody.Part.createFormData(
+            name = "image",
+            filename = fileName,
+            body = body
+        )
+        return resolveApiUrl(api.uploadMyAvatar(part).avatarUrl).orEmpty()
     }
 }
