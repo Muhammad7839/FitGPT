@@ -58,16 +58,28 @@ export function normalizeColorName(raw) {
   return map[t] || t;
 }
 
+const CSS_COLOR_MAP = {
+  black: "#1a1a1a", white: "#f5f5f5", gray: "#9ca3af", grey: "#9ca3af",
+  red: "#dc2626", blue: "#3b82f6", green: "#22c55e", yellow: "#eab308",
+  orange: "#f97316", purple: "#a855f7", pink: "#ec4899", brown: "#92400e",
+  beige: "#d4c5a9", navy: "#1e3a5f", teal: "#14b8a6", coral: "#f87171",
+  gold: "#d97706", olive: "#65a30d", lavender: "#a78bfa", mint: "#34d399",
+};
+
+export function splitColors(raw) {
+  if (!raw) return [];
+  return raw.split(",").map((c) => c.trim()).filter(Boolean);
+}
+
 export function colorToCss(colorName) {
-  const c = normalizeColorName(colorName).toLowerCase();
-  const map = {
-    black: "#1a1a1a", white: "#f5f5f5", gray: "#9ca3af", grey: "#9ca3af",
-    red: "#dc2626", blue: "#3b82f6", green: "#22c55e", yellow: "#eab308",
-    orange: "#f97316", purple: "#a855f7", pink: "#ec4899", brown: "#92400e",
-    beige: "#d4c5a9", navy: "#1e3a5f", teal: "#14b8a6", coral: "#f87171",
-    gold: "#d97706", olive: "#65a30d", lavender: "#a78bfa", mint: "#34d399",
-  };
-  return map[c] || "#9ca3af";
+  const parts = splitColors(colorName);
+  if (parts.length <= 1) {
+    const c = normalizeColorName(colorName).toLowerCase();
+    return CSS_COLOR_MAP[c] || "#9ca3af";
+  }
+  const hexes = parts.map((p) => CSS_COLOR_MAP[normalizeColorName(p).toLowerCase()] || "#9ca3af");
+  const stops = hexes.map((h, i) => `${h} ${Math.round((i / (hexes.length - 1)) * 100)}%`).join(", ");
+  return `linear-gradient(135deg, ${stops})`;
 }
 
 /* ── Fit penalty ────────────────────────────────────────────── */
@@ -139,10 +151,7 @@ export function hueDiff(h1, h2) {
   return Math.min(d, 360 - d);
 }
 
-export function pairScore(aColor, bColor) {
-  const a = colorInfo(aColor);
-  const b = colorInfo(bColor);
-
+function singlePairScore(a, b) {
   if (!a.name || !b.name) return 2;
 
   if (a.neutral && b.neutral) {
@@ -167,6 +176,23 @@ export function pairScore(aColor, bColor) {
   if (diff >= 50 && diff <= 100) return 1;
 
   return 2;
+}
+
+export function pairScore(aColor, bColor) {
+  const aParts = splitColors(aColor);
+  const bParts = splitColors(bColor);
+  const aInfos = (aParts.length ? aParts : [aColor]).map(colorInfo);
+  const bInfos = (bParts.length ? bParts : [bColor]).map(colorInfo);
+
+  let total = 0;
+  let count = 0;
+  for (const a of aInfos) {
+    for (const b of bInfos) {
+      total += singlePairScore(a, b);
+      count++;
+    }
+  }
+  return count > 0 ? total / count : 2;
 }
 
 /* ── PRNG ───────────────────────────────────────────────────── */
@@ -452,7 +478,17 @@ export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactS
       if (accessory) outfitItems.push(accessory);
     }
 
-    const mapped = outfitItems.map((x, i) => ({
+    // Deduplicate: keep only the first item per category (prevents 2+ shoes, etc.)
+    const seenCats = new Set();
+    const deduped = [];
+    for (const x of outfitItems) {
+      const cat = normalizeCategory(x.category);
+      if (cat && seenCats.has(cat)) continue;
+      if (cat) seenCats.add(cat);
+      deduped.push(x);
+    }
+
+    const mapped = deduped.map((x, i) => ({
       id: x.id ?? `w${i}_${x._idx}`,
       name: x.name ?? "Wardrobe item",
       category: normalizeCategory(x.category),
@@ -663,7 +699,7 @@ export function buildExplanation({ answers, outfit, weatherCategory, timeCategor
 
   const occasion = dressFor.length ? titleCase(dressFor[0]) : "";
   const styleHint = style.length ? style[0].toLowerCase() : "";
-  const colors = uniqueNonEmpty((outfit || []).map((x) => x?.color));
+  const colors = uniqueNonEmpty((outfit || []).flatMap((x) => splitColors(x?.color || "").length ? splitColors(x.color) : [x?.color]));
 
   const seed = explanationHash(outfit.map((x) => `${x?.name}${x?.color}`).join(""));
 
