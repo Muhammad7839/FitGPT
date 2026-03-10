@@ -298,8 +298,10 @@ export default function Wardrobe() {
     const source = tab === "archived" ? archivedItems : activeItems;
     const set = new Set();
     for (const it of source) {
-      const c = (it.color || "").trim();
-      if (c) set.add(c);
+      const raw = (it.color || "").trim();
+      if (!raw) continue;
+      const parts = raw.split(",").map((c) => c.trim()).filter(Boolean);
+      for (const c of (parts.length ? parts : [raw])) set.add(c);
     }
     return [...set].sort();
   }, [activeItems, archivedItems, tab]);
@@ -343,7 +345,8 @@ export default function Wardrobe() {
       const catOk = activeCategory === "All Items" ? true : it.category === activeCategory;
       const fit = fitLabel(it.fit_tag || it.fitTag || it.fit);
       const qOk = !q ? true : `${it.name} ${it.color} ${it.category} ${fit}`.toLowerCase().includes(q);
-      const colorOk = filterColors.size === 0 || filterColors.has((it.color || "").trim());
+      const itemColors = (it.color || "").split(",").map((c) => c.trim()).filter(Boolean);
+      const colorOk = filterColors.size === 0 || itemColors.some((c) => filterColors.has(c));
       const fitOk = filterFits.size === 0 || filterFits.has(normalizeFitTag(it.fit_tag || it.fitTag || it.fit));
       return catOk && qOk && colorOk && fitOk;
     });

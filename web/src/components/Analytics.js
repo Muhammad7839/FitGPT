@@ -104,7 +104,7 @@ const ActivePieShape = (props) => {
       endAngle={endAngle}
       fill={fill}
       stroke={stroke || "none"}
-      style={{ transition: "all 800ms cubic-bezier(0.25, 1, 0.5, 1)", cursor: "pointer" }}
+      style={{ transition: "all 250ms cubic-bezier(0.25, 1, 0.5, 1)", cursor: "pointer" }}
     />
   );
 };
@@ -198,9 +198,12 @@ export function AnalyticsContent() {
   const colorData = useMemo(() => {
     const counts = {};
     for (const it of activeItems) {
-      const col = (it?.color || "").toString().trim().toLowerCase();
-      if (!col) continue;
-      counts[col] = (counts[col] || 0) + 1;
+      const raw = (it?.color || "").toString().trim();
+      if (!raw) continue;
+      const parts = raw.split(",").map((c) => c.trim().toLowerCase()).filter(Boolean);
+      for (const col of (parts.length ? parts : [raw.toLowerCase()])) {
+        counts[col] = (counts[col] || 0) + 1;
+      }
     }
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1])

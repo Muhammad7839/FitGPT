@@ -1,5 +1,5 @@
 import React from "react";
-import { CATEGORIES as ITEM_CATEGORIES, FIT_TAG_OPTIONS } from "./ItemFormFields";
+import { CATEGORIES as ITEM_CATEGORIES, FIT_TAG_OPTIONS, ColorChipInput } from "./ItemFormFields";
 
 function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, isSaving, error }) {
   return (
@@ -50,13 +50,12 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
                     </select>
                     {entry.classifying && <span className="classifyingHint">Detecting...</span>}
                   </div>
-                  <input
-                    className="wardrobeInput"
-                    placeholder="Color"
-                    value={entry.color}
-                    onChange={(e) => onUpdateItem(entry._key, "color", e.target.value)}
-                    style={{ flex: 1 }}
-                  />
+                  <div style={{ flex: 1 }}>
+                    <ColorChipInput
+                      value={entry.color}
+                      onChange={(v) => onUpdateItem(entry._key, "color", v)}
+                    />
+                  </div>
                 </div>
                 <select
                   className="wardrobeInput"
