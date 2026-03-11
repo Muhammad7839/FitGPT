@@ -2273,6 +2273,75 @@ img.dashSquareImg {
   color: rgba(255, 255, 255, 0.9);
 }
 
+.mannequinLegend {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.mannequinLegendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 10px;
+  padding: 6px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="dark"] .mannequinLegendItem {
+  background: rgba(30, 26, 22, 0.85);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.mannequinLegendThumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.mannequinLegendPlaceholder {
+  background: linear-gradient(135deg, rgba(139, 30, 30, 0.12), rgba(0, 0, 0, 0.06));
+}
+
+.mannequinLegendInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.mannequinLegendName {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: rgba(0, 0, 0, 0.8);
+}
+
+[data-theme="dark"] .mannequinLegendName {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.mannequinLegendCat {
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+[data-theme="dark"] .mannequinLegendCat {
+  color: rgba(255, 255, 255, 0.4);
+}
+
 .mannequinSaveBtnRow {
   display: flex;
   justify-content: center;
