@@ -389,7 +389,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     return { outfits: raw, pairedExplanations: rawExplanations };
   }, [generatedOutfits, reused, wardrobe, aiOutfits, aiExplanations, savedSigs]);
 
-  const [selectedIdx, setSelectedIdx] = useState(null);
+  const [selectedIdx, setSelectedIdx] = useState(0);
   const [viewMode, setViewMode] = useState("grid"); // "grid" | "mannequin"
 
   // Clamp selectedIdx when outfits shrink (e.g. after saving removes an option)
@@ -763,7 +763,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           {outfits.length > 0 && (
             <div className="dashViewToggle">
               <button type="button" className={"dashViewToggleBtn" + (viewMode === "grid" ? " active" : "")} onClick={() => setViewMode("grid")}>Grid</button>
-              <button type="button" className={"dashViewToggleBtn" + (viewMode === "mannequin" ? " active" : "")} onClick={() => setViewMode("mannequin")}>3D</button>
+              <button type="button" className={"dashViewToggleBtn" + (viewMode === "mannequin" ? " active" : "")} onClick={() => { setViewMode("mannequin"); if (selectedIdx == null) setSelectedIdx(0); }}>3D</button>
             </div>
           )}
         </div>
