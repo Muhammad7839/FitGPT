@@ -32,7 +32,8 @@ with engine.connect() as conn:
     inspector = inspect(engine)
     existing = {c["name"] for c in inspector.get_columns("users")}
     if "google_id" not in existing:
-        conn.execute(text("ALTER TABLE users ADD COLUMN google_id VARCHAR UNIQUE"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN google_id VARCHAR"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_id ON users (google_id)"))
     if "auth_provider" not in existing:
         conn.execute(text("ALTER TABLE users ADD COLUMN auth_provider VARCHAR DEFAULT 'email'"))
     if existing and "hashed_password" in existing:
