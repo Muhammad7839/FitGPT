@@ -14,25 +14,14 @@ from app.auth import (
     verify_google_token,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
-from app.schemas import RecommendationResponse, AIRecommendationRequest, AIRecommendationResponse
+from app.schemas import RecommendationResponse, AIRecommendationRequest, AIRecommendationResponse, ChatRequest, ChatResponse
 from app.weather import get_weather
 from app.groq_service import get_ai_recommendations
+from app.chat_service import get_chat_response
 from app.email import send_password_reset_email
 
 router = APIRouter()
 auth_router = APIRouter(prefix="/auth")
-
-
-# =============================
-# Onboarding Enforcement
-# =============================
-
-def require_onboarding_complete(current_user: models.User):
-    if not current_user.onboarding_complete:
-        raise HTTPException(
-            status_code=403,
-            detail="Complete onboarding before accessing this feature."
-        )
 
 
 # =============================
@@ -406,3 +395,16 @@ def get_ai_recommendations_endpoint(request: AIRecommendationRequest):
         "source": "ai",
         "outfits": result,
     }
+
+
+# =============================
+# Chatbot (no auth required)
+# =============================
+
+@router.post("/chat", response_model=ChatResponse)
+def chat_endpoint(request: ChatRequest):
+    messages = [{"role": m.role, "content": m.content} for m in request.messages]
+    reply = get_chat_response(messages)
+    if reply is None:
+        return {"reply": "Sorry, the assistant is unavailable right now. Please try again later."}
+    return {"reply": reply}

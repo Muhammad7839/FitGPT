@@ -134,6 +134,11 @@ export function HistoryContent() {
     if (!itemIds.length) return;
 
     setReuseOutfit(itemIds, entry?.history_id || "");
+    outfitHistoryApi.recordWorn({
+      item_ids: itemIds,
+      source: "history",
+      context: entry?.context || {},
+    }, user).catch(() => {});
     navigate("/dashboard");
   };
 

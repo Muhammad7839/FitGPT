@@ -6,24 +6,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { logout } from "../api/authApi";
 import { readDemoAuth, writeDemoAuth, loadProfilePic, saveProfilePic, loadAnswers, saveAnswers } from "../utils/userStorage";
 import { fileToDataUrl } from "../utils/helpers";
-
-const STYLE_OPTIONS = [
-  "Casual", "Professional", "Streetwear", "Athletic", "Minimalist", "Formal",
-];
-
-const COMFORT_OPTIONS = ["Balanced", "Relaxed", "Fitted", "Stretchy", "Layered"];
-
-const DRESS_FOR_OPTIONS = [
-  "Class / Campus", "Work", "Gym", "Date Night", "Errands", "Party / Event", "Travel",
-];
-
-const BODY_TYPE_OPTIONS = [
-  { id: "pear", label: "Pear", note: "Balance with structure on top." },
-  { id: "apple", label: "Apple", note: "Comfort + clean lines through the middle." },
-  { id: "hourglass", label: "Hourglass", note: "Highlight waist, keep proportions balanced." },
-  { id: "rectangle", label: "Rectangle", note: "Add shape with layers and contrast." },
-  { id: "inverted", label: "Inverted Triangle", note: "Balance shoulders with volume below." },
-];
+import { STYLE_OPTIONS, COMFORT_OPTIONS, DRESS_FOR_OPTIONS, BODY_TYPE_OPTIONS } from "../utils/formOptions";
 
 const DEFAULT_PREFS = { style: [], comfort: [], dressFor: [], bodyType: null };
 

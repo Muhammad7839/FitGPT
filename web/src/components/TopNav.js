@@ -9,9 +9,8 @@ import { EVT_PROFILE_PIC_CHANGED } from "../utils/constants";
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Home" },
   { to: "/wardrobe", label: "Wardrobe" },
-  { to: "/favorites", label: "Favorites" },
   { to: "/history", label: "Insights" },
-  { to: "/saved-outfits", label: "Saved" },
+  { to: "/saved-outfits", label: "Outfits" },
   { to: "/plans", label: "Plans" },
   { to: "/profile", label: "Profile" },
 ];

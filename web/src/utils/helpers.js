@@ -157,6 +157,34 @@ export function monthKey(dateInput) {
   }
 }
 
+export function isNetworkError(e) {
+  const msg = (e?.message || "").toString().toLowerCase();
+  return msg.includes("failed to fetch") || msg.includes("networkerror") || msg.includes("load failed");
+}
+
+export function tomorrowDateStr() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+export function onTiltMove(e) {
+  const el = e.currentTarget;
+  const rect = el.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / rect.width - 0.5;
+  const y = (e.clientY - rect.top) / rect.height - 0.5;
+  const tiltX = -(y * 8);
+  const tiltY = x * 8;
+  el.style.transform = `perspective(800px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) scale(1.02)`;
+}
+
+export function onTiltLeave(e) {
+  e.currentTarget.style.transform = "";
+}
+
 export function setReuseOutfit(itemIds, outfitId) {
   const items = normalizeItems(itemIds);
   if (!items.length) return;

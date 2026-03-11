@@ -2,7 +2,6 @@
 export const TOKEN_KEY = "fitgpt_token_v1";
 export const AUTH_MODE_KEY = "fitgpt_auth_mode_v1";
 export const DEMO_AUTH_KEY = "fitgpt_demo_auth_v1";
-export const ACCOUNTS_KEY = "fitgpt_accounts_v1";
 
 // Wardrobe
 export const GUEST_WARDROBE_KEY = "fitgpt_guest_wardrobe_v1";
@@ -34,6 +33,7 @@ export const CUSTOM_THEMES_KEY = "fitgpt_custom_themes_v1";
 // Misc
 export const STALE_CLEANUP_KEY = "fitgpt_stale_cleanup_v2";
 export const TUTORIAL_DONE_KEY = "fitgpt_tutorial_done_v1";
+export const CHAT_HISTORY_KEY = "fitgpt_chat_history_v1";
 
 // Custom events
 export const EVT_WARDROBE_CHANGED = "fitgpt:guest-wardrobe-changed";
