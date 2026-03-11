@@ -2,10 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { savedOutfitsApi } from "../api/savedOutfitsApi";
+import { outfitHistoryApi } from "../api/outfitHistoryApi";
 import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 import { loadWardrobe } from "../utils/userStorage";
 import { EVT_SAVED_OUTFITS_CHANGED } from "../utils/constants";
-import { buildWardrobeMap, formatCardDate, labelFromSource, setReuseOutfit as setReuse, buildGoogleCalendarUrl } from "../utils/helpers";
+import { buildWardrobeMap, formatCardDate, labelFromSource, setReuseOutfit as setReuse, buildGoogleCalendarUrl, tomorrowDateStr } from "../utils/helpers";
 
 export default function SavedOutfits() {
   const navigate = useNavigate();
@@ -65,7 +66,13 @@ export default function SavedOutfits() {
   }, [saved]);
 
   function reuseOutfit(outfit) {
-    setReuse(outfit?.items || [], outfit?.saved_outfit_id);
+    const itemIds = outfit?.items || [];
+    setReuse(itemIds, outfit?.saved_outfit_id);
+    outfitHistoryApi.recordWorn({
+      item_ids: itemIds,
+      source: "saved",
+      context: { occasion: outfit?.context?.occasion || "" },
+    }, user).catch(() => {});
     navigate("/dashboard");
   }
 
@@ -98,12 +105,7 @@ export default function SavedOutfits() {
   }
 
   function handlePlanForLater(outfit) {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const yyyy = tomorrow.getFullYear();
-    const mm = String(tomorrow.getMonth() + 1).padStart(2, "0");
-    const dd = String(tomorrow.getDate()).padStart(2, "0");
-    const date = `${yyyy}-${mm}-${dd}`;
+    const date = tomorrowDateStr();
     const occasion = outfit?.context?.occasion || "";
 
     const itemIds = Array.isArray(outfit?.items) ? outfit.items : [];

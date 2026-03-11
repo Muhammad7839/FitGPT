@@ -138,8 +138,6 @@ class ClothingItemResponse(BaseModel):
 # Recommendation Schemas
 # =============================
 
-from typing import List
-
 
 class OutfitItem(BaseModel):
     id: int
@@ -206,3 +204,20 @@ class AIOutfitResult(BaseModel):
 class AIRecommendationResponse(BaseModel):
     source: str  # "ai" or "fallback"
     outfits: List[AIOutfitResult]
+
+
+# =============================
+# Chat Schemas
+# =============================
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: List[ChatMessage]
+
+
+class ChatResponse(BaseModel):
+    reply: str

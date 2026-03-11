@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { loginWithEmail, getMe } from "../api/authApi";
 import { useAuth } from "../auth/AuthProvider";
 import { migrateGuestData, clearGuestData } from "../utils/userStorage";
+import { isNetworkError } from "../utils/helpers";
 import GoogleSignInButton from "./GoogleSignInButton";
 
 export default function Login() {
@@ -50,11 +51,10 @@ export default function Login() {
 
       navigate("/dashboard", { replace: true });
     } catch (err) {
-      const msg = err?.message || "";
-      if (msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("networkerror")) {
+      if (isNetworkError(err)) {
         setError("Can't reach the server. Check your connection or try again later.");
       } else {
-        setError(msg || "Login failed. Please try again.");
+        setError(err?.message || "Login failed. Please try again.");
       }
     } finally {
       setIsLoading(false);

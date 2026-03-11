@@ -36,6 +36,7 @@ FitGPT/
 │       │   ├── ResetPassword.js     # Password reset form (token from URL, POST /auth/reset-password)
 │       │   ├── onboarding/Onboarding.js  # 5-step onboarding (style, comfort, occasion, body type)
 │       │   ├── onboarding/SplashCrumple.js  # Canvas splash screen with affine-mapped crumple animation
+│       │   ├── Chatbot.js          # StyleBot AI assistant: multi-chat history, share, typewriter, localStorage persistence
 │       │   ├── AuthPrompt.js, Login.js, Signup.js, Register.js
 │       ├── theme/
 │       │   ├── themeDefinitions.js  # 10 preset themes (classic/color/seasonal) + buildCustomTheme()
@@ -52,6 +53,7 @@ FitGPT/
 │           ├── outfitHistoryApi.js  # Record/list outfit history (localStorage fallback)
 │           ├── plannedOutfitsApi.js # Plan/list/remove outfits (localStorage only, per-user namespaced)
 │           ├── recommendationsApi.js # POST /recommendations/ai — strips image_url, sends wardrobe + context
+│           ├── chatApi.js           # POST /chat — sends conversation history, returns assistant reply
 │           └── weatherApi.js, profileApi.js, preferencesApi.js
 ├── backend/                # FastAPI backend
 │   └── app/
@@ -64,7 +66,8 @@ FitGPT/
 │       ├── database.py     # DB engine/session (SQLite default, PostgreSQL via DATABASE_URL)
 │       ├── weather.py      # Weather integration
 │       ├── email.py        # Gmail SMTP for password reset emails (requires GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
-│       └── groq_service.py # Groq API (llama-3.1-8b-instant) for AI outfit recommendations
+│       ├── groq_service.py # Groq API (llama-3.1-8b-instant) for AI outfit recommendations
+│       └── chat_service.py # StyleBot chatbot: Groq API (llama-3.1-8b-instant), system prompt with full app knowledge base
 └── app/                    # Android/Kotlin app (not actively developed)
 ```
 
@@ -166,6 +169,7 @@ Keys marked with * are namespaced per-user when signed in (e.g., `fitgpt_wardrob
 | `fitgpt_token_v1` | localStorage | JWT auth token |
 | `fitgpt_demo_auth_v1` | localStorage | Demo sign-in state |
 | `fitgpt_reuse_outfit_v1` | sessionStorage | Outfit reuse from Profile/Plans |
+| `fitgpt_chat_history_v1` | localStorage | StyleBot conversation history (up to 30 chats) |
 
 ## Backend Notes
 - FastAPI on port 8000, CORS allows localhost:3000 and 127.0.0.1:3000
@@ -182,6 +186,7 @@ Keys marked with * are namespaced per-user when signed in (e.g., `fitgpt_wardrob
 - `POST /auth/forgot-password` — triggers password reset email
 - `POST /auth/reset-password` — validates token, updates password
 - `POST /recommendations/ai` — AI outfit recommendations via Groq
+- `POST /chat` — StyleBot chatbot (Groq, llama-3.1-8b-instant, max_tokens 2048)
 
 ## Common Bugs & Solutions
 
@@ -241,6 +246,16 @@ cd web && npx react-scripts build            # Production build
 ### Analytics (Analytics.js)
 - Wardrobe breakdown by category/color (pie charts), wear frequency (bar charts), activity timeline (6-month area chart)
 - Uses recharts; dynamically reads theme colors from CSS variables with MutationObserver
+
+### StyleBot (Chatbot.js)
+- AI assistant floating in bottom-right corner of every page (branded as "StyleBot")
+- Backend: `chat_service.py` with Groq API (llama-3.1-8b-instant, max_tokens 2048), comprehensive system prompt containing full app knowledge base
+- **Multi-chat history**: Up to 30 conversations persisted in localStorage (`fitgpt_chat_history_v1`)
+- Chat management: new chat, switch, delete, auto-derived titles from first user message
+- **Share**: `navigator.share` on mobile, `navigator.clipboard` on desktop, with toast confirmation
+- **Typewriter effect**: Character-by-character rendering for assistant replies (12ms per char)
+- **Logo**: Custom robotic mannequin image (`/fitgpt-logo.png`) used in toggle button, header, and message avatars
+- UI: two-row header (title + close on top, action buttons below), pill-shaped composer with circular send button
 
 ## Style Notes
 - Skewed save button: `clip-path: polygon(...)`, `skewX(-4deg)`, gradient backgrounds

@@ -16,7 +16,7 @@ import ResetPassword from "../components/ResetPassword";
 const Onboarding = lazy(() => import("../components/onboarding/Onboarding"));
 const Dashboard = lazy(() => import("../components/Dashboard"));
 const Wardrobe = lazy(() => import("../components/Wardrobe"));
-const Favorites = lazy(() => import("../components/Favorites"));
+
 const Profile = lazy(() => import("../components/Profile"));
 const HistoryAnalytics = lazy(() => import("../components/HistoryAnalytics"));
 const Plans = lazy(() => import("../components/Plans"));
@@ -122,7 +122,7 @@ export default function AppRoutes() {
             }
           />
           <Route path="/wardrobe" element={<ErrorBoundary><Wardrobe /></ErrorBoundary>} />
-          <Route path="/favorites" element={<ErrorBoundary><Favorites /></ErrorBoundary>} />
+          <Route path="/favorites" element={<Navigate to="/wardrobe" replace />} />
           <Route path="/profile" element={<ErrorBoundary><Profile onResetOnboarding={handleResetOnboarding} /></ErrorBoundary>} />
           <Route path="/history" element={<ErrorBoundary><HistoryAnalytics /></ErrorBoundary>} />
           <Route path="/plans" element={<ErrorBoundary><Plans /></ErrorBoundary>} />

@@ -7,6 +7,7 @@ import { AuthProvider } from "./auth/AuthProvider";
 import { getPresetTheme, PRESET_THEMES } from "./theme/themeDefinitions";
 import { applyTheme } from "./theme/themeEngine";
 import TopNav from "./components/TopNav";
+import Chatbot from "./components/Chatbot";
 import { LEGACY_THEME_KEY, THEME_KEY, CUSTOM_THEMES_KEY, STALE_CLEANUP_KEY, TOKEN_KEY, WARDROBE_KEY } from "./utils/constants";
 if (!localStorage.getItem(STALE_CLEANUP_KEY)) {
   localStorage.removeItem(WARDROBE_KEY);
@@ -122,6 +123,7 @@ export default function App() {
       <AuthProvider>
         <TopNav />
         <AppRoutes />
+        <Chatbot />
       </AuthProvider>
     </ThemeContext.Provider>
   );

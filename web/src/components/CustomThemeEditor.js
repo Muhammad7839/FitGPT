@@ -1,5 +1,6 @@
 // web/src/components/CustomThemeEditor.js
 import React, { useCallback, useMemo, useState } from "react";
+import ReactDOM from "react-dom";
 import { useTheme } from "../App";
 import { buildCustomTheme } from "../theme/themeDefinitions";
 import { deriveAccentVars } from "../theme/colorUtils";
@@ -89,7 +90,7 @@ export default function CustomThemeEditor({ onClose }) {
     onClose();
   }, [previewTheme, name, saveCustomTheme, setTheme, onClose]);
 
-  return (
+  return ReactDOM.createPortal(
     <div className="modalOverlay" onClick={onClose}>
       <div className="modalCard cteModal" onClick={(e) => e.stopPropagation()}>
         <div className="cteHeader">
@@ -244,6 +245,7 @@ export default function CustomThemeEditor({ onClose }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

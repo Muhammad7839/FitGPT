@@ -19,7 +19,7 @@ const TUTORIAL_STEPS = [
     selector: ".topNavInner",
     title: "Welcome to FitGPT!",
     description:
-      "This is your navigation bar. Use these tabs to jump between your Dashboard, Wardrobe, Favorites, Insights, Saved Outfits, Plans, and Profile — everything you need is one tap away.",
+      "This is your navigation bar. Use these tabs to jump between your Dashboard, Wardrobe, Insights, Outfits, Plans, and Profile — everything you need is one tap away.",
   },
   {
     type: "spotlight",
@@ -74,9 +74,9 @@ const TUTORIAL_STEPS = [
     type: "spotlight",
     route: "/wardrobe",
     selector: ".wardrobeTabs",
-    title: "Active & Archived",
+    title: "Active, Favorites & Archived",
     description:
-      "Switch between Active items (in rotation) and Archived items (stored away). Keep your closet organized by season or preference.",
+      "Switch between Active items (in rotation), Favorites (your go-to pieces), and Archived items (stored away). Tap the heart on any item to add it to Favorites for quick access.",
   },
   {
     type: "spotlight",
@@ -86,27 +86,10 @@ const TUTORIAL_STEPS = [
     description:
       "Search by name, filter by color or material, and toggle Body Type Fit to see how items complement your body shape.",
   },
-  // ── Navigate to Favorites ──
-  {
-    type: "navigate",
-    route: "/wardrobe",
-    navHref: "/favorites",
-    title: "Check Out Favorites",
-    description: "Click Favorites to see how saved items work.",
-  },
-  // ── Favorites page ──
-  {
-    type: "spotlight",
-    route: "/favorites",
-    selector: ".wardrobeGrid",
-    title: "Your Favorite Pieces",
-    description:
-      "This is where your favorited items live. Tap the heart icon on any wardrobe item to add it here for quick access when building outfits.",
-  },
   // ── Navigate to Insights ──
   {
     type: "navigate",
-    route: "/favorites",
+    route: "/wardrobe",
     navHref: "/history",
     navLabel: "Insights",
     title: "See Your Insights",
@@ -132,13 +115,14 @@ const TUTORIAL_STEPS = [
     description:
       "Dive into your style stats — see wear frequency, color distribution, category breakdowns, and pattern insights all at a glance.",
   },
-  // ── Navigate to Saved ──
+  // ── Navigate to Outfits ──
   {
     type: "navigate",
     route: "/history",
     navHref: "/saved-outfits",
+    navLabel: "Outfits",
     title: "View Saved Outfits",
-    description: "Click Saved to see your saved outfit combos.",
+    description: "Click Outfits to see your saved outfit combos.",
   },
   // ── Saved Outfits page ──
   {
@@ -191,6 +175,15 @@ const TUTORIAL_STEPS = [
     title: "Style Preferences",
     description:
       "Tap the pills to set your style, comfort level, what you dress for, and body type. These preferences shape every outfit recommendation you get.",
+  },
+  // ── Chatbot ──
+  {
+    type: "spotlight",
+    route: "/profile",
+    selector: ".chatbot-toggle",
+    title: "FitGPT Assistant",
+    description:
+      "Need help? Tap the chat bubble in the corner anytime to ask the FitGPT Assistant about features, how things work, or troubleshooting tips.",
   },
   // ── Done ──
   {

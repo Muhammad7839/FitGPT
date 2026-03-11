@@ -1,17 +1,40 @@
 import { useState, useEffect } from "react";
-import { loadWardrobe, GUEST_WARDROBE_KEY, WARDROBE_KEY } from "../utils/userStorage";
+import { loadWardrobe, saveWardrobe, GUEST_WARDROBE_KEY, WARDROBE_KEY } from "../utils/userStorage";
+import { wardrobeApi } from "../api/wardrobeApi";
 import { EVT_WARDROBE_CHANGED } from "../utils/constants";
 
 /**
  * Reactive wardrobe hook — returns the current wardrobe array and
  * automatically refreshes on user change, storage events, focus,
  * and custom wardrobe-changed events.
+ *
+ * When local storage is empty but the user is signed in, attempts
+ * a one-time API fetch so Dashboard and other consumers see items
+ * that only exist server-side.
  */
 export default function useWardrobe(user) {
   const [items, setItems] = useState(() => loadWardrobe(user));
 
   useEffect(() => {
-    setItems(loadWardrobe(user));
+    let alive = true;
+    const local = loadWardrobe(user);
+    setItems(local);
+
+    // If local is empty and user is signed in, try the API
+    if (local.length === 0 && user) {
+      wardrobeApi.getItems()
+        .then((data) => {
+          if (!alive) return;
+          const apiItems = Array.isArray(data) ? data : [];
+          if (apiItems.length > 0) {
+            setItems(apiItems);
+            saveWardrobe(apiItems, user);
+          }
+        })
+        .catch(() => {});
+    }
+
+    return () => { alive = false; };
   }, [user]);
 
   useEffect(() => {

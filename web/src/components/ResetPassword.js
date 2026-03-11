@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { apiFetch } from "../api/apiFetch";
+import { isNetworkError } from "../utils/helpers";
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
@@ -49,7 +50,7 @@ export default function ResetPassword() {
         setError("This reset link has expired. Please request a new one.");
       } else if (msg.toLowerCase().includes("invalid") || msg.toLowerCase().includes("token")) {
         setError("Invalid reset link. Please request a new one.");
-      } else if (msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("networkerror")) {
+      } else if (isNetworkError(err)) {
         setError("Can't reach the server. Check your connection or try again later.");
       } else {
         setError(msg || "Failed to reset password. Please try again.");

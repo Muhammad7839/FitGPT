@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../api/apiFetch";
+import { isNetworkError } from "../utils/helpers";
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
@@ -34,14 +35,8 @@ export default function ForgotPassword() {
       });
       setSuccess(true);
     } catch (err) {
-      const msg = err?.message || "";
-      if (
-        msg.toLowerCase().includes("failed to fetch") ||
-        msg.toLowerCase().includes("networkerror")
-      ) {
-        setError(
-          "Can't reach the server. Check your connection or try again later."
-        );
+      if (isNetworkError(err)) {
+        setError("Can't reach the server. Check your connection or try again later.");
       } else {
         // Show generic success even on most errors to avoid leaking whether email exists
         setSuccess(true);

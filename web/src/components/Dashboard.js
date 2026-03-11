@@ -1,5 +1,5 @@
 // web/src/components/Dashboard.js
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 
@@ -15,7 +15,7 @@ import ErrorBoundary from "./ErrorBoundary";
 import UpcomingPlanCard from "./UpcomingPlanCard";
 import { OPEN_ADD_ITEM_FLAG, REUSE_OUTFIT_KEY, EVT_PLANNED_OUTFITS_CHANGED } from "../utils/constants";
 import { readRecSeed, writeRecSeed, readTimeOverride, writeTimeOverride, readWeatherOverride, setWeatherOverride } from "../utils/userStorage";
-import { safeParse, formatToday, normalizeFitTag, setReuseOutfit, buildGoogleCalendarUrl } from "../utils/helpers";
+import { safeParse, formatToday, normalizeFitTag, normalizeItems, setReuseOutfit, buildGoogleCalendarUrl, onTiltMove, onTiltLeave, tomorrowDateStr } from "../utils/helpers";
 import { getWeatherContext } from "../api/weatherApi";
 import {
   titleCase, normalizeCategory, normalizeColorName, colorToCss,
@@ -32,7 +32,7 @@ function readReuseOutfit() {
   if (!parsed || !Array.isArray(parsed.items)) return null;
 
   const ids = parsed.items.map((x) => (x ?? "").toString().trim()).filter(Boolean);
-  const normalized = savedOutfitsApi.normalizeItems(ids);
+  const normalized = normalizeItems(ids);
 
   if (!normalized.length) return null;
 
@@ -438,12 +438,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     const outfit = outfits[idx] || outfits[0] || [];
     if (!outfit.length) return;
 
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const yyyy = tomorrow.getFullYear();
-    const mm = String(tomorrow.getMonth() + 1).padStart(2, "0");
-    const dd = String(tomorrow.getDate()).padStart(2, "0");
-    const date = `${yyyy}-${mm}-${dd}`;
+    const date = tomorrowDateStr();
 
     const itemNames = outfit.map((x) => x?.name).filter(Boolean);
     const calUrl = buildGoogleCalendarUrl({ date, occasion: "", itemNames });
@@ -476,33 +471,24 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     const itemIds = Array.isArray(upcomingPlan.item_ids) ? upcomingPlan.item_ids : [];
     if (!itemIds.length) return;
     setReuseOutfit(itemIds, upcomingPlan.planned_id);
+    outfitHistoryApi.recordWorn({
+      item_ids: itemIds,
+      source: "planner",
+      context: { occasion: upcomingPlan.occasion || "" },
+    }, user).catch(() => {});
     window.location.reload();
   };
 
   function outfitSignature(outfit) {
-    const ids = savedOutfitsApi.normalizeItems((outfit || []).map((x) => x?.id));
+    const ids = normalizeItems((outfit || []).map((x) => x?.id));
     return ids.join("|");
   }
 
 
 
-  const onTiltMove = useCallback((e) => {
-    const el = e.currentTarget;
-    const rect = el.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width - 0.5;
-    const y = (e.clientY - rect.top) / rect.height - 0.5;
-    const tiltX = -y * 8;
-    const tiltY = x * 8;
-    el.style.transform = `perspective(800px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) scale(1.02)`;
-  }, []);
-
-  const onTiltLeave = useCallback((e) => {
-    e.currentTarget.style.transform = "";
-  }, []);
-
   async function handleSaveOutfit(outfit) {
     const itemIds = (outfit || []).map((x) => x?.id).filter(Boolean);
-    const normalized = savedOutfitsApi.normalizeItems(itemIds);
+    const normalized = normalizeItems(itemIds);
     const sig = normalized.join("|");
 
     if (!sig) {
@@ -563,6 +549,20 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         next.add(sig);
         return next;
       });
+
+      // Record to outfit history
+      if (created) {
+        outfitHistoryApi.recordWorn({
+          item_ids: normalized,
+          source: "recommendation",
+          context: {
+            occasion: chipText,
+            temperature_category: weatherCategory,
+            temperature_f: weatherTempF,
+            time_of_day: timeCategory,
+          },
+        }, user).catch(() => {});
+      }
 
       if (msg) setSaveMsg(msg);
       else setSaveMsg(created ? "Saved! Refreshing recommendations..." : "This outfit is already in your saved outfits.");

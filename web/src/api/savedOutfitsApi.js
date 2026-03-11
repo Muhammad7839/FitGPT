@@ -13,8 +13,6 @@ const PATHS = {
 const { read: readLocal, write: writeLocal } = makeLocalStore(SAVED_OUTFITS_KEY, EVT_SAVED_OUTFITS_CHANGED);
 
 export const savedOutfitsApi = {
-  normalizeItems,
-
   async listSaved(user) {
     if (USE_LOCAL_FALLBACK) {
       return { saved_outfits: readLocal(user) };

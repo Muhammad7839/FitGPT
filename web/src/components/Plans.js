@@ -4,6 +4,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 import { loadWardrobe } from "../utils/userStorage";
 import { EVT_PLANNED_OUTFITS_CHANGED } from "../utils/constants";
+import { outfitHistoryApi } from "../api/outfitHistoryApi";
 import { buildWardrobeMap, formatPlanDate, setReuseOutfit, buildGoogleCalendarUrl } from "../utils/helpers";
 
 export default function Plans() {
@@ -55,7 +56,13 @@ export default function Plans() {
   }, [planned, today]);
 
   const handleWearThis = (plan) => {
-    setReuseOutfit(plan?.item_ids || [], plan?.planned_id);
+    const itemIds = plan?.item_ids || [];
+    setReuseOutfit(itemIds, plan?.planned_id);
+    outfitHistoryApi.recordWorn({
+      item_ids: itemIds,
+      source: "planner",
+      context: { occasion: plan?.occasion || "" },
+    }, user).catch(() => {});
     navigate("/dashboard");
   };
 

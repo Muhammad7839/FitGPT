@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { loginWithGoogle, getMe } from "../api/authApi";
 import { useAuth } from "../auth/AuthProvider";
 import { migrateGuestData, clearGuestData } from "../utils/userStorage";
+import { isNetworkError } from "../utils/helpers";
 
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "";
 
@@ -55,14 +56,10 @@ export default function GoogleSignInButton() {
 
       navigate("/dashboard", { replace: true });
     } catch (err) {
-      const msg = err?.message || "";
-      if (
-        msg.toLowerCase().includes("failed to fetch") ||
-        msg.toLowerCase().includes("networkerror")
-      ) {
+      if (isNetworkError(err)) {
         setError("Can't reach the server. Check your connection or try again later.");
       } else {
-        setError(msg || "Google sign-in failed. Please try again.");
+        setError(err?.message || "Google sign-in failed. Please try again.");
       }
     } finally {
       setLoading(false);

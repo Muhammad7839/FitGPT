@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { wardrobeApi } from "../api/wardrobeApi";
@@ -6,7 +6,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { loadWardrobe, saveWardrobe, loadAnswers } from "../utils/userStorage";
 import { classifyFromUrl, preloadModel } from "../utils/classifyClothing";
 import { OPEN_ADD_ITEM_FLAG } from "../utils/constants";
-import { makeId, normalizeFitTag, fileToDataUrl } from "../utils/helpers";
+import { makeId, normalizeFitTag, fileToDataUrl, isNetworkError, onTiltMove, onTiltLeave } from "../utils/helpers";
 
 import ItemFormFields, { CATEGORIES as ITEM_CATEGORIES, FIT_TAG_OPTIONS } from "./ItemFormFields";
 import WardrobeItemCard from "./WardrobeItemCard";
@@ -73,9 +73,18 @@ function bodyFitRating(fitTag, bodyType, category) {
 }
 
 
-function isNetworkError(e) {
-  const msg = (e?.message || "").toString().toLowerCase();
-  return msg.includes("failed to fetch") || msg.includes("networkerror") || msg.includes("load failed");
+// Map frontend display values to backend enum values for API calls
+const API_CATEGORIES = ["top","bottom","shoes","outerwear","accessory"];
+const API_COLORS = ["black","white","gray","beige","red","blue","green","yellow","purple","orange"];
+const API_FITS = ["slim","regular","oversized"];
+const API_STYLES = ["casual","sporty","formal","street"];
+
+function toApiEnum(val, list, fallback) {
+  if (!val) return fallback;
+  const v = val.toLowerCase().trim();
+  if (list.includes(v)) return v;
+  const match = list.find(l => v.includes(l) || l.includes(v));
+  return match || fallback;
 }
 
 function guessCategoryFromName(name) {
@@ -208,38 +217,8 @@ export default function Wardrobe() {
           const data = await wardrobeApi.getItems();
           if (!alive) return;
           const apiItems = Array.isArray(data) ? data : [];
-          // Only use API data if it has items; otherwise keep local
-          if (apiItems.length > 0) {
-            setItems(apiItems);
-          } else if (local.length > 0) {
-            // One-time sync: push local items to cloud if API is empty
-            setItems(local);
-            const validCategories = ["top","bottom","shoes","outerwear","accessory"];
-            const validColors = ["black","white","gray","beige","red","blue","green","yellow","purple","orange"];
-            const validFits = ["slim","regular","oversized"];
-            const validStyles = ["casual","sporty","formal","street"];
-            const closest = (val, list, fallback) => {
-              if (!val) return fallback;
-              const v = val.toLowerCase().trim();
-              if (list.includes(v)) return v;
-              const match = list.find(l => v.includes(l) || l.includes(v));
-              return match || fallback;
-            };
-            for (const item of local) {
-              try {
-                await wardrobeApi.createItem({
-                  name: item.name || "Unnamed Item",
-                  category: closest(item.category, validCategories, "top"),
-                  color: closest(item.color, validColors, "black"),
-                  fit_type: closest(item.fit_tag || item.fit_type, validFits, "regular"),
-                  style_tag: closest(item.style_tag, validStyles, "casual"),
-                  image_url: item.image_url || "",
-                });
-              } catch (_) { /* best-effort */ }
-            }
-          } else {
-            setItems([]);
-          }
+          // API is source of truth when signed in; fall back to local if API is empty
+          setItems(apiItems.length > 0 ? apiItems : (Array.isArray(local) ? local : []));
         } else {
           if (!alive) return;
           setItems(Array.isArray(local) ? local : []);
@@ -274,9 +253,10 @@ export default function Wardrobe() {
 
   const activeItems = useMemo(() => items.filter((x) => x && x.is_active !== false), [items]);
   const archivedItems = useMemo(() => items.filter((x) => x && x.is_active === false), [items]);
+  const favoriteItems = useMemo(() => activeItems.filter((x) => x.is_favorite === true), [activeItems]);
 
   const counts = useMemo(() => {
-    const source = tab === "archived" ? archivedItems : activeItems;
+    const source = tab === "archived" ? archivedItems : tab === "favorites" ? favoriteItems : activeItems;
 
     const map = {
       "All Items": source.length,
@@ -292,10 +272,10 @@ export default function Wardrobe() {
       if (map[cat] !== undefined) map[cat] += 1;
     }
     return map;
-  }, [activeItems, archivedItems, tab]);
+  }, [activeItems, archivedItems, favoriteItems, tab]);
 
   const availableColors = useMemo(() => {
-    const source = tab === "archived" ? archivedItems : activeItems;
+    const source = tab === "archived" ? archivedItems : tab === "favorites" ? favoriteItems : activeItems;
     const set = new Set();
     for (const it of source) {
       const raw = (it.color || "").trim();
@@ -304,17 +284,17 @@ export default function Wardrobe() {
       for (const c of (parts.length ? parts : [raw])) set.add(c);
     }
     return [...set].sort();
-  }, [activeItems, archivedItems, tab]);
+  }, [activeItems, archivedItems, favoriteItems, tab]);
 
   const availableFits = useMemo(() => {
-    const source = tab === "archived" ? archivedItems : activeItems;
+    const source = tab === "archived" ? archivedItems : tab === "favorites" ? favoriteItems : activeItems;
     const set = new Set();
     for (const it of source) {
       const f = normalizeFitTag(it.fit_tag || it.fitTag || it.fit);
       if (f && f !== "unknown") set.add(f);
     }
     return FIT_TAG_OPTIONS.filter((x) => set.has(x.value));
-  }, [activeItems, archivedItems, tab]);
+  }, [activeItems, archivedItems, favoriteItems, tab]);
 
   const activeFilterCount = filterColors.size + filterFits.size;
 
@@ -339,7 +319,7 @@ export default function Wardrobe() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const base = tab === "archived" ? archivedItems : activeItems;
+    const base = tab === "archived" ? archivedItems : tab === "favorites" ? favoriteItems : activeItems;
 
     return base.filter((it) => {
       const catOk = activeCategory === "All Items" ? true : it.category === activeCategory;
@@ -350,7 +330,7 @@ export default function Wardrobe() {
       const fitOk = filterFits.size === 0 || filterFits.has(normalizeFitTag(it.fit_tag || it.fitTag || it.fit));
       return catOk && qOk && colorOk && fitOk;
     });
-  }, [activeItems, archivedItems, tab, activeCategory, query, filterColors, filterFits]);
+  }, [activeItems, archivedItems, favoriteItems, tab, activeCategory, query, filterColors, filterFits]);
 
   const openPicker = () => fileInputRef.current?.click();
 
@@ -536,10 +516,10 @@ export default function Wardrobe() {
       try { imageUrl = await fileToDataUrl(pendingFile); } catch {}
       const created = await wardrobeApi.createItem({
         name,
-        category: formCategory,
-        color,
-        fit_type: fit_tag || "regular",
-        style_tag: "casual",
+        category: toApiEnum(formCategory, API_CATEGORIES, "top"),
+        color: toApiEnum(color, API_COLORS, "black"),
+        fit_type: toApiEnum(fit_tag, API_FITS, "regular"),
+        style_tag: toApiEnum("casual", API_STYLES, "casual"),
         image_url: imageUrl,
       });
 
@@ -678,9 +658,9 @@ export default function Wardrobe() {
             }
             await wardrobeApi.createItem({
               name: entry.name.trim(),
-              category: entry.category,
-              color: entry.color.trim(),
-              fit_type: normalizeFitTag(entry.fitTag) || "regular",
+              category: toApiEnum(entry.category, API_CATEGORIES, "top"),
+              color: toApiEnum(entry.color.trim(), API_COLORS, "black"),
+              fit_type: toApiEnum(normalizeFitTag(entry.fitTag), API_FITS, "regular"),
               style_tag: "casual",
               image_url: imgUrl,
             });
@@ -857,24 +837,18 @@ export default function Wardrobe() {
     // Best-effort API sync
     try {
       if (effectiveSignedIn) {
-        await wardrobeApi.updateItem(editId, { name, category: editCategory, color, fit_tag });
+        await wardrobeApi.updateItem(editId, {
+          name,
+          category: toApiEnum(editCategory, API_CATEGORIES, "top"),
+          color: toApiEnum(color, API_COLORS, "black"),
+          fit_type: toApiEnum(fit_tag, API_FITS, "regular"),
+          style_tag: "casual",
+        });
       }
     } catch {
       // Ignore API errors — local update is already saved
     }
   };
-
-  const onTiltMove = useCallback((e) => {
-    const el = e.currentTarget;
-    const rect = el.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width - 0.5;
-    const y = (e.clientY - rect.top) / rect.height - 0.5;
-    el.style.transform = `perspective(800px) rotateX(${-y * 8}deg) rotateY(${x * 8}deg) scale(1.02)`;
-  }, []);
-
-  const onTiltLeave = useCallback((e) => {
-    e.currentTarget.style.transform = "";
-  }, []);
 
   const toggleFavorite = async (id) => {
     const current = items.find((x) => x.id === id);
@@ -938,6 +912,17 @@ export default function Wardrobe() {
         </button>
         <button
           type="button"
+          className={tab === "favorites" ? "wardrobeTab active" : "wardrobeTab"}
+          onClick={() => {
+            setTab("favorites");
+            setActiveCategory("All Items");
+          }}
+          aria-pressed={tab === "favorites" ? "true" : "false"}
+        >
+          Favorites ({favoriteItems.length})
+        </button>
+        <button
+          type="button"
           className={tab === "archived" ? "wardrobeTab active" : "wardrobeTab"}
           onClick={() => {
             setTab("archived");
@@ -982,7 +967,7 @@ export default function Wardrobe() {
         <div className="wardrobeSearchWrap">
           <input
             className="wardrobeSearch"
-            placeholder={tab === "archived" ? "Search archived items..." : "Search your wardrobe..."}
+            placeholder={tab === "archived" ? "Search archived items..." : tab === "favorites" ? "Search favorites..." : "Search your wardrobe..."}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -1119,9 +1104,13 @@ export default function Wardrobe() {
 
         {!filtered.length ? (
           <div className="wardrobeEmpty">
-            <div className="wardrobeEmptyIcon">{tab === "archived" ? "\u2001" : "\uD83D\uDC54"}</div>
-            <div className="wardrobeEmptyTitle">{tab === "archived" ? "No archived items" : "No items found"}</div>
-            <div className="wardrobeEmptySub">Try a different category or search term.</div>
+            <div className="wardrobeEmptyIcon">{tab === "archived" ? "\u2001" : tab === "favorites" ? "\u2661" : "\uD83D\uDC54"}</div>
+            <div className="wardrobeEmptyTitle">{tab === "archived" ? "No archived items" : tab === "favorites" ? "No favorites yet" : "No items found"}</div>
+            <div className="wardrobeEmptySub">
+              {tab === "favorites"
+                ? "Tap the heart on items in your wardrobe to save them here."
+                : "Try a different category or search term."}
+            </div>
           </div>
         ) : null}
       </section>
