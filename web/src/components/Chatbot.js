@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { sendChatMessage } from "../api/chatApi";
 import { CHAT_HISTORY_KEY } from "../utils/constants";
 
-const GREETING = "Hi! I'm StyleBot. Ask me anything about the app — features, how-tos, troubleshooting, and more.";
+const GREETING = "Hi! I'm AURA. Ask me anything about the app — features, how-tos, troubleshooting, and more.";
 const MAX_CHATS = 30;
 
 // ── Persistence helpers ──
@@ -64,7 +64,7 @@ function AutoResizeTextarea({ value, onChange, onKeyDown, disabled, inputRef }) 
         adjustHeight(e.target);
       }}
       onKeyDown={onKeyDown}
-      placeholder="Message StyleBot..."
+      placeholder="Message AURA..."
       disabled={disabled}
     />
   );
@@ -251,16 +251,16 @@ export default function Chatbot() {
   const [shareToast, setShareToast] = useState("");
 
   const shareChat = useCallback((chat) => {
-    const lines = [`StyleBot — ${chat.title || "Chat"}`, ""];
+    const lines = [`AURA — ${chat.title || "Chat"}`, ""];
     for (const m of chat.messages) {
       if (m.role === "assistant" && m.content === GREETING) continue;
-      const label = m.role === "assistant" ? "StyleBot" : "You";
+      const label = m.role === "assistant" ? "AURA" : "You";
       lines.push(`${label}: ${m.content}`, "");
     }
     const text = lines.join("\n").trim();
 
     if (navigator.share) {
-      navigator.share({ title: `StyleBot — ${chat.title}`, text }).catch(() => {});
+      navigator.share({ title: `AURA — ${chat.title}`, text }).catch(() => {});
     } else if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(() => {
         setShareToast("Copied to clipboard!");
@@ -278,7 +278,7 @@ export default function Chatbot() {
         className="chatbot-toggle"
         onClick={() => setOpen((p) => !p)}
         aria-label={open ? "Close assistant" : "Open assistant"}
-        title="StyleBot"
+        title="AURA"
       >
         {open ? "\u2715" : <img src="/fitgpt-logo.png" alt="FitGPT" className="chatbot-toggle-logo" />}
       </button>
@@ -291,7 +291,7 @@ export default function Chatbot() {
               <div className="chatbot-header-left">
                 <img src="/fitgpt-logo.png" alt="FitGPT" className="chatbot-header-logo" />
                 <div className="chatbot-header-info">
-                  <span className="chatbot-header-title">StyleBot</span>
+                  <span className="chatbot-header-title">AURA</span>
                   <span className="chatbot-header-sub">
                     <span className="chatbot-status-dot" />
                     Always available
@@ -409,7 +409,7 @@ export default function Chatbot() {
                     </div>
                     <div className="chatbot-bubble">
                       <div className="chatbot-sender">
-                        {m.role === "assistant" ? "StyleBot" : "You"}
+                        {m.role === "assistant" ? "AURA" : "You"}
                       </div>
                       <div className="chatbot-text">
                         {i === typingIdx ? (
@@ -427,7 +427,7 @@ export default function Chatbot() {
                       <img src="/fitgpt-logo.png" alt="FitGPT" className="chatbot-avatar-logo" />
                     </div>
                     <div className="chatbot-bubble">
-                      <div className="chatbot-sender">StyleBot</div>
+                      <div className="chatbot-sender">AURA</div>
                       <div className="chatbot-typing">
                         <span /><span /><span />
                       </div>
