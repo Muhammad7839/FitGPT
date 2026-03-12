@@ -22,6 +22,7 @@ const HistoryAnalytics = lazy(() => import("../components/HistoryAnalytics"));
 const Plans = lazy(() => import("../components/Plans"));
 const SavedOutfits = lazy(() => import("../components/SavedOutfits"));
 
+
 function RouteSpinner() {
   return (
     <div className="routeSpinner">
@@ -128,6 +129,7 @@ export default function AppRoutes() {
           <Route path="/plans" element={<ErrorBoundary><Plans /></ErrorBoundary>} />
           <Route path="/saved-outfits" element={<ErrorBoundary><SavedOutfits /></ErrorBoundary>} />
           <Route path="/analytics" element={<Navigate to="/history?tab=analytics" replace />} />
+
 
           <Route path="/onboarding" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
