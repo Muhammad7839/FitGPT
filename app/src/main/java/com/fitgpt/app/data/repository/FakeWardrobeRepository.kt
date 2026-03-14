@@ -3,6 +3,7 @@ package com.fitgpt.app.data.repository
 import com.fitgpt.app.data.model.AiRecommendationResult
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.data.model.OutfitHistoryEntry
+import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
 import com.fitgpt.app.data.model.UploadResult
@@ -41,6 +42,13 @@ class FakeWardrobeRepository : WardrobeRepository {
         clothingType: String?,
         season: String?,
         fitTag: String?,
+        layerType: String?,
+        isOnePiece: Boolean?,
+        setIdentifier: String?,
+        styleTag: String?,
+        seasonTag: String?,
+        occasionTag: String?,
+        accessoryType: String?,
         favoritesOnly: Boolean
     ): List<ClothingItem> {
         val normalizedSearch = search?.trim()?.lowercase().orEmpty()
@@ -53,6 +61,13 @@ class FakeWardrobeRepository : WardrobeRepository {
             .filter { clothingType.isNullOrBlank() || (it.clothingType ?: "").contains(clothingType, ignoreCase = true) }
             .filter { season.isNullOrBlank() || it.season.contains(season, ignoreCase = true) }
             .filter { fitTag.isNullOrBlank() || (it.fitTag ?: "").contains(fitTag, ignoreCase = true) }
+            .filter { layerType.isNullOrBlank() || (it.layerType ?: "").contains(layerType, ignoreCase = true) }
+            .filter { isOnePiece == null || it.isOnePiece == isOnePiece }
+            .filter { setIdentifier.isNullOrBlank() || (it.setIdentifier ?: "").contains(setIdentifier, ignoreCase = true) }
+            .filter { styleTag.isNullOrBlank() || it.styleTags.any { tag -> tag.contains(styleTag, ignoreCase = true) } }
+            .filter { seasonTag.isNullOrBlank() || it.seasonTags.any { tag -> tag.contains(seasonTag, ignoreCase = true) } }
+            .filter { occasionTag.isNullOrBlank() || it.occasionTags.any { tag -> tag.contains(occasionTag, ignoreCase = true) } }
+            .filter { accessoryType.isNullOrBlank() || (it.accessoryType ?: "").contains(accessoryType, ignoreCase = true) }
             .filter {
                 normalizedSearch.isBlank() ||
                     listOfNotNull(it.name, it.category, it.color, it.season, it.clothingType, it.fitTag, it.brand)
@@ -163,14 +178,54 @@ class FakeWardrobeRepository : WardrobeRepository {
         return AiRecommendationResult(
             items = items,
             explanation = "Fallback recommendation generated from local repository.",
+            outfitScore = 0.72f,
             source = "fallback",
             fallbackUsed = true,
             warning = "fake_repository",
             weatherCategory = weatherCategory ?: "mild",
             occasion = occasion,
             suggestionId = items.map { it.id }.sorted().joinToString(","),
-            itemExplanations = emptyMap()
+            itemExplanations = emptyMap(),
+            outfitOptions = listOf(
+                OutfitOption(
+                    items = items,
+                    explanation = "Fallback recommendation generated from local repository.",
+                    outfitScore = 0.72f
+                )
+            )
         )
+    }
+
+    override suspend fun getRecommendationOptions(
+        manualTemp: Int?,
+        timeContext: String?,
+        planDate: String?,
+        exclude: String?,
+        weatherCity: String?,
+        weatherLat: Double?,
+        weatherLon: Double?,
+        weatherCategory: String?,
+        occasion: String?,
+        limit: Int
+    ): List<OutfitOption> {
+        val items = getRecommendations(
+            manualTemp = manualTemp,
+            timeContext = timeContext,
+            planDate = planDate,
+            exclude = exclude,
+            weatherCity = weatherCity,
+            weatherLat = weatherLat,
+            weatherLon = weatherLon,
+            weatherCategory = weatherCategory,
+            occasion = occasion
+        )
+        return listOf(
+            OutfitOption(
+                items = items,
+                explanation = "Fallback option from fake repository.",
+                outfitScore = 0.72f
+            )
+        ).take(limit.coerceAtLeast(1))
     }
 
     override suspend fun getCurrentWeather(city: String?, lat: Double?, lon: Double?): WeatherSnapshot {

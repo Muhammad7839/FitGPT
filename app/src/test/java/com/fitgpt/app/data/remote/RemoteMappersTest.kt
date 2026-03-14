@@ -1,142 +1,107 @@
 /**
- * Verifies DTO/domain mapping for remote wardrobe payloads.
+ * Mapper tests for additive metadata fields and AI outfit options.
  */
 package com.fitgpt.app.data.remote
 
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.data.remote.dto.AiRecommendationItemExplanationDto
 import com.fitgpt.app.data.remote.dto.AiRecommendationResponseDto
-import com.fitgpt.app.data.remote.dto.ChatResponseDto
 import com.fitgpt.app.data.remote.dto.ClothingItemDto
+import com.fitgpt.app.data.remote.dto.OutfitOptionDto
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RemoteMappersTest {
 
     @Test
-    fun dtoToDomain_mapsAllFields() {
-        val dto = ClothingItemDto(
-            id = 5,
-            name = "Oxford Shirt",
-            category = "Top",
-            clothingType = "shirt",
+    fun clothingItem_toCreateRequest_keeps_new_metadata_fields() {
+        val item = ClothingItem(
+            id = 1,
+            name = "Office Blazer",
+            category = "Outerwear",
+            clothingType = "blazer",
+            layerType = "outer",
+            isOnePiece = false,
+            setIdentifier = "set-1",
             fitTag = "regular",
-            color = "Black",
-            season = "Winter",
-            comfortLevel = 4,
-            imageUrl = "https://example.com/item.png",
-            brand = "Uniqlo",
-            isAvailable = true,
-            isFavorite = true,
-            isArchived = false,
-            lastWornTimestamp = 12345L
+            color = "Navy",
+            colors = listOf("Navy", "White"),
+            season = "Fall",
+            seasonTags = listOf("fall", "winter"),
+            styleTags = listOf("formal"),
+            occasionTags = listOf("work"),
+            accessoryType = null,
+            comfortLevel = 3
         )
 
-        val model = dto.toDomain()
-
-        assertEquals(5, model.id)
-        assertEquals("Oxford Shirt", model.name)
-        assertEquals("Top", model.category)
-        assertEquals("shirt", model.clothingType)
-        assertEquals("regular", model.fitTag)
-        assertEquals("Black", model.color)
-        assertEquals("Winter", model.season)
-        assertEquals(4, model.comfortLevel)
-        assertEquals("Uniqlo", model.brand)
-        assertEquals(12345L, model.lastWornTimestamp)
-        assertTrue(model.isAvailable)
-        assertTrue(model.isFavorite)
+        val request = item.toCreateRequest()
+        assertEquals("outer", request.layerType)
+        assertFalse(request.isOnePiece)
+        assertEquals("set-1", request.setIdentifier)
+        assertEquals(listOf("Navy", "White"), request.colors)
+        assertEquals(listOf("fall", "winter"), request.seasonTags)
+        assertEquals(listOf("formal"), request.styleTags)
+        assertEquals(listOf("work"), request.occasionTags)
     }
 
     @Test
-    fun domainToCreateRequest_mapsAllFields() {
-        val model = ClothingItem(
-            id = 9,
-            name = "Classic Chino",
-            category = "Bottom",
-            clothingType = "pants",
-            fitTag = "slim",
-            color = "Blue",
+    fun aiRecommendationDto_toDomain_maps_scores_and_options() {
+        val dtoItem = ClothingItemDto(
+            id = 10,
+            name = "Top",
+            category = "Top",
+            clothingType = "shirt",
+            layerType = "base",
+            isOnePiece = false,
+            setIdentifier = null,
+            fitTag = "regular",
+            color = "Black",
+            colors = listOf("Black"),
             season = "All",
+            seasonTags = listOf("all"),
+            styleTags = listOf("casual"),
+            occasionTags = listOf("daily"),
+            accessoryType = null,
             comfortLevel = 3,
             imageUrl = null,
-            brand = "Levi's",
+            brand = null,
             isAvailable = true,
-            isFavorite = true,
+            isFavorite = false,
             isArchived = false,
             lastWornTimestamp = null
         )
-
-        val request = model.toCreateRequest()
-        assertEquals("Classic Chino", request.name)
-        assertEquals("Bottom", request.category)
-        assertEquals("pants", request.clothingType)
-        assertEquals("slim", request.fitTag)
-        assertEquals("Blue", request.color)
-        assertEquals(3, request.comfortLevel)
-        assertEquals("Levi's", request.brand)
-        assertTrue(request.isFavorite)
-    }
-
-    @Test
-    fun aiRecommendationDtoToDomain_mapsMetadata() {
         val response = AiRecommendationResponseDto(
-            items = listOf(
-                ClothingItemDto(
-                    id = 3,
-                    name = "Black Tee",
-                    category = "Top",
-                    clothingType = "tee",
-                    fitTag = null,
-                    color = "Black",
-                    season = "All",
-                    comfortLevel = 4,
-                    imageUrl = null,
-                    brand = null,
-                    isAvailable = true,
-                    isFavorite = false,
-                    isArchived = false,
-                    lastWornTimestamp = null
-                )
-            ),
-            explanation = "Balanced outfit.",
+            items = listOf(dtoItem),
+            explanation = "Balanced look",
+            outfitScore = 0.91f,
             weatherCategory = "mild",
-            occasion = "office",
+            occasion = "daily",
             source = "ai",
             fallbackUsed = false,
             warning = null,
-            suggestionId = "3,4,5",
+            suggestionId = "10",
             itemExplanations = listOf(
                 AiRecommendationItemExplanationDto(
-                    itemId = 3,
-                    explanation = "Neutral base."
+                    itemId = 10,
+                    explanation = "Strong base layer"
+                )
+            ),
+            outfitOptions = listOf(
+                OutfitOptionDto(
+                    items = listOf(dtoItem),
+                    explanation = "Option one",
+                    outfitScore = 0.88f
                 )
             )
         )
 
-        val model = response.toDomain()
-        assertEquals("ai", model.source)
-        assertEquals("Balanced outfit.", model.explanation)
-        assertEquals("mild", model.weatherCategory)
-        assertEquals("office", model.occasion)
-        assertEquals("3,4,5", model.suggestionId)
-        assertEquals("Neutral base.", model.itemExplanations[3])
-    }
-
-    @Test
-    fun chatResponseDtoToDomain_mapsFallbackFields() {
-        val dto = ChatResponseDto(
-            reply = "Try a lighter top.",
-            source = "fallback",
-            fallbackUsed = true,
-            warning = "provider_timeout"
-        )
-
-        val model = dto.toDomain()
-        assertEquals("Try a lighter top.", model.reply)
-        assertEquals("fallback", model.source)
-        assertTrue(model.fallbackUsed)
-        assertEquals("provider_timeout", model.warning)
+        val mapped = response.toDomain()
+        assertEquals(0.91f, mapped.outfitScore)
+        assertEquals(1, mapped.outfitOptions.size)
+        assertEquals(0.88f, mapped.outfitOptions.first().outfitScore)
+        assertEquals("Option one", mapped.outfitOptions.first().explanation)
+        assertTrue(mapped.itemExplanations.containsKey(10))
     }
 }

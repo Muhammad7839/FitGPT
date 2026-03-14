@@ -46,6 +46,7 @@ fun RecommendationScreen(
 ) {
     val state by viewModel.recommendationState.collectAsState()
     val recommendationMeta by viewModel.recommendationMeta.collectAsState()
+    val recommendationOptions by viewModel.recommendationOptionsState.collectAsState()
     val weatherState by viewModel.weatherState.collectAsState()
     val weatherUiStatus by viewModel.weatherUiStatus.collectAsState()
     var manualTempInput by rememberSaveable { mutableStateOf("") }
@@ -57,6 +58,7 @@ fun RecommendationScreen(
     var occasion by rememberSaveable { mutableStateOf("") }
     var stylePreference by rememberSaveable { mutableStateOf("") }
     var preferredSeasons by rememberSaveable { mutableStateOf("") }
+    var selectedOptionIndex by rememberSaveable { mutableStateOf(0) }
     var locationMessage by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -121,6 +123,17 @@ fun RecommendationScreen(
         viewModel.fetchRecommendations()
     }
 
+    LaunchedEffect(recommendationOptions) {
+        if (recommendationOptions.isEmpty()) {
+            selectedOptionIndex = 0
+            return@LaunchedEffect
+        }
+        if (selectedOptionIndex !in recommendationOptions.indices) {
+            selectedOptionIndex = 0
+        }
+        viewModel.selectRecommendationOption(selectedOptionIndex)
+    }
+
     when (state) {
 
         is UiState.Loading -> {
@@ -174,6 +187,7 @@ fun RecommendationScreen(
                             recommendationMeta.warning?.takeIf { it.isNotBlank() }?.let { warning ->
                                 WebBadge(text = warning)
                             }
+                            WebBadge(text = "Score ${"%.2f".format(recommendationMeta.outfitScore)}")
                         }
                     }
 
@@ -375,6 +389,31 @@ fun RecommendationScreen(
                             )
                         }
                     } else {
+                        if (recommendationOptions.size > 1) {
+                            WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text("Outfit options", style = MaterialTheme.typography.titleSmall)
+                                    recommendationOptions.take(3).forEachIndexed { index, option ->
+                                        OutlinedButton(
+                                            onClick = {
+                                                selectedOptionIndex = index
+                                                viewModel.selectRecommendationOption(index)
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            val selected = if (index == selectedOptionIndex) " (selected)" else ""
+                                            Text(
+                                                "Option ${index + 1} • ${"%.2f".format(option.outfitScore)}$selected"
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
                         LazyColumn(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {

@@ -18,11 +18,19 @@ data class AiChatResponse(
 data class AiRecommendationResult(
     val items: List<ClothingItem>,
     val explanation: String,
+    val outfitScore: Float = 0f,
     val source: String,
     val fallbackUsed: Boolean,
     val warning: String?,
     val weatherCategory: String?,
     val occasion: String?,
     val suggestionId: String?,
-    val itemExplanations: Map<Int, String>
+    val itemExplanations: Map<Int, String>,
+    val outfitOptions: List<OutfitOption> = emptyList()
+)
+
+data class OutfitOption(
+    val items: List<ClothingItem>,
+    val explanation: String,
+    val outfitScore: Float
 )

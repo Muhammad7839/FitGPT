@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import models, schemas
+from app.ai import deterministic, history
 from app.config import RESET_TOKEN_EXPIRE_MINUTES
 from app.weather import map_temperature_to_category
 
@@ -110,6 +111,29 @@ def _normalize_optional_text(value: Optional[str]) -> Optional[str]:
     return cleaned or None
 
 
+def _normalize_tag_list(values: Optional[list[str]]) -> list[str]:
+    if not values:
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in values:
+        cleaned = str(raw).strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(cleaned)
+    return normalized
+
+
+def _first_or_default(values: list[str], fallback: str) -> str:
+    if values:
+        return values[0]
+    return fallback
+
+
 def _apply_default_preferences(db_user: models.User) -> None:
     db_user.body_type = _normalize_optional_text(db_user.body_type) or schemas.DEFAULT_BODY_TYPE
     db_user.lifestyle = _normalize_optional_text(db_user.lifestyle) or schemas.DEFAULT_LIFESTYLE
@@ -194,13 +218,21 @@ def update_user_profile(
 # =============================
 
 def create_clothing_item(db: Session, item: schemas.ClothingItemCreate, user_id: int):
+    colors = _normalize_tag_list(item.colors)
+    season_tags = _normalize_tag_list(item.season_tags)
+    style_tags = _normalize_tag_list(item.style_tags)
+    occasion_tags = _normalize_tag_list(item.occasion_tags)
     db_item = models.ClothingItem(
         name=item.name,
         category=item.category,
         clothing_type=item.clothing_type,
+        layer_type=item.layer_type,
+        is_one_piece=item.is_one_piece,
+        set_identifier=item.set_identifier,
         fit_tag=item.fit_tag,
-        color=item.color,
-        season=item.season,
+        color=_first_or_default(colors, item.color),
+        season=_first_or_default(season_tags, item.season),
+        accessory_type=item.accessory_type,
         comfort_level=item.comfort_level,
         image_url=item.image_url,
         brand=item.brand,
@@ -210,6 +242,10 @@ def create_clothing_item(db: Session, item: schemas.ClothingItemCreate, user_id:
         last_worn_timestamp=item.last_worn_timestamp,
         owner_id=user_id
     )
+    db_item.colors = colors
+    db_item.season_tags = season_tags
+    db_item.style_tags = style_tags
+    db_item.occasion_tags = occasion_tags
 
     db.add(db_item)
     db.commit()
@@ -259,6 +295,13 @@ def get_clothing_items_for_user(
     clothing_type: Optional[str] = None,
     season: Optional[str] = None,
     fit_tag: Optional[str] = None,
+    layer_type: Optional[str] = None,
+    is_one_piece: Optional[bool] = None,
+    set_identifier: Optional[str] = None,
+    style_tag: Optional[str] = None,
+    season_tag: Optional[str] = None,
+    occasion_tag: Optional[str] = None,
+    accessory_type: Optional[str] = None,
     favorites_only: bool = False,
 ):
     query = db.query(models.ClothingItem).filter(
@@ -272,13 +315,39 @@ def get_clothing_items_for_user(
     if category:
         query = query.filter(models.ClothingItem.category.ilike(f"%{category.strip()}%"))
     if color:
-        query = query.filter(models.ClothingItem.color.ilike(f"%{color.strip()}%"))
+        cleaned_color = color.strip()
+        query = query.filter(
+            or_(
+                models.ClothingItem.color.ilike(f"%{cleaned_color}%"),
+                models.ClothingItem.colors_json.ilike(f"%{cleaned_color}%"),
+            )
+        )
     if clothing_type:
         query = query.filter(models.ClothingItem.clothing_type.ilike(f"%{clothing_type.strip()}%"))
     if season:
-        query = query.filter(models.ClothingItem.season.ilike(f"%{season.strip()}%"))
+        cleaned_season = season.strip()
+        query = query.filter(
+            or_(
+                models.ClothingItem.season.ilike(f"%{cleaned_season}%"),
+                models.ClothingItem.season_tags_json.ilike(f"%{cleaned_season}%"),
+            )
+        )
     if fit_tag:
         query = query.filter(models.ClothingItem.fit_tag.ilike(f"%{fit_tag.strip()}%"))
+    if layer_type:
+        query = query.filter(models.ClothingItem.layer_type.ilike(f"%{layer_type.strip()}%"))
+    if is_one_piece is not None:
+        query = query.filter(models.ClothingItem.is_one_piece.is_(is_one_piece))
+    if set_identifier:
+        query = query.filter(models.ClothingItem.set_identifier.ilike(f"%{set_identifier.strip()}%"))
+    if style_tag:
+        query = query.filter(models.ClothingItem.style_tags_json.ilike(f"%{style_tag.strip()}%"))
+    if season_tag:
+        query = query.filter(models.ClothingItem.season_tags_json.ilike(f"%{season_tag.strip()}%"))
+    if occasion_tag:
+        query = query.filter(models.ClothingItem.occasion_tags_json.ilike(f"%{occasion_tag.strip()}%"))
+    if accessory_type:
+        query = query.filter(models.ClothingItem.accessory_type.ilike(f"%{accessory_type.strip()}%"))
 
     if search:
         cleaned_search = search.strip()
@@ -290,6 +359,13 @@ def get_clothing_items_for_user(
                 models.ClothingItem.clothing_type.ilike(f"%{cleaned_search}%"),
                 models.ClothingItem.brand.ilike(f"%{cleaned_search}%"),
                 models.ClothingItem.fit_tag.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.layer_type.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.set_identifier.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.accessory_type.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.colors_json.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.style_tags_json.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.season_tags_json.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.occasion_tags_json.ilike(f"%{cleaned_search}%"),
             )
         )
 
@@ -316,8 +392,24 @@ def update_clothing_item(
     db_item: models.ClothingItem,
     updated_data: schemas.ClothingItemUpdate
 ):
-    for field_name, field_value in updated_data.model_dump(exclude_unset=True).items():
+    payload = updated_data.model_dump(exclude_unset=True)
+    for field_name, field_value in payload.items():
+        if field_name in {"colors", "season_tags", "style_tags", "occasion_tags"}:
+            continue
         setattr(db_item, field_name, field_value)
+
+    if "colors" in payload:
+        colors = _normalize_tag_list(payload["colors"])
+        db_item.colors = colors
+        db_item.color = _first_or_default(colors, db_item.color)
+    if "season_tags" in payload:
+        season_tags = _normalize_tag_list(payload["season_tags"])
+        db_item.season_tags = season_tags
+        db_item.season = _first_or_default(season_tags, db_item.season)
+    if "style_tags" in payload:
+        db_item.style_tags = _normalize_tag_list(payload["style_tags"])
+    if "occasion_tags" in payload:
+        db_item.occasion_tags = _normalize_tag_list(payload["occasion_tags"])
 
     db.commit()
     db.refresh(db_item)
@@ -363,10 +455,17 @@ def _item_text_blob(item: models.ClothingItem) -> str:
             item.name or "",
             item.category or "",
             item.clothing_type or "",
+            item.layer_type or "",
+            item.set_identifier or "",
+            item.accessory_type or "",
             item.fit_tag or "",
             item.color or "",
             item.season or "",
             item.brand or "",
+            " ".join(item.style_tags),
+            " ".join(item.season_tags),
+            " ".join(item.colors),
+            " ".join(item.occasion_tags),
         ]
     ).lower()
 
@@ -400,9 +499,12 @@ def _occasion_penalty(item: models.ClothingItem, occasion: Optional[str]) -> int
     if not normalized_occasion:
         return 0
     blob = _item_text_blob(item)
+    occasion_tags = {tag.lower() for tag in item.occasion_tags}
+    if occasion_tags and any(token in occasion_tags for token in normalized_occasion.split()):
+        return 0
 
     if any(token in normalized_occasion for token in ["formal", "wedding", "interview", "office", "work"]):
-        if any(token in blob for token in ["formal", "tailored", "blazer", "dress", "oxford", "loafer"]):
+        if any(token in blob for token in ["formal", "tailored", "blazer", "dress", "oxford", "loafer", "work"]):
             return 0
         return 2
     if any(token in normalized_occasion for token in ["gym", "workout", "sport", "running"]):
@@ -415,6 +517,7 @@ def _occasion_penalty(item: models.ClothingItem, occasion: Optional[str]) -> int
 def _temperature_penalty(item: models.ClothingItem, weather_category: str) -> int:
     blob = _item_text_blob(item)
     item_category = _normalize_category(item.category)
+    season_tags = {value.lower() for value in item.season_tags}
     penalties = 0
 
     if weather_category == "cold":
@@ -424,6 +527,8 @@ def _temperature_penalty(item: models.ClothingItem, weather_category: str) -> in
             penalties += 5
         if any(token in blob for token in ["tank", "linen", "lightweight"]):
             penalties += 3
+        if "summer" in season_tags:
+            penalties += 2
     elif weather_category == "cool":
         if item_category == "outerwear" and any(token in blob for token in ["parka", "heavy", "thick"]):
             penalties += 3
@@ -432,11 +537,15 @@ def _temperature_penalty(item: models.ClothingItem, weather_category: str) -> in
             penalties += 5
         if any(token in blob for token in ["heavy", "wool", "thick", "sweater"]):
             penalties += 3
+        if "winter" in season_tags:
+            penalties += 2
     elif weather_category == "hot":
         if item_category == "outerwear":
             penalties += 8
         if any(token in blob for token in ["jacket", "coat", "sweater", "heavy", "wool"]):
             penalties += 4
+        if "winter" in season_tags:
+            penalties += 3
 
     return penalties
 
@@ -481,6 +590,56 @@ def _choose_best(
     return available_candidates[0]
 
 
+def get_recommendation_options_for_user(
+    db: Session,
+    user: models.User,
+    manual_temp: Optional[int] = None,
+    weather_category: Optional[str] = None,
+    occasion: Optional[str] = None,
+    exclude: Optional[str] = None,
+    limit: int = 3,
+) -> list[dict]:
+    normalized_limit = max(1, min(limit, 10))
+    all_items = get_clothing_items_for_user(db, user.id)
+    item_map = {item.id: item for item in all_items}
+    recent_fingerprints = set(history.get_recent_fingerprints(db, user.id))
+
+    candidates = deterministic.recommend_many(
+        items=all_items,
+        user=user,
+        manual_temp=manual_temp,
+        weather_category=weather_category,
+        occasion=occasion,
+        exclude=exclude,
+        style_preference=user.lifestyle,
+        preferred_seasons=[],
+        recent_fingerprints=recent_fingerprints,
+        max_options=max(normalized_limit, 3),
+    )
+
+    options: list[dict] = []
+    seen_fingerprints: set[str] = set()
+    for candidate in candidates:
+        if candidate.fingerprint in seen_fingerprints:
+            continue
+        outfit_items = [item_map[item_id] for item_id in candidate.item_ids if item_id in item_map]
+        if not outfit_items:
+            continue
+        seen_fingerprints.add(candidate.fingerprint)
+        options.append(
+            {
+                "items": outfit_items,
+                "explanation": candidate.explanation,
+                "outfit_score": round(candidate.score, 3),
+                "weather_category": candidate.weather_category,
+                "fingerprint": candidate.fingerprint,
+            }
+        )
+        if len(options) >= normalized_limit:
+            break
+    return options
+
+
 def get_recommendations_for_user(
     db: Session,
     user: models.User,
@@ -489,95 +648,18 @@ def get_recommendations_for_user(
     occasion: Optional[str] = None,
     exclude: Optional[str] = None,
 ):
-    normalized_weather = (weather_category or "").strip().lower()
-    if normalized_weather not in {"cold", "cool", "mild", "warm", "hot"}:
-        normalized_weather = map_temperature_to_category(manual_temp) if manual_temp is not None else "mild"
-
-    exclusions = [
-        token.strip().lower()
-        for token in (exclude or "").split(",")
-        if token.strip()
-    ]
-
-    items = get_clothing_items_for_user(db, user.id)
-    available = [
-        item for item in items
-        if item.is_available and not item.is_archived and not _item_matches_exclusions(item, exclusions)
-    ]
-
-    by_category: dict[str, list[models.ClothingItem]] = {
-        "top": [],
-        "bottom": [],
-        "shoes": [],
-        "outerwear": [],
-        "accessory": [],
-    }
-    for item in available:
-        normalized_category = _normalize_category(item.category)
-        if normalized_category in by_category:
-            by_category[normalized_category].append(item)
-
-    chosen_ids: set[int] = set()
-    recommended: list[models.ClothingItem] = []
-
-    for required_category in ["top", "bottom", "shoes"]:
-        chosen_item = _choose_best(
-            by_category[required_category],
-            weather_category=normalized_weather,
-            occasion=occasion,
-            body_type=user.body_type,
-            chosen_ids=chosen_ids,
-        )
-        if chosen_item:
-            chosen_ids.add(chosen_item.id)
-            recommended.append(chosen_item)
-
-    if normalized_weather == "cold":
-        outerwear_item = _choose_best(
-            by_category["outerwear"],
-            weather_category=normalized_weather,
-            occasion=occasion,
-            body_type=user.body_type,
-            chosen_ids=chosen_ids,
-        )
-        if outerwear_item:
-            chosen_ids.add(outerwear_item.id)
-            recommended.append(outerwear_item)
-    elif normalized_weather == "cool":
-        outerwear_item = _choose_best(
-            by_category["outerwear"],
-            weather_category=normalized_weather,
-            occasion=occasion,
-            body_type=user.body_type,
-            chosen_ids=chosen_ids,
-        )
-        if outerwear_item and _temperature_penalty(outerwear_item, "cool") <= 2:
-            chosen_ids.add(outerwear_item.id)
-            recommended.append(outerwear_item)
-
-    accessory_candidates = sorted(
-        [item for item in by_category["accessory"] if item.id not in chosen_ids],
-        key=lambda item: _build_sort_key(
-            item,
-            weather_category=normalized_weather,
-            occasion=occasion,
-            body_type=user.body_type,
-        ),
+    options = get_recommendation_options_for_user(
+        db=db,
+        user=user,
+        manual_temp=manual_temp,
+        weather_category=weather_category,
+        occasion=occasion,
+        exclude=exclude,
+        limit=1,
     )
-    hat_used = False
-    for accessory in accessory_candidates:
-        if len([item for item in recommended if _normalize_category(item.category) == "accessory"]) >= 3:
-            break
-        text_blob = _item_text_blob(accessory)
-        is_hat = "hat" in text_blob
-        if is_hat and hat_used:
-            continue
-        if is_hat:
-            hat_used = True
-        chosen_ids.add(accessory.id)
-        recommended.append(accessory)
-
-    return recommended
+    if not options:
+        return []
+    return options[0]["items"]
 
 
 def save_outfit_history(

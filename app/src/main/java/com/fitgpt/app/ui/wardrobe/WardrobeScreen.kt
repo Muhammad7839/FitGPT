@@ -50,6 +50,12 @@ fun WardrobeScreen(
     var clothingTypeFilter by remember { mutableStateOf("") }
     var seasonFilter by remember { mutableStateOf("") }
     var fitTagFilter by remember { mutableStateOf("") }
+    var layerTypeFilter by remember { mutableStateOf("") }
+    var styleTagFilter by remember { mutableStateOf("") }
+    var occasionTagFilter by remember { mutableStateOf("") }
+    var accessoryTypeFilter by remember { mutableStateOf("") }
+    var setIdentifierFilter by remember { mutableStateOf("") }
+    var onePieceOnly by remember { mutableStateOf(false) }
     var showAdvancedFilters by remember { mutableStateOf(false) }
     var bodyFitAssistEnabled by remember { mutableStateOf(false) }
 
@@ -63,7 +69,13 @@ fun WardrobeScreen(
         colorFilter,
         clothingTypeFilter,
         seasonFilter,
-        fitTagFilter
+        fitTagFilter,
+        layerTypeFilter,
+        styleTagFilter,
+        occasionTagFilter,
+        accessoryTypeFilter,
+        setIdentifierFilter,
+        onePieceOnly
     ) {
         viewModel.applyWardrobeFilters(
             WardrobeFilters(
@@ -74,6 +86,12 @@ fun WardrobeScreen(
                 clothingType = clothingTypeFilter.trim().takeIf { it.isNotBlank() },
                 season = seasonFilter.trim().takeIf { it.isNotBlank() },
                 fitTag = fitTagFilter.trim().takeIf { it.isNotBlank() },
+                layerType = layerTypeFilter.trim().takeIf { it.isNotBlank() },
+                styleTag = styleTagFilter.trim().takeIf { it.isNotBlank() },
+                occasionTag = occasionTagFilter.trim().takeIf { it.isNotBlank() },
+                accessoryType = accessoryTypeFilter.trim().takeIf { it.isNotBlank() },
+                setIdentifier = setIdentifierFilter.trim().takeIf { it.isNotBlank() },
+                isOnePiece = if (onePieceOnly) true else null,
                 favoritesOnly = favoritesOnly
             )
         )
@@ -150,6 +168,11 @@ fun WardrobeScreen(
                     onClick = { showArchived = true },
                     label = { Text("Archived") }
                 )
+                FilterChip(
+                    selected = onePieceOnly,
+                    onClick = { onePieceOnly = !onePieceOnly },
+                    label = { Text(if (onePieceOnly) "One-piece only" else "All structures") }
+                )
             }
 
             AnimatedVisibility(visible = showAdvancedFilters) {
@@ -179,6 +202,36 @@ fun WardrobeScreen(
                         value = fitTagFilter,
                         onValueChange = { fitTagFilter = it },
                         label = { Text("Fit tag filter") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = layerTypeFilter,
+                        onValueChange = { layerTypeFilter = it },
+                        label = { Text("Layer filter (base/mid/outer)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = styleTagFilter,
+                        onValueChange = { styleTagFilter = it },
+                        label = { Text("Style tag filter") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = occasionTagFilter,
+                        onValueChange = { occasionTagFilter = it },
+                        label = { Text("Occasion tag filter") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = accessoryTypeFilter,
+                        onValueChange = { accessoryTypeFilter = it },
+                        label = { Text("Accessory type filter") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = setIdentifierFilter,
+                        onValueChange = { setIdentifierFilter = it },
+                        label = { Text("Set identifier filter") },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -348,6 +401,14 @@ fun WardrobeItemCard(
                 if (showBodyFitAssist) {
                     Spacer(modifier = Modifier.height(8.dp))
                     WebBadge(text = fitAssistLabel(item.fitTag))
+                }
+                if (item.isOnePiece) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    WebBadge(text = "One-piece")
+                }
+                item.setIdentifier?.takeIf { it.isNotBlank() }?.let { setId ->
+                    Spacer(modifier = Modifier.height(6.dp))
+                    WebBadge(text = "Set: $setId")
                 }
             }
 

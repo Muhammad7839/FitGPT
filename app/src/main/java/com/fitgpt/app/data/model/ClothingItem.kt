@@ -8,9 +8,17 @@ data class ClothingItem(
     val name: String? = null,
     val category: String,
     val clothingType: String? = null,
+    val layerType: String? = null,
+    val isOnePiece: Boolean = false,
+    val setIdentifier: String? = null,
     val fitTag: String? = null,
     val color: String,
+    val colors: List<String> = emptyList(),
     val season: String,
+    val seasonTags: List<String> = emptyList(),
+    val styleTags: List<String> = emptyList(),
+    val occasionTags: List<String> = emptyList(),
+    val accessoryType: String? = null,
     val comfortLevel: Int,
 
     // Optional image

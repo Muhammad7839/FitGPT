@@ -23,6 +23,7 @@ import com.fitgpt.app.data.remote.dto.PlannedOutfitAssignmentResponseDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.PlannedOutfitListResponseDto
 import com.fitgpt.app.data.remote.dto.RecommendationResponseDto
+import com.fitgpt.app.data.remote.dto.RecommendationOptionsResponseDto
 import com.fitgpt.app.data.remote.dto.AiRecommendationRequestDto
 import com.fitgpt.app.data.remote.dto.AiRecommendationResponseDto
 import com.fitgpt.app.data.remote.dto.RegisterRequest
@@ -108,6 +109,13 @@ interface ApiService {
         @Query("clothing_type") clothingType: String? = null,
         @Query("season") season: String? = null,
         @Query("fit_tag") fitTag: String? = null,
+        @Query("layer_type") layerType: String? = null,
+        @Query("is_one_piece") isOnePiece: Boolean? = null,
+        @Query("set_identifier") setIdentifier: String? = null,
+        @Query("style_tag") styleTag: String? = null,
+        @Query("season_tag") seasonTag: String? = null,
+        @Query("occasion_tag") occasionTag: String? = null,
+        @Query("accessory_type") accessoryType: String? = null,
         @Query("favorites_only") favoritesOnly: Boolean = false
     ): List<ClothingItemDto>
 
@@ -165,6 +173,20 @@ interface ApiService {
         @Query("weather_category") weatherCategory: String? = null,
         @Query("occasion") occasion: String? = null,
     ): RecommendationResponseDto
+
+    @GET("recommendations/options")
+    suspend fun getRecommendationOptions(
+        @Query("manual_temp") manualTemp: Int? = null,
+        @Query("time_context") timeContext: String? = null,
+        @Query("plan_date") planDate: String? = null,
+        @Query("exclude") exclude: String? = null,
+        @Query("weather_city") weatherCity: String? = null,
+        @Query("weather_lat") weatherLat: Double? = null,
+        @Query("weather_lon") weatherLon: Double? = null,
+        @Query("weather_category") weatherCategory: String? = null,
+        @Query("occasion") occasion: String? = null,
+        @Query("limit") limit: Int = 3,
+    ): RecommendationOptionsResponseDto
 
     @POST("ai/recommendations")
     suspend fun getAiRecommendations(
