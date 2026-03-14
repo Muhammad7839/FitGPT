@@ -413,6 +413,13 @@ def get_my_wardrobe(
     clothing_type: Optional[str] = None,
     season: Optional[str] = None,
     fit_tag: Optional[str] = None,
+    layer_type: Optional[str] = None,
+    is_one_piece: Optional[bool] = None,
+    set_identifier: Optional[str] = None,
+    style_tag: Optional[str] = None,
+    season_tag: Optional[str] = None,
+    occasion_tag: Optional[str] = None,
+    accessory_type: Optional[str] = None,
     favorites_only: bool = False,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
@@ -427,6 +434,13 @@ def get_my_wardrobe(
         clothing_type=clothing_type,
         season=season,
         fit_tag=fit_tag,
+        layer_type=layer_type,
+        is_one_piece=is_one_piece,
+        set_identifier=set_identifier,
+        style_tag=style_tag,
+        season_tag=season_tag,
+        occasion_tag=occasion_tag,
+        accessory_type=accessory_type,
         favorites_only=favorites_only,
     )
     return items
@@ -637,14 +651,21 @@ def get_recommendations(
     except WeatherLookupError as exc:
         raise HTTPException(status_code=getattr(exc, "status_code", 400), detail=str(exc)) from exc
 
-    items = crud.get_recommendations_for_user(
+    options = crud.get_recommendation_options_for_user(
         db=db,
         user=current_user,
         manual_temp=effective_temp,
         weather_category=normalized_weather_category,
         occasion=occasion,
         exclude=exclude,
+        limit=1,
     )
+    top_option = options[0] if options else {
+        "items": [],
+        "explanation": "",
+        "outfit_score": 0.0,
+    }
+    items = top_option["items"]
     explanation = build_recommendation_explanation(
         user=current_user,
         items=items,
@@ -658,9 +679,65 @@ def get_recommendations(
             occasion=occasion,
         ),
     )
+    deterministic_explanation = (top_option["explanation"] or "").strip()
+    final_explanation = explanation
+    if deterministic_explanation and deterministic_explanation.lower() not in explanation.lower():
+        final_explanation = f"{deterministic_explanation} {explanation}".strip()
     return {
         "items": items,
-        "explanation": explanation,
+        "explanation": final_explanation,
+        "outfit_score": top_option["outfit_score"],
+        "weather_category": normalized_weather_category,
+        "occasion": occasion,
+    }
+
+
+@router.get("/recommendations/options", response_model=schemas.RecommendationOptionsResponse)
+def get_recommendation_options(
+    manual_temp: Optional[int] = None,
+    time_context: Optional[str] = None,
+    plan_date: Optional[str] = None,
+    exclude: Optional[str] = None,
+    weather_city: Optional[str] = None,
+    weather_lat: Optional[float] = None,
+    weather_lon: Optional[float] = None,
+    weather_category: Optional[str] = None,
+    occasion: Optional[str] = None,
+    limit: int = 3,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    _ = time_context
+    _ = plan_date
+    try:
+        effective_temp, normalized_weather_category, _ = _resolve_recommendation_weather_context(
+            manual_temp=manual_temp,
+            weather_city=weather_city,
+            weather_lat=weather_lat,
+            weather_lon=weather_lon,
+            weather_category=weather_category,
+        )
+    except WeatherLookupError as exc:
+        raise HTTPException(status_code=getattr(exc, "status_code", 400), detail=str(exc)) from exc
+
+    options = crud.get_recommendation_options_for_user(
+        db=db,
+        user=current_user,
+        manual_temp=effective_temp,
+        weather_category=normalized_weather_category,
+        occasion=occasion,
+        exclude=exclude,
+        limit=limit,
+    )
+    return {
+        "outfits": [
+            {
+                "items": option["items"],
+                "explanation": option["explanation"],
+                "outfit_score": option["outfit_score"],
+            }
+            for option in options
+        ],
         "weather_category": normalized_weather_category,
         "occasion": occasion,
     }
@@ -752,9 +829,14 @@ def get_ai_recommendations(
         result.warning,
         result.suggestion_id,
     )
+    wardrobe_item_map = {
+        item.id: item
+        for item in crud.get_clothing_items_for_user(db, current_user.id, include_archived=False)
+    }
     return {
         "items": result.items,
         "explanation": result.explanation,
+        "outfit_score": result.outfit_score,
         "weather_category": result.weather_category,
         "occasion": payload.occasion,
         "source": result.source,
@@ -764,6 +846,18 @@ def get_ai_recommendations(
         "item_explanations": [
             {"item_id": item_id, "explanation": explanation}
             for item_id, explanation in result.item_explanations.items()
+        ],
+        "outfit_options": [
+            {
+                "items": [
+                    wardrobe_item_map[item_id]
+                    for item_id in option.item_ids
+                    if item_id in wardrobe_item_map
+                ],
+                "explanation": option.explanation,
+                "outfit_score": option.score,
+            }
+            for option in result.outfit_options
         ],
     }
 

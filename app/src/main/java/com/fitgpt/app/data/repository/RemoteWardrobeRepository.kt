@@ -5,6 +5,7 @@ package com.fitgpt.app.data.repository
 
 import com.fitgpt.app.data.model.AiRecommendationResult
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
@@ -37,6 +38,13 @@ class RemoteWardrobeRepository(
         clothingType: String?,
         season: String?,
         fitTag: String?,
+        layerType: String?,
+        isOnePiece: Boolean?,
+        setIdentifier: String?,
+        styleTag: String?,
+        seasonTag: String?,
+        occasionTag: String?,
+        accessoryType: String?,
         favoritesOnly: Boolean
     ): List<ClothingItem> {
         val items = api.getWardrobeItems(
@@ -47,6 +55,13 @@ class RemoteWardrobeRepository(
             clothingType = clothingType,
             season = season,
             fitTag = fitTag,
+            layerType = layerType,
+            isOnePiece = isOnePiece,
+            setIdentifier = setIdentifier,
+            styleTag = styleTag,
+            seasonTag = seasonTag,
+            occasionTag = occasionTag,
+            accessoryType = accessoryType,
             favoritesOnly = favoritesOnly
         ).map { dto ->
             dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl))
@@ -138,6 +153,38 @@ class RemoteWardrobeRepository(
             occasion = occasion
         ).items.map { dto ->
             dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl))
+        }
+    }
+
+    override suspend fun getRecommendationOptions(
+        manualTemp: Int?,
+        timeContext: String?,
+        planDate: String?,
+        exclude: String?,
+        weatherCity: String?,
+        weatherLat: Double?,
+        weatherLon: Double?,
+        weatherCategory: String?,
+        occasion: String?,
+        limit: Int
+    ): List<OutfitOption> {
+        return api.getRecommendationOptions(
+            manualTemp = manualTemp,
+            timeContext = timeContext,
+            planDate = planDate,
+            exclude = exclude,
+            weatherCity = weatherCity,
+            weatherLat = weatherLat,
+            weatherLon = weatherLon,
+            weatherCategory = weatherCategory,
+            occasion = occasion,
+            limit = limit
+        ).outfits.map { option ->
+            OutfitOption(
+                items = option.items.map { dto -> dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl)) },
+                explanation = option.explanation,
+                outfitScore = option.outfitScore
+            )
         }
     }
 

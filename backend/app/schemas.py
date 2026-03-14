@@ -136,9 +136,17 @@ class ClothingItemCreate(BaseModel):
     name: Optional[str] = Field(default=None, max_length=128)
     category: str = Field(min_length=1, max_length=64)
     clothing_type: Optional[str] = Field(default=None, max_length=64)
+    layer_type: Optional[str] = Field(default=None, max_length=16)
+    is_one_piece: bool = False
+    set_identifier: Optional[str] = Field(default=None, max_length=64)
     fit_tag: Optional[str] = Field(default=None, max_length=32)
     color: str = Field(min_length=1, max_length=64)
+    colors: list[str] = Field(default_factory=list, max_length=10)
     season: str = Field(min_length=1, max_length=32)
+    season_tags: list[str] = Field(default_factory=list, max_length=8)
+    style_tags: list[str] = Field(default_factory=list, max_length=12)
+    occasion_tags: list[str] = Field(default_factory=list, max_length=12)
+    accessory_type: Optional[str] = Field(default=None, max_length=32)
     comfort_level: int = Field(ge=1, le=5)
     image_url: Optional[str] = Field(default=None, max_length=1024)
     brand: Optional[str] = Field(default=None, max_length=128)
@@ -155,7 +163,7 @@ class ClothingItemCreate(BaseModel):
             raise ValueError("value cannot be blank")
         return cleaned
 
-    @field_validator("name", "clothing_type", "fit_tag", "image_url", "brand")
+    @field_validator("name", "clothing_type", "fit_tag", "layer_type", "set_identifier", "accessory_type", "image_url", "brand")
     @classmethod
     def validate_optional_text(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
@@ -163,15 +171,49 @@ class ClothingItemCreate(BaseModel):
         cleaned = value.strip()
         return cleaned or None
 
+    @field_validator("layer_type")
+    @classmethod
+    def validate_layer_type(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if normalized not in {"base", "mid", "outer"}:
+            raise ValueError("layer_type must be base/mid/outer")
+        return normalized
+
+    @field_validator("style_tags", "season_tags", "colors", "occasion_tags")
+    @classmethod
+    def normalize_tag_list(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            cleaned = raw.strip()
+            if not cleaned:
+                continue
+            key = cleaned.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(cleaned)
+        return normalized
+
 
 class ClothingItemResponse(BaseModel):
     id: int
     name: Optional[str] = None
     category: str
     clothing_type: Optional[str] = None
+    layer_type: Optional[str] = None
+    is_one_piece: bool = False
+    set_identifier: Optional[str] = None
     fit_tag: Optional[str] = None
     color: str
+    colors: list[str] = Field(default_factory=list)
     season: str
+    season_tags: list[str] = Field(default_factory=list)
+    style_tags: list[str] = Field(default_factory=list)
+    occasion_tags: list[str] = Field(default_factory=list)
+    accessory_type: Optional[str] = None
     comfort_level: int
     image_url: Optional[str] = None
     brand: Optional[str] = None
@@ -187,9 +229,17 @@ class ClothingItemUpdate(BaseModel):
     name: Optional[str] = Field(default=None, max_length=128)
     category: Optional[str] = Field(default=None, min_length=1, max_length=64)
     clothing_type: Optional[str] = Field(default=None, max_length=64)
+    layer_type: Optional[str] = Field(default=None, max_length=16)
+    is_one_piece: Optional[bool] = None
+    set_identifier: Optional[str] = Field(default=None, max_length=64)
     fit_tag: Optional[str] = Field(default=None, max_length=32)
     color: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    colors: Optional[list[str]] = Field(default=None, max_length=10)
     season: Optional[str] = Field(default=None, min_length=1, max_length=32)
+    season_tags: Optional[list[str]] = Field(default=None, max_length=8)
+    style_tags: Optional[list[str]] = Field(default=None, max_length=12)
+    occasion_tags: Optional[list[str]] = Field(default=None, max_length=12)
+    accessory_type: Optional[str] = Field(default=None, max_length=32)
     comfort_level: Optional[int] = Field(default=None, ge=1, le=5)
     image_url: Optional[str] = Field(default=None, max_length=1024)
     brand: Optional[str] = Field(default=None, max_length=128)
@@ -208,13 +258,41 @@ class ClothingItemUpdate(BaseModel):
             raise ValueError("value cannot be blank")
         return cleaned
 
-    @field_validator("name", "clothing_type", "fit_tag", "image_url", "brand")
+    @field_validator("name", "clothing_type", "fit_tag", "layer_type", "set_identifier", "accessory_type", "image_url", "brand")
     @classmethod
     def validate_optional_free_text(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return value
         cleaned = value.strip()
         return cleaned or None
+
+    @field_validator("layer_type")
+    @classmethod
+    def validate_optional_layer_type(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if normalized not in {"base", "mid", "outer"}:
+            raise ValueError("layer_type must be base/mid/outer")
+        return normalized
+
+    @field_validator("style_tags", "season_tags", "colors", "occasion_tags")
+    @classmethod
+    def normalize_optional_tag_list(cls, value: Optional[list[str]]) -> Optional[list[str]]:
+        if value is None:
+            return None
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            cleaned = raw.strip()
+            if not cleaned:
+                continue
+            key = cleaned.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(cleaned)
+        return normalized
 
 
 class FavoriteToggleRequest(BaseModel):
@@ -258,7 +336,20 @@ class ImageBatchUploadResponse(BaseModel):
 class RecommendationResponse(BaseModel):
     items: list[ClothingItemResponse]
     explanation: str
+    outfit_score: float = 0.0
     weather_category: Optional[str] = None
+    occasion: Optional[str] = None
+
+
+class OutfitOptionResponse(BaseModel):
+    items: list[ClothingItemResponse]
+    explanation: str
+    outfit_score: float
+
+
+class RecommendationOptionsResponse(BaseModel):
+    outfits: list[OutfitOptionResponse]
+    weather_category: str
     occasion: Optional[str] = None
 
 
@@ -363,6 +454,7 @@ class AiRecommendationItemExplanation(BaseModel):
 class AiRecommendationResponse(BaseModel):
     items: list[ClothingItemResponse]
     explanation: str
+    outfit_score: float = 0.0
     weather_category: str
     occasion: Optional[str] = None
     source: str
@@ -370,6 +462,7 @@ class AiRecommendationResponse(BaseModel):
     warning: Optional[str] = None
     suggestion_id: str
     item_explanations: list[AiRecommendationItemExplanation] = Field(default_factory=list)
+    outfit_options: list[OutfitOptionResponse] = Field(default_factory=list)
 
 
 class DashboardContextWeather(BaseModel):

@@ -54,6 +54,8 @@ data class AiRecommendationItemExplanationDto(
 data class AiRecommendationResponseDto(
     val items: List<ClothingItemDto>,
     val explanation: String,
+    @SerializedName("outfit_score")
+    val outfitScore: Float = 0f,
     @SerializedName("weather_category")
     val weatherCategory: String?,
     val occasion: String?,
@@ -64,5 +66,7 @@ data class AiRecommendationResponseDto(
     @SerializedName("suggestion_id")
     val suggestionId: String?,
     @SerializedName("item_explanations")
-    val itemExplanations: List<AiRecommendationItemExplanationDto>
+    val itemExplanations: List<AiRecommendationItemExplanationDto>,
+    @SerializedName("outfit_options")
+    val outfitOptions: List<OutfitOptionDto> = emptyList()
 )

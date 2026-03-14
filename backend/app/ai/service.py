@@ -31,12 +31,14 @@ class RecommendationResult:
 
     items: list[models.ClothingItem]
     explanation: str
+    outfit_score: float
     source: str
     fallback_used: bool
     warning: Optional[str]
     weather_category: str
     item_explanations: dict[int, str]
     suggestion_id: str
+    outfit_options: list[deterministic.RecommendationCandidate]
 
 
 @dataclass(frozen=True)
@@ -109,7 +111,7 @@ class AiService:
         all_items = crud.get_clothing_items_for_user(db, user.id, include_archived=False)
         recent_fingerprints = set(history.get_recent_fingerprints(db, user.id))
 
-        deterministic_pick = deterministic.recommend(
+        deterministic_options = deterministic.recommend_many(
             items=all_items,
             user=user,
             manual_temp=context.manual_temp,
@@ -119,7 +121,9 @@ class AiService:
             style_preference=context.style_preference,
             preferred_seasons=context.preferred_seasons,
             recent_fingerprints=recent_fingerprints,
+            max_options=5,
         )
+        deterministic_pick = deterministic_options[0]
 
         item_map = {item.id: item for item in all_items}
         deterministic_items = [item_map[item_id] for item_id in deterministic_pick.item_ids if item_id in item_map]
@@ -127,12 +131,14 @@ class AiService:
             return RecommendationResult(
                 items=[],
                 explanation=deterministic_pick.explanation,
+                outfit_score=0.0,
                 source="fallback",
                 fallback_used=True,
                 warning="insufficient_wardrobe_data",
                 weather_category=deterministic_pick.weather_category,
                 item_explanations={},
                 suggestion_id=deterministic_pick.fingerprint,
+                outfit_options=deterministic_options,
             )
 
         if not self.provider_client.is_available:
@@ -140,12 +146,14 @@ class AiService:
             return RecommendationResult(
                 items=deterministic_items,
                 explanation=deterministic_pick.explanation,
+                outfit_score=deterministic_pick.score,
                 source="fallback",
                 fallback_used=True,
                 warning="provider_not_configured",
                 weather_category=deterministic_pick.weather_category,
                 item_explanations=deterministic_pick.item_explanations,
                 suggestion_id=deterministic_pick.fingerprint,
+                outfit_options=deterministic_options,
             )
 
         prompt = prompts.build_recommendation_prompt(
@@ -183,12 +191,14 @@ class AiService:
                 return RecommendationResult(
                     items=deterministic_items,
                     explanation=deterministic_pick.explanation,
+                    outfit_score=deterministic_pick.score,
                     source="fallback",
                     fallback_used=True,
                     warning="repeat_prevention_applied",
                     weather_category=deterministic_pick.weather_category,
                     item_explanations=deterministic_pick.item_explanations,
                     suggestion_id=deterministic_pick.fingerprint,
+                    outfit_options=deterministic_options,
                 )
 
             history.save_fingerprint(db, user.id, ai_fingerprint)
@@ -197,15 +207,34 @@ class AiService:
                 for item_id, explanation in parsed.item_explanations.items()
                 if item_id in {item.id for item in ai_items}
             }
+            ai_candidate = deterministic.score_existing_combo(
+                combo=ai_items,
+                user=user,
+                weather_category=deterministic_pick.weather_category,
+                occasion=context.occasion,
+                style_preference=context.style_preference,
+                preferred_seasons=context.preferred_seasons,
+            )
+            combined_options: list[deterministic.RecommendationCandidate] = [ai_candidate]
+            seen = {ai_candidate.fingerprint}
+            for option in deterministic_options:
+                if option.fingerprint in seen:
+                    continue
+                combined_options.append(option)
+                seen.add(option.fingerprint)
+                if len(combined_options) >= 5:
+                    break
             return RecommendationResult(
                 items=ai_items,
                 explanation=parsed.explanation,
+                outfit_score=ai_candidate.score,
                 source="ai",
                 fallback_used=False,
                 warning=None,
                 weather_category=deterministic_pick.weather_category,
                 item_explanations=item_explanations,
                 suggestion_id=ai_fingerprint,
+                outfit_options=combined_options,
             )
         except (AiProviderError, ValueError) as exc:
             warning_code = exc.code if isinstance(exc, AiProviderError) else "provider_malformed_response"
@@ -218,12 +247,14 @@ class AiService:
             return RecommendationResult(
                 items=deterministic_items,
                 explanation=deterministic_pick.explanation,
+                outfit_score=deterministic_pick.score,
                 source="fallback",
                 fallback_used=True,
                 warning=warning_code,
                 weather_category=deterministic_pick.weather_category,
                 item_explanations=deterministic_pick.item_explanations,
                 suggestion_id=deterministic_pick.fingerprint,
+                outfit_options=deterministic_options,
             )
 
     @staticmethod
@@ -246,4 +277,3 @@ class AiService:
 
 def _normalize_category(value: str) -> str:
     return value.strip().lower()
-

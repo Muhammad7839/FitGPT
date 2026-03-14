@@ -7,6 +7,7 @@ import com.fitgpt.app.data.model.AiChatMessage
 import com.fitgpt.app.data.model.AiChatResponse
 import com.fitgpt.app.data.model.AiRecommendationResult
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.remote.dto.ClothingItemCreateRequest
 import com.fitgpt.app.data.remote.dto.ClothingItemDto
 import com.fitgpt.app.data.remote.dto.ChatMessageDto
@@ -19,9 +20,17 @@ fun ClothingItemDto.toDomain(): ClothingItem {
         name = name,
         category = category,
         clothingType = clothingType,
+        layerType = layerType,
+        isOnePiece = isOnePiece,
+        setIdentifier = setIdentifier,
         fitTag = fitTag,
         color = color,
+        colors = colors,
         season = season,
+        seasonTags = seasonTags,
+        styleTags = styleTags,
+        occasionTags = occasionTags,
+        accessoryType = accessoryType,
         comfortLevel = comfortLevel,
         imageUrl = imageUrl,
         brand = brand,
@@ -37,9 +46,17 @@ fun ClothingItem.toCreateRequest(): ClothingItemCreateRequest {
         name = name,
         category = category,
         clothingType = clothingType,
+        layerType = layerType,
+        isOnePiece = isOnePiece,
+        setIdentifier = setIdentifier,
         fitTag = fitTag,
         color = color,
+        colors = colors,
         season = season,
+        seasonTags = seasonTags,
+        styleTags = styleTags,
+        occasionTags = occasionTags,
+        accessoryType = accessoryType,
         comfortLevel = comfortLevel,
         imageUrl = imageUrl,
         brand = brand,
@@ -70,12 +87,20 @@ fun AiRecommendationResponseDto.toDomain(): AiRecommendationResult {
     return AiRecommendationResult(
         items = items.map { it.toDomain() },
         explanation = explanation,
+        outfitScore = outfitScore,
         source = source,
         fallbackUsed = fallbackUsed,
         warning = warning,
         weatherCategory = weatherCategory,
         occasion = occasion,
         suggestionId = suggestionId,
-        itemExplanations = itemExplanations.associate { it.itemId to it.explanation }
+        itemExplanations = itemExplanations.associate { it.itemId to it.explanation },
+        outfitOptions = outfitOptions.map { option ->
+            OutfitOption(
+                items = option.items.map { it.toDomain() },
+                explanation = option.explanation,
+                outfitScore = option.outfitScore
+            )
+        }
     )
 }

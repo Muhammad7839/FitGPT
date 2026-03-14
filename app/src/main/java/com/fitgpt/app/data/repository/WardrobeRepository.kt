@@ -3,6 +3,7 @@ package com.fitgpt.app.data.repository
 import com.fitgpt.app.data.model.AiRecommendationResult
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.data.model.OutfitHistoryEntry
+import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
 import com.fitgpt.app.data.model.UploadResult
@@ -18,6 +19,13 @@ interface WardrobeRepository {
         clothingType: String? = null,
         season: String? = null,
         fitTag: String? = null,
+        layerType: String? = null,
+        isOnePiece: Boolean? = null,
+        setIdentifier: String? = null,
+        styleTag: String? = null,
+        seasonTag: String? = null,
+        occasionTag: String? = null,
+        accessoryType: String? = null,
         favoritesOnly: Boolean = false
     ): List<ClothingItem>
     suspend fun addItem(item: ClothingItem)
@@ -39,6 +47,18 @@ interface WardrobeRepository {
         weatherCategory: String? = null,
         occasion: String? = null,
     ): List<ClothingItem>
+    suspend fun getRecommendationOptions(
+        manualTemp: Int? = null,
+        timeContext: String? = null,
+        planDate: String? = null,
+        exclude: String? = null,
+        weatherCity: String? = null,
+        weatherLat: Double? = null,
+        weatherLon: Double? = null,
+        weatherCategory: String? = null,
+        occasion: String? = null,
+        limit: Int = 3,
+    ): List<OutfitOption>
     suspend fun getAiRecommendation(
         manualTemp: Int? = null,
         timeContext: String? = null,

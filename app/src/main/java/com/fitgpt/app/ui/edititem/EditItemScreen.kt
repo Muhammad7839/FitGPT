@@ -92,6 +92,15 @@ fun EditItemScreen(
             var season by remember { mutableStateOf(item.season) }
             var comfort by remember { mutableStateOf(item.comfortLevel.toString()) }
             var brand by remember { mutableStateOf(item.brand.orEmpty()) }
+            var layerType by remember { mutableStateOf(item.layerType.orEmpty()) }
+            var onePiece by remember { mutableStateOf(item.isOnePiece) }
+            var setIdentifier by remember { mutableStateOf(item.setIdentifier.orEmpty()) }
+            var styleTags by remember { mutableStateOf(item.styleTags.joinToString(",")) }
+            var seasonTags by remember { mutableStateOf(item.seasonTags.joinToString(",")) }
+            var colors by remember { mutableStateOf(item.colors.joinToString(",")) }
+            var occasionTags by remember { mutableStateOf(item.occasionTags.joinToString(",")) }
+            var accessoryType by remember { mutableStateOf(item.accessoryType.orEmpty()) }
+            var showAdvancedMetadata by remember { mutableStateOf(false) }
             var imageUrl by remember { mutableStateOf(item.imageUrl.orEmpty()) }
             var cameraMessage by remember { mutableStateOf<String?>(null) }
             var formError by remember { mutableStateOf<String?>(null) }
@@ -215,6 +224,63 @@ fun EditItemScreen(
                     )
 
                     Button(
+                        onClick = { showAdvancedMetadata = !showAdvancedMetadata },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (showAdvancedMetadata) "Hide advanced metadata" else "Show advanced metadata")
+                    }
+                    if (showAdvancedMetadata) {
+                        OutlinedTextField(
+                            value = layerType,
+                            onValueChange = { layerType = it },
+                            label = { Text("Layer Type (base/mid/outer)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = setIdentifier,
+                            onValueChange = { setIdentifier = it },
+                            label = { Text("Set Identifier") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = styleTags,
+                            onValueChange = { styleTags = it },
+                            label = { Text("Style Tags CSV") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = seasonTags,
+                            onValueChange = { seasonTags = it },
+                            label = { Text("Season Tags CSV") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = colors,
+                            onValueChange = { colors = it },
+                            label = { Text("Colors CSV") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = occasionTags,
+                            onValueChange = { occasionTags = it },
+                            label = { Text("Occasion Tags CSV") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = accessoryType,
+                            onValueChange = { accessoryType = it },
+                            label = { Text("Accessory Type") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Button(
+                            onClick = { onePiece = !onePiece },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(if (onePiece) "One-piece: ON" else "One-piece: OFF")
+                        }
+                    }
+
+                    Button(
                         onClick = { picker.launch("image/*") },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -293,9 +359,17 @@ fun EditItemScreen(
                                     name = name.trim().takeIf { it.isNotBlank() },
                                     category = category.trim(),
                                     clothingType = clothingType.trim().takeIf { it.isNotBlank() },
+                                    layerType = layerType.trim().lowercase().takeIf { it.isNotBlank() },
+                                    isOnePiece = onePiece,
+                                    setIdentifier = setIdentifier.trim().takeIf { it.isNotBlank() },
                                     fitTag = fitTag.trim().takeIf { it.isNotBlank() },
                                     color = color.trim(),
+                                    colors = colors.toCsvList().ifEmpty { listOf(color.trim()) },
                                     season = season.trim(),
+                                    seasonTags = seasonTags.toCsvList().ifEmpty { listOf(season.trim()) },
+                                    styleTags = styleTags.toCsvList(),
+                                    occasionTags = occasionTags.toCsvList(),
+                                    accessoryType = accessoryType.trim().takeIf { it.isNotBlank() },
                                     comfortLevel = parseComfortLevel(comfort),
                                     brand = brand.trim().takeIf { it.isNotBlank() },
                                     imageUrl = imageUrl.takeIf { it.isNotBlank() }
@@ -327,4 +401,11 @@ private fun bitmapToJpegBytes(bitmap: Bitmap): ByteArray {
     val output = ByteArrayOutputStream()
     bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
     return output.toByteArray()
+}
+
+private fun String.toCsvList(): List<String> {
+    return split(",")
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .distinctBy { it.lowercase() }
 }

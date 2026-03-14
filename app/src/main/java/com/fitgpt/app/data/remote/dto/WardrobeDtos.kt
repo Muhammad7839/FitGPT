@@ -11,10 +11,25 @@ data class ClothingItemDto(
     val category: String,
     @SerializedName("clothing_type")
     val clothingType: String?,
+    @SerializedName("layer_type")
+    val layerType: String? = null,
+    @SerializedName("is_one_piece")
+    val isOnePiece: Boolean = false,
+    @SerializedName("set_identifier")
+    val setIdentifier: String? = null,
     @SerializedName("fit_tag")
     val fitTag: String?,
     val color: String,
+    val colors: List<String> = emptyList(),
     val season: String,
+    @SerializedName("season_tags")
+    val seasonTags: List<String> = emptyList(),
+    @SerializedName("style_tags")
+    val styleTags: List<String> = emptyList(),
+    @SerializedName("occasion_tags")
+    val occasionTags: List<String> = emptyList(),
+    @SerializedName("accessory_type")
+    val accessoryType: String? = null,
     @SerializedName("comfort_level")
     val comfortLevel: Int,
     @SerializedName("image_url")
@@ -35,10 +50,25 @@ data class ClothingItemCreateRequest(
     val category: String,
     @SerializedName("clothing_type")
     val clothingType: String?,
+    @SerializedName("layer_type")
+    val layerType: String? = null,
+    @SerializedName("is_one_piece")
+    val isOnePiece: Boolean = false,
+    @SerializedName("set_identifier")
+    val setIdentifier: String? = null,
     @SerializedName("fit_tag")
     val fitTag: String?,
     val color: String,
+    val colors: List<String> = emptyList(),
     val season: String,
+    @SerializedName("season_tags")
+    val seasonTags: List<String> = emptyList(),
+    @SerializedName("style_tags")
+    val styleTags: List<String> = emptyList(),
+    @SerializedName("occasion_tags")
+    val occasionTags: List<String> = emptyList(),
+    @SerializedName("accessory_type")
+    val accessoryType: String? = null,
     @SerializedName("comfort_level")
     val comfortLevel: Int,
     @SerializedName("image_url")
@@ -57,8 +87,24 @@ data class ClothingItemCreateRequest(
 data class RecommendationResponseDto(
     val items: List<ClothingItemDto>,
     val explanation: String,
+    @SerializedName("outfit_score")
+    val outfitScore: Float,
     @SerializedName("weather_category")
     val weatherCategory: String?,
+    val occasion: String?
+)
+
+data class OutfitOptionDto(
+    val items: List<ClothingItemDto>,
+    val explanation: String,
+    @SerializedName("outfit_score")
+    val outfitScore: Float
+)
+
+data class RecommendationOptionsResponseDto(
+    val outfits: List<OutfitOptionDto>,
+    @SerializedName("weather_category")
+    val weatherCategory: String,
     val occasion: String?
 )
 

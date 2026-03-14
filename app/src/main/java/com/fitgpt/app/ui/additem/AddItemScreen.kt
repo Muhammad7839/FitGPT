@@ -88,6 +88,15 @@ fun AddItemScreen(
     var season by remember { mutableStateOf("") }
     var comfort by remember { mutableStateOf("") }
     var brand by remember { mutableStateOf("") }
+    var layerType by remember { mutableStateOf("") }
+    var onePiece by remember { mutableStateOf(false) }
+    var setIdentifier by remember { mutableStateOf("") }
+    var styleTags by remember { mutableStateOf("") }
+    var seasonTags by remember { mutableStateOf("") }
+    var colors by remember { mutableStateOf("") }
+    var occasionTags by remember { mutableStateOf("") }
+    var accessoryType by remember { mutableStateOf("") }
+    var showAdvancedMetadata by remember { mutableStateOf(false) }
     var imageUrl by remember { mutableStateOf("") }
     var cameraMessage by remember { mutableStateOf<String?>(null) }
     var formError by remember { mutableStateOf<String?>(null) }
@@ -187,6 +196,9 @@ fun AddItemScreen(
             }
             if (comfort.isBlank()) {
                 comfort = inferredFromName.comfortLevel?.toString().orEmpty()
+            }
+            if (layerType.isBlank()) {
+                layerType = inferLayerTypeFromCategory(inferredFromName.category ?: category)
             }
             Log.i(UPLOAD_LOG_TAG, "gallery image selected mime=$mimeType size=${bytes.size}")
             viewModel.uploadImage(
@@ -296,7 +308,15 @@ fun AddItemScreen(
                 clothingType = resolvedClothingType,
                 fitTag = typedFitTag,
                 color = resolvedColor,
+                colors = listOf(resolvedColor),
                 season = resolvedSeason,
+                seasonTags = listOf(resolvedSeason),
+                styleTags = styleTags.toCsvList(),
+                occasionTags = occasionTags.toCsvList(),
+                layerType = layerType.trim().takeIf { it.isNotBlank() },
+                isOnePiece = onePiece,
+                setIdentifier = setIdentifier.trim().takeIf { it.isNotBlank() },
+                accessoryType = accessoryType.trim().takeIf { it.isNotBlank() },
                 comfortLevel = resolvedComfort.coerceIn(1, 5),
                 brand = typedBrand,
                 imageUrl = url
@@ -500,6 +520,64 @@ fun AddItemScreen(
                     )
 
                     Button(
+                        onClick = { showAdvancedMetadata = !showAdvancedMetadata },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (showAdvancedMetadata) "Hide advanced metadata" else "Show advanced metadata")
+                    }
+
+                    if (showAdvancedMetadata) {
+                        OutlinedTextField(
+                            value = layerType,
+                            onValueChange = { layerType = it },
+                            label = { Text("Layer Type (base/mid/outer)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = setIdentifier,
+                            onValueChange = { setIdentifier = it },
+                            label = { Text("Set Identifier (optional)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = styleTags,
+                            onValueChange = { styleTags = it },
+                            label = { Text("Style Tags CSV") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = seasonTags,
+                            onValueChange = { seasonTags = it },
+                            label = { Text("Season Tags CSV") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = colors,
+                            onValueChange = { colors = it },
+                            label = { Text("Colors CSV") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = occasionTags,
+                            onValueChange = { occasionTags = it },
+                            label = { Text("Occasion Tags CSV") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = accessoryType,
+                            onValueChange = { accessoryType = it },
+                            label = { Text("Accessory Type (optional)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Button(
+                            onClick = { onePiece = !onePiece },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(if (onePiece) "One-piece: ON" else "One-piece: OFF")
+                        }
+                    }
+
+                    Button(
                         onClick = { showPhotoOptions = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -599,9 +677,17 @@ fun AddItemScreen(
                                     name = name.trim().takeIf { it.isNotBlank() },
                                     category = category.trim(),
                                     clothingType = clothingType.trim().takeIf { it.isNotBlank() },
+                                    layerType = layerType.trim().lowercase().takeIf { it.isNotBlank() },
+                                    isOnePiece = onePiece,
+                                    setIdentifier = setIdentifier.trim().takeIf { it.isNotBlank() },
                                     fitTag = fitTag.trim().takeIf { it.isNotBlank() },
                                     color = color.trim(),
+                                    colors = colors.toCsvList().ifEmpty { listOf(color.trim()) },
                                     season = season.trim(),
+                                    seasonTags = seasonTags.toCsvList().ifEmpty { listOf(season.trim()) },
+                                    styleTags = styleTags.toCsvList(),
+                                    occasionTags = occasionTags.toCsvList(),
+                                    accessoryType = accessoryType.trim().takeIf { it.isNotBlank() },
                                     comfortLevel = parseComfortLevel(comfort),
                                     brand = brand.trim().takeIf { it.isNotBlank() },
                                     imageUrl = imageUrl.takeIf { it.isNotBlank() }
@@ -659,6 +745,22 @@ private fun buildBatchItemName(
         cleanedBaseName.isNotEmpty() -> "$cleanedBaseName #${index + 1}"
         total == 1 -> fallback
         else -> "$fallback #${index + 1}"
+    }
+}
+
+private fun String.toCsvList(): List<String> {
+    return split(",")
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .distinctBy { it.lowercase() }
+}
+
+private fun inferLayerTypeFromCategory(category: String?): String {
+    val normalized = category?.trim()?.lowercase().orEmpty()
+    return when {
+        normalized.contains("outer") || normalized.contains("jacket") || normalized.contains("coat") -> "outer"
+        normalized.contains("top") || normalized.contains("shirt") -> "base"
+        else -> ""
     }
 }
 
