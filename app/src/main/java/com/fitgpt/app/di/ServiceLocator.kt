@@ -7,6 +7,8 @@ import android.content.Context
 import android.util.Log
 import com.fitgpt.app.BuildConfig
 import com.fitgpt.app.data.auth.AuthInterceptor
+import com.fitgpt.app.data.network.BackendEndpointRegistry
+import com.fitgpt.app.data.network.BackendFailoverInterceptor
 import com.fitgpt.app.data.auth.TokenStore
 import com.fitgpt.app.data.remote.ApiService
 import com.fitgpt.app.data.repository.AuthRepository
@@ -86,6 +88,7 @@ object ServiceLocator {
     private fun provideApiService(context: Context): ApiService {
         return apiService ?: synchronized(this) {
             val baseUrl = BuildConfig.API_BASE_URL.ifBlank { FALLBACK_BASE_URL }
+            BackendEndpointRegistry.initialize(baseUrl)
             Log.i(NETWORK_LOG_TAG, "Retrofit baseUrl=$baseUrl")
             apiService ?: Retrofit.Builder()
                 .baseUrl(baseUrl)
@@ -107,6 +110,7 @@ object ServiceLocator {
             }
         }
         return OkHttpClient.Builder()
+            .addInterceptor(BackendFailoverInterceptor())
             .addInterceptor(AuthInterceptor(provideTokenStore(context)))
             .addInterceptor(logger)
             .connectTimeout(15, TimeUnit.SECONDS)

@@ -174,7 +174,7 @@ class AuthViewModel(
     private fun resolveNetworkAuthError(exception: Exception, action: String): String {
         return when (exception) {
             is UnknownHostException -> "No internet or host not found during $action"
-            is ConnectException -> "Cannot reach backend during $action (check server and adb reverse)"
+            is ConnectException -> "Cannot reach backend during $action (check server is running)"
             is SocketTimeoutException -> "Backend timeout during $action"
             is IOException -> "Network I/O error during $action"
             else -> "Unexpected network error during $action"
