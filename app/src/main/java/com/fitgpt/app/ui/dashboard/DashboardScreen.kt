@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -32,9 +34,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
+import com.fitgpt.app.data.CURRENT_TUTORIAL_VERSION
+import com.fitgpt.app.data.PreferencesManager
 import com.fitgpt.app.data.location.GpsLocationProvider
 import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.ui.common.FitGptScaffold
+import com.fitgpt.app.ui.common.GuidedTutorialOverlay
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebBadge
 import com.fitgpt.app.ui.common.WebCard
@@ -53,13 +58,18 @@ fun DashboardScreen(
     viewModel: WardrobeViewModel
 ) {
     val recommendationState by viewModel.recommendationState.collectAsState()
+    val recommendationMeta by viewModel.recommendationMeta.collectAsState()
+    val plannedState by viewModel.plannedState.collectAsState()
     val weatherState by viewModel.weatherState.collectAsState()
     val weatherUiStatus by viewModel.weatherUiStatus.collectAsState()
     var weatherCity by rememberSaveable { mutableStateOf("") }
     var autoFetchAttempted by rememberSaveable { mutableStateOf(false) }
+    var showTutorial by rememberSaveable { mutableStateOf(false) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val preferencesManager = remember(context) { PreferencesManager(context) }
+    val tutorialCompleted by preferencesManager.tutorialCompleted.collectAsState(initial = false)
     val locationProvider = remember(context) { GpsLocationProvider(context) }
 
     fun fetchFromCurrentLocation() {
@@ -110,6 +120,20 @@ fun DashboardScreen(
             viewModel.markWeatherPermissionNeeded()
             Log.i(LOCATION_LOG_TAG, "dashboard location permission missing")
         }
+    }
+
+    LaunchedEffect(tutorialCompleted) {
+        if (!tutorialCompleted) {
+            showTutorial = true
+        }
+    }
+
+    val nextPlannedOutfit = remember(plannedState) {
+        val today = java.time.LocalDate.now().toString()
+        plannedState
+            .filter { it.planDate >= today }
+            .sortedBy { it.planDate }
+            .firstOrNull()
     }
 
     FitGptScaffold(
@@ -217,6 +241,32 @@ fun DashboardScreen(
                 }
             }
 
+            nextPlannedOutfit?.let { plan ->
+                WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("Upcoming Plan", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            text = "${plan.planDate} • ${plan.occasion ?: "Planned look"}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = "Items: ${plan.items.size}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Button(
+                            onClick = { navController.navigate(Routes.PLANS) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Open Plans")
+                        }
+                    }
+                }
+            }
+
             WebCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -240,6 +290,41 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Get Outfit Recommendation")
+                    }
+                }
+            }
+
+            if (recommendationMeta.explanation.isNotBlank()) {
+                WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("Latest Recommendation Context", style = MaterialTheme.typography.titleMedium)
+                        WebBadge(
+                            text = if (recommendationMeta.source.equals("ai", ignoreCase = true)) {
+                                "AI-powered"
+                            } else {
+                                "Fallback"
+                            }
+                        )
+                        Text(
+                            text = recommendationMeta.explanation,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Button(
+                            onClick = {
+                                val weather = (weatherState as? UiState.Success)?.data
+                                viewModel.fetchRecommendations(
+                                    manualTemp = weather?.temperatureF,
+                                    weatherCategory = weather?.weatherCategory
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Refresh Recommendation")
+                        }
                     }
                 }
             }
@@ -273,6 +358,15 @@ fun DashboardScreen(
                         )
                         QuickActionCard(
                             modifier = Modifier.weight(1f),
+                            title = "Chat",
+                            subtitle = "Ask AI stylist",
+                            onClick = { navController.navigate(Routes.CHAT) }
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Spacer(modifier = Modifier.weight(1f))
+                        QuickActionCard(
+                            modifier = Modifier.weight(1f),
                             title = "More",
                             subtitle = "History and settings",
                             onClick = { navController.navigate(Routes.MORE) }
@@ -298,6 +392,16 @@ fun DashboardScreen(
             }
         }
     }
+
+    GuidedTutorialOverlay(
+        visible = showTutorial,
+        onDismiss = {
+            showTutorial = false
+            scope.launch {
+                preferencesManager.markTutorialSeen(version = CURRENT_TUTORIAL_VERSION)
+            }
+        }
+    )
 }
 
 @Composable

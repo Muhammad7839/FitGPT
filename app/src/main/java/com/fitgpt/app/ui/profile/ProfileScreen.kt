@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,7 @@ import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.ui.common.isImagePayloadAllowed
 import com.fitgpt.app.viewmodel.ProfileViewModel
 import com.fitgpt.app.viewmodel.UiState
+import kotlinx.coroutines.delay
 
 private const val UPLOAD_LOG_TAG = "FitGPTUpload"
 
@@ -56,6 +58,7 @@ fun ProfileScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
+        viewModel.clearAvatarUploadState()
         val bytes = readBytes(context, uri)
         if (bytes == null) {
             avatarError = "Unable to read selected image"
@@ -78,10 +81,19 @@ fun ProfileScreen(
         viewModel.uploadAvatar(bytes = bytes, fileName = fileName, mimeType = mimeType)
     }
 
+    LaunchedEffect(avatarUploadState) {
+        val state = avatarUploadState
+        if (state is UiState.Success && !state.data.isNullOrBlank()) {
+            delay(2200)
+            viewModel.clearAvatarUploadState()
+        }
+    }
+
     FitGptScaffold(
         navController = navController,
         currentRoute = Routes.PROFILE,
-        title = "Profile"
+        title = "Profile",
+        showMoreAction = false
     ) { padding ->
         when (val currentState = state) {
             UiState.Loading -> {

@@ -20,6 +20,7 @@ import com.fitgpt.app.ui.auth.ForgotPasswordScreen
 import com.fitgpt.app.ui.auth.LoginScreen
 import com.fitgpt.app.ui.auth.ResetPasswordScreen
 import com.fitgpt.app.ui.auth.SignupScreen
+import com.fitgpt.app.ui.chat.ChatScreen
 import com.fitgpt.app.ui.dashboard.DashboardScreen
 import com.fitgpt.app.ui.edititem.EditItemScreen
 import com.fitgpt.app.ui.favorites.FavoritesScreen
@@ -34,6 +35,8 @@ import com.fitgpt.app.ui.settings.SettingsScreen
 import com.fitgpt.app.ui.wardrobe.WardrobeScreen
 import com.fitgpt.app.viewmodel.AuthViewModel
 import com.fitgpt.app.viewmodel.AuthViewModelFactory
+import com.fitgpt.app.viewmodel.ChatViewModel
+import com.fitgpt.app.viewmodel.ChatViewModelFactory
 import com.fitgpt.app.viewmodel.OnboardingViewModel
 import com.fitgpt.app.viewmodel.OnboardingViewModelFactory
 import com.fitgpt.app.viewmodel.ProfileViewModel
@@ -59,6 +62,7 @@ object Routes {
     const val PROFILE = "profile"
     const val MORE = "more"
     const val SETTINGS = "settings"
+    const val CHAT = "chat"
     const val ADD_ITEM = "add_item"
     const val EDIT_ITEM = "edit_item"
     const val RECOMMENDATION = "recommendation"
@@ -94,6 +98,13 @@ fun AppNavHost(
     val profileViewModel: ProfileViewModel? =
         if (hasToken) {
             viewModel(factory = ProfileViewModelFactory(profileRepository))
+        } else {
+            null
+        }
+    val chatRepository = remember { ServiceLocator.provideChatRepository(context) }
+    val chatViewModel: ChatViewModel? =
+        if (hasToken) {
+            viewModel(factory = ChatViewModelFactory(chatRepository))
         } else {
             null
         }
@@ -263,6 +274,14 @@ fun AppNavHost(
 
         composable(Routes.MORE) {
             MoreScreen(navController = navController)
+        }
+
+        composable(Routes.CHAT) {
+            val vm = chatViewModel ?: return@composable
+            ChatScreen(
+                navController = navController,
+                viewModel = vm
+            )
         }
 
         composable(Routes.SETTINGS) {

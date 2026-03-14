@@ -1,3 +1,6 @@
+/**
+ * Shared top-level scaffold with FitGPT branding, tab navigation, and animated background shell.
+ */
 package com.fitgpt.app.ui.common
 
 import androidx.compose.foundation.Image
@@ -13,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
@@ -28,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
@@ -35,10 +40,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.fitgpt.app.R
 import com.fitgpt.app.navigation.Routes
-import com.fitgpt.app.ui.theme.FitgptAccentDeep
+import com.fitgpt.app.ui.theme.LocalFitGptVisualTokens
 
 /**
  * Shared shell used by top-level screens to mirror the web app IA.
@@ -55,6 +63,10 @@ fun FitGptScaffold(
     content: @Composable (PaddingValues) -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val activeRoute = navBackStackEntry?.destination?.route ?: currentRoute
+    val meshAccentDeep = LocalFitGptVisualTokens.current.meshAccentDeep
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -84,7 +96,21 @@ fun FitGptScaffold(
                     titleContentColor = colorScheme.onSurface
                 ),
                 actions = {
-                    if (showMoreAction && currentRoute != Routes.MORE && currentRoute != Routes.SETTINGS) {
+                    if (activeRoute != Routes.CHAT) {
+                        IconButton(
+                            onClick = {
+                                navController.navigate(Routes.CHAT) {
+                                    launchSingleTop = true
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Chat"
+                            )
+                        }
+                    }
+                    if (showMoreAction && activeRoute != Routes.MORE && activeRoute != Routes.SETTINGS) {
                         IconButton(
                             onClick = {
                                 navController.navigate(Routes.MORE) {
@@ -110,9 +136,11 @@ fun FitGptScaffold(
                 ) {
                     topLevelItems.forEach { item ->
                         NavigationBarItem(
-                            selected = currentRoute == item.route,
+                            selected = activeRoute == item.route,
                             onClick = {
-                                if (currentRoute != item.route) {
+                                if (isTopLevelDestination(navBackStackEntry?.destination, item.route)) {
+                                    navController.popBackStack(item.route, inclusive = false)
+                                } else {
                                     navController.navigate(item.route) {
                                         popUpTo(navController.graph.findStartDestination().id) {
                                             saveState = true
@@ -146,11 +174,15 @@ fun FitGptScaffold(
                 backgroundBottom = colorScheme.surfaceVariant.copy(alpha = 0.84f),
                 accent = colorScheme.primary,
                 accentSoft = colorScheme.primary.copy(alpha = 0.8f),
-                accentDeep = FitgptAccentDeep
+                accentDeep = meshAccentDeep
             )
             Box(modifier = Modifier.fillMaxSize()) { content(padding) }
         }
     }
+}
+
+private fun isTopLevelDestination(destination: NavDestination?, route: String): Boolean {
+    return destination?.hierarchy?.any { it.route == route } == true
 }
 
 private data class TopLevelNavItem(

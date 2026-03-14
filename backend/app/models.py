@@ -85,3 +85,14 @@ class PlannedOutfit(Base):
     planned_date = Column(String, nullable=False)
     occasion = Column(String, nullable=True)
     created_at_timestamp = Column(Integer, nullable=False)
+
+
+class RecommendationFingerprint(Base):
+    """Tracks recently served recommendation combinations per user."""
+
+    __tablename__ = "recommendation_fingerprints"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    fingerprint = Column(String, nullable=False, index=True)
+    created_at_timestamp = Column(Integer, nullable=False, index=True)

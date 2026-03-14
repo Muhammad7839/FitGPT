@@ -3,6 +3,7 @@
  */
 package com.fitgpt.app.data.repository
 
+import com.fitgpt.app.data.model.AiRecommendationResult
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.data.model.PlannedOutfit
@@ -18,6 +19,7 @@ import com.fitgpt.app.data.remote.dto.OutfitHistoryRequest
 import com.fitgpt.app.data.remote.dto.PlannedOutfitAssignmentRequestDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.SavedOutfitCreateRequest
+import com.fitgpt.app.data.remote.dto.AiRecommendationRequestDto
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -137,6 +139,41 @@ class RemoteWardrobeRepository(
         ).items.map { dto ->
             dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl))
         }
+    }
+
+    override suspend fun getAiRecommendation(
+        manualTemp: Int?,
+        timeContext: String?,
+        planDate: String?,
+        exclude: String?,
+        weatherCity: String?,
+        weatherLat: Double?,
+        weatherLon: Double?,
+        weatherCategory: String?,
+        occasion: String?,
+        stylePreference: String?,
+        preferredSeasons: List<String>
+    ): AiRecommendationResult {
+        val response = api.getAiRecommendations(
+            AiRecommendationRequestDto(
+                manualTemp = manualTemp,
+                timeContext = timeContext,
+                planDate = planDate,
+                exclude = exclude,
+                weatherCity = weatherCity,
+                weatherLat = weatherLat,
+                weatherLon = weatherLon,
+                weatherCategory = weatherCategory,
+                occasion = occasion,
+                stylePreference = stylePreference,
+                preferredSeasons = preferredSeasons
+            )
+        ).toDomain()
+        return response.copy(
+            items = response.items.map { item ->
+                item.copy(imageUrl = resolveApiUrl(item.imageUrl))
+            }
+        )
     }
 
     override suspend fun getCurrentWeather(city: String?, lat: Double?, lon: Double?): WeatherSnapshot {

@@ -51,10 +51,22 @@ data class WeatherUiStatus(
     val message: String
 )
 
+data class RecommendationMeta(
+    val explanation: String = "",
+    val source: String = "fallback",
+    val fallbackUsed: Boolean = true,
+    val warning: String? = null,
+    val weatherCategory: String? = null,
+    val occasion: String? = null,
+    val suggestionId: String? = null,
+    val itemExplanations: Map<Int, String> = emptyMap()
+)
+
 class WardrobeViewModel(
     private val repository: WardrobeRepository
 ) : ViewModel() {
     private val weatherLogTag = "FitGPTWeather"
+    private val recommendationLogTag = "FitGPTRecommendation"
 
     private val allItems = mutableListOf<ClothingItem>()
     private var currentFilters = WardrobeFilters()
@@ -65,6 +77,8 @@ class WardrobeViewModel(
 
     private val _recommendationState = MutableStateFlow<UiState<List<ClothingItem>>>(UiState.Loading)
     val recommendationState: StateFlow<UiState<List<ClothingItem>>> = _recommendationState
+    private val _recommendationMeta = MutableStateFlow(RecommendationMeta())
+    val recommendationMeta: StateFlow<RecommendationMeta> = _recommendationMeta
 
     private val _historyState = MutableStateFlow<List<OutfitHistoryEntry>>(emptyList())
     val historyState: StateFlow<List<OutfitHistoryEntry>> = _historyState
@@ -81,6 +95,11 @@ class WardrobeViewModel(
     private val _batchImageUploadState =
         MutableStateFlow<UiState<List<UploadResult>>>(UiState.Success(emptyList()))
     val batchImageUploadState: StateFlow<UiState<List<UploadResult>>> = _batchImageUploadState
+
+    private val _itemSaveState = MutableStateFlow<UiState<Int?>>(UiState.Success(null))
+    val itemSaveState: StateFlow<UiState<Int?>> = _itemSaveState
+    private val _bulkItemSaveState = MutableStateFlow<UiState<Int?>>(UiState.Success(null))
+    val bulkItemSaveState: StateFlow<UiState<Int?>> = _bulkItemSaveState
 
     private val _weatherState = MutableStateFlow<UiState<WeatherSnapshot?>>(UiState.Success(null))
     val weatherState: StateFlow<UiState<WeatherSnapshot?>> = _weatherState
@@ -128,25 +147,39 @@ class WardrobeViewModel(
     }
 
     fun addItem(item: ClothingItem) {
+        _itemSaveState.value = UiState.Loading
         viewModelScope.launch {
             try {
                 repository.addItem(item)
+                _itemSaveState.value = UiState.Success(1)
                 refreshWardrobe()
-            } catch (_: Exception) {
-                _wardrobeState.value = UiState.Error("Failed to add item")
+            } catch (exception: Exception) {
+                Log.e(recommendationLogTag, "add item failed", exception)
+                _itemSaveState.value = UiState.Error("Failed to save item")
             }
         }
     }
 
     fun addItemsBulk(items: List<ClothingItem>) {
+        _bulkItemSaveState.value = UiState.Loading
         viewModelScope.launch {
             try {
-                repository.addItemsBulk(items)
+                val savedItems = repository.addItemsBulk(items)
+                _bulkItemSaveState.value = UiState.Success(savedItems.size)
                 refreshWardrobe()
-            } catch (_: Exception) {
-                _wardrobeState.value = UiState.Error("Failed to add items")
+            } catch (exception: Exception) {
+                Log.e(recommendationLogTag, "bulk add item failed", exception)
+                _bulkItemSaveState.value = UiState.Error("Failed to save uploaded items")
             }
         }
+    }
+
+    fun clearItemSaveState() {
+        _itemSaveState.value = UiState.Success(null)
+    }
+
+    fun clearBulkItemSaveState() {
+        _bulkItemSaveState.value = UiState.Success(null)
     }
 
     fun uploadImage(bytes: ByteArray, fileName: String, mimeType: String) {
@@ -212,25 +245,70 @@ class WardrobeViewModel(
         weatherLat: Double? = null,
         weatherLon: Double? = null,
         weatherCategory: String? = null,
-        occasion: String? = null
+        occasion: String? = null,
+        stylePreference: String? = null,
+        preferredSeasons: List<String> = emptyList()
     ) {
         _recommendationState.value = UiState.Loading
         viewModelScope.launch {
             try {
-                val recommendations = repository.getRecommendations(
-                    manualTemp = manualTemp ?: latestWeatherSnapshot?.temperatureF,
+                val resolvedTemp = manualTemp ?: latestWeatherSnapshot?.temperatureF
+                val resolvedWeatherCategory = weatherCategory ?: latestWeatherSnapshot?.weatherCategory
+                val aiResult = repository.getAiRecommendation(
+                    manualTemp = resolvedTemp,
                     timeContext = timeContext,
                     planDate = planDate,
                     exclude = exclude,
                     weatherCity = weatherCity,
                     weatherLat = weatherLat,
                     weatherLon = weatherLon,
-                    weatherCategory = weatherCategory ?: latestWeatherSnapshot?.weatherCategory,
-                    occasion = occasion
+                    weatherCategory = resolvedWeatherCategory,
+                    occasion = occasion,
+                    stylePreference = stylePreference,
+                    preferredSeasons = preferredSeasons
                 )
-                _recommendationState.value = UiState.Success(recommendations)
+                _recommendationMeta.value = RecommendationMeta(
+                    explanation = aiResult.explanation,
+                    source = aiResult.source,
+                    fallbackUsed = aiResult.fallbackUsed,
+                    warning = aiResult.warning,
+                    weatherCategory = aiResult.weatherCategory,
+                    occasion = aiResult.occasion,
+                    suggestionId = aiResult.suggestionId,
+                    itemExplanations = aiResult.itemExplanations
+                )
+                _recommendationState.value = UiState.Success(aiResult.items)
+                Log.i(
+                    recommendationLogTag,
+                    "source=${aiResult.source} fallback=${aiResult.fallbackUsed} warning=${aiResult.warning.orEmpty()}"
+                )
             } catch (_: Exception) {
-                _recommendationState.value = UiState.Error("Failed to load recommendations")
+                Log.w(recommendationLogTag, "ai recommendation failed, falling back to legacy endpoint")
+                try {
+                    val recommendations = repository.getRecommendations(
+                        manualTemp = manualTemp ?: latestWeatherSnapshot?.temperatureF,
+                        timeContext = timeContext,
+                        planDate = planDate,
+                        exclude = exclude,
+                        weatherCity = weatherCity,
+                        weatherLat = weatherLat,
+                        weatherLon = weatherLon,
+                        weatherCategory = weatherCategory ?: latestWeatherSnapshot?.weatherCategory,
+                        occasion = occasion
+                    )
+                    _recommendationMeta.value = RecommendationMeta(
+                        explanation = "Generated by compatibility recommendation engine.",
+                        source = "fallback",
+                        fallbackUsed = true,
+                        warning = "legacy_endpoint_fallback",
+                        weatherCategory = weatherCategory ?: latestWeatherSnapshot?.weatherCategory,
+                        occasion = occasion
+                    )
+                    _recommendationState.value = UiState.Success(recommendations)
+                } catch (_: Exception) {
+                    Log.e(recommendationLogTag, "legacy recommendation endpoint failed")
+                    _recommendationState.value = UiState.Error("Failed to load recommendations")
+                }
             }
         }
     }
@@ -486,6 +564,9 @@ class WardrobeViewModel(
     }
 
     fun generateExplanation(item: ClothingItem): String {
+        _recommendationMeta.value.itemExplanations[item.id]?.let { detail ->
+            return detail
+        }
         val comfortText = if (item.comfortLevel >= 4) "high comfort" else "moderate comfort"
         val brandText = item.brand?.let { "from $it" } ?: ""
         return "This $brandText piece works well for ${item.season.lowercase()} and provides $comfortText."

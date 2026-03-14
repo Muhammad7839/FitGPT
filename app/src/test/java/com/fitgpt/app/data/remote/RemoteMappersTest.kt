@@ -4,6 +4,9 @@
 package com.fitgpt.app.data.remote
 
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.data.remote.dto.AiRecommendationItemExplanationDto
+import com.fitgpt.app.data.remote.dto.AiRecommendationResponseDto
+import com.fitgpt.app.data.remote.dto.ChatResponseDto
 import com.fitgpt.app.data.remote.dto.ClothingItemDto
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -74,5 +77,66 @@ class RemoteMappersTest {
         assertEquals(3, request.comfortLevel)
         assertEquals("Levi's", request.brand)
         assertTrue(request.isFavorite)
+    }
+
+    @Test
+    fun aiRecommendationDtoToDomain_mapsMetadata() {
+        val response = AiRecommendationResponseDto(
+            items = listOf(
+                ClothingItemDto(
+                    id = 3,
+                    name = "Black Tee",
+                    category = "Top",
+                    clothingType = "tee",
+                    fitTag = null,
+                    color = "Black",
+                    season = "All",
+                    comfortLevel = 4,
+                    imageUrl = null,
+                    brand = null,
+                    isAvailable = true,
+                    isFavorite = false,
+                    isArchived = false,
+                    lastWornTimestamp = null
+                )
+            ),
+            explanation = "Balanced outfit.",
+            weatherCategory = "mild",
+            occasion = "office",
+            source = "ai",
+            fallbackUsed = false,
+            warning = null,
+            suggestionId = "3,4,5",
+            itemExplanations = listOf(
+                AiRecommendationItemExplanationDto(
+                    itemId = 3,
+                    explanation = "Neutral base."
+                )
+            )
+        )
+
+        val model = response.toDomain()
+        assertEquals("ai", model.source)
+        assertEquals("Balanced outfit.", model.explanation)
+        assertEquals("mild", model.weatherCategory)
+        assertEquals("office", model.occasion)
+        assertEquals("3,4,5", model.suggestionId)
+        assertEquals("Neutral base.", model.itemExplanations[3])
+    }
+
+    @Test
+    fun chatResponseDtoToDomain_mapsFallbackFields() {
+        val dto = ChatResponseDto(
+            reply = "Try a lighter top.",
+            source = "fallback",
+            fallbackUsed = true,
+            warning = "provider_timeout"
+        )
+
+        val model = dto.toDomain()
+        assertEquals("Try a lighter top.", model.reply)
+        assertEquals("fallback", model.source)
+        assertTrue(model.fallbackUsed)
+        assertEquals("provider_timeout", model.warning)
     }
 }
