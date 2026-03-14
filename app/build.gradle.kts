@@ -1,3 +1,6 @@
+import java.io.ByteArrayOutputStream
+import java.io.File
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -72,4 +75,96 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+}
+
+tasks.register("setupAdbReverseDebug") {
+    group = "fitgpt"
+    description = "Best-effort adb reverse setup for backend port 8000 on debug runs."
+    doLast {
+        val osName = System.getProperty("os.name").lowercase()
+        val adbExecutable = if (osName.contains("win")) "adb.exe" else "adb"
+        val localPropertiesSdkRoot = rootProject.file("local.properties")
+            .takeIf { it.exists() }
+            ?.readLines()
+            ?.firstOrNull { it.startsWith("sdk.dir=") }
+            ?.substringAfter("sdk.dir=")
+            ?.replace("\\:", ":")
+            ?.replace("\\\\", "\\")
+
+        val sdkRootCandidates = listOf(
+            localPropertiesSdkRoot,
+            System.getenv("ANDROID_HOME"),
+            System.getenv("ANDROID_SDK_ROOT"),
+            System.getenv("ANDROID_SDK_HOME")
+        ).filterNotNull()
+
+        val adbFromSdk = sdkRootCandidates
+            .map { File(it, "platform-tools/$adbExecutable") }
+            .firstOrNull { it.exists() && it.canExecute() }
+
+        val adbCommand = adbFromSdk?.absolutePath ?: adbExecutable
+
+        fun runCommand(args: List<String>, capture: ByteArrayOutputStream? = null): Boolean {
+            return try {
+                val process = ProcessBuilder(args)
+                    .redirectErrorStream(true)
+                    .start()
+                val bytes = process.inputStream.readBytes()
+                capture?.write(bytes)
+                process.waitFor()
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        fun runAdbReverse(adb: String, serial: String): Boolean {
+            return try {
+                val process = ProcessBuilder(
+                    adb,
+                    "-s",
+                    serial,
+                    "reverse",
+                    "tcp:8000",
+                    "tcp:8000"
+                )
+                    .redirectErrorStream(true)
+                    .start()
+                process.waitFor()
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        val devicesOutput = ByteArrayOutputStream()
+        val devicesOk = runCommand(listOf(adbCommand, "devices"), capture = devicesOutput)
+        if (!devicesOk) {
+            logger.lifecycle("setupAdbReverseDebug: adb not available; skipping reverse setup.")
+            return@doLast
+        }
+
+        val serials = devicesOutput.toString()
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.endsWith("\tdevice") }
+            .map { it.substringBefore('\t') }
+            .toList()
+
+        if (serials.isEmpty()) {
+            logger.lifecycle("setupAdbReverseDebug: no connected devices found.")
+            return@doLast
+        }
+
+        serials.forEach { serial ->
+            runAdbReverse(adbCommand, serial)
+        }
+        logger.lifecycle("setupAdbReverseDebug: applied tcp:8000 reverse to ${serials.size} device(s).")
+    }
+}
+
+tasks.matching { task ->
+    task.name.startsWith("install") && task.name.endsWith("Debug")
+}.configureEach {
+    dependsOn("setupAdbReverseDebug")
 }
