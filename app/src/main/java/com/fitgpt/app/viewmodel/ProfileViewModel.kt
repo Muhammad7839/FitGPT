@@ -73,4 +73,8 @@ class ProfileViewModel(
             }
         }
     }
+
+    fun clearAvatarUploadState() {
+        _avatarUploadState.value = UiState.Success(null)
+    }
 }

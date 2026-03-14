@@ -7,6 +7,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fitgpt.app.data.auth.TokenStore
 import com.fitgpt.app.data.repository.AuthRepository
+import java.io.IOException
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -62,7 +66,7 @@ class AuthViewModel(
                 }
                 _loginState.value = AuthState.Error(message)
             } catch (e: Exception) {
-                _loginState.value = AuthState.Error("Network error during login")
+                _loginState.value = AuthState.Error(resolveNetworkAuthError(e, action = "login"))
             }
         }
     }
@@ -82,7 +86,7 @@ class AuthViewModel(
             } catch (e: HttpException) {
                 _loginState.value = AuthState.Error("Google login failed (${e.code()})")
             } catch (e: Exception) {
-                _loginState.value = AuthState.Error("Network error during Google login")
+                _loginState.value = AuthState.Error(resolveNetworkAuthError(e, action = "Google login"))
             }
         }
     }
@@ -115,7 +119,7 @@ class AuthViewModel(
                 }
                 _registerState.value = AuthState.Error(message)
             } catch (e: Exception) {
-                _registerState.value = AuthState.Error("Network error during registration")
+                _registerState.value = AuthState.Error(resolveNetworkAuthError(e, action = "registration"))
             }
         }
     }
@@ -135,7 +139,7 @@ class AuthViewModel(
             } catch (e: HttpException) {
                 _forgotPasswordState.value = AuthState.Error("Forgot password failed (${e.code()})")
             } catch (e: Exception) {
-                _forgotPasswordState.value = AuthState.Error("Network error during forgot password")
+                _forgotPasswordState.value = AuthState.Error(resolveNetworkAuthError(e, action = "forgot password"))
             }
         }
     }
@@ -162,8 +166,18 @@ class AuthViewModel(
             } catch (e: HttpException) {
                 _resetPasswordState.value = AuthState.Error("Reset failed (${e.code()})")
             } catch (e: Exception) {
-                _resetPasswordState.value = AuthState.Error("Network error during reset password")
+                _resetPasswordState.value = AuthState.Error(resolveNetworkAuthError(e, action = "reset password"))
             }
+        }
+    }
+
+    private fun resolveNetworkAuthError(exception: Exception, action: String): String {
+        return when (exception) {
+            is UnknownHostException -> "No internet or host not found during $action"
+            is ConnectException -> "Cannot reach backend during $action (check server and adb reverse)"
+            is SocketTimeoutException -> "Backend timeout during $action"
+            is IOException -> "Network I/O error during $action"
+            else -> "Unexpected network error during $action"
         }
     }
 }

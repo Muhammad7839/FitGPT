@@ -30,6 +30,7 @@ import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SectionHeader
+import com.fitgpt.app.ui.common.WebBadge
 import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
@@ -44,6 +45,7 @@ fun RecommendationScreen(
     viewModel: WardrobeViewModel
 ) {
     val state by viewModel.recommendationState.collectAsState()
+    val recommendationMeta by viewModel.recommendationMeta.collectAsState()
     val weatherState by viewModel.weatherState.collectAsState()
     val weatherUiStatus by viewModel.weatherUiStatus.collectAsState()
     var manualTempInput by rememberSaveable { mutableStateOf("") }
@@ -53,6 +55,8 @@ fun RecommendationScreen(
     var planDate by rememberSaveable { mutableStateOf("") }
     var exclude by rememberSaveable { mutableStateOf("") }
     var occasion by rememberSaveable { mutableStateOf("") }
+    var stylePreference by rememberSaveable { mutableStateOf("") }
+    var preferredSeasons by rememberSaveable { mutableStateOf("") }
     var locationMessage by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -78,7 +82,9 @@ fun RecommendationScreen(
             weatherLat = lat,
             weatherLon = lon,
             weatherCategory = weatherCategory.nullIfBlank(),
-            occasion = occasion.nullIfBlank()
+            occasion = occasion.nullIfBlank(),
+            stylePreference = stylePreference.nullIfBlank(),
+            preferredSeasons = preferredSeasons.toListFromCsv()
         )
     }
 
@@ -150,20 +156,39 @@ fun RecommendationScreen(
                         .padding(16.dp)
                 ) {
 
-                    if (recommendedItems.isEmpty()) {
-                        Text(
-                            text = "Add available items to generate an outfit.",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        return@Column
-                    }
-
                     SectionHeader(
                         title = "Recommended for you",
                         subtitle = "Live context + wardrobe history driven picks"
                     )
+                    if (recommendedItems.isNotEmpty()) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            WebBadge(
+                                text = if (recommendationMeta.source.equals("ai", ignoreCase = true)) {
+                                    "AI-powered"
+                                } else {
+                                    "Fallback"
+                                }
+                            )
+                            recommendationMeta.warning?.takeIf { it.isNotBlank() }?.let { warning ->
+                                WebBadge(text = warning)
+                            }
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(12.dp))
+
+                    recommendationMeta.explanation.takeIf { it.isNotBlank() }?.let { summary ->
+                        WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                            Text(
+                                text = summary,
+                                modifier = Modifier.padding(12.dp),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
 
                     WebCard(modifier = Modifier.fillMaxWidth()) {
                         Column(
@@ -221,6 +246,20 @@ fun RecommendationScreen(
                                 value = occasion,
                                 onValueChange = { occasion = it },
                                 label = { Text("Occasion (work, gym, event)") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = stylePreference,
+                                onValueChange = { stylePreference = it },
+                                label = { Text("Style preference (optional)") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = preferredSeasons,
+                                onValueChange = { preferredSeasons = it },
+                                label = { Text("Preferred seasons CSV (optional)") },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
@@ -324,14 +363,27 @@ fun RecommendationScreen(
                         }
                     }
 
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(recommendedItems) { item ->
-                            RecommendationCard(
-                                item = item,
-                                explanation = viewModel.generateExplanation(item)
+                    if (recommendedItems.isEmpty()) {
+                        WebCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            accentTop = false
+                        ) {
+                            Text(
+                                text = "No recommendation yet. Tap Apply context or Use Current Location.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(14.dp)
                             )
+                        }
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(recommendedItems) { item ->
+                                RecommendationCard(
+                                    item = item,
+                                    explanation = viewModel.generateExplanation(item)
+                                )
+                            }
                         }
                     }
 
@@ -398,6 +450,13 @@ fun RecommendationScreen(
 private fun String.nullIfBlank(): String? {
     val cleaned = trim()
     return if (cleaned.isEmpty()) null else cleaned
+}
+
+private fun String.toListFromCsv(): List<String> {
+    return split(",")
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .distinctBy { it.lowercase() }
 }
 
 @Composable

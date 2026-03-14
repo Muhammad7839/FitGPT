@@ -17,6 +17,26 @@ def test_register_and_login_success(client):
     assert token
 
 
+def test_auth_alias_register_login_and_me_success(client):
+    register = client.post(
+        "/auth/register",
+        json={"email": "alias-auth@example.com", "password": "password123"},
+    )
+    assert register.status_code == 200
+
+    login = client.post(
+        "/auth/login",
+        json={"email": "alias-auth@example.com", "password": "password123"},
+    )
+    assert login.status_code == 200
+    token = login.json()["access_token"]
+    assert token
+
+    me = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200
+    assert me.json()["email"] == "alias-auth@example.com"
+
+
 def test_login_fails_with_wrong_password(client):
     register_and_login(client, "user2@example.com", "password123")
     bad_login = client.post(

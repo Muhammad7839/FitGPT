@@ -28,6 +28,19 @@ class UserCreate(BaseModel):
         return value
 
 
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=6, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        cleaned = value.strip()
+        if cleaned != value:
+            raise ValueError("password cannot have leading or trailing spaces")
+        return value
+
+
 class UserResponse(BaseModel):
     id: int
     email: EmailStr
@@ -247,6 +260,200 @@ class RecommendationResponse(BaseModel):
     explanation: str
     weather_category: Optional[str] = None
     occasion: Optional[str] = None
+
+
+class ChatMessage(BaseModel):
+    role: str = Field(min_length=1, max_length=16)
+    content: str = Field(min_length=1, max_length=1200)
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"user", "assistant", "system"}:
+            raise ValueError("role must be one of: user, assistant, system")
+        return normalized
+
+    @field_validator("content")
+    @classmethod
+    def normalize_content(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("content cannot be blank")
+        return cleaned
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage] = Field(min_length=1, max_length=20)
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    source: str
+    fallback_used: bool = False
+    warning: Optional[str] = None
+
+
+class AiRecommendationRequest(BaseModel):
+    manual_temp: Optional[int] = Field(default=None, ge=-30, le=130)
+    time_context: Optional[str] = Field(default=None, max_length=64)
+    plan_date: Optional[str] = Field(default=None, max_length=10)
+    exclude: Optional[str] = Field(default=None, max_length=256)
+    weather_city: Optional[str] = Field(default=None, max_length=128)
+    weather_lat: Optional[float] = None
+    weather_lon: Optional[float] = None
+    weather_category: Optional[str] = Field(default=None, max_length=16)
+    occasion: Optional[str] = Field(default=None, max_length=128)
+    style_preference: Optional[str] = Field(default=None, max_length=64)
+    preferred_seasons: list[str] = Field(default_factory=list, max_length=6)
+
+    @field_validator("time_context", "exclude", "weather_city", "occasion", "style_preference")
+    @classmethod
+    def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        cleaned = value.strip()
+        return cleaned or None
+
+    @field_validator("weather_category")
+    @classmethod
+    def validate_weather_category(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        normalized = value.strip().lower()
+        if not normalized:
+            return None
+        if normalized not in {"cold", "cool", "mild", "warm", "hot"}:
+            raise ValueError("weather_category must be cold/cool/mild/warm/hot")
+        return normalized
+
+    @field_validator("plan_date")
+    @classmethod
+    def validate_optional_plan_date(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        cleaned = value.strip()
+        try:
+            datetime.strptime(cleaned, "%Y-%m-%d")
+        except ValueError as exc:
+            raise ValueError("plan_date must be in YYYY-MM-DD format") from exc
+        return cleaned
+
+    @field_validator("preferred_seasons")
+    @classmethod
+    def normalize_seasons(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            cleaned = raw.strip()
+            if not cleaned:
+                continue
+            key = cleaned.lower()
+            if key not in seen:
+                normalized.append(cleaned)
+                seen.add(key)
+        return normalized
+
+
+class AiRecommendationItemExplanation(BaseModel):
+    item_id: int
+    explanation: str
+
+
+class AiRecommendationResponse(BaseModel):
+    items: list[ClothingItemResponse]
+    explanation: str
+    weather_category: str
+    occasion: Optional[str] = None
+    source: str
+    fallback_used: bool = False
+    warning: Optional[str] = None
+    suggestion_id: str
+    item_explanations: list[AiRecommendationItemExplanation] = Field(default_factory=list)
+
+
+class DashboardContextWeather(BaseModel):
+    city: str
+    temperature_f: int
+    weather_category: str
+    condition: str
+    description: str
+
+
+class DashboardContextResponse(BaseModel):
+    weather: Optional[DashboardContextWeather] = None
+    status: str
+    detail: Optional[str] = None
+
+
+class CompatWardrobeItemInput(BaseModel):
+    id: str
+    name: Optional[str] = ""
+    category: Optional[str] = ""
+    color: Optional[str] = ""
+    fit_type: Optional[str] = ""
+    style_tag: Optional[str] = ""
+
+
+class CompatAiContext(BaseModel):
+    weather_category: Optional[str] = "mild"
+    time_category: Optional[str] = "work hours"
+    occasion: Optional[str] = "daily"
+    body_type: Optional[str] = DEFAULT_BODY_TYPE
+    style_preferences: list[str] = Field(default_factory=list)
+
+    @field_validator("weather_category")
+    @classmethod
+    def normalize_weather_category(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        cleaned = value.strip().lower()
+        if not cleaned:
+            return None
+        if cleaned not in {"cold", "cool", "mild", "warm", "hot"}:
+            raise ValueError("weather_category must be cold/cool/mild/warm/hot")
+        return cleaned
+
+    @field_validator("time_category", "occasion", "body_type")
+    @classmethod
+    def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        cleaned = value.strip()
+        return cleaned or None
+
+    @field_validator("style_preferences")
+    @classmethod
+    def normalize_style_preferences(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in values:
+            cleaned = raw.strip()
+            if not cleaned:
+                continue
+            lowered = cleaned.lower()
+            if lowered in seen:
+                continue
+            seen.add(lowered)
+            normalized.append(cleaned)
+        return normalized
+
+
+class CompatAiRecommendationRequest(BaseModel):
+    items: list[CompatWardrobeItemInput] = Field(default_factory=list, max_length=256)
+    context: Optional[CompatAiContext] = None
+
+
+class CompatAiOutfit(BaseModel):
+    item_ids: list[str]
+    explanation: str
+
+
+class CompatAiRecommendationResponse(BaseModel):
+    source: str
+    outfits: list[CompatAiOutfit]
+    fallback_used: bool = False
+    warning: Optional[str] = None
 
 
 class WeatherCurrentResponse(BaseModel):

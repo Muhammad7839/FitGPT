@@ -67,6 +67,11 @@ EXPOSE_RESET_TOKEN_IN_RESPONSE = get_bool_env("EXPOSE_RESET_TOKEN_IN_RESPONSE", 
 OPENWEATHER_API_KEY = get_env("OPENWEATHER_API_KEY", "")
 OPENWEATHER_TIMEOUT_SECONDS = get_float_env("OPENWEATHER_TIMEOUT_SECONDS", 5)
 MAX_UPLOAD_IMAGE_BYTES = get_int_env("MAX_UPLOAD_IMAGE_BYTES", 5 * 1024 * 1024)
+GROQ_API_KEY = get_env("GROQ_API_KEY", "")
+GROQ_MODEL = get_env("GROQ_MODEL", "llama-3.3-70b-versatile")
+AI_TIMEOUT_SECONDS = get_float_env("AI_TIMEOUT_SECONDS", 12)
+AI_MAX_TOKENS = get_int_env("AI_MAX_TOKENS", 450)
+AI_TEMPERATURE = get_float_env("AI_TEMPERATURE", 0.4)
 
 ENVIRONMENT = get_env("ENVIRONMENT", "development").strip().lower()
 if ENVIRONMENT in {"prod", "production"} and SECRET_KEY == "dev-only-change-me":

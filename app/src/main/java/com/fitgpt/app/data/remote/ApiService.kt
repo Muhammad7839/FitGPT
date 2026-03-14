@@ -5,6 +5,8 @@ package com.fitgpt.app.data.remote
 
 import com.fitgpt.app.data.remote.dto.ClothingItemCreateRequest
 import com.fitgpt.app.data.remote.dto.ClothingItemDto
+import com.fitgpt.app.data.remote.dto.ChatRequestDto
+import com.fitgpt.app.data.remote.dto.ChatResponseDto
 import com.fitgpt.app.data.remote.dto.BulkCreateClothingItemsRequestDto
 import com.fitgpt.app.data.remote.dto.BulkCreateClothingItemsResponseDto
 import com.fitgpt.app.data.remote.dto.FavoriteToggleRequestDto
@@ -21,6 +23,8 @@ import com.fitgpt.app.data.remote.dto.PlannedOutfitAssignmentResponseDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.PlannedOutfitListResponseDto
 import com.fitgpt.app.data.remote.dto.RecommendationResponseDto
+import com.fitgpt.app.data.remote.dto.AiRecommendationRequestDto
+import com.fitgpt.app.data.remote.dto.AiRecommendationResponseDto
 import com.fitgpt.app.data.remote.dto.RegisterRequest
 import com.fitgpt.app.data.remote.dto.ResetPasswordRequest
 import com.fitgpt.app.data.remote.dto.SavedOutfitCreateRequest
@@ -161,6 +165,16 @@ interface ApiService {
         @Query("weather_category") weatherCategory: String? = null,
         @Query("occasion") occasion: String? = null,
     ): RecommendationResponseDto
+
+    @POST("ai/recommendations")
+    suspend fun getAiRecommendations(
+        @Body payload: AiRecommendationRequestDto
+    ): AiRecommendationResponseDto
+
+    @POST("ai/chat")
+    suspend fun sendChatMessage(
+        @Body payload: ChatRequestDto
+    ): ChatResponseDto
 
     @GET("weather/current")
     suspend fun getCurrentWeather(

@@ -4,10 +4,12 @@
 package com.fitgpt.app.ui.wardrobe
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -27,6 +29,7 @@ import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebCard
+import com.fitgpt.app.ui.common.WebBadge
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeFilters
 import com.fitgpt.app.viewmodel.WardrobeViewModel
@@ -48,6 +51,7 @@ fun WardrobeScreen(
     var seasonFilter by remember { mutableStateOf("") }
     var fitTagFilter by remember { mutableStateOf("") }
     var showAdvancedFilters by remember { mutableStateOf(false) }
+    var bodyFitAssistEnabled by remember { mutableStateOf(false) }
 
     var itemToDelete by remember { mutableStateOf<ClothingItem?>(null) }
 
@@ -122,11 +126,19 @@ fun WardrobeScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 FilterChip(
                     selected = showAdvancedFilters,
                     onClick = { showAdvancedFilters = !showAdvancedFilters },
                     label = { Text(if (showAdvancedFilters) "Hide filters" else "Filters") }
+                )
+                FilterChip(
+                    selected = bodyFitAssistEnabled,
+                    onClick = { bodyFitAssistEnabled = !bodyFitAssistEnabled },
+                    label = { Text(if (bodyFitAssistEnabled) "Body-fit on" else "Body-fit off") }
                 )
                 FilterChip(
                     selected = !showArchived,
@@ -236,6 +248,7 @@ fun WardrobeScreen(
                                 WardrobeItemCard(
                                     item = item,
                                     viewModel = viewModel,
+                                    showBodyFitAssist = bodyFitAssistEnabled,
                                     onEdit = {
                                         navController.navigate("${Routes.EDIT_ITEM}/${item.id}")
                                     },
@@ -283,6 +296,7 @@ fun WardrobeScreen(
 fun WardrobeItemCard(
     item: ClothingItem,
     viewModel: WardrobeViewModel,
+    showBodyFitAssist: Boolean,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -330,6 +344,11 @@ fun WardrobeItemCard(
                     text = explanation,
                     style = MaterialTheme.typography.bodySmall
                 )
+
+                if (showBodyFitAssist) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    WebBadge(text = fitAssistLabel(item.fitTag))
+                }
             }
 
             IconButton(onClick = onEdit) {
@@ -347,5 +366,16 @@ fun WardrobeItemCard(
                 Icon(Icons.Default.Delete, contentDescription = "Delete")
             }
         }
+    }
+}
+
+private fun fitAssistLabel(fitTag: String?): String {
+    val normalized = fitTag?.trim()?.lowercase().orEmpty()
+    return when {
+        normalized.contains("slim") || normalized.contains("tailored") -> "Body-fit: structured"
+        normalized.contains("regular") -> "Body-fit: balanced"
+        normalized.contains("oversized") || normalized.contains("relaxed") -> "Body-fit: relaxed"
+        normalized.isBlank() -> "Body-fit: add fit tag for better matching"
+        else -> "Body-fit: $normalized"
     }
 }

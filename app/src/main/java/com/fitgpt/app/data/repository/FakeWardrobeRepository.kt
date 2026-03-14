@@ -1,5 +1,6 @@
 package com.fitgpt.app.data.repository
 
+import com.fitgpt.app.data.model.AiRecommendationResult
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.data.model.PlannedOutfit
@@ -133,6 +134,43 @@ class FakeWardrobeRepository : WardrobeRepository {
         val bottoms = available.filter { it.category.equals("Bottom", true) }
         val shoes = available.filter { it.category.equals("Shoes", true) }
         return listOfNotNull(tops.firstOrNull(), bottoms.firstOrNull(), shoes.firstOrNull())
+    }
+
+    override suspend fun getAiRecommendation(
+        manualTemp: Int?,
+        timeContext: String?,
+        planDate: String?,
+        exclude: String?,
+        weatherCity: String?,
+        weatherLat: Double?,
+        weatherLon: Double?,
+        weatherCategory: String?,
+        occasion: String?,
+        stylePreference: String?,
+        preferredSeasons: List<String>
+    ): AiRecommendationResult {
+        val items = getRecommendations(
+            manualTemp = manualTemp,
+            timeContext = timeContext,
+            planDate = planDate,
+            exclude = exclude,
+            weatherCity = weatherCity,
+            weatherLat = weatherLat,
+            weatherLon = weatherLon,
+            weatherCategory = weatherCategory,
+            occasion = occasion
+        )
+        return AiRecommendationResult(
+            items = items,
+            explanation = "Fallback recommendation generated from local repository.",
+            source = "fallback",
+            fallbackUsed = true,
+            warning = "fake_repository",
+            weatherCategory = weatherCategory ?: "mild",
+            occasion = occasion,
+            suggestionId = items.map { it.id }.sorted().joinToString(","),
+            itemExplanations = emptyMap()
+        )
     }
 
     override suspend fun getCurrentWeather(city: String?, lat: Double?, lon: Double?): WeatherSnapshot {

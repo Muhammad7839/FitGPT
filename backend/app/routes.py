@@ -11,6 +11,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
+from app.ai.provider import ProviderMessage
+from app.ai.service import AiService, RecommendationContext as AiRecommendationContext
 from app.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     create_access_token,
@@ -28,6 +30,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 UPLOADS_DIR = Path("uploads")
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+ai_service = AiService()
 
 
 def _serialize_saved_outfits(saved_outfits: list[models.SavedOutfit]) -> list[dict]:
@@ -138,6 +141,72 @@ def fetch_current_temperature_f(city: str) -> int:
     return fetch_current_weather(city=city).temperature_f
 
 
+def _resolve_recommendation_weather_context(
+    *,
+    manual_temp: Optional[int],
+    weather_city: Optional[str],
+    weather_lat: Optional[float],
+    weather_lon: Optional[float],
+    weather_category: Optional[str],
+) -> tuple[Optional[int], str, Optional[str]]:
+    normalized_city = weather_city.strip() if weather_city else None
+    normalized_weather_category = _normalize_weather_category(weather_category)
+
+    effective_temp = manual_temp
+    resolved_weather_city = normalized_city
+
+    if effective_temp is None and normalized_city and weather_lat is None and weather_lon is None:
+        try:
+            effective_temp = fetch_current_temperature_f(normalized_city)
+        except WeatherLookupError as exc:
+            logger.warning("Weather lookup failed for recommendation city=%s error=%s", normalized_city, exc)
+            if not normalized_weather_category:
+                raise
+
+    if effective_temp is None and (normalized_city or (weather_lat is not None and weather_lon is not None)):
+        try:
+            weather = fetch_current_weather(
+                city=normalized_city,
+                lat=weather_lat,
+                lon=weather_lon,
+            )
+            effective_temp = weather.temperature_f
+            normalized_weather_category = normalized_weather_category or weather.weather_category
+            resolved_weather_city = weather.city
+        except WeatherLookupError as exc:
+            logger.warning("Weather lookup failed for recommendation weather=%s", exc)
+            if not normalized_weather_category:
+                raise
+
+    if effective_temp is not None and not normalized_weather_category:
+        normalized_weather_category = map_temperature_to_category(effective_temp)
+    if not normalized_weather_category:
+        normalized_weather_category = "mild"
+
+    return effective_temp, normalized_weather_category, resolved_weather_city
+
+
+def _login_with_credentials(db: Session, *, email: str, password: str) -> schemas.Token:
+    user = crud.get_user_by_email(db, email)
+
+    if not user or not verify_password(password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is inactive",
+        )
+
+    access_token = create_access_token(
+        data={"sub": str(user.id)},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
 # =============================
 # Register
 # =============================
@@ -150,6 +219,12 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     return crud.create_user(db, user)
 
 
+@router.post("/auth/register", response_model=schemas.UserResponse)
+def register_user_alias(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    """Compatibility alias for web clients expecting /auth/register."""
+    return register_user(user=user, db=db)
+
+
 # =============================
 # Login (JWT)
 # =============================
@@ -159,24 +234,24 @@ def login_user(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
-    user = crud.get_user_by_email(db, form_data.username)
-
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
-        )
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is inactive"
-        )
-
-    access_token = create_access_token(
-        data={"sub": str(user.id)},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    return _login_with_credentials(
+        db=db,
+        email=form_data.username,
+        password=form_data.password,
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/auth/login", response_model=schemas.Token)
+def login_user_alias(
+    payload: schemas.UserLogin,
+    db: Session = Depends(get_db),
+):
+    """Compatibility alias for web clients expecting JSON login at /auth/login."""
+    return _login_with_credentials(
+        db=db,
+        email=payload.email,
+        password=payload.password,
+    )
 
 
 @router.post("/login/google", response_model=schemas.Token)
@@ -240,6 +315,12 @@ def reset_password(
 
 @router.get("/me", response_model=schemas.UserResponse)
 def read_current_user(current_user: models.User = Depends(get_current_user)):
+    return current_user
+
+
+@router.get("/auth/me", response_model=schemas.UserResponse)
+def read_current_user_alias(current_user: models.User = Depends(get_current_user)):
+    """Compatibility alias for web clients expecting /auth/me."""
     return current_user
 
 
@@ -492,6 +573,45 @@ def get_current_weather(
     }
 
 
+@router.get("/dashboard/context", response_model=schemas.DashboardContextResponse)
+def get_dashboard_context(
+    city: Optional[str] = None,
+    lat: Optional[float] = None,
+    lon: Optional[float] = None,
+    current_user: models.User = Depends(get_current_user),
+):
+    """Web compatibility endpoint for dashboard bootstrap context."""
+    _ = current_user
+    if not city and (lat is None or lon is None):
+        return {
+            "weather": None,
+            "status": "idle",
+            "detail": "Weather not requested",
+        }
+
+    try:
+        weather = fetch_current_weather(city=city, lat=lat, lon=lon)
+    except WeatherLookupError as exc:
+        logger.warning("Dashboard context weather lookup failed: %s", exc)
+        return {
+            "weather": None,
+            "status": "unavailable",
+            "detail": str(exc),
+        }
+
+    return {
+        "weather": {
+            "city": weather.city,
+            "temperature_f": weather.temperature_f,
+            "weather_category": weather.weather_category,
+            "condition": weather.condition,
+            "description": weather.description,
+        },
+        "status": "available",
+        "detail": None,
+    }
+
+
 @router.get("/recommendations", response_model=schemas.RecommendationResponse)
 def get_recommendations(
     manual_temp: Optional[int] = None,
@@ -506,39 +626,16 @@ def get_recommendations(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    normalized_city = weather_city.strip() if weather_city else None
-    normalized_weather_category = _normalize_weather_category(weather_category)
-
-    effective_temp = manual_temp
-    resolved_weather_city = normalized_city
-
-    if effective_temp is None and normalized_city and weather_lat is None and weather_lon is None:
-        try:
-            effective_temp = fetch_current_temperature_f(normalized_city)
-        except WeatherLookupError as exc:
-            logger.warning("Weather lookup failed for recommendation: %s", exc)
-            if not normalized_weather_category:
-                raise HTTPException(status_code=getattr(exc, "status_code", 400), detail=str(exc)) from exc
-
-    if effective_temp is None and (normalized_city or (weather_lat is not None and weather_lon is not None)):
-        try:
-            weather = fetch_current_weather(
-                city=normalized_city,
-                lat=weather_lat,
-                lon=weather_lon,
-            )
-            effective_temp = weather.temperature_f
-            normalized_weather_category = normalized_weather_category or weather.weather_category
-            resolved_weather_city = weather.city
-        except WeatherLookupError as exc:
-            logger.warning("Weather lookup failed for recommendation: %s", exc)
-            if not normalized_weather_category:
-                raise HTTPException(status_code=getattr(exc, "status_code", 400), detail=str(exc)) from exc
-
-    if effective_temp is not None and not normalized_weather_category:
-        normalized_weather_category = map_temperature_to_category(effective_temp)
-    if not normalized_weather_category:
-        normalized_weather_category = "mild"
+    try:
+        effective_temp, normalized_weather_category, resolved_weather_city = _resolve_recommendation_weather_context(
+            manual_temp=manual_temp,
+            weather_city=weather_city,
+            weather_lat=weather_lat,
+            weather_lon=weather_lon,
+            weather_category=weather_category,
+        )
+    except WeatherLookupError as exc:
+        raise HTTPException(status_code=getattr(exc, "status_code", 400), detail=str(exc)) from exc
 
     items = crud.get_recommendations_for_user(
         db=db,
@@ -566,6 +663,157 @@ def get_recommendations(
         "explanation": explanation,
         "weather_category": normalized_weather_category,
         "occasion": occasion,
+    }
+
+
+@router.post("/ai/chat", response_model=schemas.ChatResponse)
+def chat_with_ai(
+    payload: schemas.ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    request_id = uuid4().hex[:12]
+    wardrobe_items = crud.get_clothing_items_for_user(
+        db=db,
+        user_id=current_user.id,
+        include_archived=False,
+    )
+    messages = [ProviderMessage(role=entry.role, content=entry.content) for entry in payload.messages]
+
+    result = ai_service.run_chat(
+        user=current_user,
+        wardrobe_items=wardrobe_items,
+        messages=messages,
+        request_id=request_id,
+    )
+    logger.info(
+        "request_id=%s endpoint=/ai/chat user_id=%s source=%s fallback=%s warning=%s",
+        request_id,
+        current_user.id,
+        result.source,
+        result.fallback_used,
+        result.warning,
+    )
+    return {
+        "reply": result.reply,
+        "source": result.source,
+        "fallback_used": result.fallback_used,
+        "warning": result.warning,
+    }
+
+
+@router.post("/chat", response_model=schemas.ChatResponse)
+def chat_with_ai_alias(
+    payload: schemas.ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Compatibility alias for web clients expecting /chat."""
+    return chat_with_ai(payload=payload, db=db, current_user=current_user)
+
+
+@router.post("/ai/recommendations", response_model=schemas.AiRecommendationResponse)
+def get_ai_recommendations(
+    payload: schemas.AiRecommendationRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    request_id = uuid4().hex[:12]
+    try:
+        effective_temp, normalized_weather_category, _ = _resolve_recommendation_weather_context(
+            manual_temp=payload.manual_temp,
+            weather_city=payload.weather_city,
+            weather_lat=payload.weather_lat,
+            weather_lon=payload.weather_lon,
+            weather_category=payload.weather_category,
+        )
+    except WeatherLookupError as exc:
+        raise HTTPException(status_code=getattr(exc, "status_code", 400), detail=str(exc)) from exc
+
+    result = ai_service.run_recommendation(
+        db=db,
+        user=current_user,
+        context=AiRecommendationContext(
+            manual_temp=effective_temp,
+            weather_category=normalized_weather_category,
+            occasion=payload.occasion,
+            exclude=payload.exclude,
+            style_preference=payload.style_preference,
+            preferred_seasons=payload.preferred_seasons,
+            request_id=request_id,
+        ),
+    )
+    logger.info(
+        "request_id=%s endpoint=/ai/recommendations user_id=%s source=%s fallback=%s warning=%s suggestion_id=%s",
+        request_id,
+        current_user.id,
+        result.source,
+        result.fallback_used,
+        result.warning,
+        result.suggestion_id,
+    )
+    return {
+        "items": result.items,
+        "explanation": result.explanation,
+        "weather_category": result.weather_category,
+        "occasion": payload.occasion,
+        "source": result.source,
+        "fallback_used": result.fallback_used,
+        "warning": result.warning,
+        "suggestion_id": result.suggestion_id,
+        "item_explanations": [
+            {"item_id": item_id, "explanation": explanation}
+            for item_id, explanation in result.item_explanations.items()
+        ],
+    }
+
+
+@router.post("/recommendations/ai", response_model=schemas.CompatAiRecommendationResponse)
+def get_ai_recommendations_compat(
+    payload: schemas.CompatAiRecommendationRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Compatibility alias for web clients expecting /recommendations/ai."""
+    request_id = uuid4().hex[:12]
+    context = payload.context or schemas.CompatAiContext()
+    style_preference = context.style_preferences[0] if context.style_preferences else None
+
+    result = ai_service.run_recommendation(
+        db=db,
+        user=current_user,
+        context=AiRecommendationContext(
+            manual_temp=None,
+            weather_category=context.weather_category,
+            occasion=context.occasion,
+            exclude=None,
+            style_preference=style_preference,
+            preferred_seasons=[],
+            request_id=request_id,
+        ),
+    )
+    logger.info(
+        "request_id=%s endpoint=/recommendations/ai user_id=%s source=%s fallback=%s warning=%s suggestion_id=%s",
+        request_id,
+        current_user.id,
+        result.source,
+        result.fallback_used,
+        result.warning,
+        result.suggestion_id,
+    )
+    outfits: list[dict] = []
+    if result.items:
+        outfits.append(
+            {
+                "item_ids": [str(item.id) for item in result.items],
+                "explanation": result.explanation,
+            }
+        )
+    return {
+        "source": result.source,
+        "outfits": outfits,
+        "fallback_used": result.fallback_used,
+        "warning": result.warning,
     }
 
 
