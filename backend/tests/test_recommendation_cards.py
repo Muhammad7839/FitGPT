@@ -353,3 +353,75 @@ def test_ai_recommendations_include_ranked_outfit_options(client, monkeypatch):
     assert body["outfit_options"]
     assert isinstance(body["outfit_options"][0]["outfit_score"], float)
     assert isinstance(body["outfit_options"][0]["explanation"], str)
+
+
+def test_recommendation_option_explanations_vary_for_different_outfits(client):
+    token = register_and_login(client, "card-explanations@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    _create(client, auth, _item_payload(name="Top Black", category="Top", clothing_type="t-shirt", color="Black"))
+    _create(client, auth, _item_payload(name="Top White", category="Top", clothing_type="shirt", color="White"))
+    _create(client, auth, _item_payload(name="Top Blue", category="Top", clothing_type="polo", color="Blue"))
+    _create(client, auth, _item_payload(name="Bottom Khaki", category="Bottom", clothing_type="chino", color="Khaki"))
+    _create(client, auth, _item_payload(name="Bottom Navy", category="Bottom", clothing_type="jeans", color="Navy"))
+    _create(client, auth, _item_payload(name="Bottom Gray", category="Bottom", clothing_type="pants", color="Gray"))
+    _create(client, auth, _item_payload(name="Shoes White", category="Shoes", clothing_type="sneakers", color="White"))
+
+    response = client.get("/recommendations/options", headers=auth, params={"weather_category": "mild", "limit": 6})
+    assert response.status_code == 200
+    outfits = response.json()["outfits"]
+    assert len(outfits) >= 3
+
+    explanations = {outfit["explanation"] for outfit in outfits}
+    assert len(explanations) >= 2
+    assert all("color" in explanation.lower() for explanation in explanations)
+
+
+def test_occasion_tags_influence_top_recommendation_choice(client):
+    token = register_and_login(client, "card-occasion-signal@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    work_top = _create(
+        client,
+        auth,
+        _item_payload(
+            name="Work Shirt",
+            category="Top",
+            clothing_type="shirt",
+            color="White",
+            occasion_tags=["work", "formal"],
+        ),
+    )
+    sport_top = _create(
+        client,
+        auth,
+        _item_payload(
+            name="Gym Tee",
+            category="Top",
+            clothing_type="t-shirt",
+            color="Black",
+            occasion_tags=["athletic", "gym"],
+        ),
+    )
+    _create(client, auth, _item_payload(name="Bottom", category="Bottom", clothing_type="pants", color="Navy"))
+    _create(client, auth, _item_payload(name="Shoes", category="Shoes", clothing_type="sneakers", color="White"))
+
+    work_response = client.get(
+        "/recommendations/options",
+        headers=auth,
+        params={"weather_category": "mild", "occasion": "work", "limit": 1},
+    )
+    assert work_response.status_code == 200
+    work_items = work_response.json()["outfits"][0]["items"]
+    work_item_ids = {item["id"] for item in work_items}
+    assert work_top["id"] in work_item_ids
+
+    gym_response = client.get(
+        "/recommendations/options",
+        headers=auth,
+        params={"weather_category": "mild", "occasion": "gym", "limit": 1},
+    )
+    assert gym_response.status_code == 200
+    gym_items = gym_response.json()["outfits"][0]["items"]
+    gym_item_ids = {item["id"] for item in gym_items}
+    assert sport_top["id"] in gym_item_ids

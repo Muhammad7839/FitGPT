@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -78,6 +78,77 @@ def _serialize_planned_outfits(planned_outfits: list[models.PlannedOutfit]) -> l
         }
         for planned_outfit in planned_outfits
     ]
+
+
+def _legacy_signature_from_item_ids(item_ids: list[int]) -> str:
+    normalized = sorted(str(item_id).strip() for item_id in item_ids if str(item_id).strip())
+    return "|".join(normalized)
+
+
+def _timestamp_to_iso(timestamp: Optional[int]) -> str:
+    if timestamp is None:
+        return ""
+    try:
+        return datetime.utcfromtimestamp(int(timestamp)).isoformat() + "Z"
+    except (OSError, TypeError, ValueError):
+        return ""
+
+
+def _serialize_saved_outfits_legacy(saved_outfits: list[models.SavedOutfit]) -> list[dict]:
+    records: list[dict] = []
+    for saved_outfit in saved_outfits:
+        item_ids = [
+            int(item_id)
+            for item_id in saved_outfit.item_ids_csv.split(",")
+            if item_id
+        ]
+        records.append(
+            {
+                "saved_outfit_id": str(saved_outfit.id),
+                "items": [str(item_id) for item_id in item_ids],
+                "item_details": [],
+                "created_at": _timestamp_to_iso(saved_outfit.saved_at_timestamp),
+                "source": "recommended",
+                "context": {},
+                "outfit_signature": _legacy_signature_from_item_ids(item_ids),
+            }
+        )
+    return records
+
+
+def _serialize_history_entries_legacy(history_entries: list[models.OutfitHistory]) -> list[dict]:
+    records: list[dict] = []
+    for entry in history_entries:
+        item_ids = [
+            int(item_id)
+            for item_id in entry.item_ids_csv.split(",")
+            if item_id
+        ]
+        records.append(
+            {
+                "history_id": str(entry.id),
+                "item_ids": [str(item_id) for item_id in item_ids],
+                "worn_at": _timestamp_to_iso(entry.worn_at_timestamp),
+                "source": "recommendation",
+                "context": {},
+                "confidence_score": None,
+            }
+        )
+    return records
+
+
+def _parse_legacy_item_ids(raw_item_ids: object, *, field_name: str) -> list[int]:
+    if not isinstance(raw_item_ids, list):
+        raise HTTPException(status_code=400, detail=f"{field_name} must be a list")
+    parsed: list[int] = []
+    for raw in raw_item_ids:
+        text = str(raw).strip()
+        if not text:
+            continue
+        if not text.isdigit():
+            raise HTTPException(status_code=400, detail=f"{field_name} must contain numeric ids")
+        parsed.append(int(text))
+    return parsed
 
 
 def _ensure_owned_items(db: Session, user_id: int, item_ids: list[int]) -> None:
@@ -277,6 +348,15 @@ def login_with_google(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
+@router.post("/auth/google/callback", response_model=schemas.Token)
+def login_with_google_alias(
+    payload: schemas.GoogleLoginRequest,
+    db: Session = Depends(get_db),
+):
+    """Compatibility alias for web clients expecting /auth/google/callback."""
+    return login_with_google(payload=payload, db=db)
+
+
 @router.post("/forgot-password", response_model=schemas.ForgotPasswordResponse)
 def forgot_password(
     payload: schemas.ForgotPasswordRequest,
@@ -370,6 +450,25 @@ def get_profile_summary(
     current_user: models.User = Depends(get_current_user),
 ):
     return crud.build_profile_summary(db, current_user)
+
+
+@router.get("/profile", response_model=schemas.UserProfileSummaryResponse)
+def get_profile_summary_alias(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Compatibility alias for web clients expecting /profile."""
+    return get_profile_summary(db=db, current_user=current_user)
+
+
+@router.put("/profile", response_model=schemas.UserResponse)
+def update_profile_alias(
+    updated_data: schemas.UserProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Compatibility alias for web clients expecting /profile."""
+    return update_my_profile(updated_data=updated_data, db=db, current_user=current_user)
 
 
 # =============================
@@ -949,6 +1048,103 @@ def clear_outfit_history(
     return {"detail": "Outfit history cleared"}
 
 
+@router.get("/outfit-history")
+def list_outfit_history_alias(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Compatibility alias for web clients expecting /outfit-history."""
+    history_entries = crud.get_outfit_history_for_user(db, current_user.id)
+    return {"history": _serialize_history_entries_legacy(history_entries)}
+
+
+@router.post("/outfit-history")
+def create_outfit_history_alias(
+    payload: dict = Body(default_factory=dict),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Compatibility alias for web clients expecting /outfit-history."""
+    raw_item_ids = payload.get("item_ids")
+    if not isinstance(raw_item_ids, list) or not raw_item_ids:
+        return {"created": False, "message": "Nothing to record."}
+    item_ids = _parse_legacy_item_ids(raw_item_ids, field_name="item_ids")
+    if not item_ids:
+        return {"created": False, "message": "Nothing to record."}
+
+    _ensure_owned_items(db, current_user.id, item_ids)
+    worn_at_timestamp = int(datetime.utcnow().timestamp())
+    raw_worn_at_timestamp = payload.get("worn_at_timestamp")
+    if isinstance(raw_worn_at_timestamp, (int, float, str)):
+        try:
+            worn_at_timestamp = int(raw_worn_at_timestamp)
+        except (TypeError, ValueError):
+            pass
+    raw_worn_at = payload.get("worn_at")
+    if isinstance(raw_worn_at, str) and raw_worn_at.strip():
+        try:
+            worn_at_timestamp = int(datetime.fromisoformat(raw_worn_at.strip().replace("Z", "+00:00")).timestamp())
+        except ValueError:
+            pass
+
+    entry = crud.save_outfit_history(
+        db=db,
+        user_id=current_user.id,
+        item_ids=item_ids,
+        worn_at_timestamp=worn_at_timestamp,
+    )
+    legacy_entry = _serialize_history_entries_legacy([entry])[0]
+    legacy_entry["source"] = str(payload.get("source") or "recommendation")
+    legacy_entry["context"] = payload.get("context") if isinstance(payload.get("context"), dict) else {}
+    confidence_score = payload.get("confidence_score")
+    legacy_entry["confidence_score"] = confidence_score if isinstance(confidence_score, (int, float)) else None
+    return {"created": True, "message": "Added to history.", "history_entry": legacy_entry}
+
+
+@router.delete("/outfit-history")
+def clear_outfit_history_alias(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Compatibility alias for web clients expecting /outfit-history."""
+    crud.clear_outfit_history_for_user(db, current_user.id)
+    return {"cleared": True}
+
+
+@router.delete("/outfit-history/{signature}")
+def delete_outfit_history_by_signature_alias(
+    signature: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Compatibility alias for web clients deleting history by item signature."""
+    normalized_signature = signature.strip()
+    if not normalized_signature:
+        return {"deleted": False}
+
+    history_entries = crud.get_outfit_history_for_user(db, current_user.id)
+    matched_entry_ids = [
+        entry.id
+        for entry in history_entries
+        if _legacy_signature_from_item_ids(
+            [
+                int(item_id)
+                for item_id in entry.item_ids_csv.split(",")
+                if item_id
+            ]
+        ) == normalized_signature
+    ]
+    if not matched_entry_ids:
+        return {"deleted": False}
+
+    deleted_count = db.query(models.OutfitHistory).filter(
+        models.OutfitHistory.owner_id == current_user.id,
+        models.OutfitHistory.id.in_(matched_entry_ids),
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {"deleted": deleted_count > 0}
+
+
 # =============================
 # Saved Outfit Routes
 # =============================
@@ -991,6 +1187,98 @@ def delete_saved_outfit(
         raise HTTPException(status_code=404, detail="Saved outfit not found")
     saved_outfits = crud.get_saved_outfits_for_user(db, current_user.id)
     return {"outfits": _serialize_saved_outfits(saved_outfits)}
+
+
+@router.get("/saved-outfits")
+def get_saved_outfits_alias(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Compatibility alias for web clients expecting /saved-outfits."""
+    saved_outfits = crud.get_saved_outfits_for_user(db, current_user.id)
+    return {"saved_outfits": _serialize_saved_outfits_legacy(saved_outfits)}
+
+
+@router.post("/saved-outfits")
+def save_outfit_alias(
+    payload: dict = Body(default_factory=dict),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Compatibility alias for web clients expecting /saved-outfits."""
+    raw_items = payload.get("items")
+    if not isinstance(raw_items, list) or not raw_items:
+        return {"created": False, "message": "Nothing to save."}
+    item_ids = _parse_legacy_item_ids(raw_items, field_name="items")
+    if not item_ids:
+        return {"created": False, "message": "Nothing to save."}
+
+    normalized_signature = _legacy_signature_from_item_ids(item_ids)
+    existing = crud.get_saved_outfits_for_user(db, current_user.id)
+    for entry in existing:
+        existing_item_ids = [
+            int(item_id)
+            for item_id in entry.item_ids_csv.split(",")
+            if item_id
+        ]
+        if _legacy_signature_from_item_ids(existing_item_ids) == normalized_signature:
+            return {"created": False, "message": "This outfit is already in your saved outfits."}
+
+    _ensure_owned_items(db, current_user.id, item_ids)
+    saved_at_timestamp = int(datetime.utcnow().timestamp())
+    raw_saved_at_timestamp = payload.get("saved_at_timestamp")
+    if isinstance(raw_saved_at_timestamp, (int, float, str)):
+        try:
+            saved_at_timestamp = int(raw_saved_at_timestamp)
+        except (TypeError, ValueError):
+            pass
+    raw_created_at = payload.get("created_at")
+    if isinstance(raw_created_at, str) and raw_created_at.strip():
+        try:
+            saved_at_timestamp = int(datetime.fromisoformat(raw_created_at.strip().replace("Z", "+00:00")).timestamp())
+        except ValueError:
+            pass
+
+    saved_entry = crud.save_saved_outfit(
+        db=db,
+        user_id=current_user.id,
+        item_ids=item_ids,
+        saved_at_timestamp=saved_at_timestamp,
+    )
+    legacy_saved_entry = _serialize_saved_outfits_legacy([saved_entry])[0]
+    legacy_saved_entry["source"] = str(payload.get("source") or "recommended")
+    legacy_saved_entry["context"] = payload.get("context") if isinstance(payload.get("context"), dict) else {}
+    legacy_saved_entry["item_details"] = payload.get("item_details") if isinstance(payload.get("item_details"), list) else []
+    return {
+        "created": True,
+        "message": "Saved.",
+        "saved_outfit": legacy_saved_entry,
+    }
+
+
+@router.delete("/saved-outfits/{signature}")
+def delete_saved_outfit_by_signature_alias(
+    signature: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Compatibility alias for web clients deleting saved outfits by item signature."""
+    normalized_signature = signature.strip()
+    if not normalized_signature:
+        return {"deleted": False}
+
+    saved_outfits = crud.get_saved_outfits_for_user(db, current_user.id)
+    for saved_outfit in saved_outfits:
+        item_ids = [
+            int(item_id)
+            for item_id in saved_outfit.item_ids_csv.split(",")
+            if item_id
+        ]
+        if _legacy_signature_from_item_ids(item_ids) != normalized_signature:
+            continue
+        deleted = crud.delete_saved_outfit(db, current_user.id, saved_outfit.id)
+        return {"deleted": bool(deleted)}
+    return {"deleted": False}
 
 
 # =============================
