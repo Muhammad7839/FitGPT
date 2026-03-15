@@ -216,6 +216,22 @@ def test_google_login_returns_existing_user(client, monkeypatch):
     assert me.json()["email"] == "google-existing@example.com"
 
 
+def test_google_login_callback_alias_uses_same_flow(client, monkeypatch):
+    class Identity:
+        email = "google-callback@example.com"
+        full_name = "Callback User"
+
+    monkeypatch.setattr("app.routes.verify_google_id_token", lambda _: Identity())
+
+    response = client.post("/auth/google/callback", json={"id_token": "fake-token-value-4444444444"})
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+
+    me = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200
+    assert me.json()["email"] == "google-callback@example.com"
+
+
 def test_google_login_invalid_or_expired_token_handling(client, monkeypatch):
     def invalid_verify(_: str):
         raise GoogleTokenValidationError("Invalid Google token")
@@ -282,6 +298,27 @@ def test_forgot_password_hides_reset_token_when_exposure_disabled(client):
     body = forgot.json()
     assert body["reset_token"] is None
     assert body["detail"] == "If the account exists, reset instructions were issued"
+
+
+def test_profile_alias_get_and_put(client):
+    token = register_and_login(client, "profile-alias@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    update = client.put(
+        "/profile",
+        headers=auth,
+        json={"body_type": "athletic", "lifestyle": "work", "comfort_preference": "high"},
+    )
+    assert update.status_code == 200
+    assert update.json()["body_type"] == "athletic"
+    assert update.json()["lifestyle"] == "work"
+
+    profile = client.get("/profile", headers=auth)
+    assert profile.status_code == 200
+    body = profile.json()
+    assert body["email"] == "profile-alias@example.com"
+    assert body["body_type"] == "athletic"
+    assert body["lifestyle"] == "work"
 
 
 def test_avatar_upload_updates_me_and_summary_and_persists_after_relogin(client):

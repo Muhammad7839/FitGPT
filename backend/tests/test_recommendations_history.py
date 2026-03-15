@@ -121,6 +121,90 @@ def test_saved_outfits_returns_updated_data_and_persists(client):
     assert len(delete_saved_body["outfits"]) == 1
 
 
+def test_saved_outfits_legacy_alias_supports_create_list_and_delete_by_signature(client):
+    token = register_and_login(client, "saved-legacy@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
+    bottom = client.post("/wardrobe/items", json=item("Bottom", "Blue"), headers=auth).json()
+
+    created = client.post(
+        "/saved-outfits",
+        headers=auth,
+        json={
+            "items": [str(top["id"]), str(bottom["id"])],
+            "source": "recommended",
+            "context": {"occasion": "work"},
+        },
+    )
+    assert created.status_code == 200
+    body = created.json()
+    assert body["created"] is True
+    expected_signature = "|".join(sorted([str(top["id"]), str(bottom["id"])]))
+    assert body["saved_outfit"]["outfit_signature"] == expected_signature
+
+    duplicate = client.post(
+        "/saved-outfits",
+        headers=auth,
+        json={"items": [top["id"], bottom["id"]]},
+    )
+    assert duplicate.status_code == 200
+    assert duplicate.json()["created"] is False
+
+    listed = client.get("/saved-outfits", headers=auth)
+    assert listed.status_code == 200
+    saved_outfits = listed.json()["saved_outfits"]
+    assert len(saved_outfits) == 1
+    assert saved_outfits[0]["items"] == [str(bottom["id"]), str(top["id"])] or saved_outfits[0]["items"] == [
+        str(top["id"]),
+        str(bottom["id"]),
+    ]
+
+    signature = saved_outfits[0]["outfit_signature"]
+    deleted = client.delete(f"/saved-outfits/{signature}", headers=auth)
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted"] is True
+
+    listed_after = client.get("/saved-outfits", headers=auth)
+    assert listed_after.status_code == 200
+    assert listed_after.json()["saved_outfits"] == []
+
+
+def test_outfit_history_legacy_alias_supports_create_list_and_signature_delete(client):
+    token = register_and_login(client, "history-legacy@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
+    bottom = client.post("/wardrobe/items", json=item("Bottom", "Blue"), headers=auth).json()
+    shoes = client.post("/wardrobe/items", json=item("Shoes", "White"), headers=auth).json()
+
+    created = client.post(
+        "/outfit-history",
+        headers=auth,
+        json={
+            "item_ids": [top["id"], bottom["id"], shoes["id"]],
+            "source": "recommendation",
+            "context": {"occasion": "daily"},
+        },
+    )
+    assert created.status_code == 200
+    assert created.json()["created"] is True
+
+    listed = client.get("/outfit-history", headers=auth)
+    assert listed.status_code == 200
+    history = listed.json()["history"]
+    assert len(history) == 1
+    signature = "|".join(sorted(history[0]["item_ids"]))
+
+    deleted = client.delete(f"/outfit-history/{signature}", headers=auth)
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted"] is True
+
+    listed_after = client.get("/outfit-history", headers=auth)
+    assert listed_after.status_code == 200
+    assert listed_after.json()["history"] == []
+
+
 def test_recommendations_use_weather_city_when_temp_missing(client, monkeypatch):
     token = register_and_login(client, "weather@example.com", "password123")
     auth = {"Authorization": f"Bearer {token}"}
