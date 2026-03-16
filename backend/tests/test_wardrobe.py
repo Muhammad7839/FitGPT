@@ -120,6 +120,36 @@ def test_wardrobe_image_upload_returns_static_url(client):
     cleanup_uploaded_file(image_url)
 
 
+def test_wardrobe_create_accepts_multipart_form_compatibility_payload(client):
+    token = register_and_login(client, "wardrobe-multipart@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    response = client.post(
+        "/wardrobe/items",
+        headers=auth,
+        data={
+            "name": "Compat Upload",
+            "category": "top",
+            "color": "black",
+            "fit_type": "regular",
+            "style_tag": "casual",
+            "is_active": "true",
+        },
+        files={"image": ("item.jpg", b"fake-jpeg-binary", "image/jpeg")},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["name"] == "Compat Upload"
+    assert body["category"].lower() == "top"
+    assert body["fit_tag"] == "regular"
+    assert body["style_tags"] == ["casual"]
+    assert body["season"] == "All"
+    assert body["comfort_level"] == 3
+    assert body["is_available"] is True
+    assert body["image_url"].startswith("/uploads/")
+    cleanup_uploaded_file(body["image_url"])
+
+
 def test_wardrobe_image_upload_rejects_unsupported_content_type(client):
     token = register_and_login(client, "wardrobe-upload-invalid@example.com", "password123")
     auth = {"Authorization": f"Bearer {token}"}
