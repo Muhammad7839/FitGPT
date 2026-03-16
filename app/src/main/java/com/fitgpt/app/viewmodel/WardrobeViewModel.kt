@@ -71,6 +71,11 @@ data class RecommendationMeta(
     val itemExplanations: Map<Int, String> = emptyMap()
 )
 
+enum class ImageUploadTarget {
+    ADD_ITEM,
+    EDIT_ITEM
+}
+
 class WardrobeViewModel(
     private val repository: WardrobeRepository
 ) : ViewModel() {
@@ -100,8 +105,11 @@ class WardrobeViewModel(
     private val _savedOutfitsState = MutableStateFlow<List<SavedOutfit>>(emptyList())
     val savedOutfitsState: StateFlow<List<SavedOutfit>> = _savedOutfitsState
 
-    private val _imageUploadState = MutableStateFlow<UiState<String?>>(UiState.Success(null))
-    val imageUploadState: StateFlow<UiState<String?>> = _imageUploadState
+    private val _addItemImageUploadState = MutableStateFlow<UiState<String?>>(UiState.Success(null))
+    val addItemImageUploadState: StateFlow<UiState<String?>> = _addItemImageUploadState
+
+    private val _editItemImageUploadState = MutableStateFlow<UiState<String?>>(UiState.Success(null))
+    val editItemImageUploadState: StateFlow<UiState<String?>> = _editItemImageUploadState
 
     private val _batchImageUploadState =
         MutableStateFlow<UiState<List<UploadResult>>>(UiState.Success(emptyList()))
@@ -109,6 +117,10 @@ class WardrobeViewModel(
 
     private val _itemSaveState = MutableStateFlow<UiState<Int?>>(UiState.Success(null))
     val itemSaveState: StateFlow<UiState<Int?>> = _itemSaveState
+
+    private val _itemUpdateState = MutableStateFlow<UiState<Int?>>(UiState.Success(null))
+    val itemUpdateState: StateFlow<UiState<Int?>> = _itemUpdateState
+
     private val _bulkItemSaveState = MutableStateFlow<UiState<Int?>>(UiState.Success(null))
     val bulkItemSaveState: StateFlow<UiState<Int?>> = _bulkItemSaveState
 
@@ -178,6 +190,20 @@ class WardrobeViewModel(
         }
     }
 
+    fun addItemWithPhoto(item: ClothingItem, photo: UploadImagePayload) {
+        _itemSaveState.value = UiState.Loading
+        viewModelScope.launch {
+            try {
+                repository.addItemWithPhoto(item, photo)
+                _itemSaveState.value = UiState.Success(1)
+                refreshWardrobe()
+            } catch (exception: Exception) {
+                Log.e(recommendationLogTag, "add item with photo failed", exception)
+                _itemSaveState.value = UiState.Error("Failed to save item")
+            }
+        }
+    }
+
     fun addItemsBulk(items: List<ClothingItem>) {
         _bulkItemSaveState.value = UiState.Loading
         viewModelScope.launch {
@@ -200,14 +226,19 @@ class WardrobeViewModel(
         _bulkItemSaveState.value = UiState.Success(null)
     }
 
-    fun uploadImage(bytes: ByteArray, fileName: String, mimeType: String) {
-        _imageUploadState.value = UiState.Loading
+    fun uploadImage(
+        bytes: ByteArray,
+        fileName: String,
+        mimeType: String,
+        target: ImageUploadTarget = ImageUploadTarget.ADD_ITEM
+    ) {
+        setImageUploadState(target, UiState.Loading)
         viewModelScope.launch {
             try {
                 val url = repository.uploadImage(bytes, fileName, mimeType)
-                _imageUploadState.value = UiState.Success(url)
+                setImageUploadState(target, UiState.Success(url))
             } catch (_: Exception) {
-                _imageUploadState.value = UiState.Error("Failed to upload image")
+                setImageUploadState(target, UiState.Error("Failed to upload image"))
             }
         }
     }
@@ -232,6 +263,17 @@ class WardrobeViewModel(
         _batchImageUploadState.value = UiState.Success(emptyList())
     }
 
+    fun clearImageUploadState(target: ImageUploadTarget) {
+        setImageUploadState(target, UiState.Success(null))
+    }
+
+    private fun setImageUploadState(target: ImageUploadTarget, value: UiState<String?>) {
+        when (target) {
+            ImageUploadTarget.ADD_ITEM -> _addItemImageUploadState.value = value
+            ImageUploadTarget.EDIT_ITEM -> _editItemImageUploadState.value = value
+        }
+    }
+
     fun deleteItem(item: ClothingItem) {
         viewModelScope.launch {
             try {
@@ -244,14 +286,20 @@ class WardrobeViewModel(
     }
 
     fun updateItem(item: ClothingItem) {
+        _itemUpdateState.value = UiState.Loading
         viewModelScope.launch {
             try {
                 repository.updateItem(item)
+                _itemUpdateState.value = UiState.Success(item.id)
                 refreshWardrobe()
             } catch (_: Exception) {
-                _wardrobeState.value = UiState.Error("Failed to update item")
+                _itemUpdateState.value = UiState.Error("Failed to update item")
             }
         }
+    }
+
+    fun clearItemUpdateState() {
+        _itemUpdateState.value = UiState.Success(null)
     }
 
     fun fetchRecommendations(

@@ -21,8 +21,10 @@ import com.fitgpt.app.data.remote.dto.PlannedOutfitAssignmentRequestDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.SavedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.AiRecommendationRequestDto
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 
 class RemoteWardrobeRepository(
@@ -72,6 +74,19 @@ class RemoteWardrobeRepository(
 
     override suspend fun addItem(item: ClothingItem) {
         api.addWardrobeItem(item.toCreateRequest())
+    }
+
+    override suspend fun addItemWithPhoto(item: ClothingItem, photo: UploadImagePayload): ClothingItem {
+        val imagePart = MultipartBody.Part.createFormData(
+            name = "image",
+            filename = photo.fileName,
+            body = photo.bytes.toRequestBody(photo.mimeType.toMediaTypeOrNull())
+        )
+        val created = api.addWardrobeItemMultipart(
+            payload = buildMultipartItemFields(item),
+            image = imagePart
+        ).toDomain()
+        return created.copy(imageUrl = resolveApiUrl(created.imageUrl))
     }
 
     override suspend fun addItemsBulk(items: List<ClothingItem>): List<ClothingItem> {
@@ -331,5 +346,37 @@ class RemoteWardrobeRepository(
                 comfortLevel = 3
             )
         }
+    }
+
+    private fun buildMultipartItemFields(item: ClothingItem): Map<String, RequestBody> {
+        val fields = linkedMapOf<String, RequestBody>()
+        fields.putText("category", item.category.ifBlank { "Top" })
+        fields.putText("color", item.color.ifBlank { "Unknown" })
+        fields.putText("season", item.season.ifBlank { "All" })
+        fields.putText("comfort_level", item.comfortLevel.coerceIn(1, 5).toString())
+
+        item.name?.takeIf { it.isNotBlank() }?.let { fields.putText("name", it) }
+        item.clothingType?.takeIf { it.isNotBlank() }?.let { fields.putText("clothing_type", it) }
+        item.layerType?.takeIf { it.isNotBlank() }?.let { fields.putText("layer_type", it) }
+        item.fitTag?.takeIf { it.isNotBlank() }?.let { fields.putText("fit_tag", it) }
+        item.setIdentifier?.takeIf { it.isNotBlank() }?.let { fields.putText("set_identifier", it) }
+        item.accessoryType?.takeIf { it.isNotBlank() }?.let { fields.putText("accessory_type", it) }
+        item.brand?.takeIf { it.isNotBlank() }?.let { fields.putText("brand", it) }
+
+        item.colors.takeIf { it.isNotEmpty() }?.let { fields.putText("colors", it.joinToString(",")) }
+        item.seasonTags.takeIf { it.isNotEmpty() }?.let { fields.putText("season_tags", it.joinToString(",")) }
+        item.styleTags.takeIf { it.isNotEmpty() }?.let { fields.putText("style_tags", it.joinToString(",")) }
+        item.occasionTags.takeIf { it.isNotEmpty() }?.let { fields.putText("occasion_tags", it.joinToString(",")) }
+
+        fields.putText("is_one_piece", item.isOnePiece.toString())
+        fields.putText("is_available", item.isAvailable.toString())
+        fields.putText("is_favorite", item.isFavorite.toString())
+        fields.putText("is_archived", item.isArchived.toString())
+        item.lastWornTimestamp?.let { fields.putText("last_worn_timestamp", it.toString()) }
+        return fields
+    }
+
+    private fun MutableMap<String, RequestBody>.putText(key: String, value: String) {
+        this[key] = value.toRequestBody("text/plain".toMediaType())
     }
 }

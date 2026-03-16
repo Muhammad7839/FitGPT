@@ -21,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.fitgpt.app.navigation.Routes
+import com.fitgpt.app.navigation.navigateToSecondary
+import com.fitgpt.app.navigation.navigateToTopLevel
 import com.fitgpt.app.ui.common.EmptyStateCard
 import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.RemoteImagePreview
@@ -83,7 +85,7 @@ fun SavedOutfitsScreen(
                         subtitle = "Save a recommendation to see it here."
                     )
                     Button(
-                        onClick = { navController.navigate(Routes.DASHBOARD) },
+                        onClick = { navController.navigateToTopLevel(Routes.DASHBOARD) },
                         modifier = Modifier.padding(top = 12.dp)
                     ) {
                         Text("Go to Dashboard")
@@ -137,7 +139,7 @@ fun SavedOutfitsScreen(
                                 Button(
                                     onClick = {
                                         viewModel.markOutfitAsWorn(outfit.items)
-                                        navController.navigate(Routes.HISTORY)
+                                        navController.navigateToSecondary(Routes.HISTORY)
                                     }
                                 ) {
                                     Text("Wear")

@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.navigation.Routes
+import com.fitgpt.app.navigation.TopLevelReselectBus
+import com.fitgpt.app.navigation.navigateToSecondary
 import com.fitgpt.app.ui.common.EmptyStateCard
 import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.RemoteImagePreview
@@ -33,6 +35,7 @@ import com.fitgpt.app.ui.common.WebBadge
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeFilters
 import com.fitgpt.app.viewmodel.WardrobeViewModel
+import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,13 +100,21 @@ fun WardrobeScreen(
         )
     }
 
+    LaunchedEffect(Unit) {
+        TopLevelReselectBus.events.collectLatest { route ->
+            if (route == Routes.WARDROBE) {
+                viewModel.refreshWardrobe()
+            }
+        }
+    }
+
     FitGptScaffold(
         navController = navController,
         currentRoute = Routes.WARDROBE,
         title = "Your Wardrobe",
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { navController.navigate(Routes.ADD_ITEM) }
+                onClick = { navController.navigateToSecondary(Routes.ADD_ITEM) }
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add item")
             }
@@ -127,7 +138,7 @@ fun WardrobeScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             Button(
-                onClick = { navController.navigate(Routes.RECOMMENDATION) },
+                onClick = { navController.navigateToSecondary(Routes.RECOMMENDATION) },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Get Outfit Recommendation")
@@ -303,7 +314,7 @@ fun WardrobeScreen(
                                     viewModel = viewModel,
                                     showBodyFitAssist = bodyFitAssistEnabled,
                                     onEdit = {
-                                        navController.navigate("${Routes.EDIT_ITEM}/${item.id}")
+                                        navController.navigateToSecondary("${Routes.EDIT_ITEM}/${item.id}")
                                     },
                                     onDelete = {
                                         itemToDelete = item
