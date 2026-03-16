@@ -10,6 +10,8 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +24,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,12 +40,15 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.navigation.Routes
+import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.MAX_LOCAL_IMAGE_BYTES
 import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.isImagePayloadAllowed
 import com.fitgpt.app.ui.common.parseComfortLevel
 import com.fitgpt.app.ui.common.validateClothingItemForm
+import com.fitgpt.app.viewmodel.ImageUploadTarget
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import java.io.ByteArrayOutputStream
@@ -54,7 +60,8 @@ fun EditItemScreen(
     viewModel: WardrobeViewModel
 ) {
     val state by viewModel.wardrobeState.collectAsState()
-    val imageUploadState by viewModel.imageUploadState.collectAsState()
+    val imageUploadState by viewModel.editItemImageUploadState.collectAsState()
+    val itemUpdateState by viewModel.itemUpdateState.collectAsState()
     val context = LocalContext.current
 
     when (state) {
@@ -104,6 +111,12 @@ fun EditItemScreen(
             var imageUrl by remember { mutableStateOf(item.imageUrl.orEmpty()) }
             var cameraMessage by remember { mutableStateOf<String?>(null) }
             var formError by remember { mutableStateOf<String?>(null) }
+            val snackbarHostState = remember { SnackbarHostState() }
+
+            LaunchedEffect(Unit) {
+                viewModel.clearImageUploadState(ImageUploadTarget.EDIT_ITEM)
+                viewModel.clearItemUpdateState()
+            }
 
             val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
                 if (bitmap == null) {
@@ -116,7 +129,12 @@ fun EditItemScreen(
                     return@rememberLauncherForActivityResult
                 }
                 val fileName = "camera_${System.currentTimeMillis()}.jpg"
-                viewModel.uploadImage(bytes = bytes, fileName = fileName, mimeType = "image/jpeg")
+                viewModel.uploadImage(
+                    bytes = bytes,
+                    fileName = fileName,
+                    mimeType = "image/jpeg",
+                    target = ImageUploadTarget.EDIT_ITEM
+                )
                 cameraMessage = null
             }
 
@@ -142,7 +160,12 @@ fun EditItemScreen(
                     else -> ".jpg"
                 }
                 val fileName = "item_${System.currentTimeMillis()}$extension"
-                viewModel.uploadImage(bytes = bytes, fileName = fileName, mimeType = mimeType)
+                viewModel.uploadImage(
+                    bytes = bytes,
+                    fileName = fileName,
+                    mimeType = mimeType,
+                    target = ImageUploadTarget.EDIT_ITEM
+                )
             }
 
             LaunchedEffect(imageUploadState) {
@@ -152,13 +175,37 @@ fun EditItemScreen(
                 }
             }
 
-            Scaffold { padding ->
+            LaunchedEffect(itemUpdateState) {
+                when (val current = itemUpdateState) {
+                    UiState.Loading -> Unit
+                    is UiState.Error -> {
+                        formError = current.message
+                    }
+                    is UiState.Success -> {
+                        if (current.data != null) {
+                            snackbarHostState.showSnackbar("Item updated.")
+                            viewModel.clearItemUpdateState()
+                            navController.popBackStack()
+                        }
+                    }
+                }
+            }
+
+            FitGptScaffold(
+                navController = navController,
+                currentRoute = "${Routes.EDIT_ITEM}/$itemId",
+                title = "Edit Item",
+                showChatAction = false,
+                showMoreAction = false,
+                snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+            ) { padding ->
 
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
-                        .padding(20.dp),
+                        .padding(20.dp)
+                        .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
 
@@ -311,7 +358,7 @@ fun EditItemScreen(
 
                     if (imageUrl.isNotBlank()) {
                         Text(
-                            text = "Image: $imageUrl",
+                            text = "Photo uploaded.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -375,11 +422,11 @@ fun EditItemScreen(
                                     imageUrl = imageUrl.takeIf { it.isNotBlank() }
                                 )
                             )
-                            navController.popBackStack()
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = itemUpdateState !is UiState.Loading
                     ) {
-                        Text("Save Changes")
+                        Text(if (itemUpdateState is UiState.Loading) "Saving..." else "Save Changes")
                     }
                     formError?.let {
                         Text(

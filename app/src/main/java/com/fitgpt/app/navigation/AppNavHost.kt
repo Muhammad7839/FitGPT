@@ -3,7 +3,11 @@
  */
 package com.fitgpt.app.navigation
 
+import android.app.Activity
+import android.os.SystemClock
 import android.util.Log
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -11,6 +15,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.fitgpt.app.data.PreferencesManager
@@ -146,6 +151,39 @@ fun AppNavHost(
         if (!completed) Routes.ONBOARDING_WELCOME
         else if (hasToken) Routes.DASHBOARD
         else Routes.LOGIN
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRouteBase = routeBase(currentBackStackEntry?.destination?.route)
+    val topLevelTabHistory = remember { TopLevelTabHistory(homeRoute = Routes.DASHBOARD) }
+    var lastBackPressAt by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(hasToken) {
+        if (!hasToken) {
+            topLevelTabHistory.clear()
+            lastBackPressAt = 0L
+        }
+    }
+
+    LaunchedEffect(hasToken, currentRouteBase) {
+        if (hasToken) {
+            topLevelTabHistory.recordVisit(currentRouteBase)
+        }
+    }
+
+    BackHandler(enabled = hasToken && isTopLevelRoute(currentRouteBase)) {
+        val backTarget = topLevelTabHistory.resolveBackTarget(currentRouteBase)
+        if (backTarget != null) {
+            navController.navigateToTopLevel(backTarget)
+            return@BackHandler
+        }
+
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastBackPressAt <= 2000L) {
+            (context as? Activity)?.finish()
+        } else {
+            lastBackPressAt = now
+            Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     NavHost(
         navController = navController,

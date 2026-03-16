@@ -82,6 +82,12 @@ class FakeWardrobeRepository : WardrobeRepository {
         wardrobeItems.add(item)
     }
 
+    override suspend fun addItemWithPhoto(item: ClothingItem, photo: UploadImagePayload): ClothingItem {
+        val withPhoto = item.copy(imageUrl = "https://example.com/uploads/${photo.fileName}")
+        wardrobeItems.add(withPhoto)
+        return withPhoto
+    }
+
     override suspend fun addItemsBulk(items: List<ClothingItem>): List<ClothingItem> {
         wardrobeItems.addAll(items)
         return items

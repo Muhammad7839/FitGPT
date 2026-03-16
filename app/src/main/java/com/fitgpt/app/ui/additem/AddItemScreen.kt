@@ -30,7 +30,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -46,16 +45,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
-import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.data.repository.UploadImagePayload
+import com.fitgpt.app.navigation.Routes
+import com.fitgpt.app.navigation.navigateToTopLevel
+import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.MAX_LOCAL_IMAGE_BYTES
 import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.ui.common.isImagePayloadAllowed
 import com.fitgpt.app.ui.common.parseComfortLevel
-import com.fitgpt.app.ui.common.validateClothingItemForm
+import com.fitgpt.app.viewmodel.ImageUploadTarget
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import java.io.ByteArrayOutputStream
@@ -102,20 +103,80 @@ fun AddItemScreen(
     var formError by remember { mutableStateOf<String?>(null) }
     var batchAutoCreateMessage by remember { mutableStateOf<String?>(null) }
     var batchAutoFillHints by remember { mutableStateOf<Map<String, ImageAutoFillHint>>(emptyMap()) }
+    var selectedPhotoPayload by remember { mutableStateOf<UploadImagePayload?>(null) }
     var showPhotoOptions by remember { mutableStateOf(false) }
     var photoFlowState by remember { mutableStateOf(PhotoFlowState.IDLE) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val context = LocalContext.current
-    val imageUploadState by viewModel.imageUploadState.collectAsState()
+    val imageUploadState by viewModel.addItemImageUploadState.collectAsState()
     val batchUploadState by viewModel.batchImageUploadState.collectAsState()
     val itemSaveState by viewModel.itemSaveState.collectAsState()
     val bulkItemSaveState by viewModel.bulkItemSaveState.collectAsState()
     val isSavingItem = itemSaveState is UiState.Loading || bulkItemSaveState is UiState.Loading
 
     LaunchedEffect(Unit) {
+        viewModel.clearImageUploadState(ImageUploadTarget.ADD_ITEM)
         viewModel.clearItemSaveState()
         viewModel.clearBulkItemSaveState()
+    }
+
+    fun applyImageAutoFill(bytes: ByteArray, sourceName: String) {
+        val inferredFromName = inferFromFileName(sourceName)
+        category = category.ifBlank { inferredFromName.category ?: "Top" }
+        if (clothingType.isBlank()) {
+            clothingType = inferredFromName.clothingType.orEmpty()
+        }
+        if (fitTag.isBlank()) {
+            fitTag = inferredFromName.fitTag.orEmpty()
+        }
+        if (season.isBlank()) {
+            season = inferredFromName.season ?: "All"
+        }
+        if (color.isBlank()) {
+            color = inferDominantColorName(bytes) ?: AUTO_FILL_UNKNOWN
+        }
+        if (comfort.isBlank()) {
+            comfort = inferredFromName.comfortLevel?.toString().orEmpty()
+        }
+        if (layerType.isBlank()) {
+            layerType = inferLayerTypeFromCategory(inferredFromName.category ?: category)
+        }
+    }
+
+    fun saveCurrentItem() {
+        formError = null
+        val resolvedCategory = category.trim().ifBlank { "Top" }
+        val resolvedColor = color.trim().ifBlank { AUTO_FILL_UNKNOWN }
+        val resolvedSeason = season.trim().ifBlank { "All" }
+        val resolvedComfort = parseComfortLevel(comfort)
+        val draftItem = ClothingItem(
+            id = System.currentTimeMillis().toInt(),
+            name = name.trim().takeIf { it.isNotBlank() },
+            category = resolvedCategory,
+            clothingType = clothingType.trim().takeIf { it.isNotBlank() },
+            layerType = layerType.trim().lowercase().takeIf { it.isNotBlank() },
+            isOnePiece = onePiece,
+            setIdentifier = setIdentifier.trim().takeIf { it.isNotBlank() },
+            fitTag = fitTag.trim().takeIf { it.isNotBlank() },
+            color = resolvedColor,
+            colors = colors.toCsvList().ifEmpty { listOf(resolvedColor) },
+            season = resolvedSeason,
+            seasonTags = seasonTags.toCsvList().ifEmpty { listOf(resolvedSeason) },
+            styleTags = styleTags.toCsvList(),
+            occasionTags = occasionTags.toCsvList(),
+            accessoryType = accessoryType.trim().takeIf { it.isNotBlank() },
+            comfortLevel = resolvedComfort,
+            brand = brand.trim().takeIf { it.isNotBlank() },
+            imageUrl = imageUrl.takeIf { it.isNotBlank() }
+        )
+        photoFlowState = PhotoFlowState.SAVING
+        val payload = selectedPhotoPayload
+        if (draftItem.imageUrl.isNullOrBlank() && payload != null) {
+            viewModel.addItemWithPhoto(draftItem, payload)
+        } else {
+            viewModel.addItem(draftItem)
+        }
     }
 
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
@@ -133,9 +194,20 @@ fun AddItemScreen(
             return@rememberLauncherForActivityResult
         }
         val fileName = "camera_${System.currentTimeMillis()}.jpg"
+        selectedPhotoPayload = UploadImagePayload(
+            bytes = bytes,
+            fileName = fileName,
+            mimeType = "image/jpeg"
+        )
+        applyImageAutoFill(bytes, fileName)
         photoFlowState = PhotoFlowState.UPLOADING
         Log.i(UPLOAD_LOG_TAG, "camera image accepted size=${bytes.size}")
-        viewModel.uploadImage(bytes = bytes, fileName = fileName, mimeType = "image/jpeg")
+        viewModel.uploadImage(
+            bytes = bytes,
+            fileName = fileName,
+            mimeType = "image/jpeg",
+            target = ImageUploadTarget.ADD_ITEM
+        )
         cameraMessage = null
     }
 
@@ -179,37 +251,25 @@ fun AddItemScreen(
                 else -> ".jpg"
             }
             val fileName = "item_${System.currentTimeMillis()}$extension"
+            selectedPhotoPayload = UploadImagePayload(
+                bytes = bytes,
+                fileName = fileName,
+                mimeType = mimeType
+            )
             val sourceName = resolveDisplayName(context, uri) ?: fileName
-            val inferredFromName = inferFromFileName(sourceName)
-            category = category.ifBlank { inferredFromName.category ?: "" }
-            if (clothingType.isBlank()) {
-                clothingType = inferredFromName.clothingType ?: ""
-            }
-            if (fitTag.isBlank()) {
-                fitTag = inferredFromName.fitTag ?: ""
-            }
-            if (season.isBlank()) {
-                season = inferredFromName.season ?: ""
-            }
-            if (color.isBlank()) {
-                color = inferDominantColorName(bytes) ?: ""
-            }
-            if (comfort.isBlank()) {
-                comfort = inferredFromName.comfortLevel?.toString().orEmpty()
-            }
-            if (layerType.isBlank()) {
-                layerType = inferLayerTypeFromCategory(inferredFromName.category ?: category)
-            }
+            applyImageAutoFill(bytes, sourceName)
             Log.i(UPLOAD_LOG_TAG, "gallery image selected mime=$mimeType size=${bytes.size}")
             viewModel.uploadImage(
                 bytes = bytes,
                 fileName = fileName,
-                mimeType = mimeType
+                mimeType = mimeType,
+                target = ImageUploadTarget.ADD_ITEM
             )
             return@rememberLauncherForActivityResult
         }
 
         val hints = mutableMapOf<String, ImageAutoFillHint>()
+        selectedPhotoPayload = null
         val payloads = uris.mapIndexedNotNull { index, uri ->
             val bytes = readBytes(context, uri) ?: return@mapIndexedNotNull null
             if (!isImagePayloadAllowed(bytes.size)) {
@@ -354,10 +414,8 @@ fun AddItemScreen(
                     photoFlowState = PhotoFlowState.DONE
                     snackbarHostState.showSnackbar("Item saved to wardrobe.")
                     viewModel.clearItemSaveState()
-                    navController.navigate(Routes.WARDROBE) {
-                        popUpTo(Routes.WARDROBE) { inclusive = false }
-                        launchSingleTop = true
-                        restoreState = true
+                    if (!navController.popBackStack()) {
+                        navController.navigateToTopLevel(Routes.WARDROBE)
                     }
                 }
             }
@@ -378,10 +436,8 @@ fun AddItemScreen(
                     batchAutoCreateMessage = "Added $savedCount item(s) from selected photos."
                     snackbarHostState.showSnackbar("Added $savedCount item(s) to wardrobe.")
                     viewModel.clearBulkItemSaveState()
-                    navController.navigate(Routes.WARDROBE) {
-                        popUpTo(Routes.WARDROBE) { inclusive = false }
-                        launchSingleTop = true
-                        restoreState = true
+                    if (!navController.popBackStack()) {
+                        navController.navigateToTopLevel(Routes.WARDROBE)
                     }
                 } else {
                     batchAutoCreateMessage = "No uploaded photos were saved."
@@ -433,7 +489,12 @@ fun AddItemScreen(
         }
     }
 
-    Scaffold(
+    FitGptScaffold(
+        navController = navController,
+        currentRoute = Routes.ADD_ITEM,
+        title = "Add Item",
+        showChatAction = false,
+        showMoreAction = false,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
         val scrollState = rememberScrollState()
@@ -591,11 +652,29 @@ fun AddItemScreen(
                         }
                         is UiState.Error -> {
                             Text(upload.message, color = MaterialTheme.colorScheme.error)
+                            val payload = selectedPhotoPayload
+                            if (payload != null) {
+                                Button(
+                                    onClick = {
+                                        photoFlowState = PhotoFlowState.UPLOADING
+                                        cameraMessage = null
+                                        viewModel.uploadImage(
+                                            bytes = payload.bytes,
+                                            fileName = payload.fileName,
+                                            mimeType = payload.mimeType,
+                                            target = ImageUploadTarget.ADD_ITEM
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Retry Upload")
+                                }
+                            }
                         }
                         is UiState.Success -> {
                             if (!imageUrl.isNullOrBlank()) {
                                 Text(
-                                    text = "Image ready: $imageUrl",
+                                    text = "Photo uploaded. Tap Save Item to finish.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -632,6 +711,16 @@ fun AddItemScreen(
                                 .fillMaxWidth()
                                 .height(180.dp)
                         )
+                        Button(
+                            onClick = {
+                                if (!isSavingItem) saveCurrentItem()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isSavingItem,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(if (isSavingItem) "Saving..." else "Quick Save Photo")
+                        }
                     }
 
                     when (val batch = batchUploadState) {
@@ -658,41 +747,7 @@ fun AddItemScreen(
 
                     Button(
                         onClick = {
-                            val validationError = validateClothingItemForm(
-                                category = category,
-                                color = color,
-                                season = season,
-                                comfortText = comfort
-                            )
-                            if (validationError != null) {
-                                formError = validationError
-                                photoFlowState = PhotoFlowState.ERROR
-                                return@Button
-                            }
-                            formError = null
-                            photoFlowState = PhotoFlowState.SAVING
-                            viewModel.addItem(
-                                ClothingItem(
-                                    id = System.currentTimeMillis().toInt(),
-                                    name = name.trim().takeIf { it.isNotBlank() },
-                                    category = category.trim(),
-                                    clothingType = clothingType.trim().takeIf { it.isNotBlank() },
-                                    layerType = layerType.trim().lowercase().takeIf { it.isNotBlank() },
-                                    isOnePiece = onePiece,
-                                    setIdentifier = setIdentifier.trim().takeIf { it.isNotBlank() },
-                                    fitTag = fitTag.trim().takeIf { it.isNotBlank() },
-                                    color = color.trim(),
-                                    colors = colors.toCsvList().ifEmpty { listOf(color.trim()) },
-                                    season = season.trim(),
-                                    seasonTags = seasonTags.toCsvList().ifEmpty { listOf(season.trim()) },
-                                    styleTags = styleTags.toCsvList(),
-                                    occasionTags = occasionTags.toCsvList(),
-                                    accessoryType = accessoryType.trim().takeIf { it.isNotBlank() },
-                                    comfortLevel = parseComfortLevel(comfort),
-                                    brand = brand.trim().takeIf { it.isNotBlank() },
-                                    imageUrl = imageUrl.takeIf { it.isNotBlank() }
-                                )
-                            )
+                            saveCurrentItem()
                         },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !isSavingItem,

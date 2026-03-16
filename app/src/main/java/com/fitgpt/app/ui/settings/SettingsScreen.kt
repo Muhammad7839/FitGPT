@@ -3,6 +3,8 @@
  */
 package com.fitgpt.app.ui.settings
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Arrangement
@@ -27,10 +29,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.fitgpt.app.data.PreferencesManager
 import com.fitgpt.app.data.model.CustomThemePalette
 import com.fitgpt.app.data.model.ThemeMode
 import com.fitgpt.app.data.model.ThemePreset
+import com.fitgpt.app.di.ServiceLocator
 import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.SectionHeader
@@ -43,6 +47,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val preferencesManager = remember { PreferencesManager(context) }
+    val tokenStore = remember { ServiceLocator.provideTokenStore(context) }
     val themeMode by preferencesManager.themeMode.collectAsState(initial = ThemeMode.DARK)
     val themePreset by preferencesManager.themePreset.collectAsState(initial = ThemePreset.CLASSIC)
     val customThemeJson by preferencesManager.customThemeJson.collectAsState(initial = null)
@@ -84,7 +89,8 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             SectionHeader(
@@ -259,6 +265,31 @@ fun SettingsScreen(
                     }
                     customThemeError?.let {
                         Text(text = it, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+
+            WebCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Account", style = MaterialTheme.typography.titleMedium)
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                tokenStore.clearToken()
+                                navController.navigate(Routes.LOGIN) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        inclusive = true
+                                    }
+                                    launchSingleTop = true
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Sign out")
                     }
                 }
             }

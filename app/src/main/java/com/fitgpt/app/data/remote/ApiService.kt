@@ -44,10 +44,12 @@ import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
+import retrofit2.http.PartMap
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 import okhttp3.MultipartBody
+import okhttp3.RequestBody
 
 interface ApiService {
 
@@ -125,6 +127,13 @@ interface ApiService {
     @POST("wardrobe/items")
     suspend fun addWardrobeItem(
         @Body payload: ClothingItemCreateRequest
+    ): ClothingItemDto
+
+    @Multipart
+    @POST("wardrobe/items")
+    suspend fun addWardrobeItemMultipart(
+        @PartMap payload: Map<String, @JvmSuppressWildcards RequestBody>,
+        @Part image: MultipartBody.Part
     ): ClothingItemDto
 
     @POST("wardrobe/items/bulk")

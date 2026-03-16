@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Favorite
@@ -22,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.fitgpt.app.navigation.Routes
+import com.fitgpt.app.navigation.navigateToSecondary
 import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebCard
@@ -40,7 +43,8 @@ fun MoreScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             SectionHeader(
@@ -58,31 +62,31 @@ fun MoreScreen(
                         icon = { Icon(Icons.Default.Star, contentDescription = null) },
                         title = "Chat",
                         subtitle = "Ask AI stylist for quick guidance",
-                        onClick = { navController.navigate(Routes.CHAT) }
+                        onClick = { navController.navigateToSecondary(Routes.CHAT) }
                     )
                     MoreActionRow(
                         icon = { Icon(Icons.Default.Favorite, contentDescription = null) },
                         title = "Favorites",
                         subtitle = "Pin and revisit go-to items",
-                        onClick = { navController.navigate(Routes.FAVORITES) }
+                        onClick = { navController.navigateToSecondary(Routes.FAVORITES) }
                     )
                     MoreActionRow(
                         icon = { Icon(Icons.Default.Star, contentDescription = null) },
                         title = "Saved Outfits",
                         subtitle = "Reuse generated combinations",
-                        onClick = { navController.navigate(Routes.SAVED_OUTFITS) }
+                        onClick = { navController.navigateToSecondary(Routes.SAVED_OUTFITS) }
                     )
                     MoreActionRow(
                         icon = { Icon(Icons.Default.Info, contentDescription = null) },
                         title = "History",
                         subtitle = "Track what you wore",
-                        onClick = { navController.navigate(Routes.HISTORY) }
+                        onClick = { navController.navigateToSecondary(Routes.HISTORY) }
                     )
                     MoreActionRow(
                         icon = { Icon(Icons.Default.DateRange, contentDescription = null) },
                         title = "Plans",
                         subtitle = "Schedule outfits by date",
-                        onClick = { navController.navigate(Routes.PLANS) }
+                        onClick = { navController.navigateToSecondary(Routes.PLANS) }
                     )
                 }
             }
@@ -97,7 +101,7 @@ fun MoreScreen(
                         icon = { Icon(Icons.Default.Settings, contentDescription = null) },
                         title = "Settings",
                         subtitle = "Appearance and app preferences",
-                        onClick = { navController.navigate(Routes.SETTINGS) }
+                        onClick = { navController.navigateToSecondary(Routes.SETTINGS) }
                     )
                 }
             }

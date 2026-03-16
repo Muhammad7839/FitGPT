@@ -8,8 +8,8 @@ import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.LocationOn
@@ -27,6 +27,8 @@ import androidx.navigation.NavController
 import com.fitgpt.app.data.location.GpsLocationProvider
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.navigation.Routes
+import com.fitgpt.app.navigation.TopLevelReselectBus
+import com.fitgpt.app.navigation.navigateToSecondary
 import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SectionHeader
@@ -35,6 +37,7 @@ import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import com.fitgpt.app.viewmodel.WeatherRequestSource
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 private const val LOCATION_LOG_TAG = "FitGPTLocation"
@@ -58,6 +61,7 @@ fun RecommendationScreen(
     var occasion by rememberSaveable { mutableStateOf("") }
     var stylePreference by rememberSaveable { mutableStateOf("") }
     var preferredSeasons by rememberSaveable { mutableStateOf("") }
+    var showAdvancedControls by rememberSaveable { mutableStateOf(false) }
     var selectedOptionIndex by rememberSaveable { mutableStateOf(0) }
     var locationMessage by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
@@ -134,22 +138,61 @@ fun RecommendationScreen(
         viewModel.selectRecommendationOption(selectedOptionIndex)
     }
 
+    LaunchedEffect(Unit) {
+        TopLevelReselectBus.events.collectLatest { route ->
+            if (route != Routes.RECOMMENDATION) return@collectLatest
+            applyContextRequest(
+                city = weatherCity.nullIfBlank(),
+                lat = null,
+                lon = null
+            )
+        }
+    }
+
     when (state) {
 
         is UiState.Loading -> {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
+            FitGptScaffold(
+                navController = navController,
+                currentRoute = Routes.RECOMMENDATION,
+                title = "Outfit Recommendation"
+            ) { paddingValues ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
             }
         }
 
         is UiState.Error -> {
-            Text(
-                text = (state as UiState.Error).message,
-                modifier = Modifier.padding(16.dp)
-            )
+            FitGptScaffold(
+                navController = navController,
+                currentRoute = Routes.RECOMMENDATION,
+                title = "Outfit Recommendation"
+            ) { paddingValues ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = (state as UiState.Error).message,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Button(
+                        onClick = { viewModel.fetchRecommendations() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Retry")
+                    }
+                }
+            }
         }
 
         is UiState.Success -> {
@@ -167,6 +210,7 @@ fun RecommendationScreen(
                         .fillMaxSize()
                         .padding(paddingValues)
                         .padding(16.dp)
+                        .verticalScroll(rememberScrollState())
                 ) {
 
                     SectionHeader(
@@ -215,44 +259,9 @@ fun RecommendationScreen(
                             )
 
                             OutlinedTextField(
-                                value = manualTempInput,
-                                onValueChange = { manualTempInput = it },
-                                label = { Text("Manual temperature (F)") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-                            OutlinedTextField(
                                 value = weatherCity,
                                 onValueChange = { weatherCity = it },
                                 label = { Text("Weather city (optional)") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = weatherCategory,
-                                onValueChange = { weatherCategory = it },
-                                label = { Text("Weather category (cold/cool/mild/warm/hot)") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = timeContext,
-                                onValueChange = { timeContext = it },
-                                label = { Text("Time context (morning/evening)") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = planDate,
-                                onValueChange = { planDate = it },
-                                label = { Text("Plan date (YYYY-MM-DD)") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = exclude,
-                                onValueChange = { exclude = it },
-                                label = { Text("Exclude keywords (comma-separated)") },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
@@ -263,20 +272,71 @@ fun RecommendationScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
-                            OutlinedTextField(
-                                value = stylePreference,
-                                onValueChange = { stylePreference = it },
-                                label = { Text("Style preference (optional)") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = preferredSeasons,
-                                onValueChange = { preferredSeasons = it },
-                                label = { Text("Preferred seasons CSV (optional)") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
+
+                            OutlinedButton(
+                                onClick = { showAdvancedControls = !showAdvancedControls },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    if (showAdvancedControls) {
+                                        "Hide advanced controls"
+                                    } else {
+                                        "Show advanced controls"
+                                    }
+                                )
+                            }
+
+                            if (showAdvancedControls) {
+                                OutlinedTextField(
+                                    value = manualTempInput,
+                                    onValueChange = { manualTempInput = it },
+                                    label = { Text("Manual temperature (F)") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = weatherCategory,
+                                    onValueChange = { weatherCategory = it },
+                                    label = { Text("Weather category (cold/cool/mild/warm/hot)") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = timeContext,
+                                    onValueChange = { timeContext = it },
+                                    label = { Text("Time context (morning/evening)") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = planDate,
+                                    onValueChange = { planDate = it },
+                                    label = { Text("Plan date (YYYY-MM-DD)") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = exclude,
+                                    onValueChange = { exclude = it },
+                                    label = { Text("Exclude keywords (comma-separated)") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = stylePreference,
+                                    onValueChange = { stylePreference = it },
+                                    label = { Text("Style preference (optional)") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = preferredSeasons,
+                                    onValueChange = { preferredSeasons = it },
+                                    label = { Text("Preferred seasons CSV (optional)") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
+                            }
 
                             OutlinedButton(
                                 onClick = {
@@ -414,10 +474,10 @@ fun RecommendationScreen(
                             }
                             Spacer(modifier = Modifier.height(12.dp))
                         }
-                        LazyColumn(
+                        Column(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(recommendedItems) { item ->
+                            recommendedItems.forEach { item ->
                                 RecommendationCard(
                                     item = item,
                                     explanation = viewModel.generateExplanation(item)
@@ -430,10 +490,12 @@ fun RecommendationScreen(
 
                     Button(
                         onClick = {
+                            if (recommendedItems.isEmpty()) return@Button
                             viewModel.markOutfitAsWorn(recommendedItems)
-                            navController.navigate(Routes.HISTORY)
+                            navController.navigateToSecondary(Routes.HISTORY)
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = recommendedItems.isNotEmpty()
                     ) {
                         Text("Wear This Outfit")
                     }
@@ -441,8 +503,12 @@ fun RecommendationScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Button(
-                        onClick = { viewModel.saveOutfit(recommendedItems) },
-                        modifier = Modifier.fillMaxWidth()
+                        onClick = {
+                            if (recommendedItems.isEmpty()) return@Button
+                            viewModel.saveOutfit(recommendedItems)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = recommendedItems.isNotEmpty()
                     ) {
                         Icon(Icons.Default.Star, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
@@ -453,11 +519,13 @@ fun RecommendationScreen(
 
                     Button(
                         onClick = {
+                            if (recommendedItems.isEmpty()) return@Button
                             val today = java.time.LocalDate.now().plusDays(1).toString()
                             viewModel.planCurrentRecommendation(today, "Planned from recommendation")
-                            navController.navigate(Routes.PLANS)
+                            navController.navigateToSecondary(Routes.PLANS)
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = recommendedItems.isNotEmpty()
                     ) {
                         Icon(Icons.Default.DateRange, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))

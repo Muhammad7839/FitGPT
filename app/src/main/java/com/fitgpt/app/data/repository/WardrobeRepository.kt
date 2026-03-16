@@ -29,6 +29,7 @@ interface WardrobeRepository {
         favoritesOnly: Boolean = false
     ): List<ClothingItem>
     suspend fun addItem(item: ClothingItem)
+    suspend fun addItemWithPhoto(item: ClothingItem, photo: UploadImagePayload): ClothingItem
     suspend fun addItemsBulk(items: List<ClothingItem>): List<ClothingItem>
     suspend fun uploadImage(bytes: ByteArray, fileName: String, mimeType: String): String
     suspend fun uploadImagesBatch(images: List<UploadImagePayload>): List<UploadResult>

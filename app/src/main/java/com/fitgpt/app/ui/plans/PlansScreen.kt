@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.fitgpt.app.navigation.Routes
+import com.fitgpt.app.navigation.navigateToTopLevel
 import com.fitgpt.app.ui.common.EmptyStateCard
 import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.RemoteImagePreview
@@ -188,7 +189,7 @@ fun PlansScreen(
                         subtitle = "Plan outfits from recommendations or saved outfits."
                     )
                     Button(
-                        onClick = { navController.navigate(Routes.DASHBOARD) },
+                        onClick = { navController.navigateToTopLevel(Routes.DASHBOARD) },
                         modifier = Modifier.padding(top = 12.dp)
                     ) {
                         Text("Go to Dashboard")

@@ -38,6 +38,8 @@ import com.fitgpt.app.data.CURRENT_TUTORIAL_VERSION
 import com.fitgpt.app.data.PreferencesManager
 import com.fitgpt.app.data.location.GpsLocationProvider
 import com.fitgpt.app.navigation.Routes
+import com.fitgpt.app.navigation.TopLevelReselectBus
+import com.fitgpt.app.navigation.navigateToSecondary
 import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.GuidedTutorialOverlay
 import com.fitgpt.app.ui.common.SectionHeader
@@ -47,6 +49,7 @@ import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import com.fitgpt.app.viewmodel.WeatherRequestSource
 import com.fitgpt.app.viewmodel.WeatherStatusType
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 private const val WEATHER_LOG_TAG = "FitGPTWeather"
@@ -125,6 +128,13 @@ fun DashboardScreen(
     LaunchedEffect(tutorialCompleted) {
         if (!tutorialCompleted) {
             showTutorial = true
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        TopLevelReselectBus.events.collectLatest { route ->
+            if (route != Routes.DASHBOARD) return@collectLatest
+            viewModel.fetchRecommendations()
         }
     }
 
@@ -258,7 +268,7 @@ fun DashboardScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Button(
-                            onClick = { navController.navigate(Routes.PLANS) },
+                            onClick = { navController.navigateToSecondary(Routes.PLANS) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Open Plans")
@@ -285,7 +295,7 @@ fun DashboardScreen(
                                 manualTemp = weather?.temperatureF,
                                 weatherCategory = weather?.weatherCategory
                             )
-                            navController.navigate(Routes.RECOMMENDATION)
+                            navController.navigateToSecondary(Routes.RECOMMENDATION)
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -340,13 +350,13 @@ fun DashboardScreen(
                             modifier = Modifier.weight(1f),
                             title = "Add Item",
                             subtitle = "Capture wardrobe",
-                            onClick = { navController.navigate(Routes.ADD_ITEM) }
+                            onClick = { navController.navigateToSecondary(Routes.ADD_ITEM) }
                         )
                         QuickActionCard(
                             modifier = Modifier.weight(1f),
                             title = "Plans",
                             subtitle = "Schedule looks",
-                            onClick = { navController.navigate(Routes.PLANS) }
+                            onClick = { navController.navigateToSecondary(Routes.PLANS) }
                         )
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -354,13 +364,13 @@ fun DashboardScreen(
                             modifier = Modifier.weight(1f),
                             title = "Saved",
                             subtitle = "Reuse outfits",
-                            onClick = { navController.navigate(Routes.SAVED_OUTFITS) }
+                            onClick = { navController.navigateToSecondary(Routes.SAVED_OUTFITS) }
                         )
                         QuickActionCard(
                             modifier = Modifier.weight(1f),
                             title = "Chat",
                             subtitle = "Ask AI stylist",
-                            onClick = { navController.navigate(Routes.CHAT) }
+                            onClick = { navController.navigateToSecondary(Routes.CHAT) }
                         )
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -369,7 +379,7 @@ fun DashboardScreen(
                             modifier = Modifier.weight(1f),
                             title = "More",
                             subtitle = "History and settings",
-                            onClick = { navController.navigate(Routes.MORE) }
+                            onClick = { navController.navigateToSecondary(Routes.MORE) }
                         )
                     }
                 }

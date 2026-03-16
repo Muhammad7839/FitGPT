@@ -14,11 +14,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -34,12 +35,14 @@ import androidx.navigation.NavController
 import com.fitgpt.app.ui.common.MAX_LOCAL_IMAGE_BYTES
 import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.navigation.Routes
+import com.fitgpt.app.navigation.TopLevelReselectBus
 import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.ui.common.isImagePayloadAllowed
 import com.fitgpt.app.viewmodel.ProfileViewModel
 import com.fitgpt.app.viewmodel.UiState
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.delay
 
 private const val UPLOAD_LOG_TAG = "FitGPTUpload"
@@ -89,6 +92,14 @@ fun ProfileScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        TopLevelReselectBus.events.collectLatest { route ->
+            if (route == Routes.PROFILE) {
+                viewModel.refresh()
+            }
+        }
+    }
+
     FitGptScaffold(
         navController = navController,
         currentRoute = Routes.PROFILE,
@@ -127,13 +138,13 @@ fun ProfileScreen(
                 var bodyType by remember(profile.idHash()) { mutableStateOf(profile.bodyType) }
                 var lifestyle by remember(profile.idHash()) { mutableStateOf(profile.lifestyle) }
                 var comfort by remember(profile.idHash()) { mutableStateOf(profile.comfortPreference) }
-                var onboardingComplete by remember(profile.idHash()) { mutableStateOf(profile.onboardingComplete) }
 
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                        .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     SectionHeader(
@@ -216,21 +227,13 @@ fun ProfileScreen(
                                 modifier = Modifier.fillMaxWidth()
                             )
 
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("Onboarding Complete")
-                                Switch(
-                                    checked = onboardingComplete,
-                                    onCheckedChange = { onboardingComplete = it }
-                                )
-                            }
-
                             Button(
                                 onClick = {
                                     viewModel.updateProfile(
                                         bodyType = bodyType,
                                         lifestyle = lifestyle,
                                         comfortPreference = comfort,
-                                        onboardingComplete = onboardingComplete
+                                        onboardingComplete = profile.onboardingComplete
                                     )
                                 },
                                 modifier = Modifier.fillMaxWidth()
