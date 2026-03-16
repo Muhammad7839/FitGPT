@@ -281,6 +281,54 @@ def test_forgot_and_reset_password_flow(client, monkeypatch):
     assert new_login.status_code == 200
 
 
+def test_auth_forgot_and_reset_aliases_match_canonical_behavior(client, monkeypatch):
+    monkeypatch.setattr("app.routes.EXPOSE_RESET_TOKEN_IN_RESPONSE", True)
+    register_and_login(client, "reset-alias@example.com", "password123")
+
+    forgot = client.post("/auth/forgot-password", json={"email": "reset-alias@example.com"})
+    assert forgot.status_code == 200
+    reset_token = forgot.json()["reset_token"]
+    assert reset_token
+
+    reset = client.post(
+        "/auth/reset-password",
+        json={"token": reset_token, "new_password": "newpass456"},
+    )
+    assert reset.status_code == 200
+    assert reset.json()["detail"] == "Password reset successful"
+
+    old_login = client.post(
+        "/login",
+        data={"username": "reset-alias@example.com", "password": "password123"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert old_login.status_code == 401
+
+    new_login = client.post(
+        "/login",
+        data={"username": "reset-alias@example.com", "password": "newpass456"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert new_login.status_code == 200
+
+
+def test_logout_compat_endpoint_is_stateless(client):
+    token = register_and_login(client, "logout-alias@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    without_auth = client.post("/logout")
+    assert without_auth.status_code == 200
+    assert without_auth.json()["detail"] == "Logged out"
+
+    with_auth = client.post("/logout", headers=auth)
+    assert with_auth.status_code == 200
+    assert with_auth.json()["detail"] == "Logged out"
+
+    me_after_logout = client.get("/me", headers=auth)
+    assert me_after_logout.status_code == 200
+    assert me_after_logout.json()["email"] == "logout-alias@example.com"
+
+
 def test_reset_password_rejects_invalid_token(client):
     response = client.post(
         "/reset-password",

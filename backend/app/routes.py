@@ -6,9 +6,11 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
+from starlette.datastructures import FormData
 
 from app import crud, models, schemas
 from app.ai.provider import ProviderMessage
@@ -207,6 +209,120 @@ def _normalize_weather_category(value: Optional[str]) -> Optional[str]:
     return None
 
 
+def _read_form_value(form: FormData, *keys: str) -> Optional[str]:
+    def _is_upload_like(value: object) -> bool:
+        return hasattr(value, "filename") and hasattr(value, "file")
+
+    for key in keys:
+        value = form.get(key)
+        if _is_upload_like(value):
+            continue
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return None
+
+
+def _read_form_bool(form: FormData, default: bool, *keys: str) -> bool:
+    raw = _read_form_value(form, *keys)
+    if raw is None:
+        return default
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+def _read_form_int(form: FormData, default: int, *keys: str) -> int:
+    raw = _read_form_value(form, *keys)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _read_form_csv_list(form: FormData, *keys: str) -> list[str]:
+    raw = _read_form_value(form, *keys)
+    if raw is None:
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in raw.split(","):
+        cleaned = value.strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(cleaned)
+    return normalized
+
+
+def _build_compat_wardrobe_item_from_form(form: FormData, image_url: Optional[str]) -> schemas.ClothingItemCreate:
+    category = _read_form_value(form, "category") or "Top"
+    color = _read_form_value(form, "color") or "Unknown"
+    season = _read_form_value(form, "season") or "All"
+    colors = _read_form_csv_list(form, "colors")
+    season_tags = _read_form_csv_list(form, "season_tags", "seasonTags")
+    style_tags = _read_form_csv_list(form, "style_tags", "styleTags")
+    occasion_tags = _read_form_csv_list(form, "occasion_tags", "occasionTags")
+
+    style_tag_single = _read_form_value(form, "style_tag")
+    if style_tag_single:
+        style_tags = [style_tag_single, *style_tags]
+    occasion_single = _read_form_value(form, "occasion")
+    if occasion_single:
+        occasion_tags = [occasion_single, *occasion_tags]
+
+    fit_tag = _read_form_value(form, "fit_tag", "fitTag", "fit_type", "fitType", "fit")
+    clothing_type = _read_form_value(form, "clothing_type", "clothingType", "type")
+
+    is_active = _read_form_bool(form, True, "is_active")
+    is_available = _read_form_bool(form, is_active, "is_available")
+
+    return schemas.ClothingItemCreate(
+        name=_read_form_value(form, "name"),
+        category=category,
+        clothing_type=clothing_type,
+        layer_type=_read_form_value(form, "layer_type", "layerType"),
+        is_one_piece=_read_form_bool(form, False, "is_one_piece", "isOnePiece"),
+        set_identifier=_read_form_value(form, "set_identifier", "setIdentifier"),
+        fit_tag=fit_tag,
+        color=color,
+        colors=colors,
+        season=season,
+        season_tags=season_tags,
+        style_tags=style_tags,
+        occasion_tags=occasion_tags,
+        accessory_type=_read_form_value(form, "accessory_type", "accessoryType"),
+        comfort_level=_read_form_int(form, 3, "comfort_level", "comfortLevel", "comfort"),
+        image_url=image_url or _read_form_value(form, "image_url", "imageUrl"),
+        brand=_read_form_value(form, "brand"),
+        is_available=is_available,
+        is_favorite=_read_form_bool(form, False, "is_favorite", "isFavorite"),
+        is_archived=_read_form_bool(form, False, "is_archived", "isArchived"),
+        last_worn_timestamp=_read_form_int(form, 0, "last_worn_timestamp", "lastWornTimestamp") or None,
+    )
+
+
+def _extract_compat_upload_file(form: FormData) -> Optional[UploadFile]:
+    def _is_upload_like(value: object) -> bool:
+        return hasattr(value, "filename") and hasattr(value, "file")
+
+    for key in ("image", "imageFile", "file"):
+        candidate = form.get(key)
+        if _is_upload_like(candidate):
+            return candidate
+    return None
+
+
 def fetch_current_temperature_f(city: str) -> int:
     """Compatibility helper used by recommendation flow and tests."""
     return fetch_current_weather(city=city).temperature_f
@@ -375,6 +491,16 @@ def forgot_password(
     }
 
 
+@router.post("/auth/forgot-password", response_model=schemas.ForgotPasswordResponse)
+def forgot_password_alias(
+    payload: schemas.ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    """Compatibility alias for web clients expecting /auth/forgot-password."""
+    logger.info("Compatibility auth route hit path=/auth/forgot-password")
+    return forgot_password(payload=payload, db=db)
+
+
 @router.post("/reset-password", response_model=schemas.ResetPasswordResponse)
 def reset_password(
     payload: schemas.ResetPasswordRequest,
@@ -387,6 +513,23 @@ def reset_password(
     crud.reset_user_password(db, user, payload.new_password)
     logger.info("Reset password for user_id=%s", user.id)
     return {"detail": "Password reset successful"}
+
+
+@router.post("/auth/reset-password", response_model=schemas.ResetPasswordResponse)
+def reset_password_alias(
+    payload: schemas.ResetPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    """Compatibility alias for web clients expecting /auth/reset-password."""
+    logger.info("Compatibility auth route hit path=/auth/reset-password")
+    return reset_password(payload=payload, db=db)
+
+
+@router.post("/logout", response_model=schemas.ResetPasswordResponse)
+def logout_compat():
+    """Stateless compatibility endpoint for web clients that call /logout."""
+    logger.info("Compatibility auth route hit path=/logout")
+    return {"detail": "Logged out"}
 
 
 # =============================
@@ -476,11 +619,37 @@ def update_profile_alias(
 # =============================
 
 @router.post("/wardrobe/items", response_model=schemas.ClothingItemResponse)
-def create_wardrobe_item(
-    item: schemas.ClothingItemCreate,
+async def create_wardrobe_item(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    content_type = (request.headers.get("content-type") or "").lower()
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        form_keys = sorted(str(key) for key in form.keys())
+        logger.info(
+            "Compatibility wardrobe create path=/wardrobe/items shape=multipart user_id=%s keys=%s",
+            current_user.id,
+            form_keys,
+        )
+        uploaded = _extract_compat_upload_file(form)
+        image_url = _store_uploaded_image(uploaded, current_user.id) if uploaded else None
+        compat_item = _build_compat_wardrobe_item_from_form(form=form, image_url=image_url)
+        created = crud.create_clothing_item(db, compat_item, current_user.id)
+        logger.info("Created wardrobe item user_id=%s item_id=%s", current_user.id, created.id)
+        return created
+
+    try:
+        payload = await request.json()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="Invalid wardrobe item payload") from exc
+
+    try:
+        item = schemas.ClothingItemCreate.model_validate(payload)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
     created = crud.create_clothing_item(db, item, current_user.id)
     logger.info("Created wardrobe item user_id=%s item_id=%s", current_user.id, created.id)
     return created
