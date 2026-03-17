@@ -19,6 +19,8 @@ class ProfileViewModel(
     val profileState: StateFlow<UiState<UserProfile>> = _profileState
     private val _avatarUploadState = MutableStateFlow<UiState<String?>>(UiState.Success(null))
     val avatarUploadState: StateFlow<UiState<String?>> = _avatarUploadState
+    private val _profileSaveState = MutableStateFlow<UiState<Boolean?>>(UiState.Success(null))
+    val profileSaveState: StateFlow<UiState<Boolean?>> = _profileSaveState
 
     init {
         refresh()
@@ -41,7 +43,7 @@ class ProfileViewModel(
         comfortPreference: String,
         onboardingComplete: Boolean
     ) {
-        _profileState.value = UiState.Loading
+        _profileSaveState.value = UiState.Loading
         viewModelScope.launch {
             try {
                 val updated = repository.updateProfile(
@@ -51,8 +53,9 @@ class ProfileViewModel(
                     onboardingComplete = onboardingComplete
                 )
                 _profileState.value = UiState.Success(updated)
+                _profileSaveState.value = UiState.Success(true)
             } catch (e: Exception) {
-                _profileState.value = UiState.Error("Failed to update profile")
+                _profileSaveState.value = UiState.Error("Failed to update profile")
             }
         }
     }
@@ -76,5 +79,9 @@ class ProfileViewModel(
 
     fun clearAvatarUploadState() {
         _avatarUploadState.value = UiState.Success(null)
+    }
+
+    fun clearProfileSaveState() {
+        _profileSaveState.value = UiState.Success(null)
     }
 }

@@ -42,8 +42,10 @@ import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.ui.common.FitGptScaffold
+import com.fitgpt.app.ui.common.FormOptionCatalog
 import com.fitgpt.app.ui.common.MAX_LOCAL_IMAGE_BYTES
 import com.fitgpt.app.ui.common.RemoteImagePreview
+import com.fitgpt.app.ui.common.SelectableField
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.isImagePayloadAllowed
 import com.fitgpt.app.ui.common.parseComfortLevel
@@ -93,13 +95,19 @@ fun EditItemScreen(
 
             var name by remember { mutableStateOf(item.name.orEmpty()) }
             var category by remember { mutableStateOf(item.category) }
+            var categoryCustom by remember { mutableStateOf("") }
             var clothingType by remember { mutableStateOf(item.clothingType.orEmpty()) }
+            var clothingTypeCustom by remember { mutableStateOf("") }
             var fitTag by remember { mutableStateOf(item.fitTag.orEmpty()) }
+            var fitTagCustom by remember { mutableStateOf("") }
             var color by remember { mutableStateOf(item.color) }
+            var colorCustom by remember { mutableStateOf("") }
             var season by remember { mutableStateOf(item.season) }
+            var seasonCustom by remember { mutableStateOf("") }
             var comfort by remember { mutableStateOf(item.comfortLevel.toString()) }
             var brand by remember { mutableStateOf(item.brand.orEmpty()) }
             var layerType by remember { mutableStateOf(item.layerType.orEmpty()) }
+            var layerTypeCustom by remember { mutableStateOf("") }
             var onePiece by remember { mutableStateOf(item.isOnePiece) }
             var setIdentifier by remember { mutableStateOf(item.setIdentifier.orEmpty()) }
             var styleTags by remember { mutableStateOf(item.styleTags.joinToString(",")) }
@@ -221,39 +229,49 @@ fun EditItemScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    OutlinedTextField(
-                        value = category,
+                    SelectableField(
+                        label = "Category",
+                        selectedValue = category,
                         onValueChange = { category = it },
-                        label = { Text("Category") },
-                        modifier = Modifier.fillMaxWidth()
+                        options = FormOptionCatalog.wardrobeCategories,
+                        customValue = categoryCustom,
+                        onCustomValueChange = { categoryCustom = it }
                     )
 
-                    OutlinedTextField(
-                        value = clothingType,
+                    SelectableField(
+                        label = "Clothing Type",
+                        selectedValue = clothingType,
                         onValueChange = { clothingType = it },
-                        label = { Text("Clothing Type") },
-                        modifier = Modifier.fillMaxWidth()
+                        options = FormOptionCatalog.clothingTypes,
+                        customValue = clothingTypeCustom,
+                        onCustomValueChange = { clothingTypeCustom = it }
                     )
 
-                    OutlinedTextField(
-                        value = fitTag,
+                    SelectableField(
+                        label = "Fit Type",
+                        selectedValue = fitTag,
                         onValueChange = { fitTag = it },
-                        label = { Text("Fit Tag") },
-                        modifier = Modifier.fillMaxWidth()
+                        options = FormOptionCatalog.fitTypeOptions,
+                        customValue = fitTagCustom,
+                        onCustomValueChange = { fitTagCustom = it }
                     )
 
-                    OutlinedTextField(
-                        value = color,
+                    SelectableField(
+                        label = "Color",
+                        selectedValue = color,
                         onValueChange = { color = it },
-                        label = { Text("Color") },
-                        modifier = Modifier.fillMaxWidth()
+                        options = FormOptionCatalog.colorOptions,
+                        customValue = colorCustom,
+                        onCustomValueChange = { colorCustom = it }
                     )
 
-                    OutlinedTextField(
-                        value = season,
+                    SelectableField(
+                        label = "Season",
+                        selectedValue = season,
                         onValueChange = { season = it },
-                        label = { Text("Season") },
-                        modifier = Modifier.fillMaxWidth()
+                        options = FormOptionCatalog.seasonOptions,
+                        customValue = seasonCustom,
+                        onCustomValueChange = { seasonCustom = it }
                     )
 
                     OutlinedTextField(
@@ -277,11 +295,13 @@ fun EditItemScreen(
                         Text(if (showAdvancedMetadata) "Hide advanced metadata" else "Show advanced metadata")
                     }
                     if (showAdvancedMetadata) {
-                        OutlinedTextField(
-                            value = layerType,
+                        SelectableField(
+                            label = "Layer Type",
+                            selectedValue = layerType,
                             onValueChange = { layerType = it },
-                            label = { Text("Layer Type (base/mid/outer)") },
-                            modifier = Modifier.fillMaxWidth()
+                            options = FormOptionCatalog.layerTypeOptions,
+                            customValue = layerTypeCustom,
+                            onCustomValueChange = { layerTypeCustom = it }
                         )
                         OutlinedTextField(
                             value = setIdentifier,
@@ -390,10 +410,17 @@ fun EditItemScreen(
 
                     Button(
                         onClick = {
+                            val resolvedCategory = category.resolveSelectedValue(categoryCustom).ifBlank { "Top" }
+                            val resolvedColor = color.resolveSelectedValue(colorCustom).ifBlank { "Unknown" }
+                            val resolvedSeason = season.resolveSelectedValue(seasonCustom).ifBlank { "All" }
+                            val resolvedClothingType = clothingType.resolveSelectedValue(clothingTypeCustom)
+                            val resolvedFitTag = fitTag.resolveSelectedValue(fitTagCustom)
+                            val resolvedLayerType = layerType.resolveSelectedValue(layerTypeCustom)
+
                             val validationError = validateClothingItemForm(
-                                category = category,
-                                color = color,
-                                season = season,
+                                category = resolvedCategory,
+                                color = resolvedColor,
+                                season = resolvedSeason,
                                 comfortText = comfort
                             )
                             if (validationError != null) {
@@ -404,16 +431,16 @@ fun EditItemScreen(
                             viewModel.updateItem(
                                 item.copy(
                                     name = name.trim().takeIf { it.isNotBlank() },
-                                    category = category.trim(),
-                                    clothingType = clothingType.trim().takeIf { it.isNotBlank() },
-                                    layerType = layerType.trim().lowercase().takeIf { it.isNotBlank() },
+                                    category = resolvedCategory,
+                                    clothingType = resolvedClothingType.takeIf { it.isNotBlank() },
+                                    layerType = resolvedLayerType.lowercase().takeIf { it.isNotBlank() },
                                     isOnePiece = onePiece,
                                     setIdentifier = setIdentifier.trim().takeIf { it.isNotBlank() },
-                                    fitTag = fitTag.trim().takeIf { it.isNotBlank() },
-                                    color = color.trim(),
-                                    colors = colors.toCsvList().ifEmpty { listOf(color.trim()) },
-                                    season = season.trim(),
-                                    seasonTags = seasonTags.toCsvList().ifEmpty { listOf(season.trim()) },
+                                    fitTag = resolvedFitTag.takeIf { it.isNotBlank() },
+                                    color = resolvedColor,
+                                    colors = colors.toCsvList().ifEmpty { listOf(resolvedColor) },
+                                    season = resolvedSeason,
+                                    seasonTags = seasonTags.toCsvList().ifEmpty { listOf(resolvedSeason) },
                                     styleTags = styleTags.toCsvList(),
                                     occasionTags = occasionTags.toCsvList(),
                                     accessoryType = accessoryType.trim().takeIf { it.isNotBlank() },
@@ -448,6 +475,14 @@ private fun bitmapToJpegBytes(bitmap: Bitmap): ByteArray {
     val output = ByteArrayOutputStream()
     bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
     return output.toByteArray()
+}
+
+private fun String.resolveSelectedValue(customValue: String): String {
+    val normalized = trim()
+    if (normalized.equals(FormOptionCatalog.OTHER_OPTION, ignoreCase = true)) {
+        return customValue.trim()
+    }
+    return normalized
 }
 
 private fun String.toCsvList(): List<String> {

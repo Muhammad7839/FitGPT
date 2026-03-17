@@ -31,6 +31,8 @@ import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebBadge
 import com.fitgpt.app.ui.common.WebCard
+import com.fitgpt.app.ui.common.recommendationSourceLabel
+import com.fitgpt.app.ui.common.recommendationWarningLabel
 import com.fitgpt.app.viewmodel.ChatUiMessage
 import com.fitgpt.app.viewmodel.ChatViewModel
 
@@ -62,10 +64,15 @@ fun ChatScreen(
 
             state.source?.let { source ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    WebBadge(text = if (source == "ai") "AI-powered" else "Fallback")
-                    state.warning?.let { warning ->
-                        if (state.fallbackUsed) {
-                            WebBadge(text = warning)
+                    WebBadge(
+                        text = recommendationSourceLabel(
+                            source = source,
+                            fallbackUsed = state.fallbackUsed
+                        )
+                    )
+                    if (state.fallbackUsed) {
+                        recommendationWarningLabel(state.warning)?.let { warningLabel ->
+                            WebBadge(text = warningLabel)
                         }
                     }
                 }

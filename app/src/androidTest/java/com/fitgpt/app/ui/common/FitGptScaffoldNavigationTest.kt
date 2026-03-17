@@ -75,13 +75,12 @@ class FitGptScaffoldNavigationTest {
     }
 
     @Test
-    fun secondTapOnActiveHomeTab_dispatchesReselectEvent() {
+    fun tappingActiveHomeTab_dispatchesReselectEvent() {
         composeRule.setContent {
             ScaffoldNavigationTestHost(trackDashboardReselect = true)
         }
 
         assertNodeWithTextExists("Reselect count: 0")
-        composeRule.onNodeWithText("Home").performClick()
         composeRule.onNodeWithText("Home").performClick()
         composeRule.waitUntil(timeoutMillis = 3_000) {
             composeRule.onAllNodesWithText("Reselect count: 1").fetchSemanticsNodes().isNotEmpty()
