@@ -29,11 +29,17 @@ import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.navigation.TopLevelReselectBus
 import com.fitgpt.app.navigation.navigateToSecondary
+import com.fitgpt.app.ui.common.FormOptionCatalog
 import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.RemoteImagePreview
+import com.fitgpt.app.ui.common.SelectableField
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebBadge
 import com.fitgpt.app.ui.common.WebCard
+import com.fitgpt.app.ui.common.recommendationScoreLabel
+import com.fitgpt.app.ui.common.recommendationSourceLabel
+import com.fitgpt.app.ui.common.recommendationWarningLabel
+import com.fitgpt.app.ui.common.weatherStatusMessage
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import com.fitgpt.app.viewmodel.WeatherRequestSource
@@ -51,16 +57,20 @@ fun RecommendationScreen(
     val recommendationMeta by viewModel.recommendationMeta.collectAsState()
     val recommendationOptions by viewModel.recommendationOptionsState.collectAsState()
     val weatherState by viewModel.weatherState.collectAsState()
+    val weatherCity by viewModel.weatherCityState.collectAsState()
     val weatherUiStatus by viewModel.weatherUiStatus.collectAsState()
     var manualTempInput by rememberSaveable { mutableStateOf("") }
-    var weatherCity by rememberSaveable { mutableStateOf("") }
-    var weatherCategory by rememberSaveable { mutableStateOf("") }
+    var weatherCategorySelection by rememberSaveable { mutableStateOf("") }
+    var weatherCategoryCustom by rememberSaveable { mutableStateOf("") }
     var timeContext by rememberSaveable { mutableStateOf("") }
     var planDate by rememberSaveable { mutableStateOf("") }
     var exclude by rememberSaveable { mutableStateOf("") }
-    var occasion by rememberSaveable { mutableStateOf("") }
-    var stylePreference by rememberSaveable { mutableStateOf("") }
-    var preferredSeasons by rememberSaveable { mutableStateOf("") }
+    var occasionSelection by rememberSaveable { mutableStateOf("") }
+    var occasionCustom by rememberSaveable { mutableStateOf("") }
+    var styleSelection by rememberSaveable { mutableStateOf("") }
+    var styleCustom by rememberSaveable { mutableStateOf("") }
+    var seasonSelection by rememberSaveable { mutableStateOf("") }
+    var seasonCustom by rememberSaveable { mutableStateOf("") }
     var showAdvancedControls by rememberSaveable { mutableStateOf(false) }
     var selectedOptionIndex by rememberSaveable { mutableStateOf(0) }
     var locationMessage by rememberSaveable { mutableStateOf<String?>(null) }
@@ -73,6 +83,20 @@ fun RecommendationScreen(
         lat: Double?,
         lon: Double?
     ) {
+        val resolvedOccasion = occasionSelection.resolveSelectedValue(occasionCustom)
+        val resolvedStylePreference = styleSelection.resolveSelectedValue(styleCustom)
+        val resolvedWeatherCategory = weatherCategorySelection
+            .resolveSelectedValue(weatherCategoryCustom)
+            .toBackendWeatherCategoryOrNull()
+        val resolvedSeason = seasonSelection.resolveSelectedValue(seasonCustom)
+        val preferredSeasons = if (resolvedSeason.isNullOrBlank()) {
+            emptyList()
+        } else {
+            listOf(resolvedSeason.lowercase())
+        }
+
+        city?.trim()?.takeIf { it.isNotEmpty() }?.let { viewModel.setWeatherCityInput(it) }
+
         if (lat != null && lon != null) {
             viewModel.fetchWeather(lat = lat, lon = lon, source = WeatherRequestSource.LOCATION)
         } else if (city != null) {
@@ -87,10 +111,10 @@ fun RecommendationScreen(
             weatherCity = city,
             weatherLat = lat,
             weatherLon = lon,
-            weatherCategory = weatherCategory.nullIfBlank(),
-            occasion = occasion.nullIfBlank(),
-            stylePreference = stylePreference.nullIfBlank(),
-            preferredSeasons = preferredSeasons.toListFromCsv()
+            weatherCategory = resolvedWeatherCategory,
+            occasion = resolvedOccasion,
+            stylePreference = resolvedStylePreference,
+            preferredSeasons = preferredSeasons
         )
     }
 
@@ -98,16 +122,18 @@ fun RecommendationScreen(
         scope.launch {
             locationMessage = "Detecting location..."
             Log.i(LOCATION_LOG_TAG, "recommendation screen location requested")
-            val coordinates = gpsLocationProvider.getCurrentCoordinates()
-            if (coordinates == null) {
+            val locationContext = gpsLocationProvider.getCurrentLocationContext()
+            if (locationContext == null) {
                 locationMessage = "Location unavailable. You can still use city manually."
                 viewModel.markWeatherManualFallback()
                 Log.w(LOCATION_LOG_TAG, "recommendation location unavailable")
                 return@launch
             }
-            locationMessage = "Using current location weather."
+            val cityLabel = locationContext.city?.takeIf { it.isNotBlank() }
+            locationMessage = cityLabel?.let { "Using current location: $it" } ?: "Using current location weather."
+            cityLabel?.let { viewModel.setWeatherCityInput(it) }
             Log.i(LOCATION_LOG_TAG, "recommendation location resolved")
-            applyContextRequest(city = null, lat = coordinates.lat, lon = coordinates.lon)
+            applyContextRequest(city = cityLabel, lat = locationContext.lat, lon = locationContext.lon)
         }
     }
 
@@ -222,16 +248,20 @@ fun RecommendationScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             WebBadge(
-                                text = if (recommendationMeta.source.equals("ai", ignoreCase = true)) {
-                                    "AI-powered"
-                                } else {
-                                    "Fallback"
-                                }
+                                text = recommendationSourceLabel(
+                                    source = recommendationMeta.source,
+                                    fallbackUsed = recommendationMeta.fallbackUsed
+                                )
                             )
-                            recommendationMeta.warning?.takeIf { it.isNotBlank() }?.let { warning ->
-                                WebBadge(text = warning)
+                            recommendationWarningLabel(recommendationMeta.warning)?.let { warningLabel ->
+                                WebBadge(text = warningLabel)
                             }
-                            WebBadge(text = "Score ${"%.2f".format(recommendationMeta.outfitScore)}")
+                            recommendationScoreLabel(
+                                score = recommendationMeta.outfitScore,
+                                fallbackUsed = recommendationMeta.fallbackUsed
+                            )?.let { scoreLabel ->
+                                WebBadge(text = scoreLabel)
+                            }
                         }
                     }
 
@@ -239,11 +269,28 @@ fun RecommendationScreen(
 
                     recommendationMeta.explanation.takeIf { it.isNotBlank() }?.let { summary ->
                         WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
-                            Text(
-                                text = summary,
+                            Column(
                                 modifier = Modifier.padding(12.dp),
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "Why this outfit was recommended",
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                buildRecommendationReasons(
+                                    summary = summary,
+                                    weatherState = weatherState,
+                                    occasion = occasionSelection.resolveSelectedValue(occasionCustom),
+                                    stylePreference = styleSelection.resolveSelectedValue(styleCustom),
+                                    recommendedItems = recommendedItems
+                                ).forEach { reason ->
+                                    Text(
+                                        text = "• $reason",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                     }
@@ -260,17 +307,18 @@ fun RecommendationScreen(
 
                             OutlinedTextField(
                                 value = weatherCity,
-                                onValueChange = { weatherCity = it },
-                                label = { Text("Weather city (optional)") },
+                                onValueChange = { viewModel.setWeatherCityInput(it) },
+                                label = { Text("Weather city") },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
-                            OutlinedTextField(
-                                value = occasion,
-                                onValueChange = { occasion = it },
-                                label = { Text("Occasion (work, gym, event)") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
+                            SelectableField(
+                                label = "Occasion",
+                                selectedValue = occasionSelection,
+                                onValueChange = { occasionSelection = it },
+                                options = FormOptionCatalog.recommendationOccasions,
+                                customValue = occasionCustom,
+                                onCustomValueChange = { occasionCustom = it }
                             )
 
                             OutlinedButton(
@@ -294,12 +342,13 @@ fun RecommendationScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true
                                 )
-                                OutlinedTextField(
-                                    value = weatherCategory,
-                                    onValueChange = { weatherCategory = it },
-                                    label = { Text("Weather category (cold/cool/mild/warm/hot)") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true
+                                SelectableField(
+                                    label = "Weather preference",
+                                    selectedValue = weatherCategorySelection,
+                                    onValueChange = { weatherCategorySelection = it },
+                                    options = FormOptionCatalog.weatherCategoryOptions,
+                                    customValue = weatherCategoryCustom,
+                                    onCustomValueChange = { weatherCategoryCustom = it }
                                 )
                                 OutlinedTextField(
                                     value = timeContext,
@@ -322,19 +371,21 @@ fun RecommendationScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true
                                 )
-                                OutlinedTextField(
-                                    value = stylePreference,
-                                    onValueChange = { stylePreference = it },
-                                    label = { Text("Style preference (optional)") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true
+                                SelectableField(
+                                    label = "Style preference",
+                                    selectedValue = styleSelection,
+                                    onValueChange = { styleSelection = it },
+                                    options = FormOptionCatalog.recommendationStyles,
+                                    customValue = styleCustom,
+                                    onCustomValueChange = { styleCustom = it }
                                 )
-                                OutlinedTextField(
-                                    value = preferredSeasons,
-                                    onValueChange = { preferredSeasons = it },
-                                    label = { Text("Preferred seasons CSV (optional)") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true
+                                SelectableField(
+                                    label = "Season",
+                                    selectedValue = seasonSelection,
+                                    onValueChange = { seasonSelection = it },
+                                    options = FormOptionCatalog.seasonOptions,
+                                    customValue = seasonCustom,
+                                    onCustomValueChange = { seasonCustom = it }
                                 )
                             }
 
@@ -385,7 +436,10 @@ fun RecommendationScreen(
                                 )
                             }
                             Text(
-                                text = "Weather status: ${weatherUiStatus.message}",
+                                text = weatherStatusMessage(
+                                    type = weatherUiStatus.type,
+                                    resolvedCity = (weatherState as? UiState.Success)?.data?.city ?: weatherCity
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -559,11 +613,42 @@ private fun String.nullIfBlank(): String? {
     return if (cleaned.isEmpty()) null else cleaned
 }
 
-private fun String.toListFromCsv(): List<String> {
-    return split(",")
-        .map { it.trim() }
-        .filter { it.isNotEmpty() }
-        .distinctBy { it.lowercase() }
+private fun String.resolveSelectedValue(customValue: String): String? {
+    val selected = trim()
+    if (selected.isEmpty()) return null
+    if (selected.equals(FormOptionCatalog.OTHER_OPTION, ignoreCase = true)) {
+        return customValue.nullIfBlank()
+    }
+    return selected
+}
+
+private fun String?.toBackendWeatherCategoryOrNull(): String? {
+    val normalized = this?.trim()?.lowercase()
+    return when (normalized) {
+        "cold", "cool", "mild", "warm", "hot" -> normalized
+        else -> null
+    }
+}
+
+private fun buildRecommendationReasons(
+    summary: String,
+    weatherState: UiState<*>,
+    occasion: String?,
+    stylePreference: String?,
+    recommendedItems: List<ClothingItem>
+): List<String> {
+    val reasons = mutableListOf<String>()
+    val weather = (weatherState as? UiState.Success<*>)?.data as? com.fitgpt.app.data.model.WeatherSnapshot
+    if (weather != null) {
+        reasons += "Weather is ${weather.temperatureF}°F in ${weather.city}"
+    }
+    occasion?.takeIf { it.isNotBlank() }?.let { reasons += "Occasion preference: $it" }
+    stylePreference?.takeIf { it.isNotBlank() }?.let { reasons += "Style preference: $it" }
+    if (recommendedItems.isNotEmpty()) {
+        reasons += "${recommendedItems.size} available wardrobe items were matched"
+    }
+    reasons += summary
+    return reasons
 }
 
 @Composable

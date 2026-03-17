@@ -34,17 +34,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
-import com.fitgpt.app.data.CURRENT_TUTORIAL_VERSION
-import com.fitgpt.app.data.PreferencesManager
 import com.fitgpt.app.data.location.GpsLocationProvider
 import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.navigation.TopLevelReselectBus
 import com.fitgpt.app.navigation.navigateToSecondary
 import com.fitgpt.app.ui.common.FitGptScaffold
-import com.fitgpt.app.ui.common.GuidedTutorialOverlay
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebBadge
 import com.fitgpt.app.ui.common.WebCard
+import com.fitgpt.app.ui.common.recommendationSourceLabel
+import com.fitgpt.app.ui.common.weatherStatusBadge
+import com.fitgpt.app.ui.common.weatherStatusMessage
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import com.fitgpt.app.viewmodel.WeatherRequestSource
@@ -64,29 +64,28 @@ fun DashboardScreen(
     val recommendationMeta by viewModel.recommendationMeta.collectAsState()
     val plannedState by viewModel.plannedState.collectAsState()
     val weatherState by viewModel.weatherState.collectAsState()
+    val weatherCity by viewModel.weatherCityState.collectAsState()
     val weatherUiStatus by viewModel.weatherUiStatus.collectAsState()
-    var weatherCity by rememberSaveable { mutableStateOf("") }
     var autoFetchAttempted by rememberSaveable { mutableStateOf(false) }
-    var showTutorial by rememberSaveable { mutableStateOf(false) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val preferencesManager = remember(context) { PreferencesManager(context) }
-    val tutorialCompleted by preferencesManager.tutorialCompleted.collectAsState(initial = false)
     val locationProvider = remember(context) { GpsLocationProvider(context) }
 
     fun fetchFromCurrentLocation() {
         scope.launch {
             Log.i(LOCATION_LOG_TAG, "location weather fetch requested")
-            val coordinates = locationProvider.getCurrentCoordinates()
-            if (coordinates == null) {
+            val locationContext = locationProvider.getCurrentLocationContext()
+            if (locationContext == null) {
                 viewModel.markWeatherManualFallback()
                 Log.w(LOCATION_LOG_TAG, "location unavailable for weather fetch")
                 return@launch
             }
+            locationContext.city?.let { viewModel.setWeatherCityInput(it) }
             viewModel.fetchWeather(
-                lat = coordinates.lat,
-                lon = coordinates.lon,
+                city = locationContext.city,
+                lat = locationContext.lat,
+                lon = locationContext.lon,
                 source = WeatherRequestSource.LOCATION
             )
             Log.i(LOCATION_LOG_TAG, "location weather fetch started with coordinates")
@@ -122,12 +121,6 @@ fun DashboardScreen(
         } else {
             viewModel.markWeatherPermissionNeeded()
             Log.i(LOCATION_LOG_TAG, "dashboard location permission missing")
-        }
-    }
-
-    LaunchedEffect(tutorialCompleted) {
-        if (!tutorialCompleted) {
-            showTutorial = true
         }
     }
 
@@ -169,9 +162,10 @@ fun DashboardScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text("Weather", style = MaterialTheme.typography.titleMedium)
-                    WebBadge(text = weatherStatusLabel(weatherUiStatus.type))
+                    val resolvedWeatherCity = (weatherState as? UiState.Success)?.data?.city ?: weatherCity
+                    WebBadge(text = weatherStatusBadge(weatherUiStatus.type))
                     Text(
-                        text = weatherUiStatus.message,
+                        text = weatherStatusMessage(weatherUiStatus.type, resolvedWeatherCity),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -220,8 +214,8 @@ fun DashboardScreen(
                         WeatherStatusType.IDLE -> {
                             OutlinedTextField(
                                 value = weatherCity,
-                                onValueChange = { weatherCity = it },
-                                label = { Text("Weather city fallback") },
+                                onValueChange = { viewModel.setWeatherCityInput(it) },
+                                label = { Text("City") },
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Button(
@@ -236,7 +230,7 @@ fun DashboardScreen(
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Use City Weather")
+                                Text("Use city weather")
                             }
                         }
                         else -> {
@@ -244,7 +238,7 @@ fun DashboardScreen(
                                 onClick = { fetchFromCurrentLocation() },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Refresh Location Weather")
+                                Text("Use Current Location")
                             }
                         }
                     }
@@ -312,11 +306,10 @@ fun DashboardScreen(
                     ) {
                         Text("Latest Recommendation Context", style = MaterialTheme.typography.titleMedium)
                         WebBadge(
-                            text = if (recommendationMeta.source.equals("ai", ignoreCase = true)) {
-                                "AI-powered"
-                            } else {
-                                "Fallback"
-                            }
+                            text = recommendationSourceLabel(
+                                source = recommendationMeta.source,
+                                fallbackUsed = recommendationMeta.fallbackUsed
+                            )
                         )
                         Text(
                             text = recommendationMeta.explanation,
@@ -402,16 +395,6 @@ fun DashboardScreen(
             }
         }
     }
-
-    GuidedTutorialOverlay(
-        visible = showTutorial,
-        onDismiss = {
-            showTutorial = false
-            scope.launch {
-                preferencesManager.markTutorialSeen(version = CURRENT_TUTORIAL_VERSION)
-            }
-        }
-    )
 }
 
 @Composable
@@ -437,17 +420,5 @@ private fun QuickActionCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-    }
-}
-
-private fun weatherStatusLabel(status: WeatherStatusType): String {
-    return when (status) {
-        WeatherStatusType.LOADING -> "Loading"
-        WeatherStatusType.USING_LOCATION -> "Using location"
-        WeatherStatusType.PERMISSION_NEEDED -> "Permission needed"
-        WeatherStatusType.MANUAL_CITY_FALLBACK -> "Manual city fallback"
-        WeatherStatusType.UNAVAILABLE -> "Unavailable"
-        WeatherStatusType.AVAILABLE -> "Ready"
-        WeatherStatusType.IDLE -> "Not set"
     }
 }

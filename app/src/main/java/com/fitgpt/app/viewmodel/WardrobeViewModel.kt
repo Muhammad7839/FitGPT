@@ -126,6 +126,8 @@ class WardrobeViewModel(
 
     private val _weatherState = MutableStateFlow<UiState<WeatherSnapshot?>>(UiState.Success(null))
     val weatherState: StateFlow<UiState<WeatherSnapshot?>> = _weatherState
+    private val _weatherCityState = MutableStateFlow("")
+    val weatherCityState: StateFlow<String> = _weatherCityState
     private val _weatherUiStatus = MutableStateFlow(
         WeatherUiStatus(
             type = WeatherStatusType.IDLE,
@@ -317,6 +319,7 @@ class WardrobeViewModel(
     ) {
         _recommendationState.value = UiState.Loading
         viewModelScope.launch {
+            val sharedWeatherCity = _weatherCityState.value.trim().takeIf { it.isNotEmpty() }
             try {
                 val resolvedTemp = manualTemp ?: latestWeatherSnapshot?.temperatureF
                 val resolvedWeatherCategory = weatherCategory ?: latestWeatherSnapshot?.weatherCategory
@@ -325,7 +328,7 @@ class WardrobeViewModel(
                     timeContext = timeContext,
                     planDate = planDate,
                     exclude = exclude,
-                    weatherCity = weatherCity,
+                    weatherCity = weatherCity?.trim()?.takeIf { it.isNotEmpty() } ?: sharedWeatherCity,
                     weatherLat = weatherLat,
                     weatherLon = weatherLon,
                     weatherCategory = resolvedWeatherCategory,
@@ -366,7 +369,7 @@ class WardrobeViewModel(
                         timeContext = timeContext,
                         planDate = planDate,
                         exclude = exclude,
-                        weatherCity = weatherCity,
+                        weatherCity = weatherCity?.trim()?.takeIf { it.isNotEmpty() } ?: sharedWeatherCity,
                         weatherLat = weatherLat,
                         weatherLon = weatherLon,
                         weatherCategory = weatherCategory ?: latestWeatherSnapshot?.weatherCategory,
@@ -421,9 +424,13 @@ class WardrobeViewModel(
     fun markWeatherManualFallback() {
         _weatherUiStatus.value = WeatherUiStatus(
             type = WeatherStatusType.MANUAL_CITY_FALLBACK,
-            message = "Manual city fallback"
+            message = "City detection unavailable"
         )
         Log.i(weatherLogTag, "manual city fallback set")
+    }
+
+    fun setWeatherCityInput(city: String) {
+        _weatherCityState.value = city.trimStart()
     }
 
     fun fetchWeather(
@@ -432,6 +439,9 @@ class WardrobeViewModel(
         lon: Double? = null,
         source: WeatherRequestSource = WeatherRequestSource.MANUAL_CITY
     ) {
+        city?.trim()?.takeIf { it.isNotEmpty() }?.let { enteredCity ->
+            _weatherCityState.value = enteredCity
+        }
         if ((city == null || city.isBlank()) && (lat == null || lon == null)) {
             _weatherState.value = UiState.Success(latestWeatherSnapshot)
             _weatherUiStatus.value = WeatherUiStatus(
@@ -464,6 +474,7 @@ class WardrobeViewModel(
                     lon = lon
                 )
                 latestWeatherSnapshot = weather
+                _weatherCityState.value = weather.city
                 _weatherState.value = UiState.Success(weather)
                 _weatherUiStatus.value = WeatherUiStatus(
                     type = WeatherStatusType.AVAILABLE,
@@ -484,7 +495,7 @@ class WardrobeViewModel(
                         _weatherState.value = UiState.Success(null)
                         _weatherUiStatus.value = WeatherUiStatus(
                             type = WeatherStatusType.MANUAL_CITY_FALLBACK,
-                            message = "Manual city fallback"
+                            message = "City detection unavailable"
                         )
                     }
                     else -> {

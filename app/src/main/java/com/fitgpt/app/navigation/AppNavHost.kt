@@ -8,6 +8,11 @@ import android.os.SystemClock
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -31,6 +36,7 @@ import com.fitgpt.app.ui.edititem.EditItemScreen
 import com.fitgpt.app.ui.favorites.FavoritesScreen
 import com.fitgpt.app.ui.history.HistoryScreen
 import com.fitgpt.app.ui.more.MoreScreen
+import com.fitgpt.app.ui.onboarding.PostLoginTutorialScreen
 import com.fitgpt.app.ui.onboarding.WelcomeScreen
 import com.fitgpt.app.ui.plans.PlansScreen
 import com.fitgpt.app.ui.profile.ProfileScreen
@@ -48,6 +54,7 @@ import com.fitgpt.app.viewmodel.ProfileViewModel
 import com.fitgpt.app.viewmodel.ProfileViewModelFactory
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import com.fitgpt.app.viewmodel.WardrobeViewModelFactory
+import kotlinx.coroutines.launch
 
 private const val NAV_LOG_TAG = "FitGPTNav"
 
@@ -58,6 +65,7 @@ object Routes {
     const val FORGOT_PASSWORD = "forgot_password"
     const val RESET_PASSWORD = "reset_password"
     const val RESET_PASSWORD_ROUTE = "reset_password?token={token}"
+    const val POST_LOGIN_TUTORIAL = "post_login_tutorial"
     const val DASHBOARD = "dashboard"
     const val WARDROBE = "wardrobe"
     const val FAVORITES = "favorites"
@@ -79,6 +87,7 @@ fun AppNavHost(
 ) {
     val context = LocalContext.current
     val prefs = remember { PreferencesManager(context) }
+    val appScope = rememberCoroutineScope()
     val tokenStore = remember { ServiceLocator.provideTokenStore(context) }
 
     val onboardingViewModel: OnboardingViewModel =
@@ -88,6 +97,8 @@ fun AppNavHost(
     var completed by remember { mutableStateOf(false) }
     var authReady by remember { mutableStateOf(false) }
     var hasToken by remember { mutableStateOf(false) }
+    var tutorialReady by remember { mutableStateOf(false) }
+    var tutorialCompleted by remember { mutableStateOf(false) }
 
     val wardrobeRepository = remember { ServiceLocator.provideWardrobeRepository(context) }
     val wardrobeViewModel: WardrobeViewModel? =
@@ -145,10 +156,18 @@ fun AppNavHost(
         authReady = true
     }
 
-    if (!isReady || !authReady) return
+    LaunchedEffect(Unit) {
+        prefs.tutorialCompleted.collect { completedTutorial ->
+            tutorialCompleted = completedTutorial
+            tutorialReady = true
+        }
+    }
+
+    if (!isReady || !authReady || !tutorialReady) return
 
     val startDestination =
         if (!completed) Routes.ONBOARDING_WELCOME
+        else if (hasToken && !tutorialCompleted) Routes.POST_LOGIN_TUTORIAL
         else if (hasToken) Routes.DASHBOARD
         else Routes.LOGIN
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
@@ -187,7 +206,31 @@ fun AppNavHost(
 
     NavHost(
         navController = navController,
-        startDestination = startDestination
+        startDestination = startDestination,
+        enterTransition = {
+            slideInHorizontally(
+                initialOffsetX = { width -> width / 8 },
+                animationSpec = tween(220)
+            ) + fadeIn(animationSpec = tween(220))
+        },
+        exitTransition = {
+            slideOutHorizontally(
+                targetOffsetX = { width -> -(width / 10) },
+                animationSpec = tween(180)
+            ) + fadeOut(animationSpec = tween(180))
+        },
+        popEnterTransition = {
+            slideInHorizontally(
+                initialOffsetX = { width -> -(width / 8) },
+                animationSpec = tween(220)
+            ) + fadeIn(animationSpec = tween(220))
+        },
+        popExitTransition = {
+            slideOutHorizontally(
+                targetOffsetX = { width -> width / 10 },
+                animationSpec = tween(180)
+            ) + fadeOut(animationSpec = tween(180))
+        }
     ) {
 
         composable(Routes.ONBOARDING_WELCOME) {
@@ -202,7 +245,8 @@ fun AppNavHost(
                 viewModel = authViewModel,
                 onLoginSuccess = {
                     hasToken = true
-                    navController.navigate(Routes.DASHBOARD) {
+                    val target = if (tutorialCompleted) Routes.DASHBOARD else Routes.POST_LOGIN_TUTORIAL
+                    navController.navigate(target) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
@@ -220,7 +264,8 @@ fun AppNavHost(
                 viewModel = authViewModel,
                 onSignupSuccess = {
                     hasToken = true
-                    navController.navigate(Routes.DASHBOARD) {
+                    val target = if (tutorialCompleted) Routes.DASHBOARD else Routes.POST_LOGIN_TUTORIAL
+                    navController.navigate(target) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
@@ -251,6 +296,21 @@ fun AppNavHost(
                 navController = navController,
                 viewModel = authViewModel,
                 initialToken = backStackEntry.arguments?.getString("token").orEmpty()
+            )
+        }
+
+        composable(Routes.POST_LOGIN_TUTORIAL) {
+            PostLoginTutorialScreen(
+                onComplete = {
+                    if (!tutorialCompleted) {
+                        appScope.launch {
+                            prefs.markTutorialSeen()
+                        }
+                    }
+                    navController.navigate(Routes.DASHBOARD) {
+                        popUpTo(Routes.POST_LOGIN_TUTORIAL) { inclusive = true }
+                    }
+                }
             )
         }
 

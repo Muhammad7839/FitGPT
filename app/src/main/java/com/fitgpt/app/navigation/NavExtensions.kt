@@ -6,7 +6,6 @@ package com.fitgpt.app.navigation
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
 
 private val topLevelRoutes = setOf(
     Routes.DASHBOARD,
@@ -35,8 +34,12 @@ fun NavDestination?.isInRouteHierarchy(route: String): Boolean {
 }
 
 fun NavController.navigateToTopLevel(route: String) {
-    navigate(route) {
-        popUpTo(graph.findStartDestination().id) {
+    val targetRoute = routeBase(route)
+    if (targetRoute.isBlank()) return
+
+    navigate(targetRoute) {
+        // Pop to the graph root to avoid auth/onboarding-dependent start-destination edge cases.
+        popUpTo(graph.id) {
             saveState = true
         }
         launchSingleTop = true

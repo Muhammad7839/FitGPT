@@ -16,17 +16,20 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -50,8 +53,10 @@ import com.fitgpt.app.data.repository.UploadImagePayload
 import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.navigation.navigateToTopLevel
 import com.fitgpt.app.ui.common.FitGptScaffold
+import com.fitgpt.app.ui.common.FormOptionCatalog
 import com.fitgpt.app.ui.common.MAX_LOCAL_IMAGE_BYTES
 import com.fitgpt.app.ui.common.RemoteImagePreview
+import com.fitgpt.app.ui.common.SelectableField
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.ui.common.isImagePayloadAllowed
@@ -83,13 +88,19 @@ fun AddItemScreen(
 ) {
     var name by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
+    var categoryCustom by remember { mutableStateOf("") }
     var clothingType by remember { mutableStateOf("") }
+    var clothingTypeCustom by remember { mutableStateOf("") }
     var fitTag by remember { mutableStateOf("") }
+    var fitTagCustom by remember { mutableStateOf("") }
     var color by remember { mutableStateOf("") }
+    var colorCustom by remember { mutableStateOf("") }
     var season by remember { mutableStateOf("") }
+    var seasonCustom by remember { mutableStateOf("") }
     var comfort by remember { mutableStateOf("") }
     var brand by remember { mutableStateOf("") }
     var layerType by remember { mutableStateOf("") }
+    var layerTypeCustom by remember { mutableStateOf("") }
     var onePiece by remember { mutableStateOf(false) }
     var setIdentifier by remember { mutableStateOf("") }
     var styleTags by remember { mutableStateOf("") }
@@ -106,6 +117,10 @@ fun AddItemScreen(
     var selectedPhotoPayload by remember { mutableStateOf<UploadImagePayload?>(null) }
     var showPhotoOptions by remember { mutableStateOf(false) }
     var photoFlowState by remember { mutableStateOf(PhotoFlowState.IDLE) }
+    var detectedCategory by remember { mutableStateOf<String?>(null) }
+    var detectionConfidence by remember { mutableStateOf(1f) }
+    var needsCategoryConfirmation by remember { mutableStateOf(false) }
+    var categorySuggestionNotice by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val context = LocalContext.current
@@ -123,6 +138,15 @@ fun AddItemScreen(
 
     fun applyImageAutoFill(bytes: ByteArray, sourceName: String) {
         val inferredFromName = inferFromFileName(sourceName)
+        detectedCategory = inferredFromName.category
+        detectionConfidence = inferredFromName.confidence
+        if (inferredFromName.confidence < 0.66f) {
+            needsCategoryConfirmation = true
+            categorySuggestionNotice = "Detected category may be inaccurate. Review if needed before saving."
+        } else {
+            needsCategoryConfirmation = false
+            categorySuggestionNotice = null
+        }
         category = category.ifBlank { inferredFromName.category ?: "Top" }
         if (clothingType.isBlank()) {
             clothingType = inferredFromName.clothingType.orEmpty()
@@ -146,19 +170,22 @@ fun AddItemScreen(
 
     fun saveCurrentItem() {
         formError = null
-        val resolvedCategory = category.trim().ifBlank { "Top" }
-        val resolvedColor = color.trim().ifBlank { AUTO_FILL_UNKNOWN }
-        val resolvedSeason = season.trim().ifBlank { "All" }
+        val resolvedCategory = category.resolveSelectedValue(categoryCustom).ifBlank { "Top" }
+        val resolvedClothingType = clothingType.resolveSelectedValue(clothingTypeCustom)
+        val resolvedFitTag = fitTag.resolveSelectedValue(fitTagCustom)
+        val resolvedColor = color.resolveSelectedValue(colorCustom).ifBlank { AUTO_FILL_UNKNOWN }
+        val resolvedSeason = season.resolveSelectedValue(seasonCustom).ifBlank { "All" }
+        val resolvedLayerType = layerType.resolveSelectedValue(layerTypeCustom).lowercase().takeIf { it.isNotBlank() }
         val resolvedComfort = parseComfortLevel(comfort)
         val draftItem = ClothingItem(
             id = System.currentTimeMillis().toInt(),
             name = name.trim().takeIf { it.isNotBlank() },
             category = resolvedCategory,
-            clothingType = clothingType.trim().takeIf { it.isNotBlank() },
-            layerType = layerType.trim().lowercase().takeIf { it.isNotBlank() },
+            clothingType = resolvedClothingType.takeIf { it.isNotBlank() },
+            layerType = resolvedLayerType,
             isOnePiece = onePiece,
             setIdentifier = setIdentifier.trim().takeIf { it.isNotBlank() },
-            fitTag = fitTag.trim().takeIf { it.isNotBlank() },
+            fitTag = resolvedFitTag.takeIf { it.isNotBlank() },
             color = resolvedColor,
             colors = colors.toCsvList().ifEmpty { listOf(resolvedColor) },
             season = resolvedSeason,
@@ -531,39 +558,85 @@ fun AddItemScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    OutlinedTextField(
-                        value = category,
-                        onValueChange = { category = it },
-                        label = { Text("Category") },
-                        modifier = Modifier.fillMaxWidth()
+                    SelectableField(
+                        label = "Category",
+                        selectedValue = category,
+                        onValueChange = {
+                            category = it
+                            needsCategoryConfirmation = false
+                            categorySuggestionNotice = null
+                        },
+                        options = FormOptionCatalog.wardrobeCategories,
+                        customValue = categoryCustom,
+                        onCustomValueChange = { categoryCustom = it }
                     )
+                    if (needsCategoryConfirmation) {
+                        Text(
+                            text = "Detected category: ${detectedCategory.orEmpty()} (${(detectionConfidence * 100).toInt()}% confidence). Please confirm or change.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf("Top", "Bottom", "Outerwear", "Shoes", "Accessories").forEach { option ->
+                                FilterChip(
+                                    selected = category.equals(option, ignoreCase = true),
+                                    onClick = {
+                                        category = option
+                                        categoryCustom = ""
+                                        needsCategoryConfirmation = false
+                                        categorySuggestionNotice = null
+                                    },
+                                    label = { Text(option) }
+                                )
+                            }
+                        }
+                    }
 
-                    OutlinedTextField(
-                        value = clothingType,
+                    categorySuggestionNotice?.let { notice ->
+                        Text(
+                            text = notice,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    SelectableField(
+                        label = "Clothing Type",
+                        selectedValue = clothingType,
                         onValueChange = { clothingType = it },
-                        label = { Text("Clothing Type (optional)") },
-                        modifier = Modifier.fillMaxWidth()
+                        options = FormOptionCatalog.clothingTypes,
+                        customValue = clothingTypeCustom,
+                        onCustomValueChange = { clothingTypeCustom = it }
                     )
 
-                    OutlinedTextField(
-                        value = fitTag,
+                    SelectableField(
+                        label = "Fit Type",
+                        selectedValue = fitTag,
                         onValueChange = { fitTag = it },
-                        label = { Text("Fit Tag (optional)") },
-                        modifier = Modifier.fillMaxWidth()
+                        options = FormOptionCatalog.fitTypeOptions,
+                        customValue = fitTagCustom,
+                        onCustomValueChange = { fitTagCustom = it }
                     )
 
-                    OutlinedTextField(
-                        value = color,
+                    SelectableField(
+                        label = "Color",
+                        selectedValue = color,
                         onValueChange = { color = it },
-                        label = { Text("Color") },
-                        modifier = Modifier.fillMaxWidth()
+                        options = FormOptionCatalog.colorOptions,
+                        customValue = colorCustom,
+                        onCustomValueChange = { colorCustom = it }
                     )
 
-                    OutlinedTextField(
-                        value = season,
+                    SelectableField(
+                        label = "Season",
+                        selectedValue = season,
                         onValueChange = { season = it },
-                        label = { Text("Season") },
-                        modifier = Modifier.fillMaxWidth()
+                        options = FormOptionCatalog.seasonOptions,
+                        customValue = seasonCustom,
+                        onCustomValueChange = { seasonCustom = it }
                     )
 
                     OutlinedTextField(
@@ -588,11 +661,13 @@ fun AddItemScreen(
                     }
 
                     if (showAdvancedMetadata) {
-                        OutlinedTextField(
-                            value = layerType,
+                        SelectableField(
+                            label = "Layer Type",
+                            selectedValue = layerType,
                             onValueChange = { layerType = it },
-                            label = { Text("Layer Type (base/mid/outer)") },
-                            modifier = Modifier.fillMaxWidth()
+                            options = FormOptionCatalog.layerTypeOptions,
+                            customValue = layerTypeCustom,
+                            onCustomValueChange = { layerTypeCustom = it }
                         )
                         OutlinedTextField(
                             value = setIdentifier,
@@ -810,6 +885,14 @@ private fun String.toCsvList(): List<String> {
         .distinctBy { it.lowercase() }
 }
 
+private fun String.resolveSelectedValue(customValue: String): String {
+    val normalized = trim()
+    if (normalized.equals(FormOptionCatalog.OTHER_OPTION, ignoreCase = true)) {
+        return customValue.trim()
+    }
+    return normalized
+}
+
 private fun inferLayerTypeFromCategory(category: String?): String {
     val normalized = category?.trim()?.lowercase().orEmpty()
     return when {
@@ -824,7 +907,8 @@ private data class InferredNameHint(
     val clothingType: String?,
     val fitTag: String? = null,
     val season: String? = null,
-    val comfortLevel: Int? = null
+    val comfortLevel: Int? = null,
+    val confidence: Float = 0.4f
 )
 
 private data class ImageAutoFillHint(
@@ -839,32 +923,38 @@ private data class ImageAutoFillHint(
 private fun inferFromFileName(fileName: String): InferredNameHint {
     val normalized = fileName.lowercase()
     val keywordHints = listOf(
-        "jacket" to InferredNameHint(category = "Outerwear", clothingType = "Jacket", season = "Winter", comfortLevel = 4),
-        "coat" to InferredNameHint(category = "Outerwear", clothingType = "Coat", season = "Winter", comfortLevel = 4),
-        "hoodie" to InferredNameHint(category = "Outerwear", clothingType = "Hoodie", season = "Fall", comfortLevel = 4),
-        "sweater" to InferredNameHint(category = "Top", clothingType = "Sweater", season = "Fall", comfortLevel = 4),
-        "shirt" to InferredNameHint(category = "Top", clothingType = "Shirt", season = "All", comfortLevel = 3),
-        "tshirt" to InferredNameHint(category = "Top", clothingType = "T-Shirt", season = "Summer", comfortLevel = 4),
-        "tee" to InferredNameHint(category = "Top", clothingType = "T-Shirt", season = "Summer", comfortLevel = 4),
-        "blouse" to InferredNameHint(category = "Top", clothingType = "Blouse", season = "Spring", comfortLevel = 3),
-        "jeans" to InferredNameHint(category = "Bottom", clothingType = "Jeans", season = "All", comfortLevel = 3),
-        "pants" to InferredNameHint(category = "Bottom", clothingType = "Pants", season = "All", comfortLevel = 3),
-        "trouser" to InferredNameHint(category = "Bottom", clothingType = "Trousers", season = "All", comfortLevel = 3),
-        "shorts" to InferredNameHint(category = "Bottom", clothingType = "Shorts", season = "Summer", comfortLevel = 4),
-        "skirt" to InferredNameHint(category = "Bottom", clothingType = "Skirt", season = "Spring", comfortLevel = 3),
-        "shoe" to InferredNameHint(category = "Shoes", clothingType = "Shoes", season = "All", comfortLevel = 3),
-        "sneaker" to InferredNameHint(category = "Shoes", clothingType = "Sneakers", season = "All", comfortLevel = 4),
-        "boot" to InferredNameHint(category = "Shoes", clothingType = "Boots", season = "Winter", comfortLevel = 3),
-        "sandal" to InferredNameHint(category = "Shoes", clothingType = "Sandals", season = "Summer", comfortLevel = 4),
-        "hat" to InferredNameHint(category = "Accessory", clothingType = "Hat", season = "All", comfortLevel = 3),
-        "cap" to InferredNameHint(category = "Accessory", clothingType = "Cap", season = "Summer", comfortLevel = 3),
-        "scarf" to InferredNameHint(category = "Accessory", clothingType = "Scarf", season = "Winter", comfortLevel = 3),
-        "watch" to InferredNameHint(category = "Accessory", clothingType = "Watch", season = "All", comfortLevel = 3),
-        "bag" to InferredNameHint(category = "Accessory", clothingType = "Bag", season = "All", comfortLevel = 3),
+        "jacket" to InferredNameHint(category = "Outerwear", clothingType = "Jacket", season = "Winter", comfortLevel = 4, confidence = 0.86f),
+        "coat" to InferredNameHint(category = "Outerwear", clothingType = "Coat", season = "Winter", comfortLevel = 4, confidence = 0.86f),
+        "hoodie" to InferredNameHint(category = "Outerwear", clothingType = "Hoodie", season = "Fall", comfortLevel = 4, confidence = 0.82f),
+        "sweater" to InferredNameHint(category = "Top", clothingType = "Sweater", season = "Fall", comfortLevel = 4, confidence = 0.82f),
+        "shirt" to InferredNameHint(category = "Top", clothingType = "Shirt", season = "All", comfortLevel = 3, confidence = 0.74f),
+        "tshirt" to InferredNameHint(category = "Top", clothingType = "T-Shirt", season = "Summer", comfortLevel = 4, confidence = 0.75f),
+        "tee" to InferredNameHint(category = "Top", clothingType = "T-Shirt", season = "Summer", comfortLevel = 4, confidence = 0.72f),
+        "blouse" to InferredNameHint(category = "Top", clothingType = "Blouse", season = "Spring", comfortLevel = 3, confidence = 0.74f),
+        "jeans" to InferredNameHint(category = "Bottom", clothingType = "Jeans", season = "All", comfortLevel = 3, confidence = 0.88f),
+        "pants" to InferredNameHint(category = "Bottom", clothingType = "Pants", season = "All", comfortLevel = 3, confidence = 0.82f),
+        "trouser" to InferredNameHint(category = "Bottom", clothingType = "Trousers", season = "All", comfortLevel = 3, confidence = 0.82f),
+        "shorts" to InferredNameHint(category = "Bottom", clothingType = "Shorts", season = "Summer", comfortLevel = 4, confidence = 0.84f),
+        "skirt" to InferredNameHint(category = "Bottom", clothingType = "Skirt", season = "Spring", comfortLevel = 3, confidence = 0.82f),
+        "shoe" to InferredNameHint(category = "Shoes", clothingType = "Shoes", season = "All", comfortLevel = 3, confidence = 0.84f),
+        "sneaker" to InferredNameHint(category = "Shoes", clothingType = "Sneakers", season = "All", comfortLevel = 4, confidence = 0.86f),
+        "boot" to InferredNameHint(category = "Shoes", clothingType = "Boots", season = "Winter", comfortLevel = 3, confidence = 0.84f),
+        "sandal" to InferredNameHint(category = "Shoes", clothingType = "Sandals", season = "Summer", comfortLevel = 4, confidence = 0.84f),
+        "hat" to InferredNameHint(category = "Accessories", clothingType = "Hat", season = "All", comfortLevel = 3, confidence = 0.76f),
+        "cap" to InferredNameHint(category = "Accessories", clothingType = "Cap", season = "Summer", comfortLevel = 3, confidence = 0.76f),
+        "scarf" to InferredNameHint(category = "Accessories", clothingType = "Scarf", season = "Winter", comfortLevel = 3, confidence = 0.76f),
+        "watch" to InferredNameHint(category = "Accessories", clothingType = "Watch", season = "All", comfortLevel = 3, confidence = 0.74f),
+        "bag" to InferredNameHint(category = "Accessories", clothingType = "Bag", season = "All", comfortLevel = 3, confidence = 0.78f),
     )
     val baseHint = keywordHints.firstOrNull { (keyword, _) ->
         normalized.contains(keyword)
-    }?.second ?: InferredNameHint(category = "Top", clothingType = null, season = "All", comfortLevel = 3)
+    }?.second ?: InferredNameHint(
+        category = "Top",
+        clothingType = null,
+        season = "All",
+        comfortLevel = 3,
+        confidence = 0.42f
+    )
 
     val inferredFitTag = when {
         normalized.contains("oversized") || normalized.contains("baggy") -> "oversized"

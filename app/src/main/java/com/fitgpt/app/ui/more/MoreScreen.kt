@@ -59,12 +59,6 @@ fun MoreScreen(
                 ) {
                     Text("Outfit Tools", style = MaterialTheme.typography.titleMedium)
                     MoreActionRow(
-                        icon = { Icon(Icons.Default.Star, contentDescription = null) },
-                        title = "Chat",
-                        subtitle = "Ask AI stylist for quick guidance",
-                        onClick = { navController.navigateToSecondary(Routes.CHAT) }
-                    )
-                    MoreActionRow(
                         icon = { Icon(Icons.Default.Favorite, contentDescription = null) },
                         title = "Favorites",
                         subtitle = "Pin and revisit go-to items",

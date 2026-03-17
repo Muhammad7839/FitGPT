@@ -23,6 +23,8 @@ class PreferencesManager(
     private val ACTIVE_THEME_ID = stringPreferencesKey("active_theme_id")
     private val CUSTOM_THEME_JSON = stringPreferencesKey("custom_theme_json")
     private val TUTORIAL_SEEN_VERSION = intPreferencesKey("tutorial_seen_version")
+    private val PROFILE_SKIN_TONE = stringPreferencesKey("profile_skin_tone")
+    private val PROFILE_HAIR_COLOR = stringPreferencesKey("profile_hair_color")
 
     val onboardingCompleted: Flow<Boolean> =
         context.dataStore.data.map { preferences ->
@@ -43,6 +45,12 @@ class PreferencesManager(
     }
     val tutorialCompleted: Flow<Boolean> = context.dataStore.data.map { preferences ->
         (preferences[TUTORIAL_SEEN_VERSION] ?: 0) >= CURRENT_TUTORIAL_VERSION
+    }
+    val profileSkinTone: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[PROFILE_SKIN_TONE].orEmpty()
+    }
+    val profileHairColor: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[PROFILE_HAIR_COLOR].orEmpty()
     }
 
     suspend fun setOnboardingCompleted() {
@@ -87,6 +95,16 @@ class PreferencesManager(
     suspend fun markTutorialSeen(version: Int = CURRENT_TUTORIAL_VERSION) {
         context.dataStore.edit { preferences ->
             preferences[TUTORIAL_SEEN_VERSION] = version
+        }
+    }
+
+    suspend fun setLocalProfileDetails(
+        skinTone: String,
+        hairColor: String
+    ) {
+        context.dataStore.edit { preferences ->
+            preferences[PROFILE_SKIN_TONE] = skinTone.trim()
+            preferences[PROFILE_HAIR_COLOR] = hairColor.trim()
         }
     }
 }
