@@ -1,36 +1,21 @@
-import React, { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { Route, Routes, Navigate, useNavigate } from "react-router-dom";
+import React, { useCallback, useEffect, useState } from "react";
+import { Route, Routes, Navigate, useLocation, useNavigate } from "react-router-dom";
 import PageTransition from "../components/PageTransition";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { useAuth } from "../auth/AuthProvider";
 import { loadAnswers, saveAnswers, isOnboarded, clearOnboarding, isTutorialDone } from "../utils/userStorage";
 import GuidedTutorial from "../components/GuidedTutorial";
-
-// Light routes — eagerly loaded (auth flow, small components)
 import Login from "../components/Login";
 import Signup from "../components/Signup";
 import ForgotPassword from "../components/ForgotPassword";
 import ResetPassword from "../components/ResetPassword";
-
-// Heavy routes — lazy loaded
-const Onboarding = lazy(() => import("../components/onboarding/Onboarding"));
-const Dashboard = lazy(() => import("../components/Dashboard"));
-const Wardrobe = lazy(() => import("../components/Wardrobe"));
-
-const Profile = lazy(() => import("../components/Profile"));
-const HistoryAnalytics = lazy(() => import("../components/HistoryAnalytics"));
-const Plans = lazy(() => import("../components/Plans"));
-const SavedOutfits = lazy(() => import("../components/SavedOutfits"));
-
-function RouteSpinner() {
-  return (
-    <div className="routeSpinner">
-      <div className="routeSpinnerDot" />
-      <div className="routeSpinnerDot" />
-      <div className="routeSpinnerDot" />
-    </div>
-  );
-}
+import Onboarding from "../components/onboarding/Onboarding";
+import Dashboard from "../components/Dashboard";
+import Wardrobe from "../components/Wardrobe";
+import Profile from "../components/Profile";
+import HistoryAnalytics from "../components/HistoryAnalytics";
+import Plans from "../components/Plans";
+import SavedOutfits from "../components/SavedOutfits";
 
 function OnboardingWrapper({ onComplete, savedAnswers }) {
   const navigate = useNavigate();
@@ -43,36 +28,33 @@ function OnboardingWrapper({ onComplete, savedAnswers }) {
     [onComplete, navigate]
   );
 
-  return (
-    <Onboarding
-      onComplete={handleComplete}
-      initialAnswers={savedAnswers}
-    />
-  );
+  return <Onboarding onComplete={handleComplete} initialAnswers={savedAnswers} />;
 }
 
 export default function AppRoutes() {
+  const { pathname } = useLocation();
   const { user } = useAuth();
 
   const [answers, setAnswers] = useState(() => loadAnswers(user));
   const [onboarded, setOnboarded] = useState(() => isOnboarded(user));
 
-  // Re-evaluate onboarding state when user changes (login/logout)
   useEffect(() => {
     setAnswers(loadAnswers(user));
     setOnboarded(isOnboarded(user));
   }, [user]);
 
   const [justOnboarded, setJustOnboarded] = useState(false);
-
   const showTutorial = justOnboarded && !isTutorialDone();
 
-  const handleOnboardingComplete = useCallback((finalAnswers) => {
-    setAnswers(finalAnswers);
-    saveAnswers(finalAnswers, user);
-    setOnboarded(true);
-    setJustOnboarded(true);
-  }, [user]);
+  const handleOnboardingComplete = useCallback(
+    (finalAnswers) => {
+      setAnswers(finalAnswers);
+      saveAnswers(finalAnswers, user);
+      setOnboarded(true);
+      setJustOnboarded(true);
+    },
+    [user]
+  );
 
   const handleResetOnboarding = useCallback(() => {
     clearOnboarding(user);
@@ -86,8 +68,6 @@ export default function AppRoutes() {
 
   return (
     <>
-      <ErrorBoundary>
-      <Suspense fallback={<RouteSpinner />}>
       <PageTransition>
         <Routes>
           <Route
@@ -113,31 +93,60 @@ export default function AppRoutes() {
           <Route
             path="/dashboard"
             element={
-              <ErrorBoundary>
-                <Dashboard
-                  answers={answers}
-                  onResetOnboarding={handleResetOnboarding}
-                />
+              <ErrorBoundary resetKey={pathname}>
+                <Dashboard answers={answers} onResetOnboarding={handleResetOnboarding} />
               </ErrorBoundary>
             }
           />
-          <Route path="/wardrobe" element={<ErrorBoundary><Wardrobe /></ErrorBoundary>} />
+          <Route
+            path="/wardrobe"
+            element={
+              <ErrorBoundary resetKey={pathname}>
+                <Wardrobe />
+              </ErrorBoundary>
+            }
+          />
           <Route path="/favorites" element={<Navigate to="/wardrobe" replace />} />
-          <Route path="/profile" element={<ErrorBoundary><Profile onResetOnboarding={handleResetOnboarding} /></ErrorBoundary>} />
-          <Route path="/history" element={<ErrorBoundary><HistoryAnalytics /></ErrorBoundary>} />
-          <Route path="/plans" element={<ErrorBoundary><Plans /></ErrorBoundary>} />
-          <Route path="/saved-outfits" element={<ErrorBoundary><SavedOutfits /></ErrorBoundary>} />
+          <Route
+            path="/profile"
+            element={
+              <ErrorBoundary resetKey={pathname}>
+                <Profile onResetOnboarding={handleResetOnboarding} />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/history"
+            element={
+              <ErrorBoundary resetKey={pathname}>
+                <HistoryAnalytics />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/plans"
+            element={
+              <ErrorBoundary resetKey={pathname}>
+                <Plans />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/saved-outfits"
+            element={
+              <ErrorBoundary resetKey={pathname}>
+                <SavedOutfits />
+              </ErrorBoundary>
+            }
+          />
           <Route path="/analytics" element={<Navigate to="/history?tab=analytics" replace />} />
 
           <Route path="/onboarding" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </PageTransition>
-      </Suspense>
-      </ErrorBoundary>
 
       <GuidedTutorial show={!!showTutorial} onDismiss={handleTutorialDismiss} />
-
     </>
   );
 }

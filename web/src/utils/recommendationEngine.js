@@ -1,12 +1,8 @@
-// Recommendation engine — pure functions extracted from Dashboard.js
-// Handles outfit generation, scoring, color coordination, weather/time biasing,
-// and explanation text generation.
 
 import { normalizeFitTag, normalizeItems, idsSignature } from "./helpers";
 
 const DEFAULT_BODY_TYPE = "rectangle";
 
-/* ── Text helpers ───────────────────────────────────────────── */
 
 export function titleCase(text) {
   if (!text) return "";
@@ -82,7 +78,7 @@ export function colorToCss(colorName) {
   return `linear-gradient(135deg, ${stops})`;
 }
 
-/* ── Fit penalty ────────────────────────────────────────────── */
+
 
 function normalizeDashboardFit(raw) {
   const v = (raw || "").toString().trim().toLowerCase();
@@ -125,7 +121,7 @@ export function fitPenalty(fitTag, bodyTypeId, category) {
   return 0;
 }
 
-/* ── Color coordination engine ──────────────────────────────── */
+
 
 const COLOR_HUE_MAP = {
   red: 0, coral: 16, orange: 30, gold: 43, yellow: 55,
@@ -195,7 +191,7 @@ export function pairScore(aColor, bColor) {
   return count > 0 ? total / count : 2;
 }
 
-/* ── PRNG ───────────────────────────────────────────────────── */
+
 
 export function mulberry32(seed) {
   let t = seed >>> 0;
@@ -232,7 +228,7 @@ function pickBestByScore(candidates, scoreFn, rng) {
   return best || pickOne(candidates, rng);
 }
 
-/* ── Weather ────────────────────────────────────────────────── */
+
 
 export function weatherCategoryFromTempF(tempF) {
   const t = Number(tempF);
@@ -265,7 +261,7 @@ function weatherScoreBias(category, itemCategory) {
   return 0;
 }
 
-/* ── Time of day ────────────────────────────────────────────── */
+
 
 export function timeCategoryFromDate(dateObj) {
   const d = dateObj instanceof Date ? dateObj : new Date();
@@ -320,7 +316,7 @@ function timeScoreBias(timeCatRaw, itemCategory, answers) {
   return Math.round(base * strength);
 }
 
-/* ── Scoring / matching ─────────────────────────────────────── */
+
 
 function bestMatch(outfitSoFar, candidates, rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers) {
   if (!outfitSoFar || !outfitSoFar.length) return pickOne(candidates, rng);
@@ -347,32 +343,287 @@ function bestMatch(outfitSoFar, candidates, rng, bodyTypeId, recentItemCounts, w
   return pickBestByScore(candidates, scoreFn, rng);
 }
 
-/* ── Wardrobe bucketing ─────────────────────────────────────── */
+function normalizeTagArray(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => (entry ?? "").toString().trim().toLowerCase())
+      .filter(Boolean)
+      .filter((entry, idx, arr) => arr.indexOf(entry) === idx);
+  }
 
-export function bucketWardrobe(activeItems) {
-  const pool = (Array.isArray(activeItems) ? activeItems : []).map((x, idx) => ({
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean)
+      .filter((entry, idx, arr) => arr.indexOf(entry) === idx);
+  }
+
+  return [];
+}
+
+function normalizeClothingType(value) {
+  return (value || "").toString().trim().toLowerCase();
+}
+
+function normalizeLayerType(value, category) {
+  const raw = (value || "").toString().trim().toLowerCase();
+  if (raw === "base" || raw === "mid" || raw === "outer") return raw;
+
+  const type = normalizeClothingType(value);
+  const cat = normalizeCategory(category);
+  if (["t-shirt", "tank top", "long sleeve", "blouse", "dress shirt", "polo"].includes(type)) return "base";
+  if (["hoodie", "sweater", "cardigan"].includes(type)) return "mid";
+  if (["jacket", "coat", "blazer", "parka", "windbreaker"].includes(type)) return "outer";
+  if (cat === "Outerwear") return "outer";
+  return "";
+}
+
+function normalizeSetId(value) {
+  return (value || "").toString().trim().toLowerCase();
+}
+
+function seasonFromDate(dateObj) {
+  const month = (dateObj instanceof Date ? dateObj : new Date()).getMonth() + 1;
+  if (month === 12 || month <= 2) return "winter";
+  if (month >= 3 && month <= 5) return "spring";
+  if (month >= 6 && month <= 8) return "summer";
+  return "fall";
+}
+
+function targetLayersForWeather(weatherCat) {
+  const cat = (weatherCat || "mild").toString().trim().toLowerCase();
+  if (cat === "cold" || cat === "cool") return ["base", "mid", "outer"];
+  return ["base"];
+}
+
+function accessoryLimitForWeather(weatherCat) {
+  const cat = (weatherCat || "mild").toString().trim().toLowerCase();
+  if (cat === "hot") return 1;
+  if (cat === "warm") return 2;
+  return 2;
+}
+
+function isAccessoryType(type) {
+  return ["hat", "scarf", "watch", "belt", "jewelry", "jewellery", "sunglasses", "bag"].includes(type);
+}
+
+function accessoryFamily(item) {
+  const type = normalizeClothingType(item?.clothing_type || item?.type || item?.name || "");
+  if (type.includes("hat")) return "hat";
+  if (type.includes("scarf")) return "scarf";
+  if (type.includes("watch")) return "watch";
+  if (type.includes("belt")) return "belt";
+  if (type.includes("glass")) return "eyewear";
+  if (type.includes("jewel") || type.includes("necklace") || type.includes("bracelet") || type.includes("ring")) return "jewelry";
+  if (type.includes("bag") || type.includes("purse")) return "bag";
+  return type || "accessory";
+}
+
+function normalizeOccasionValue(value) {
+  const raw = (value || "").toString().trim().toLowerCase();
+  if (!raw) return "";
+  const map = {
+    work: "work",
+    office: "work",
+    formal: "formal",
+    athletic: "athletic",
+    activewear: "athletic",
+    active: "athletic",
+    casual: "casual",
+    social: "social",
+    lounge: "relaxed",
+    relaxed: "relaxed",
+    everyday: "casual",
+    daily: "casual",
+  };
+  return map[raw] || raw;
+}
+
+function normalizeStyleValue(value) {
+  const raw = (value || "").toString().trim().toLowerCase();
+  if (!raw) return "";
+  const map = {
+    activewear: "activewear",
+    athletic: "activewear",
+    relaxed: "relaxed",
+    lounge: "relaxed",
+    formal: "formal",
+    casual: "casual",
+    smartcasual: "smart casual",
+    "smart casual": "smart casual",
+    work: "formal",
+  };
+  return map[raw] || raw;
+}
+
+function preferredOccasionsFromAnswers(answers) {
+  return normalizeTagArray(answers?.dressFor).map(normalizeOccasionValue).filter(Boolean);
+}
+
+function preferredStylesFromAnswers(answers) {
+  return normalizeTagArray(answers?.style).map(normalizeStyleValue).filter(Boolean);
+}
+
+function itemWeatherProfile(item) {
+  const type = normalizeClothingType(item?.clothing_type);
+  const cat = normalizeCategory(item?.category);
+
+  if (["coat", "parka"].includes(type)) return { warm: 3, coolness: 0 };
+  if (["jacket", "blazer", "hoodie", "sweater", "cardigan", "boots"].includes(type) || cat === "Outerwear") {
+    return { warm: 2, coolness: 0 };
+  }
+  if (["shorts", "tank top", "sandals"].includes(type)) return { warm: 0, coolness: 3 };
+  if (["t-shirt", "skirt"].includes(type)) return { warm: 1, coolness: 2 };
+  return { warm: 1, coolness: 1 };
+}
+
+function clothingTypeBias(item, weatherCat) {
+  const profile = itemWeatherProfile(item);
+  const cat = (weatherCat || "mild").toString().trim().toLowerCase();
+  if (cat === "cold") return profile.warm * 4 - profile.coolness * 3;
+  if (cat === "cool") return profile.warm * 3 - profile.coolness * 2;
+  if (cat === "warm") return profile.coolness * 3 - profile.warm * 2;
+  if (cat === "hot") return profile.coolness * 4 - profile.warm * 4;
+  return profile.coolness + profile.warm;
+}
+
+function metadataScore(item, context) {
+  const { answers, weatherCat, bodyTypeId, recentItemCounts, timeCat, outfitSoFar, selectedSeason } = context;
+  const id = (item?.id ?? "").toString().trim();
+  const recentPenalty = id && recentItemCounts ? (recentItemCounts.get(id) || 0) * 2 : 0;
+
+  const styles = normalizeTagArray(item?.style_tags).map(normalizeStyleValue);
+  const occasions = normalizeTagArray(item?.occasion_tags).map(normalizeOccasionValue);
+  const seasons = normalizeTagArray(item?.season_tags);
+  const preferredStyles = preferredStylesFromAnswers(answers);
+  const preferredOccasions = preferredOccasionsFromAnswers(answers);
+
+  let score = 0;
+
+  if (preferredStyles.length) {
+    score += styles.some((style) => preferredStyles.includes(style)) ? 10 : styles.length ? -5 : 2;
+  } else if (styles.includes("casual")) {
+    score += 2;
+  }
+
+  if (preferredOccasions.length) {
+    score += occasions.some((occasion) => preferredOccasions.includes(occasion)) ? 12 : occasions.length ? -6 : 2;
+  }
+
+  if (seasons.length) {
+    score += seasons.includes(selectedSeason) ? 8 : -4;
+  } else {
+    score += 1;
+  }
+
+  score += weatherScoreBias(weatherCat, item?.category);
+  score += timeScoreBias(timeCat, item?.category, answers);
+  score += clothingTypeBias(item, weatherCat);
+  score -= fitPenalty(item?.fit_tag, bodyTypeId, item?.category);
+  score -= recentPenalty;
+
+  if (Array.isArray(outfitSoFar) && outfitSoFar.length) {
+    const colorScore = outfitSoFar.reduce((total, existing) => total + pairScore(existing?.color, item?.color), 0) / outfitSoFar.length;
+    score += colorScore * 8;
+  }
+
+  return score;
+}
+
+function createNormalizedItem(x, idx) {
+  const category = normalizeCategory(x?.category);
+  const type = normalizeClothingType(x?.clothing_type || x?.type || "");
+  const layerType = normalizeLayerType(x?.layer_type, category || type);
+  const styles = normalizeTagArray(x?.style_tags).map(normalizeStyleValue);
+  const occasions = normalizeTagArray(x?.occasion_tags).map(normalizeOccasionValue);
+  const seasons = normalizeTagArray(x?.season_tags);
+
+  return {
     ...x,
     _idx: idx,
-    category: normalizeCategory(x?.category),
+    category,
     color: titleCase(normalizeColorName(x?.color || "")),
     name: x?.name || "Wardrobe item",
     fit_tag: normalizeFitTag(x?.fit_tag || x?.fitTag || x?.fit),
-  }));
+    clothing_type: type,
+    layer_type: layerType,
+    style_tags: styles,
+    occasion_tags: occasions,
+    season_tags: seasons,
+    set_id: normalizeSetId(x?.set_id),
+    is_one_piece: x?.is_one_piece === true || String(x?.is_one_piece).toLowerCase() === "true",
+  };
+}
 
-  const byCat = { Tops: [], Bottoms: [], Shoes: [], Outerwear: [], Other: [] };
+function itemRole(item) {
+  if (!item) return "other";
+  if (item.is_one_piece) return "one-piece";
+  const cat = normalizeCategory(item.category);
+  if (cat === "Tops") return "top";
+  if (cat === "Bottoms") return "bottom";
+  if (cat === "Shoes") return "shoes";
+  if (cat === "Outerwear") return "outerwear";
+  if (cat === "Accessories") return "accessory";
+  return "other";
+}
+
+function itemsConflict(a, b) {
+  if (!a || !b) return false;
+  const roleA = itemRole(a);
+  const roleB = itemRole(b);
+  if (roleA === roleB && roleA !== "accessory") return true;
+
+  const typeA = normalizeClothingType(a.clothing_type || a.name);
+  const typeB = normalizeClothingType(b.clothing_type || b.name);
+
+  if (a.layer_type && b.layer_type && a.layer_type === b.layer_type && a.layer_type !== "base") return true;
+  if (["coat", "parka"].includes(typeA) && ["coat", "parka"].includes(typeB)) return true;
+  if (["hoodie", "sweater", "cardigan"].includes(typeA) && ["hoodie", "sweater", "cardigan"].includes(typeB)) return true;
+  if ((typeA === "blazer" && ["gym shorts", "athletic shorts", "running shorts"].includes(typeB)) || (typeB === "blazer" && ["gym shorts", "athletic shorts", "running shorts"].includes(typeA))) return true;
+  if ((typeA === "dress shoes" && ["gym shorts", "athletic shorts", "running shorts"].includes(typeB)) || (typeB === "dress shoes" && ["gym shorts", "athletic shorts", "running shorts"].includes(typeA))) return true;
+
+  return false;
+}
+
+function withUniqueById(list) {
+  const seen = new Set();
+  return (Array.isArray(list) ? list : []).filter((item) => {
+    const id = (item?.id ?? "").toString();
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+
+
+export function bucketWardrobe(activeItems) {
+  const pool = (Array.isArray(activeItems) ? activeItems : []).map(createNormalizedItem);
+
+  const byCat = {
+    Tops: [],
+    Bottoms: [],
+    Shoes: [],
+    Outerwear: [],
+    Accessories: [],
+    OnePieces: [],
+    Other: [],
+  };
 
   for (const item of pool) {
+    if (item.is_one_piece) byCat.OnePieces.push(item);
     if (item.category === "Tops") byCat.Tops.push(item);
     else if (item.category === "Bottoms") byCat.Bottoms.push(item);
     else if (item.category === "Shoes") byCat.Shoes.push(item);
     else if (item.category === "Outerwear") byCat.Outerwear.push(item);
+    else if (item.category === "Accessories" || isAccessoryType(item.clothing_type)) byCat.Accessories.push(item);
     else byCat.Other.push(item);
   }
 
   return byCat;
 }
 
-/* ── Default outfit set (when wardrobe is empty) ────────────── */
 
 export function defaultOutfitSet(seedNumber) {
   const seed = typeof seedNumber === "number" && Number.isFinite(seedNumber) ? seedNumber : Date.now();
@@ -416,7 +667,180 @@ export function defaultOutfitSet(seedNumber) {
   return [make(), make(), make()];
 }
 
-/* ── Outfit generation ──────────────────────────────────────── */
+
+
+function sortCandidates(candidates, context, outfitSoFar, rng) {
+  return withUniqueById(candidates)
+    .map((item) => ({
+      item,
+      score: metadataScore(item, { ...context, outfitSoFar }),
+      tie: rng(),
+    }))
+    .sort((a, b) => (b.score - a.score) || (a.tie - b.tie))
+    .map((entry) => entry.item);
+}
+
+function findSetPartner(item, candidates) {
+  const setId = normalizeSetId(item?.set_id);
+  if (!setId) return null;
+  return (Array.isArray(candidates) ? candidates : []).find((candidate) => candidate?.id !== item?.id && normalizeSetId(candidate?.set_id) === setId) || null;
+}
+
+function chooseFirstCompatible(candidates, outfitSoFar) {
+  return (Array.isArray(candidates) ? candidates : []).find((candidate) => !outfitSoFar.some((existing) => itemsConflict(existing, candidate))) || null;
+}
+
+function buildOutfitCandidate(buckets, rng, context, variant) {
+  const outfit = [];
+  const roleCounts = new Map();
+  const layerTargets = targetLayersForWeather(context.weatherCat);
+  const selectedLayerTypes = new Set();
+
+  const addItem = (item) => {
+    if (!item) return false;
+    if (outfit.some((existing) => (existing?.id ?? "") === (item?.id ?? ""))) return false;
+    if (outfit.some((existing) => itemsConflict(existing, item))) return false;
+
+    const role = itemRole(item);
+    if (role !== "accessory" && role !== "outerwear" && role !== "other") {
+      if ((roleCounts.get(role) || 0) >= 1) return false;
+    }
+    if (item.layer_type && selectedLayerTypes.has(item.layer_type) && item.layer_type !== "base") return false;
+
+    outfit.push(item);
+    roleCounts.set(role, (roleCounts.get(role) || 0) + 1);
+    if (item.layer_type) selectedLayerTypes.add(item.layer_type);
+    return true;
+  };
+
+  const onePieceCandidates = sortCandidates(buckets.OnePieces, context, outfit, rng);
+  const topCandidates = sortCandidates(buckets.Tops, context, outfit, rng);
+  const bottomCandidates = sortCandidates(buckets.Bottoms, context, outfit, rng);
+  const shoeCandidates = sortCandidates(buckets.Shoes, context, outfit, rng);
+  const outerCandidates = sortCandidates(buckets.Outerwear, context, outfit, rng);
+  const accessoryCandidates = sortCandidates([...buckets.Accessories, ...buckets.Other], context, outfit, rng);
+
+  const preferOnePiece = variant % 3 === 1 || (onePieceCandidates.length > 0 && topCandidates.length < 2);
+
+  if (preferOnePiece) {
+    addItem(chooseFirstCompatible(onePieceCandidates, outfit));
+  }
+
+  if (!outfit.some((item) => itemRole(item) === "one-piece")) {
+    const baseLayerTopCandidates = topCandidates.filter((item) => {
+      if (!item.layer_type) return true;
+      return layerTargets.includes(item.layer_type) || item.layer_type === "base";
+    });
+    const firstTop = chooseFirstCompatible(baseLayerTopCandidates.length ? baseLayerTopCandidates : topCandidates, outfit);
+    addItem(firstTop);
+
+    const setBottom = findSetPartner(firstTop, bottomCandidates);
+    if (setBottom) addItem(setBottom);
+
+    if (!(roleCounts.get("bottom") || 0)) {
+      addItem(chooseFirstCompatible(bottomCandidates, outfit));
+    }
+  }
+
+  if (layerTargets.includes("mid") && (roleCounts.get("top") || 0) && variant % 2 === 0) {
+    const midCandidates = topCandidates.filter((item) => item.layer_type === "mid");
+    addItem(chooseFirstCompatible(midCandidates, outfit));
+  }
+
+  if (layerTargets.includes("outer") || (context.weatherCat === "cool" && variant % 3 !== 2)) {
+    const preferredOuter = outerCandidates.filter((item) => !item.layer_type || item.layer_type === "outer");
+    addItem(chooseFirstCompatible(preferredOuter.length ? preferredOuter : outerCandidates, outfit));
+  }
+
+  const shoeContext = outfit.filter((item) => ["one-piece", "top", "bottom", "outerwear"].includes(itemRole(item)));
+  const rankedShoes = sortCandidates(shoeCandidates, context, shoeContext.length ? shoeContext : outfit, rng);
+  addItem(chooseFirstCompatible(rankedShoes, outfit));
+
+  const accessoryLimit = accessoryLimitForWeather(context.weatherCat);
+  const desiredAccessories = Math.min(accessoryLimit, variant === 0 ? 1 : variant === 1 ? 2 : 0);
+  const accessoryFamilies = new Set();
+
+  for (const accessory of accessoryCandidates) {
+    if ((roleCounts.get("accessory") || 0) >= desiredAccessories) break;
+    const family = accessoryFamily(accessory);
+    if (accessoryFamilies.has(family)) continue;
+    if (context.weatherCat === "hot" && family === "scarf") continue;
+    if (preferredOccasionsFromAnswers(context.answers).includes("athletic") && ["jewelry", "belt"].includes(family)) continue;
+    if (outfit.length >= 4 && family === "scarf" && (selectedLayerTypes.has("mid") || selectedLayerTypes.has("outer"))) continue;
+    if (addItem(accessory)) accessoryFamilies.add(family);
+  }
+
+  return outfit;
+}
+
+function mappedOutfit(items) {
+  return withUniqueById(items).map((x, i) => ({
+    id: x.id ?? `w${i}_${x._idx}`,
+    name: x.name ?? "Wardrobe item",
+    category: normalizeCategory(x.category),
+    color: titleCase(x.color || ""),
+    fit_tag: normalizeFitTag(x.fit_tag),
+    image_url: x.image_url || "",
+    clothing_type: x.clothing_type || "",
+    layer_type: x.layer_type || "",
+    is_one_piece: !!x.is_one_piece,
+    set_id: x.set_id || "",
+    style_tags: normalizeTagArray(x.style_tags),
+    occasion_tags: normalizeTagArray(x.occasion_tags),
+    season_tags: normalizeTagArray(x.season_tags),
+  }));
+}
+
+function scoreOutfitCandidate(outfit, context) {
+  if (!Array.isArray(outfit) || !outfit.length) return -Infinity;
+
+  const roles = new Set(outfit.map(itemRole));
+  let score = 0;
+
+  if (roles.has("one-piece")) score += 14;
+  else {
+    if (roles.has("top")) score += 12;
+    if (roles.has("bottom")) score += 12;
+  }
+  if (roles.has("shoes")) score += 12;
+
+  const layers = new Set(outfit.map((item) => item.layer_type).filter(Boolean));
+  const targetLayers = targetLayersForWeather(context.weatherCat);
+  for (const layer of targetLayers) {
+    if (layers.has(layer)) score += 6;
+  }
+  if ((context.weatherCat === "cold" || context.weatherCat === "cool") && !roles.has("outerwear") && !layers.has("outer")) {
+    score -= 10;
+  }
+  if ((context.weatherCat === "warm" || context.weatherCat === "hot") && (roles.has("outerwear") || layers.has("outer"))) {
+    score -= 8;
+  }
+
+  for (const item of outfit) {
+    score += metadataScore(item, { ...context, outfitSoFar: outfit.filter((entry) => entry?.id !== item?.id) });
+  }
+
+  const accessories = outfit.filter((item) => itemRole(item) === "accessory");
+  if (accessories.length > 3) score -= (accessories.length - 3) * 12;
+
+  const familySet = new Set(accessories.map(accessoryFamily));
+  if (familySet.size !== accessories.length) score -= 8;
+
+  const setIds = outfit.map((item) => normalizeSetId(item?.set_id)).filter(Boolean);
+  for (const setId of setIds) {
+    const matches = outfit.filter((item) => normalizeSetId(item?.set_id) === setId).length;
+    if (matches >= 2) score += 10;
+  }
+
+  for (let i = 0; i < outfit.length; i += 1) {
+    for (let j = i + 1; j < outfit.length; j += 1) {
+      score += pairScore(outfit[i]?.color, outfit[j]?.color) * 2;
+      if (itemsConflict(outfit[i], outfit[j])) score -= 20;
+    }
+  }
+
+  return score;
+}
 
 export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactSigs, recentItemCounts, weatherCat, timeCat, answers, savedSigs) {
   const active = (Array.isArray(items) ? items : []).filter(
@@ -428,91 +852,61 @@ export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactS
   }
 
   const seed = typeof seedNumber === "number" && Number.isFinite(seedNumber) ? seedNumber : Date.now();
-  const buckets = bucketWardrobe(active);
-
-  function shuffle(arr, rng) {
-    const a = arr.slice();
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      const tmp = a[i];
-      a[i] = a[j];
-      a[j] = tmp;
-    }
-    return a;
-  }
-
   const rng = mulberry32(seed);
-
-  const includeOuterwear = (weatherCat === "cold" || weatherCat === "cool") && buckets.Outerwear.length > 0;
-  const includeOther = buckets.Other.length > 0;
-
-  const usedTopIds = new Set();
-
-  const results = [];
+  const buckets = bucketWardrobe(active);
   const skipSigs = savedSigs instanceof Set ? savedSigs : new Set();
+  const recentSigs = recentExactSigs instanceof Set ? recentExactSigs : new Set();
+  const context = {
+    answers,
+    bodyTypeId,
+    recentItemCounts,
+    weatherCat: (weatherCat || "mild").toString().toLowerCase(),
+    timeCat: (timeCat || "work hours").toString().toLowerCase(),
+    selectedSeason: seasonFromDate(new Date()),
+  };
 
-  for (let optIdx = 0; optIdx < 6 && results.length < 3; optIdx++) {
-    const outfitItems = [];
+  const candidates = [];
+  const seenSigs = new Set();
 
-    const shuffledTops = shuffle(buckets.Tops, rng);
-    const unusedTop = shuffledTops.find((t) => !usedTopIds.has(t.id));
-    const top = unusedTop || shuffledTops[0] || null;
-    if (top) {
-      usedTopIds.add(top.id);
-      outfitItems.push(top);
-    }
+  for (let variant = 0; variant < 12; variant += 1) {
+    const outfit = buildOutfitCandidate(buckets, rng, context, variant);
+    const mapped = mappedOutfit(outfit);
+    if (!mapped.length) continue;
 
-    const bottom = bestMatch(outfitItems, shuffle(buckets.Bottoms, rng), rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
-    if (bottom) outfitItems.push(bottom);
+    const sig = idsSignature(mapped.map((item) => item.id));
+    if (!sig || seenSigs.has(sig) || skipSigs.has(sig)) continue;
 
-    const shoes = bestMatch(outfitItems, shuffle(buckets.Shoes, rng), rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
-    if (shoes) outfitItems.push(shoes);
+    let score = scoreOutfitCandidate(mapped, context);
+    if (recentSigs.has(sig)) score -= 18;
+    score -= variant;
 
-    if (includeOuterwear) {
-      const outer = bestMatch(outfitItems, shuffle(buckets.Outerwear, rng), rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
-      if (outer) outfitItems.push(outer);
-    }
-
-    if (includeOther) {
-      const accessory = bestMatch(outfitItems, shuffle(buckets.Other, rng), rng, bodyTypeId, recentItemCounts, weatherCat, timeCat, answers);
-      if (accessory) outfitItems.push(accessory);
-    }
-
-    // Deduplicate: keep only the first item per category (prevents 2+ shoes, etc.)
-    const seenCats = new Set();
-    const deduped = [];
-    for (const x of outfitItems) {
-      const cat = normalizeCategory(x.category);
-      if (cat && seenCats.has(cat)) continue;
-      if (cat) seenCats.add(cat);
-      deduped.push(x);
-    }
-
-    const mapped = deduped.map((x, i) => ({
-      id: x.id ?? `w${i}_${x._idx}`,
-      name: x.name ?? "Wardrobe item",
-      category: normalizeCategory(x.category),
-      color: titleCase(x.color || ""),
-      fit_tag: normalizeFitTag(x.fit_tag),
-      image_url: x.image_url || "",
-    }));
-
-    if (mapped.length) {
-      const sig = idsSignature(mapped.map((x) => x.id));
-      if (sig && skipSigs.has(sig)) continue;
-      results.push(mapped);
-    }
+    seenSigs.add(sig);
+    candidates.push({ outfit: mapped, score, sig });
   }
 
+  candidates.sort((a, b) => b.score - a.score);
+
+  const results = candidates.slice(0, 3).map((entry) => entry.outfit);
   if (!results.length) return [];
-  while (results.length < 3) {
-    results.push(results[results.length - 1]);
-  }
-
+  while (results.length < 3) results.push(results[results.length - 1]);
   return results.slice(0, 3);
 }
 
-/* ── Signature helpers ──────────────────────────────────────── */
+export function scoreOutfitForDisplay(outfit, { weatherCategory, timeCategory, answers, bodyTypeId } = {}) {
+  const mapped = mappedOutfit(Array.isArray(outfit) ? outfit : []);
+  if (!mapped.length) return 0;
+
+  const score = scoreOutfitCandidate(mapped, {
+    answers,
+    bodyTypeId: bodyTypeId || DEFAULT_BODY_TYPE,
+    recentItemCounts: new Map(),
+    weatherCat: (weatherCategory || "mild").toString().toLowerCase(),
+    timeCat: (timeCategory || "work hours").toString().toLowerCase(),
+    selectedSeason: seasonFromDate(new Date()),
+  });
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
 
 export function signatureFromItems(items) {
   const ids = normalizeItems((items || []).map((x) => x?.id));
@@ -542,7 +936,7 @@ export function makeRecentSets(historyList, recentN = 10) {
   return { sigs, itemCounts };
 }
 
-/* ── Explanation text generation ─────────────────────────────── */
+
 
 function uniqueNonEmpty(values) {
   const out = [];
@@ -689,6 +1083,56 @@ function bodyTypeSentence(bodyTypeId, seed) {
   return opts[seed % opts.length];
 }
 
+function outfitMetadataSentence(outfit, weatherCategory, seed) {
+  const items = Array.isArray(outfit) ? outfit : [];
+  const layerTypes = uniqueNonEmpty(items.map((item) => item?.layer_type).filter(Boolean));
+  const setIds = items.map((item) => normalizeSetId(item?.set_id)).filter(Boolean);
+  const hasSet = setIds.some((setId) => items.filter((item) => normalizeSetId(item?.set_id) === setId).length >= 2);
+  const hasOnePiece = items.some((item) => item?.is_one_piece);
+  const styles = uniqueNonEmpty(items.flatMap((item) => normalizeTagArray(item?.style_tags))).map(titleCase);
+  const seasons = uniqueNonEmpty(items.flatMap((item) => normalizeTagArray(item?.season_tags))).map(titleCase);
+  const accessories = items.filter((item) => itemRole(item) === "accessory");
+
+  if (hasOnePiece) {
+    return [
+      "The one-piece foundation keeps the outfit simple and intentional.",
+      "Using a one-piece item keeps the silhouette clean without extra layers.",
+    ][seed % 2];
+  }
+
+  if ((weatherCategory === "cold" || weatherCategory === "cool") && layerTypes.includes("base") && (layerTypes.includes("mid") || layerTypes.includes("outer"))) {
+    return [
+      "The layers build from a base piece upward, so the outfit feels realistic for cooler weather.",
+      "This combination uses layering in a natural order, which makes it feel practical and polished.",
+      "The base-to-outer layering keeps the outfit believable for cooler conditions.",
+    ][seed % 3];
+  }
+
+  if (hasSet) {
+    return [
+      "The matching set pieces help the outfit feel coordinated without looking forced.",
+      "Keeping the set together makes the recommendation look more intentional.",
+    ][seed % 2];
+  }
+
+  if (styles.length) {
+    return [
+      `${styles[0]} details keep the outfit pointed in one direction.`,
+      `The ${styles[0].toLowerCase()} styling keeps the look consistent from piece to piece.`,
+    ][seed % 2];
+  }
+
+  if (seasons.length) {
+    return `${seasons[0]}-friendly pieces help the outfit feel on season.`;
+  }
+
+  if (accessories.length > 0 && accessories.length <= 2) {
+    return "The accessories stay light, so they finish the outfit without cluttering it.";
+  }
+
+  return "The pieces work together without competing for the same role in the outfit.";
+}
+
 export function buildExplanation({ answers, outfit, weatherCategory, timeCategory }) {
   const dressFor = Array.isArray(answers?.dressFor) ? answers.dressFor : [];
   const style = Array.isArray(answers?.style) ? answers.style : [];
@@ -713,7 +1157,7 @@ export function buildExplanation({ answers, outfit, weatherCategory, timeCategor
   if (occasion && styleHint && !styleMatchesOccasion) {
     opener = [
       `A ${styleHint} look for ${occasion}${timeHint}.`,
-      `This outfit nails ${styleHint} for ${occasion}${timeHint}.`,
+      `This outfit leans ${styleHint} while still fitting ${occasion}${timeHint}.`,
       `Put together for ${occasion} with a ${styleHint} edge.`,
     ][seed % 3];
   } else if (occasion) {
@@ -728,16 +1172,16 @@ export function buildExplanation({ answers, outfit, weatherCategory, timeCategor
     opener = ["A well-rounded outfit.", "A solid combination."][seed % 2];
   }
 
+  const structureSent = outfitMetadataSentence(outfit, weatherCategory, seed);
   const colorSent = describeColorHarmony(colors, seed);
-
   const closing = isNotableWeather
     ? weatherSentence(weatherCategory, seed)
     : bodyTypeSentence(bodyTypeId, seed);
 
-  return [opener, colorSent, closing].filter(Boolean).join(" ").trim();
+  return [opener, structureSent, colorSent, closing].filter(Boolean).join(" ").trim();
 }
 
-/* ── Outfit reuse helpers ───────────────────────────────────── */
+/* ?????? Outfit reuse helpers ??????????????????????????????????????????????????????????????????????????????????????????????????????????????? */
 
 export function buildOutfitFromIds(ids, wardrobe) {
   const pool = Array.isArray(wardrobe) ? wardrobe : [];

@@ -3,8 +3,6 @@ import { makeLocalStore, SAVED_OUTFITS_KEY } from "../utils/userStorage";
 import { EVT_SAVED_OUTFITS_CHANGED } from "../utils/constants";
 import { makeId, normalizeItems, idsSignature } from "../utils/helpers";
 
-const USE_LOCAL_FALLBACK = true;
-
 const PATHS = {
   list: "/saved-outfits",
   create: "/saved-outfits",
@@ -12,26 +10,83 @@ const PATHS = {
 
 const { read: readLocal, write: writeLocal } = makeLocalStore(SAVED_OUTFITS_KEY, EVT_SAVED_OUTFITS_CHANGED);
 
+function canUseApi(user) {
+  return !!user && hasApi();
+}
+
+function buildLocalRecord(payload, normalized, sig) {
+  return {
+    saved_outfit_id: makeId(),
+    user_id: "local-user",
+    name: "",
+    items: normalized,
+    item_details: Array.isArray(payload?.item_details) ? payload.item_details : [],
+    created_at: new Date().toISOString(),
+    source: payload?.source || "recommended",
+    context: payload?.context || {},
+    notes: "",
+    outfit_signature: sig,
+  };
+}
+
+function savedOutfitKey(outfit) {
+  const id = (outfit?.saved_outfit_id || "").toString().trim();
+  if (id) return `id:${id}`;
+  const sig = (outfit?.outfit_signature || "").toString().trim();
+  if (sig) return `sig:${sig}`;
+  return "";
+}
+
+function mergeSavedOutfits(remoteList, localList) {
+  const merged = [];
+  const seen = new Set();
+
+  for (const outfit of Array.isArray(remoteList) ? remoteList : []) {
+    const key = savedOutfitKey(outfit);
+    if (key) seen.add(key);
+    merged.push(outfit);
+  }
+
+  for (const outfit of Array.isArray(localList) ? localList : []) {
+    const key = savedOutfitKey(outfit);
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    merged.push(outfit);
+  }
+
+  return merged;
+}
+
 export const savedOutfitsApi = {
   async listSaved(user) {
-    if (USE_LOCAL_FALLBACK) {
+    if (!canUseApi(user)) {
       return { saved_outfits: readLocal(user) };
     }
 
-    if (!hasApi()) throw new Error("API base URL is missing.");
-    return apiFetch(PATHS.list, { method: "GET" });
+    try {
+      const res = await apiFetch(PATHS.list, { method: "GET" });
+      const remote = Array.isArray(res?.saved_outfits) ? res.saved_outfits : [];
+      const merged = mergeSavedOutfits(remote, readLocal(user));
+      writeLocal(merged, user);
+      return { saved_outfits: merged };
+    } catch {
+      return { saved_outfits: readLocal(user) };
+    }
   },
 
   async unsaveOutfit(signature, user) {
-    if (USE_LOCAL_FALLBACK) {
-      const list = readLocal(user);
-      const next = list.filter((o) => (o?.outfit_signature || "") !== signature);
-      writeLocal(next, user);
+    const next = readLocal(user).filter((o) => (o?.outfit_signature || "") !== signature);
+    writeLocal(next, user);
+
+    if (!canUseApi(user)) {
       return { deleted: true };
     }
 
-    if (!hasApi()) throw new Error("API base URL is missing.");
-    return apiFetch(`${PATHS.list}/${encodeURIComponent(signature)}`, { method: "DELETE" });
+    try {
+      return await apiFetch(`${PATHS.list}/${encodeURIComponent(signature)}`, { method: "DELETE" });
+    } catch {
+      return { deleted: true };
+    }
   },
 
   async saveOutfit(payload, user) {
@@ -43,43 +98,28 @@ export const savedOutfitsApi = {
       return { created: false, message: "Nothing to save." };
     }
 
-    if (USE_LOCAL_FALLBACK) {
-      const list = readLocal(user);
-
-      const exists = list.some((o) => (o?.outfit_signature || "") === sig);
-      if (exists) {
-        return { created: false, message: "This outfit is already in your saved outfits." };
-      }
-
-      const record = {
-        saved_outfit_id: makeId(),
-        user_id: "local-user",
-        name: "",
-        items: normalized,
-        item_details: Array.isArray(payload?.item_details) ? payload.item_details : [],
-        created_at: new Date().toISOString(),
-        source: payload?.source || "recommended",
-        context: payload?.context || {},
-        notes: "",
-        outfit_signature: sig,
-      };
-
-      const next = [record, ...list];
-      writeLocal(next, user);
-
-      return { created: true, message: "Saved.", saved_outfit: record };
+    if (canUseApi(user)) {
+      try {
+        const res = await apiFetch(PATHS.create, {
+          method: "POST",
+          body: JSON.stringify({ ...payload, items: normalized }),
+        });
+        if (res?.saved_outfit) {
+          const current = readLocal(user).filter((o) => (o?.outfit_signature || "") !== sig);
+          writeLocal([res.saved_outfit, ...current], user);
+        }
+        return res;
+      } catch {}
     }
 
-    if (!hasApi()) throw new Error("API base URL is missing.");
+    const list = readLocal(user);
+    const exists = list.some((o) => (o?.outfit_signature || "") === sig);
+    if (exists) {
+      return { created: false, message: "This outfit is already in your saved outfits." };
+    }
 
-    const res = await apiFetch(PATHS.create, {
-      method: "POST",
-      body: JSON.stringify({
-        ...payload,
-        items: normalized,
-      }),
-    });
-
-    return res;
+    const record = buildLocalRecord(payload, normalized, sig);
+    writeLocal([record, ...list], user);
+    return { created: true, message: "Saved.", saved_outfit: record };
   },
 };

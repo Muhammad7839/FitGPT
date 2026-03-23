@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { loadWardrobe, saveWardrobe, GUEST_WARDROBE_KEY, WARDROBE_KEY } from "../utils/userStorage";
+import { loadWardrobe, saveWardrobe, mergeWardrobeWithLocalMetadata, GUEST_WARDROBE_KEY, WARDROBE_KEY } from "../utils/userStorage";
 import { wardrobeApi } from "../api/wardrobeApi";
 import { EVT_WARDROBE_CHANGED } from "../utils/constants";
 
@@ -27,8 +27,9 @@ export default function useWardrobe(user) {
           if (!alive) return;
           const apiItems = Array.isArray(data) ? data : [];
           if (apiItems.length > 0) {
-            setItems(apiItems);
-            saveWardrobe(apiItems, user);
+            const merged = mergeWardrobeWithLocalMetadata(apiItems, local);
+            setItems(merged);
+            saveWardrobe(merged, user);
           }
         })
         .catch(() => {});

@@ -11,7 +11,12 @@ from app.routes import router, auth_router
 
 app = FastAPI()
 
-origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+]
 extra_origins = os.environ.get("CORS_ORIGINS", "")
 if extra_origins:
     origins.extend([o.strip() for o in extra_origins.split(",") if o.strip()])
@@ -42,6 +47,11 @@ with engine.connect() as conn:
             conn.execute(text("ALTER TABLE users ALTER COLUMN hashed_password DROP NOT NULL"))
         except Exception:
             pass  # SQLite doesn't support ALTER COLUMN; column is already nullable in new DBs
+    clothing_existing = {c["name"] for c in inspector.get_columns("clothing_items")}
+    if "is_active" not in clothing_existing:
+        conn.execute(text("ALTER TABLE clothing_items ADD COLUMN is_active BOOLEAN DEFAULT 1 NOT NULL"))
+    if "is_favorite" not in clothing_existing:
+        conn.execute(text("ALTER TABLE clothing_items ADD COLUMN is_favorite BOOLEAN DEFAULT 0 NOT NULL"))
     conn.commit()
 
 app.include_router(router)

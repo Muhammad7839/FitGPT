@@ -15,7 +15,6 @@ const NAV_ITEMS = [
   { to: "/profile", label: "Profile" },
 ];
 
-// Pages where the top nav should NOT appear
 const HIDDEN_ROUTES = ["/", "/login", "/signup", "/onboarding"];
 
 export default function TopNav() {
@@ -24,7 +23,8 @@ export default function TopNav() {
   const demoUser = useMemo(() => readDemoAuth(), []);
   const effectiveUser = user || demoUser;
   const [profilePic, setProfilePic] = useState(() => loadProfilePic(effectiveUser));
-  const isGif = profilePic.startsWith("data:image/gif");
+  const safeProfilePic = (profilePic || "").toString();
+  const isGif = safeProfilePic.startsWith("data:image/gif");
 
   useEffect(() => {
     setProfilePic(loadProfilePic(effectiveUser));
@@ -33,10 +33,10 @@ export default function TopNav() {
     return () => window.removeEventListener(EVT_PROFILE_PIC_CHANGED, onPicChange);
   }, [effectiveUser]);
 
-  // Freeze GIF to a static first frame for the nav; animate on hover
+  
   const [frozenPic, setFrozenPic] = useState("");
   useEffect(() => {
-    if (!isGif || !profilePic) { setFrozenPic(""); return; }
+    if (!isGif || !safeProfilePic) { setFrozenPic(""); return; }
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement("canvas");
@@ -45,19 +45,26 @@ export default function TopNav() {
       canvas.getContext("2d").drawImage(img, 0, 0);
       setFrozenPic(canvas.toDataURL("image/png"));
     };
-    img.src = profilePic;
-  }, [profilePic, isGif]);
+    img.src = safeProfilePic;
+  }, [safeProfilePic, isGif]);
 
   const [profileHover, setProfileHover] = useState(false);
 
-  // Hide on auth/onboarding pages
   if (HIDDEN_ROUTES.includes(pathname)) return null;
 
   return (
     <header className="topNav">
       <nav className="topNavInner" aria-label="Main navigation">
         <div className="topNavBrand">
-          <img className="topNavLogo" src="/officialLogo.png" alt="FitGPT" />
+          <img
+            className="topNavLogo"
+            src="/officialLogo.png"
+            alt="FitGPT"
+            onError={(event) => {
+              event.currentTarget.onerror = null;
+              event.currentTarget.src = "/fitgpt-logo.png";
+            }}
+          />
           <span className="topNavBrandName">FitGPT</span>
         </div>
         <div className="topNavLinks">
@@ -74,8 +81,8 @@ export default function TopNav() {
               } : {})}
             >
               {to === "/profile" && (
-                profilePic
-                  ? <img src={isGif && !profileHover && frozenPic ? frozenPic : profilePic} alt="" className="topNavProfilePic" />
+                safeProfilePic
+                  ? <img src={isGif && !profileHover && frozenPic ? frozenPic : safeProfilePic} alt="" className="topNavProfilePic" />
                   : <span className="topNavProfilePicPlaceholder">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />

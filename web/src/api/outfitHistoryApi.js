@@ -2,8 +2,6 @@ import { apiFetch, hasApi } from "./apiFetch";
 import { makeLocalStore, getUserId, OUTFIT_HISTORY_KEY } from "../utils/userStorage";
 import { makeId, normalizeItems } from "../utils/helpers";
 
-const USE_LOCAL_FALLBACK = true;
-
 const PATHS = {
   list: "/outfit-history",
   create: "/outfit-history",
@@ -11,40 +9,99 @@ const PATHS = {
 
 const { read: readLocal, write: writeLocal } = makeLocalStore(OUTFIT_HISTORY_KEY);
 
+function canUseApi(user) {
+  return !!user && hasApi();
+}
+
+function buildLocalRecord(payload, normalized, user) {
+  return {
+    history_id: makeId(),
+    user_id: getUserId(user) || "local-user",
+    item_ids: normalized,
+    worn_at: new Date().toISOString(),
+    source: payload?.source || "recommendation",
+    context: payload?.context || {},
+    confidence_score: typeof payload?.confidence_score === "number" ? payload.confidence_score : null,
+  };
+}
+
+function historyEntryKey(entry) {
+  const id = (entry?.history_id || "").toString().trim();
+  if (id) return `id:${id}`;
+  const wornAt = (entry?.worn_at || "").toString().trim();
+  const sig = normalizeItems(Array.isArray(entry?.item_ids) ? entry.item_ids : []).join("|");
+  if (wornAt || sig) return `sig:${wornAt}|${sig}`;
+  return "";
+}
+
+function mergeHistoryEntries(remoteList, localList) {
+  const merged = [];
+  const seen = new Set();
+
+  for (const entry of Array.isArray(remoteList) ? remoteList : []) {
+    const key = historyEntryKey(entry);
+    if (key) seen.add(key);
+    merged.push(entry);
+  }
+
+  for (const entry of Array.isArray(localList) ? localList : []) {
+    const key = historyEntryKey(entry);
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    merged.push(entry);
+  }
+
+  return merged;
+}
+
 export const outfitHistoryApi = {
   async listHistory(user) {
-    if (USE_LOCAL_FALLBACK) {
+    if (!canUseApi(user)) {
       return { history: readLocal(user) };
     }
 
-    if (!hasApi()) throw new Error("API base URL is missing.");
-    return apiFetch(PATHS.list, { method: "GET" });
+    try {
+      const res = await apiFetch(PATHS.list, { method: "GET" });
+      const remote = Array.isArray(res?.history) ? res.history : [];
+      const merged = mergeHistoryEntries(remote, readLocal(user));
+      writeLocal(merged, user);
+      return { history: merged };
+    } catch {
+      return { history: readLocal(user) };
+    }
   },
 
   async removeBySignature(signature, user) {
-    if (USE_LOCAL_FALLBACK) {
-      const list = readLocal(user);
-      const next = list.filter((h) => {
-        const ids = Array.isArray(h?.item_ids) ? h.item_ids : [];
-        const sig = normalizeItems(ids).join("|");
-        return sig !== signature;
-      });
-      writeLocal(next, user);
+    const next = readLocal(user).filter((h) => {
+      const ids = Array.isArray(h?.item_ids) ? h.item_ids : [];
+      const sig = normalizeItems(ids).join("|");
+      return sig !== signature;
+    });
+    writeLocal(next, user);
+
+    if (!canUseApi(user)) {
       return { deleted: true };
     }
 
-    if (!hasApi()) throw new Error("API base URL is missing.");
-    return apiFetch(`${PATHS.list}/${encodeURIComponent(signature)}`, { method: "DELETE" });
+    try {
+      return await apiFetch(`${PATHS.list}/${encodeURIComponent(signature)}`, { method: "DELETE" });
+    } catch {
+      return { deleted: true };
+    }
   },
 
   async clearHistory(user) {
-    if (USE_LOCAL_FALLBACK) {
-      writeLocal([], user);
+    writeLocal([], user);
+
+    if (!canUseApi(user)) {
       return { cleared: true };
     }
 
-    if (!hasApi()) throw new Error("API base URL is missing.");
-    return apiFetch(PATHS.list, { method: "DELETE" });
+    try {
+      return await apiFetch(PATHS.list, { method: "DELETE" });
+    } catch {
+      return { cleared: true };
+    }
   },
 
   async recordWorn(payload, user) {
@@ -55,34 +112,21 @@ export const outfitHistoryApi = {
       return { created: false, message: "Nothing to record." };
     }
 
-    if (USE_LOCAL_FALLBACK) {
-      const list = readLocal(user);
-
-      const record = {
-        history_id: makeId(),
-        user_id: getUserId(user) || "local-user",
-        item_ids: normalized,
-        worn_at: new Date().toISOString(),
-        source: payload?.source || "recommendation",
-        context: payload?.context || {},
-        confidence_score:
-          typeof payload?.confidence_score === "number" ? payload.confidence_score : null,
-      };
-
-      const next = [record, ...list];
-      writeLocal(next, user);
-
-      return { created: true, message: "Added to history.", history_entry: record };
+    if (canUseApi(user)) {
+      try {
+        const res = await apiFetch(PATHS.create, {
+          method: "POST",
+          body: JSON.stringify({ ...payload, item_ids: normalized }),
+        });
+        if (res?.history_entry) {
+          writeLocal([res.history_entry, ...readLocal(user)], user);
+        }
+        return res;
+      } catch {}
     }
 
-    if (!hasApi()) throw new Error("API base URL is missing.");
-
-    return apiFetch(PATHS.create, {
-      method: "POST",
-      body: JSON.stringify({
-        ...payload,
-        item_ids: normalized,
-      }),
-    });
+    const record = buildLocalRecord(payload, normalized, user);
+    writeLocal([record, ...readLocal(user)], user);
+    return { created: true, message: "Added to history.", history_entry: record };
   },
 };

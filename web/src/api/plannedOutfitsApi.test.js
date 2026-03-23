@@ -5,6 +5,7 @@ const TEST_USER = { id: "test-user-789" };
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
+  delete global.fetch;
 });
 
 describe("plannedOutfitsApi.planOutfit", () => {
@@ -38,6 +39,35 @@ describe("plannedOutfitsApi.listPlanned", () => {
     await plannedOutfitsApi.planOutfit({ item_ids: ["a", "b"] }, TEST_USER);
     const result = await plannedOutfitsApi.listPlanned(TEST_USER);
     expect(result.planned_outfits).toHaveLength(1);
+  });
+
+  test("merges server plans with offline local plans instead of overwriting them", async () => {
+    global.fetch = jest.fn()
+      .mockRejectedValueOnce(new Error("Failed to fetch"))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => "application/json" },
+        json: async () => ({
+          planned_outfits: [
+            {
+              planned_id: "77",
+              item_ids: ["server-look"],
+              outfit_signature: "server-look",
+              planned_date: "2026-03-24",
+              created_at: "2026-03-23T12:00:00.000Z",
+            },
+          ],
+        }),
+      });
+
+    await plannedOutfitsApi.planOutfit({ item_ids: ["local-look"], planned_date: "2026-03-25" }, TEST_USER);
+    const result = await plannedOutfitsApi.listPlanned(TEST_USER);
+
+    expect(result.planned_outfits.map((o) => o.planned_id)).toEqual(
+      expect.arrayContaining(["77"])
+    );
+    expect(result.planned_outfits).toHaveLength(2);
   });
 });
 

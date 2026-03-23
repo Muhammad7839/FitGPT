@@ -102,8 +102,8 @@ export function HistoryContent() {
     }
 
     const mostWornItemName = mostWornItemId
-      ? wardrobeById.get(mostWornItemId)?.name || "—"
-      : "—";
+      ? wardrobeById.get(mostWornItemId)?.name || "-"
+      : "-";
 
     const occCounts = new Map();
     for (const h of monthEntries) {
@@ -112,7 +112,7 @@ export function HistoryContent() {
       occCounts.set(occ, (occCounts.get(occ) || 0) + 1);
     }
 
-    let topOccasion = "—";
+    let topOccasion = "-";
     let topOccCount = 0;
     for (const [occ, count] of occCounts.entries()) {
       if (count > topOccCount) {
@@ -253,7 +253,7 @@ export function HistoryContent() {
                       (id) =>
                         wardrobeById.get((id ?? "").toString().trim())?.name || "Item"
                     )
-                    .join(" • ")}
+                    .join(" | ")}
                 </div>
 
                 <div className="historyActions">
@@ -277,6 +277,11 @@ export function HistoryContent() {
             <div className="historyStatsEmptySub">
               Wear an outfit from your recommendations to start tracking your style stats.
             </div>
+            <div style={{ marginTop: 14 }}>
+              <button className="btn primary" type="button" onClick={() => navigate("/dashboard")}>
+                Pick an outfit
+              </button>
+            </div>
           </div>
         ) : (
           <div className="historyStatsGrid">
@@ -294,13 +299,13 @@ export function HistoryContent() {
 
             <div className="historyStatTile historyStatTileText">
               <div className="historyStatIcon">&#x1F451;</div>
-              <div className="historyStatValue">{monthlyStats.mostWornItemName || "—"}</div>
+              <div className="historyStatValue">{monthlyStats.mostWornItemName || "-"}</div>
               <div className="historyStatLabel">Most Worn Item</div>
             </div>
 
             <div className="historyStatTile historyStatTileText">
               <div className="historyStatIcon">&#x1F3AF;</div>
-              <div className="historyStatValue">{monthlyStats.topOccasion || "—"}</div>
+              <div className="historyStatValue">{monthlyStats.topOccasion || "-"}</div>
               <div className="historyStatLabel">Top Occasion</div>
             </div>
           </div>
@@ -331,3 +336,4 @@ export default function History() {
     </div>
   );
 }
+
