@@ -16,7 +16,11 @@ export function hasApi() {
 }
 
 function getToken() {
-  return localStorage.getItem("access_token") || localStorage.getItem(TOKEN_KEY) || "";
+  return (
+    localStorage.getItem("fitgpt_token_v1") ||
+    localStorage.getItem("access_token") ||
+    ""
+  );
 }
 
 export function setToken(token) {
