@@ -1,12 +1,22 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { wardrobeApi } from "../api/wardrobeApi";
 import { useAuth } from "../auth/AuthProvider";
-import { loadWardrobe, saveWardrobe, loadAnswers } from "../utils/userStorage";
+import { loadWardrobe, saveWardrobe, loadAnswers, mergeWardrobeWithLocalMetadata } from "../utils/userStorage";
 import { classifyFromUrl, preloadModel } from "../utils/classifyClothing";
 import { OPEN_ADD_ITEM_FLAG } from "../utils/constants";
 import { makeId, normalizeFitTag, fileToDataUrl, isNetworkError, onTiltMove, onTiltLeave } from "../utils/helpers";
+import {
+  LAYER_TYPE_OPTIONS,
+  STYLE_TAG_OPTIONS,
+  OCCASION_TAG_OPTIONS,
+  SEASON_TAG_OPTIONS,
+  clothingTypeOptionsForCategory,
+  normalizeItemMetadata,
+  normalizeTagList,
+  optionLabel,
+} from "../utils/wardrobeOptions";
 
 import ItemFormFields, { CATEGORIES as ITEM_CATEGORIES, FIT_TAG_OPTIONS } from "./ItemFormFields";
 import WardrobeItemCard from "./WardrobeItemCard";
@@ -30,11 +40,10 @@ function fitLabel(value) {
   return FIT_TAG_OPTIONS.find((x) => x.value === v)?.label || "Unknown";
 }
 
-// Map wardrobe fit tags to body-type compatibility
-// Based on Dashboard.js fitPenalty logic
+
 function bodyFitRating(fitTag, bodyType, category) {
   const tag = normalizeFitTag(fitTag);
-  // Map wardrobe fit tags → Dashboard fit categories
+
   let mapped = "unspecified";
   if (tag === "slim") mapped = "tight";
   else if (tag === "regular") mapped = "regular";
@@ -68,12 +77,12 @@ function bodyFitRating(fitTag, bodyType, category) {
     if (mapped === "fitted" || mapped === "regular") return "great";
     return "good";
   }
-  // rectangle — everything works
+
   return "good";
 }
 
 
-// Map frontend display values to backend enum values for API calls
+
 const API_CATEGORIES = ["top","bottom","shoes","outerwear","accessory"];
 const API_COLORS = ["black","white","gray","beige","red","blue","green","yellow","purple","orange"];
 const API_FITS = ["slim","regular","oversized"];
@@ -85,6 +94,62 @@ function toApiEnum(val, list, fallback) {
   if (list.includes(v)) return v;
   const match = list.find(l => v.includes(l) || l.includes(v));
   return match || fallback;
+}
+
+function toApiTagList(value) {
+  return normalizeTagList(value);
+}
+
+function splitColorTags(value) {
+  return (value || "")
+    .toString()
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function primaryStyleTag(styleTags) {
+  const [first] = toApiTagList(styleTags);
+  return first || "casual";
+}
+
+function buildWardrobeApiPayload({
+  name,
+  category,
+  color,
+  fitTag,
+  clothingType = "",
+  layerType = "",
+  isOnePiece = false,
+  setId = "",
+  styleTags = [],
+  occasionTags = [],
+  seasonTags = [],
+  imageUrl = "",
+}) {
+  const normalizedColor = (color || "").toString().trim();
+  const normalizedFit = normalizeFitTag(fitTag);
+
+  const payload = {
+    name,
+    category: toApiEnum(category, API_CATEGORIES, "top"),
+    color: toApiEnum(normalizedColor, API_COLORS, "black"),
+    colors: splitColorTags(normalizedColor),
+    fit_type: toApiEnum(normalizedFit, API_FITS, "regular"),
+    fit_tag: normalizedFit,
+    style_tag: toApiEnum(primaryStyleTag(styleTags), API_STYLES, "casual"),
+    style_tags: toApiTagList(styleTags),
+    clothing_type: (clothingType || "").toString().trim(),
+    layer_type: (layerType || "").toString().trim(),
+    is_one_piece: !!isOnePiece,
+    set_id: (setId || "").toString().trim(),
+    occasion_tags: toApiTagList(occasionTags),
+    season_tags: toApiTagList(seasonTags),
+  };
+
+  if (imageUrl) payload.image_url = imageUrl;
+
+  return payload;
 }
 
 function guessCategoryFromName(name) {
@@ -107,11 +172,8 @@ export default function Wardrobe() {
 
   const fileInputRef = useRef(null);
   const filterRef = useRef(null);
-  const localEditRef = useRef(false); // prevents load effect from clobbering local changes
-
-  // Wraps setItems to also save to storage synchronously and flag local edit,
-  // preventing the load effect from clobbering freshly added/modified items.
-  const setItemsAndSave = React.useCallback((updater) => {
+  const localEditRef = useRef(false);
+  const setItemsAndSave = useCallback((updater) => {
     setItems((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
       saveWardrobe(next, user);
@@ -122,7 +184,7 @@ export default function Wardrobe() {
 
   const [backendOffline, setBackendOffline] = useState(false);
 
-  // Retry recovery when backendOffline is stuck — check every 5s until reachable
+ 
   React.useEffect(() => {
     if (!backendOffline || !user) return;
     let alive = true;
@@ -146,10 +208,17 @@ export default function Wardrobe() {
   const [bodyFitOn, setBodyFitOn] = useState(false);
   const [view, setView] = useState("grid");
   const [toast, setToast] = useState("");
+  const [showUploadPanel, setShowUploadPanel] = useState(false);
+  const [showCategoryTabs, setShowCategoryTabs] = useState(false);
 
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterColors, setFilterColors] = useState(new Set());
   const [filterFits, setFilterFits] = useState(new Set());
+  const [filterClothingTypes, setFilterClothingTypes] = useState(new Set());
+  const [filterLayers, setFilterLayers] = useState(new Set());
+  const [filterStyles, setFilterStyles] = useState(new Set());
+  const [filterOccasions, setFilterOccasions] = useState(new Set());
+  const [filterSeasons, setFilterSeasons] = useState(new Set());
 
   useEffect(() => {
     if (!filterOpen) return;
@@ -174,12 +243,19 @@ export default function Wardrobe() {
   const [formCategory, setFormCategory] = useState("Tops");
   const [formColor, setFormColor] = useState("");
   const [formFitTag, setFormFitTag] = useState("unknown");
+  const [formClothingType, setFormClothingType] = useState("");
+  const [formLayerType, setFormLayerType] = useState("");
+  const [formIsOnePiece, setFormIsOnePiece] = useState(false);
+  const [formSetId, setFormSetId] = useState("");
+  const [formStyleTags, setFormStyleTags] = useState([]);
+  const [formOccasionTags, setFormOccasionTags] = useState([]);
+  const [formSeasonTags, setFormSeasonTags] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [addError, setAddError] = useState("");
   const [isClassifying, setIsClassifying] = useState(false);
 
 
-  // Bulk upload state
+
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkItems, setBulkItems] = useState([]);
   const [isBulkSaving, setIsBulkSaving] = useState(false);
@@ -191,6 +267,13 @@ export default function Wardrobe() {
   const [editCategory, setEditCategory] = useState("Tops");
   const [editColor, setEditColor] = useState("");
   const [editFitTag, setEditFitTag] = useState("unknown");
+  const [editClothingType, setEditClothingType] = useState("");
+  const [editLayerType, setEditLayerType] = useState("");
+  const [editIsOnePiece, setEditIsOnePiece] = useState(false);
+  const [editSetId, setEditSetId] = useState("");
+  const [editStyleTags, setEditStyleTags] = useState([]);
+  const [editOccasionTags, setEditOccasionTags] = useState([]);
+  const [editSeasonTags, setEditSeasonTags] = useState([]);
   const [isUpdating, setIsUpdating] = useState(false);
   const [editError, setEditError] = useState("");
 
@@ -200,8 +283,7 @@ export default function Wardrobe() {
   React.useEffect(() => {
     let alive = true;
 
-    // Skip re-loading from storage if a local edit just happened —
-    // the save effect will persist the current items to storage.
+
     if (localEditRef.current) {
       localEditRef.current = false;
       setItemsLoaded(true);
@@ -209,7 +291,7 @@ export default function Wardrobe() {
     }
 
     async function load() {
-      // Always start with local data so we never lose items
+
       const local = loadWardrobe(user);
 
       try {
@@ -217,8 +299,8 @@ export default function Wardrobe() {
           const data = await wardrobeApi.getItems();
           if (!alive) return;
           const apiItems = Array.isArray(data) ? data : [];
-          // API is source of truth when signed in; fall back to local if API is empty
-          setItems(apiItems.length > 0 ? apiItems : (Array.isArray(local) ? local : []));
+          const merged = apiItems.length > 0 ? mergeWardrobeWithLocalMetadata(apiItems, local) : (Array.isArray(local) ? local : []);
+          setItems(merged);
         } else {
           if (!alive) return;
           setItems(Array.isArray(local) ? local : []);
@@ -230,7 +312,7 @@ export default function Wardrobe() {
           setBackendOffline(true);
         }
 
-        // On any error, fall back to local data
+   
         setItems(Array.isArray(local) ? local : []);
       } finally {
         if (alive) setItemsLoaded(true);
@@ -243,13 +325,13 @@ export default function Wardrobe() {
     };
   }, [effectiveSignedIn, user]);
 
-  // Always persist to sessionStorage as local backup, regardless of auth state
+
   React.useEffect(() => {
     if (itemsLoaded) {
       saveWardrobe(items, user);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, itemsLoaded]);
+   
+  }, [items, itemsLoaded, user]);
 
   const activeItems = useMemo(() => items.filter((x) => x && x.is_active !== false), [items]);
   const archivedItems = useMemo(() => items.filter((x) => x && x.is_active === false), [items]);
@@ -296,7 +378,51 @@ export default function Wardrobe() {
     return FIT_TAG_OPTIONS.filter((x) => set.has(x.value));
   }, [activeItems, archivedItems, favoriteItems, tab]);
 
-  const activeFilterCount = filterColors.size + filterFits.size;
+  const availableClothingTypes = useMemo(() => {
+    const source = tab === "archived" ? archivedItems : tab === "favorites" ? favoriteItems : activeItems;
+    const options = new Set();
+    for (const it of source) {
+      const type = (it.clothing_type || "").toString().trim().toLowerCase();
+      if (type) options.add(type);
+      else {
+        for (const option of clothingTypeOptionsForCategory(it.category)) options.add(option);
+      }
+    }
+    return [...options].sort((a, b) => optionLabel(a).localeCompare(optionLabel(b)));
+  }, [activeItems, archivedItems, favoriteItems, tab]);
+
+  const availableLayers = useMemo(() => {
+    const source = tab === "archived" ? archivedItems : tab === "favorites" ? favoriteItems : activeItems;
+    const options = new Set();
+    for (const it of source) {
+      const layer = (it.layer_type || "").toString().trim().toLowerCase();
+      if (layer) options.add(layer);
+    }
+    return LAYER_TYPE_OPTIONS.filter((option) => option.value && options.has(option.value));
+  }, [activeItems, archivedItems, favoriteItems, tab]);
+
+  const availableStyles = useMemo(() => {
+    const source = tab === "archived" ? archivedItems : tab === "favorites" ? favoriteItems : activeItems;
+    const options = new Set();
+    for (const it of source) for (const tag of normalizeTagList(it.style_tags)) options.add(tag);
+    return STYLE_TAG_OPTIONS.filter((option) => options.has(option));
+  }, [activeItems, archivedItems, favoriteItems, tab]);
+
+  const availableOccasions = useMemo(() => {
+    const source = tab === "archived" ? archivedItems : tab === "favorites" ? favoriteItems : activeItems;
+    const options = new Set();
+    for (const it of source) for (const tag of normalizeTagList(it.occasion_tags)) options.add(tag);
+    return OCCASION_TAG_OPTIONS.filter((option) => options.has(option));
+  }, [activeItems, archivedItems, favoriteItems, tab]);
+
+  const availableSeasons = useMemo(() => {
+    const source = tab === "archived" ? archivedItems : tab === "favorites" ? favoriteItems : activeItems;
+    const options = new Set();
+    for (const it of source) for (const tag of normalizeTagList(it.season_tags)) options.add(tag);
+    return SEASON_TAG_OPTIONS.filter((option) => options.has(option));
+  }, [activeItems, archivedItems, favoriteItems, tab]);
+
+  const activeFilterCount = filterColors.size + filterFits.size + filterClothingTypes.size + filterLayers.size + filterStyles.size + filterOccasions.size + filterSeasons.size;
 
   const toggleFilterColor = (color) =>
     setFilterColors((prev) => {
@@ -312,9 +438,49 @@ export default function Wardrobe() {
       return next;
     });
 
+  const toggleFilterClothingType = (value) =>
+    setFilterClothingTypes((prev) => {
+      const next = new Set(prev);
+      next.has(value) ? next.delete(value) : next.add(value);
+      return next;
+    });
+
+  const toggleFilterLayer = (value) =>
+    setFilterLayers((prev) => {
+      const next = new Set(prev);
+      next.has(value) ? next.delete(value) : next.add(value);
+      return next;
+    });
+
+  const toggleFilterStyle = (value) =>
+    setFilterStyles((prev) => {
+      const next = new Set(prev);
+      next.has(value) ? next.delete(value) : next.add(value);
+      return next;
+    });
+
+  const toggleFilterOccasion = (value) =>
+    setFilterOccasions((prev) => {
+      const next = new Set(prev);
+      next.has(value) ? next.delete(value) : next.add(value);
+      return next;
+    });
+
+  const toggleFilterSeason = (value) =>
+    setFilterSeasons((prev) => {
+      const next = new Set(prev);
+      next.has(value) ? next.delete(value) : next.add(value);
+      return next;
+    });
+
   const clearFilters = () => {
     setFilterColors(new Set());
     setFilterFits(new Set());
+    setFilterClothingTypes(new Set());
+    setFilterLayers(new Set());
+    setFilterStyles(new Set());
+    setFilterOccasions(new Set());
+    setFilterSeasons(new Set());
   };
 
   const filtered = useMemo(() => {
@@ -324,13 +490,41 @@ export default function Wardrobe() {
     return base.filter((it) => {
       const catOk = activeCategory === "All Items" ? true : it.category === activeCategory;
       const fit = fitLabel(it.fit_tag || it.fitTag || it.fit);
-      const qOk = !q ? true : `${it.name} ${it.color} ${it.category} ${fit}`.toLowerCase().includes(q);
       const itemColors = (it.color || "").split(",").map((c) => c.trim()).filter(Boolean);
+      const clothingType = (it.clothing_type || "").toString().trim().toLowerCase();
+      const layerType = (it.layer_type || "").toString().trim().toLowerCase();
+      const styleTags = normalizeTagList(it.style_tags);
+      const occasionTags = normalizeTagList(it.occasion_tags);
+      const seasonTags = normalizeTagList(it.season_tags);
+      const searchBlob = [
+        it.name,
+        it.color,
+        it.category,
+        fit,
+        clothingType,
+        optionLabel(clothingType),
+        layerType,
+        optionLabel(layerType),
+        it.set_id,
+        it.is_one_piece ? "one piece" : "",
+        ...styleTags,
+        ...styleTags.map(optionLabel),
+        ...seasonTags,
+        ...seasonTags.map(optionLabel),
+        ...occasionTags,
+        ...occasionTags.map(optionLabel),
+      ].join(" ").toLowerCase();
+      const qOk = !q ? true : searchBlob.includes(q);
       const colorOk = filterColors.size === 0 || itemColors.some((c) => filterColors.has(c));
       const fitOk = filterFits.size === 0 || filterFits.has(normalizeFitTag(it.fit_tag || it.fitTag || it.fit));
-      return catOk && qOk && colorOk && fitOk;
+      const clothingTypeOk = filterClothingTypes.size === 0 || (clothingType && filterClothingTypes.has(clothingType));
+      const layerOk = filterLayers.size === 0 || (layerType && filterLayers.has(layerType));
+      const styleOk = filterStyles.size === 0 || styleTags.some((tag) => filterStyles.has(tag));
+      const occasionOk = filterOccasions.size === 0 || occasionTags.some((tag) => filterOccasions.has(tag));
+      const seasonOk = filterSeasons.size === 0 || seasonTags.some((tag) => filterSeasons.has(tag));
+      return catOk && qOk && colorOk && fitOk && clothingTypeOk && layerOk && styleOk && occasionOk && seasonOk;
     });
-  }, [activeItems, archivedItems, favoriteItems, tab, activeCategory, query, filterColors, filterFits]);
+  }, [activeItems, archivedItems, favoriteItems, tab, activeCategory, query, filterColors, filterFits, filterClothingTypes, filterLayers, filterStyles, filterOccasions, filterSeasons]);
 
   const openPicker = () => fileInputRef.current?.click();
 
@@ -342,7 +536,6 @@ export default function Wardrobe() {
     }
   }, [user]);
 
-  // Start downloading MobileNet model in the background on mount
   useEffect(() => { preloadModel(); }, []);
 
   const resetAddForm = () => {
@@ -353,6 +546,13 @@ export default function Wardrobe() {
     setFormCategory("Tops");
     setFormColor("");
     setFormFitTag("unknown");
+    setFormClothingType("");
+    setFormLayerType("");
+    setFormIsOnePiece(false);
+    setFormSetId("");
+    setFormStyleTags([]);
+    setFormOccasionTags([]);
+    setFormSeasonTags([]);
     setAddError("");
     setIsClassifying(false);
   };
@@ -376,12 +576,18 @@ export default function Wardrobe() {
       setFormCategory(guessCategoryFromName(file.name));
       setFormColor("");
       setFormFitTag("unknown");
+      setFormClothingType("");
+      setFormLayerType("");
+      setFormIsOnePiece(false);
+      setFormSetId("");
+      setFormStyleTags([]);
+      setFormOccasionTags([]);
+      setFormSeasonTags([]);
       setAddError("");
         setIsClassifying(true);
 
       setAddOpen(true);
 
-      // Run ML classification in the background
       classifyFromUrl(preview).then((result) => {
         if (result.category) setFormCategory(result.category);
         setIsClassifying(false);
@@ -405,7 +611,6 @@ export default function Wardrobe() {
     if (files.length === 1) {
       openAddModalForFile(files[0]);
     } else {
-      // Bulk upload
       const entries = await Promise.all(
         files.map(async (file) => {
           const preview = await fileToDataUrl(file);
@@ -418,6 +623,13 @@ export default function Wardrobe() {
             category: guessCategoryFromName(file.name),
             color: "",
             fitTag: "unknown",
+            clothingType: "",
+            layerType: "",
+            isOnePiece: false,
+            setId: "",
+            styleTags: [],
+            occasionTags: [],
+            seasonTags: [],
             classifying: true,
             userOverrode: false,
           };
@@ -427,7 +639,6 @@ export default function Wardrobe() {
       setBulkError("");
       setBulkOpen(true);
 
-      // Classify each entry in parallel
       for (const entry of entries) {
         classifyFromUrl(entry.preview).then((result) => {
           setBulkItems((prev) =>
@@ -486,18 +697,24 @@ export default function Wardrobe() {
 
     try {
       if (!user) {
-        // Guest mode — save locally only
         const dataUrl = await fileToDataUrl(pendingFile);
-        const localItem = {
+        const localItem = normalizeItemMetadata({
           id: makeId(),
           name,
           category: formCategory,
           color,
           fit_tag,
+          clothing_type: formClothingType,
+          layer_type: formLayerType,
+          is_one_piece: formIsOnePiece,
+          set_id: formSetId.trim(),
+          style_tags: formStyleTags,
+          occasion_tags: formOccasionTags,
+          season_tags: formSeasonTags,
           image_url: dataUrl || "",
           is_active: true,
           is_favorite: false,
-        };
+        });
 
         setItemsAndSave((prev) => [localItem, ...prev]);
 
@@ -510,32 +727,42 @@ export default function Wardrobe() {
         return;
       }
 
-      // Signed in — always try API first (even if backendOffline was previously set)
-      // Convert file to data URL so we send JSON (backend doesn't accept FormData)
       let imageUrl = "";
       try { imageUrl = await fileToDataUrl(pendingFile); } catch {}
-      const created = await wardrobeApi.createItem({
+      const created = await wardrobeApi.createItem(buildWardrobeApiPayload({
         name,
-        category: toApiEnum(formCategory, API_CATEGORIES, "top"),
-        color: toApiEnum(color, API_COLORS, "black"),
-        fit_type: toApiEnum(fit_tag, API_FITS, "regular"),
-        style_tag: toApiEnum("casual", API_STYLES, "casual"),
-        image_url: imageUrl,
-      });
+        category: formCategory,
+        color,
+        fitTag: fit_tag,
+        clothingType: formClothingType,
+        layerType: formLayerType,
+        isOnePiece: formIsOnePiece,
+        setId: formSetId,
+        styleTags: formStyleTags,
+        occasionTags: formOccasionTags,
+        seasonTags: formSeasonTags,
+        imageUrl,
+      }));
 
-      // API succeeded — clear offline flag if it was stuck
       if (backendOffline) setBackendOffline(false);
 
-      const localShadow = {
+      const localShadow = normalizeItemMetadata({
         id: created?.id || makeId(),
         name,
         category: formCategory,
         color,
         fit_tag: created?.fit_tag ?? fit_tag,
+        clothing_type: formClothingType,
+        layer_type: formLayerType,
+        is_one_piece: formIsOnePiece,
+        set_id: formSetId.trim(),
+        style_tags: formStyleTags,
+        occasion_tags: formOccasionTags,
+        season_tags: formSeasonTags,
         image_url: created?.image_url || "",
         is_active: created?.is_active ?? true,
         is_favorite: created?.is_favorite ?? false,
-      };
+      });
 
       setItemsAndSave((prev) => [localShadow, ...prev]);
 
@@ -551,16 +778,23 @@ export default function Wardrobe() {
 
         let dataUrl = "";
         try { dataUrl = await fileToDataUrl(pendingFile); } catch {}
-        const localItem = {
+        const localItem = normalizeItemMetadata({
           id: makeId(),
           name,
           category: formCategory,
           color,
           fit_tag,
+          clothing_type: formClothingType,
+          layer_type: formLayerType,
+          is_one_piece: formIsOnePiece,
+          set_id: formSetId.trim(),
+          style_tags: formStyleTags,
+          occasion_tags: formOccasionTags,
+          season_tags: formSeasonTags,
           image_url: dataUrl,
           is_active: true,
           is_favorite: false,
-        };
+        });
 
         setItemsAndSave((prev) => [localItem, ...prev]);
 
@@ -573,19 +807,25 @@ export default function Wardrobe() {
         return;
       }
 
-      // Non-network API error (e.g. 422) — still save locally
       let dataUrl = "";
       try { dataUrl = await fileToDataUrl(pendingFile); } catch {}
-      const localItem = {
+      const localItem = normalizeItemMetadata({
         id: makeId(),
         name,
         category: formCategory,
         color,
         fit_tag,
+        clothing_type: formClothingType,
+        layer_type: formLayerType,
+        is_one_piece: formIsOnePiece,
+        set_id: formSetId.trim(),
+        style_tags: formStyleTags,
+        occasion_tags: formOccasionTags,
+        season_tags: formSeasonTags,
         image_url: dataUrl,
         is_active: true,
         is_favorite: false,
-      };
+      });
 
       setItemsAndSave((prev) => [localItem, ...prev]);
 
@@ -638,12 +878,19 @@ export default function Wardrobe() {
     setIsBulkSaving(true);
 
     try {
-      const newItems = bulkItems.map((entry) => ({
+      const newItems = bulkItems.map((entry) => normalizeItemMetadata({
         id: makeId(),
         name: entry.name.trim(),
         category: entry.category,
         color: entry.color.trim(),
         fit_tag: normalizeFitTag(entry.fitTag),
+        clothing_type: entry.clothingType || "",
+        layer_type: entry.layerType || "",
+        is_one_piece: entry.isOnePiece === true,
+        set_id: (entry.setId || "").trim(),
+        style_tags: entry.styleTags || [],
+        occasion_tags: entry.occasionTags || [],
+        season_tags: entry.seasonTags || [],
         image_url: entry.preview || "",
         is_active: true,
         is_favorite: false,
@@ -656,14 +903,20 @@ export default function Wardrobe() {
             if (!imgUrl && entry.file) {
               try { imgUrl = await fileToDataUrl(entry.file); } catch {}
             }
-            await wardrobeApi.createItem({
+            await wardrobeApi.createItem(buildWardrobeApiPayload({
               name: entry.name.trim(),
-              category: toApiEnum(entry.category, API_CATEGORIES, "top"),
-              color: toApiEnum(entry.color.trim(), API_COLORS, "black"),
-              fit_type: toApiEnum(normalizeFitTag(entry.fitTag), API_FITS, "regular"),
-              style_tag: "casual",
-              image_url: imgUrl,
-            });
+              category: entry.category,
+              color: entry.color.trim(),
+              fitTag: entry.fitTag,
+              clothingType: entry.clothingType,
+              layerType: entry.layerType,
+              isOnePiece: entry.isOnePiece,
+              setId: entry.setId,
+              styleTags: entry.styleTags,
+              occasionTags: entry.occasionTags,
+              seasonTags: entry.seasonTags,
+              imageUrl: imgUrl,
+            }));
             if (backendOffline) setBackendOffline(false);
           } catch (e) {
             if (isNetworkError(e)) {
@@ -722,7 +975,6 @@ export default function Wardrobe() {
       setToast("Deleted.");
       window.setTimeout(() => setToast(""), 2000);
     } catch (e) {
-      // Always fall back to local delete if API fails
       removeLocally();
 
       if (effectiveSignedIn && isNetworkError(e)) {
@@ -755,7 +1007,6 @@ export default function Wardrobe() {
     try {
       if (effectiveSignedIn) await wardrobeApi.archiveItem(id);
     } catch {
-      // Ignore API errors — local update is already saved
     } finally {
       setIsArchiving(false);
       setPendingArchiveId(null);
@@ -776,7 +1027,6 @@ export default function Wardrobe() {
     try {
       if (effectiveSignedIn) await wardrobeApi.unarchiveItem(id);
     } catch {
-      // Ignore API errors — local update is already saved
     } finally {
       setIsArchiving(false);
       setPendingArchiveId(null);
@@ -790,6 +1040,13 @@ export default function Wardrobe() {
     setEditCategory(item.category || "Tops");
     setEditColor(item.color || "");
     setEditFitTag(normalizeFitTag(item.fit_tag || item.fitTag || item.fit));
+    setEditClothingType((item.clothing_type || "").toString());
+    setEditLayerType((item.layer_type || "").toString());
+    setEditIsOnePiece(item.is_one_piece === true || item.is_one_piece === "true");
+    setEditSetId((item.set_id || "").toString());
+    setEditStyleTags(normalizeTagList(item.style_tags));
+    setEditOccasionTags(normalizeTagList(item.occasion_tags));
+    setEditSeasonTags(normalizeTagList(item.season_tags));
     setEditError("");
     setEditOpen(true);
   };
@@ -802,6 +1059,13 @@ export default function Wardrobe() {
     setEditCategory("Tops");
     setEditColor("");
     setEditFitTag("unknown");
+    setEditClothingType("");
+    setEditLayerType("");
+    setEditIsOnePiece(false);
+    setEditSetId("");
+    setEditStyleTags([]);
+    setEditOccasionTags([]);
+    setEditSeasonTags([]);
     setEditError("");
   };
 
@@ -824,9 +1088,8 @@ export default function Wardrobe() {
 
     setIsUpdating(true);
 
-    // Always save locally
     setItemsAndSave((prev) =>
-      prev.map((it) => (it.id === editId ? { ...it, name, category: editCategory, color, fit_tag } : it))
+      prev.map((it) => (it.id === editId ? normalizeItemMetadata({ ...it, name, category: editCategory, color, fit_tag, clothing_type: editClothingType, layer_type: editLayerType, is_one_piece: editIsOnePiece, set_id: editSetId.trim(), style_tags: editStyleTags, occasion_tags: editOccasionTags, season_tags: editSeasonTags }) : it))
     );
 
     setIsUpdating(false);
@@ -834,19 +1097,23 @@ export default function Wardrobe() {
     setToast("Changes saved.");
     window.setTimeout(() => setToast(""), 2000);
 
-    // Best-effort API sync
     try {
       if (effectiveSignedIn) {
-        await wardrobeApi.updateItem(editId, {
+        await wardrobeApi.updateItem(editId, buildWardrobeApiPayload({
           name,
-          category: toApiEnum(editCategory, API_CATEGORIES, "top"),
-          color: toApiEnum(color, API_COLORS, "black"),
-          fit_type: toApiEnum(fit_tag, API_FITS, "regular"),
-          style_tag: "casual",
-        });
+          category: editCategory,
+          color,
+          fitTag: fit_tag,
+          clothingType: editClothingType,
+          layerType: editLayerType,
+          isOnePiece: editIsOnePiece,
+          setId: editSetId,
+          styleTags: editStyleTags,
+          occasionTags: editOccasionTags,
+          seasonTags: editSeasonTags,
+        }));
       }
     } catch {
-      // Ignore API errors — local update is already saved
     }
   };
 
@@ -854,18 +1121,15 @@ export default function Wardrobe() {
     const current = items.find((x) => x.id === id);
     const nextVal = !(current?.is_favorite === true);
 
-    // Always update locally first
     setItemsAndSave((prev) => prev.map((it) => (it.id === id ? { ...it, is_favorite: nextVal } : it)));
     setToast(nextVal ? "Added to favorites." : "Removed from favorites.");
     window.setTimeout(() => setToast(""), 1500);
 
-    // Best-effort API sync
     try {
       if (effectiveSignedIn) {
         await wardrobeApi.setFavorite(id, nextVal);
       }
     } catch {
-      // Ignore API errors — local update is already saved
     }
   };
 
@@ -934,34 +1198,56 @@ export default function Wardrobe() {
         </button>
       </section>
 
-      <section
-        className="card wardrobeUploadCard"
-        onDrop={onDrop}
-        onDragOver={onDragOver}
-        role="button"
-        tabIndex={0}
-        onClick={openPicker}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") openPicker();
-        }}
-      >
-        <div className="wardrobeUploadInner">
-          <div className="wardrobeUploadTitle">Upload Wardrobe Items</div>
-          <div className="wardrobeUploadSub">Drag and drop photos or click to browse</div>
+      <section className="wardrobeActionStrip">
+        <div className="wardrobeActionCopy">
+          <div className="wardrobeActionTitle">Add to your wardrobe</div>
+          <div className="wardrobeActionSub">Upload photos when you are ready. Keep the screen focused on your clothes the rest of the time.</div>
+        </div>
+        <div className="wardrobeActionButtons">
+          <button type="button" className="wardrobeChooseBtn" onClick={openPicker}>
+            Upload Photos
+          </button>
           <button
             type="button"
-            className="wardrobeChooseBtn"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              openPicker();
-            }}
+            className={showUploadPanel ? "wardrobeChipBtn active" : "wardrobeChipBtn"}
+            onClick={() => setShowUploadPanel((prev) => !prev)}
+            aria-expanded={showUploadPanel}
           >
-            Choose Files
+            {showUploadPanel ? "Hide upload help" : "Show upload help"}
           </button>
-          <div className="wardrobeUploadHint">Supports JPG, PNG, WEBP up to 10MB each</div>
         </div>
       </section>
+
+      {showUploadPanel ? (
+        <section
+          className="card wardrobeUploadCard"
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          role="button"
+          tabIndex={0}
+          onClick={openPicker}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") openPicker();
+          }}
+        >
+          <div className="wardrobeUploadInner">
+            <div className="wardrobeUploadTitle">Upload Wardrobe Items</div>
+            <div className="wardrobeUploadSub">Drag and drop photos or click to browse</div>
+            <button
+              type="button"
+              className="wardrobeChooseBtn"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openPicker();
+              }}
+            >
+              Choose Files
+            </button>
+            <div className="wardrobeUploadHint">Supports JPG, PNG, WEBP up to 10MB each</div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="wardrobeControls">
         <div className="wardrobeSearchWrap">
@@ -1029,7 +1315,97 @@ export default function Wardrobe() {
                   </div>
                 )}
 
-                {availableColors.length === 0 && availableFits.length === 0 && (
+                {availableClothingTypes.length > 0 && (
+                  <div className="wardrobeFilterSection">
+                    <div className="wardrobeFilterHeading">Clothing Type</div>
+                    <div className="wardrobeFilterChips">
+                      {availableClothingTypes.map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          className={filterClothingTypes.has(type) ? "wardrobeFilterChip active" : "wardrobeFilterChip"}
+                          onClick={() => toggleFilterClothingType(type)}
+                        >
+                          {optionLabel(type)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {availableLayers.length > 0 && (
+                  <div className="wardrobeFilterSection">
+                    <div className="wardrobeFilterHeading">Layer</div>
+                    <div className="wardrobeFilterChips">
+                      {availableLayers.map((layer) => (
+                        <button
+                          key={layer.value}
+                          type="button"
+                          className={filterLayers.has(layer.value) ? "wardrobeFilterChip active" : "wardrobeFilterChip"}
+                          onClick={() => toggleFilterLayer(layer.value)}
+                        >
+                          {layer.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {availableStyles.length > 0 && (
+                  <div className="wardrobeFilterSection">
+                    <div className="wardrobeFilterHeading">Style</div>
+                    <div className="wardrobeFilterChips">
+                      {availableStyles.map((style) => (
+                        <button
+                          key={style}
+                          type="button"
+                          className={filterStyles.has(style) ? "wardrobeFilterChip active" : "wardrobeFilterChip"}
+                          onClick={() => toggleFilterStyle(style)}
+                        >
+                          {optionLabel(style)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {availableOccasions.length > 0 && (
+                  <div className="wardrobeFilterSection">
+                    <div className="wardrobeFilterHeading">Occasion</div>
+                    <div className="wardrobeFilterChips">
+                      {availableOccasions.map((occasion) => (
+                        <button
+                          key={occasion}
+                          type="button"
+                          className={filterOccasions.has(occasion) ? "wardrobeFilterChip active" : "wardrobeFilterChip"}
+                          onClick={() => toggleFilterOccasion(occasion)}
+                        >
+                          {optionLabel(occasion)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {availableSeasons.length > 0 && (
+                  <div className="wardrobeFilterSection">
+                    <div className="wardrobeFilterHeading">Season</div>
+                    <div className="wardrobeFilterChips">
+                      {availableSeasons.map((season) => (
+                        <button
+                          key={season}
+                          type="button"
+                          className={filterSeasons.has(season) ? "wardrobeFilterChip active" : "wardrobeFilterChip"}
+                          onClick={() => toggleFilterSeason(season)}
+                        >
+                          {optionLabel(season)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {availableColors.length === 0 && availableFits.length === 0 && availableClothingTypes.length === 0 && availableLayers.length === 0 && availableStyles.length === 0 && availableOccasions.length === 0 && availableSeasons.length === 0 && (
                   <div className="wardrobeFilterEmpty">No filter options available yet. Add items to your wardrobe first.</div>
                 )}
 
@@ -1041,6 +1417,15 @@ export default function Wardrobe() {
               </div>
             )}
           </div>
+
+          <button
+            type="button"
+            className={showCategoryTabs || activeCategory !== "All Items" ? "wardrobeChipBtn active" : "wardrobeChipBtn"}
+            onClick={() => setShowCategoryTabs((prev) => !prev)}
+            aria-expanded={showCategoryTabs || activeCategory !== "All Items"}
+          >
+            Categories
+          </button>
 
           <div className="wardrobeViewToggle">
             <button
@@ -1063,23 +1448,25 @@ export default function Wardrobe() {
         </div>
       </section>
 
-      <section className="wardrobeTabs">
-        {CATEGORIES.map((cat) => {
-          const isActive = activeCategory === cat;
-          const label = cat === "All Items" ? `All Items (${counts["All Items"]})` : `${cat} (${counts[cat] || 0})`;
+      {showCategoryTabs || activeCategory !== "All Items" ? (
+        <section className="wardrobeTabs">
+          {CATEGORIES.map((cat) => {
+            const isActive = activeCategory === cat;
+            const label = cat === "All Items" ? `All Items (${counts["All Items"]})` : `${cat} (${counts[cat] || 0})`;
 
-          return (
-            <button
-              key={cat}
-              type="button"
-              className={isActive ? "wardrobeTab active" : "wardrobeTab"}
-              onClick={() => setActiveCategory(cat)}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </section>
+            return (
+              <button
+                key={cat}
+                type="button"
+                className={isActive ? "wardrobeTab active" : "wardrobeTab"}
+                onClick={() => setActiveCategory(cat)}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </section>
+      ) : null}
 
       <section className={view === "grid" ? "wardrobeGrid" : "wardrobeList"}>
         {filtered.map((it) => (
@@ -1105,12 +1492,19 @@ export default function Wardrobe() {
         {!filtered.length ? (
           <div className="wardrobeEmpty">
             <div className="wardrobeEmptyIcon">{tab === "archived" ? "\u2001" : tab === "favorites" ? "\u2661" : "\uD83D\uDC54"}</div>
-            <div className="wardrobeEmptyTitle">{tab === "archived" ? "No archived items" : tab === "favorites" ? "No favorites yet" : "No items found"}</div>
+            <div className="wardrobeEmptyTitle">{tab === "archived" ? "No archived items yet" : tab === "favorites" ? "No favorites yet" : "Nothing matches right now"}</div>
             <div className="wardrobeEmptySub">
               {tab === "favorites"
-                ? "Tap the heart on items in your wardrobe to save them here."
-                : "Try a different category or search term."}
+                ? "Tap the heart on wardrobe items you love and they will show up here."
+                : tab === "archived"
+                  ? "Archived pieces will stay here until you bring them back into your active wardrobe."
+                  : "Try clearing filters, changing your search, or adding a few more items to your wardrobe."}
             </div>
+            {tab === "active" ? (
+              <button type="button" className="btn primary wardrobeEmptyBtn" onClick={() => setShowUploadPanel(true)}>
+                Add wardrobe item
+              </button>
+            ) : null}
           </div>
         ) : null}
       </section>
@@ -1130,6 +1524,13 @@ export default function Wardrobe() {
               category={formCategory} onCategoryChange={setFormCategory}
               color={formColor} onColorChange={setFormColor}
               fitTag={formFitTag} onFitTagChange={setFormFitTag}
+              clothingType={formClothingType} onClothingTypeChange={setFormClothingType}
+              layerType={formLayerType} onLayerTypeChange={setFormLayerType}
+              isOnePiece={formIsOnePiece} onIsOnePieceChange={setFormIsOnePiece}
+              setId={formSetId} onSetIdChange={setFormSetId}
+              styleTags={formStyleTags} onStyleTagsChange={setFormStyleTags}
+              occasionTags={formOccasionTags} onOccasionTagsChange={setFormOccasionTags}
+              seasonTags={formSeasonTags} onSeasonTagsChange={setFormSeasonTags}
               isClassifying={isClassifying}
               error={addError}
             />
@@ -1170,6 +1571,13 @@ export default function Wardrobe() {
               category={editCategory} onCategoryChange={setEditCategory}
               color={editColor} onColorChange={setEditColor}
               fitTag={editFitTag} onFitTagChange={setEditFitTag}
+              clothingType={editClothingType} onClothingTypeChange={setEditClothingType}
+              layerType={editLayerType} onLayerTypeChange={setEditLayerType}
+              isOnePiece={editIsOnePiece} onIsOnePieceChange={setEditIsOnePiece}
+              setId={editSetId} onSetIdChange={setEditSetId}
+              styleTags={editStyleTags} onStyleTagsChange={setEditStyleTags}
+              occasionTags={editOccasionTags} onOccasionTagsChange={setEditOccasionTags}
+              seasonTags={editSeasonTags} onSeasonTagsChange={setEditSeasonTags}
               error={editError}
             />
 

@@ -1,4 +1,3 @@
-// web/src/components/Dashboard.js
 import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -12,19 +11,39 @@ import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 import ClothCard from "./ClothCard";
 import MeshGradient from "./MeshGradient";
 import ErrorBoundary from "./ErrorBoundary";
-import UpcomingPlanCard from "./UpcomingPlanCard";
-import { OPEN_ADD_ITEM_FLAG, REUSE_OUTFIT_KEY, EVT_PLANNED_OUTFITS_CHANGED } from "../utils/constants";
+import { OPEN_ADD_ITEM_FLAG, REUSE_OUTFIT_KEY } from "../utils/constants";
 import { readRecSeed, writeRecSeed, readTimeOverride, writeTimeOverride, readWeatherOverride, setWeatherOverride } from "../utils/userStorage";
-import { safeParse, formatToday, normalizeFitTag, normalizeItems, setReuseOutfit, buildGoogleCalendarUrl, onTiltMove, onTiltLeave, tomorrowDateStr } from "../utils/helpers";
+import { safeParse, formatToday, normalizeFitTag, normalizeItems, buildGoogleCalendarUrl, onTiltMove, onTiltLeave, tomorrowDateStr } from "../utils/helpers";
 import { getWeatherContext } from "../api/weatherApi";
 import {
   titleCase, normalizeCategory, normalizeColorName, colorToCss,
   timeCategoryFromDate,
   generateThreeOutfits, idsSignature, makeRecentSets,
-  buildExplanation, buildOutfitFromIds,
+  buildExplanation, buildOutfitFromIds, scoreOutfitForDisplay,
 } from "../utils/recommendationEngine";
 
 const DEFAULT_BODY_TYPE = "rectangle";
+const OCCASION_OPTIONS = ["", "casual", "work", "formal", "athletic", "social", "lounge"];
+const STYLE_OPTIONS = ["", "casual", "formal", "smart casual", "relaxed", "lounge", "activewear", "social", "work"];
+const RECENT_RECOMMENDATION_SIGS_KEY = "fitgpt_recent_recommendation_sigs_v1";
+
+function recommendationSignature(outfit) {
+  return idsSignature((Array.isArray(outfit) ? outfit : []).map((item) => item?.id));
+}
+
+function readRecentRecommendationSigs() {
+  const raw = sessionStorage.getItem(RECENT_RECOMMENDATION_SIGS_KEY);
+  const parsed = raw ? safeParse(raw) : [];
+  return Array.isArray(parsed)
+    ? parsed.map((value) => (value || "").toString().trim()).filter(Boolean)
+    : [];
+}
+
+function writeRecentRecommendationSigs(signatures) {
+  const next = [...new Set((Array.isArray(signatures) ? signatures : []).map((value) => (value || "").toString().trim()).filter(Boolean))].slice(-12);
+  sessionStorage.setItem(RECENT_RECOMMENDATION_SIGS_KEY, JSON.stringify(next));
+  return next;
+}
 
 function readReuseOutfit() {
   const raw = sessionStorage.getItem(REUSE_OUTFIT_KEY);
@@ -46,6 +65,191 @@ function clearReuseOutfit() {
   sessionStorage.removeItem(REUSE_OUTFIT_KEY);
 }
 
+function splitColorNames(color) {
+  return (color || "").toString().split(",").map((part) => part.trim()).filter(Boolean);
+}
+
+function uniqueStrings(values) {
+  return [...new Set((Array.isArray(values) ? values : []).map((value) => (value || "").toString().trim()).filter(Boolean))];
+}
+
+function summarizeExplanation(text) {
+  const cleaned = (text || "").toString().trim();
+  if (!cleaned) return "";
+  const sentences = cleaned.split(/(?<=[.!?])\s+/).filter(Boolean);
+  return sentences.slice(0, 2).join(" ");
+}
+
+function outfitRoleLabel(item) {
+  const category = normalizeCategory(item?.category);
+  const layer = (item?.layer_type || "").toString().trim().toLowerCase();
+  if (item?.is_one_piece) return "One-piece";
+  if (layer === "base") return "Base layer";
+  if (layer === "mid") return "Mid layer";
+  if (category === "Outerwear" || layer === "outer") return "Outer layer";
+  if (category === "Tops") return "Top";
+  if (category === "Bottoms") return "Bottom";
+  if (category === "Shoes") return "Shoes";
+  if (category === "Accessories") return "Accessory";
+  return category || "Item";
+}
+
+function buildColorReason(outfit) {
+  const colors = uniqueStrings((Array.isArray(outfit) ? outfit : []).flatMap((item) => splitColorNames(item?.color)));
+  if (colors.length >= 3) return `The palette stays interesting by balancing ${colors.slice(0, 3).join(", ")} without letting any one piece overpower the outfit.`;
+  if (colors.length === 2) return `${colors[0]} and ${colors[1]} create a clear visual relationship, which helps the outfit feel intentional instead of random.`;
+  if (colors.length === 1) return `${colors[0]} acts like the anchor color, which keeps the outfit cohesive.`;
+  return "The color choices stay simple, which makes the outfit easier to wear and style.";
+}
+
+function buildComfortReason(outfit, answers, weatherCategory) {
+  const comfort = Array.isArray(answers?.comfort) ? answers.comfort : [];
+  const fitTags = (Array.isArray(outfit) ? outfit : []).map((item) => normalizeFitTag(item?.fit_tag || item?.fitTag || item?.fit));
+  const hasLayering = (Array.isArray(outfit) ? outfit : []).filter((item) => item?.layer_type).length >= 2;
+
+  if (comfort.includes("Layered") && hasLayering) return "This matches your comfort preference for layering, so it should feel practical without looking bulky.";
+  if (comfort.includes("Relaxed") && fitTags.some((fit) => fit === "relaxed" || fit === "oversized")) return "The outfit leans relaxed, which should feel easier to wear through the day.";
+  if (comfort.includes("Fitted") && fitTags.some((fit) => fit === "tailored" || fit === "slim" || fit === "athletic")) return "There is some structure here, so the outfit still feels polished while staying close to your fitted preference.";
+  if (comfort.includes("Stretchy")) return "The recommendation avoids overcomplicating the outfit, which usually helps comfort stay consistent through movement and daily wear.";
+  if (weatherCategory === "cold" || weatherCategory === "cool") return "The extra warmth is doing comfort work here too, so the outfit should feel more wearable in cooler weather.";
+  return "The outfit keeps the structure straightforward, which makes it easier to wear comfortably for a full day.";
+}
+
+function buildLogicReason(outfit, answers, weatherCategory, timeCategory) {
+  const items = Array.isArray(outfit) ? outfit : [];
+  const categories = items.map((item) => normalizeCategory(item?.category));
+  const hasTop = categories.includes("Tops");
+  const hasBottom = categories.includes("Bottoms");
+  const hasShoes = categories.includes("Shoes");
+  const hasOuterwear = categories.includes("Outerwear") || items.some((item) => item?.layer_type === "outer");
+  const occasion = Array.isArray(answers?.dressFor) && answers.dressFor.length ? answers.dressFor[0] : "";
+  const style = Array.isArray(answers?.style) && answers.style.length ? answers.style[0] : "";
+
+  const structure = hasTop && hasBottom && hasShoes
+    ? "It follows a complete outfit structure with a clear top, bottom, and shoe choice"
+    : "It uses the best available structure from your wardrobe";
+
+  const context = [style, occasion].filter(Boolean).join(" / ");
+  const weatherText = weatherCategory ? `for ${weatherCategory} weather` : "for the current conditions";
+  const timeText = timeCategory ? `around ${timeCategory}` : "for the moment";
+
+  if (hasOuterwear && (weatherCategory === "cold" || weatherCategory === "cool")) {
+    return `${structure}, and the outer layer makes the recommendation feel more realistic ${weatherText}.`;
+  }
+  if (context) {
+    return `${structure}, and it stays pointed toward your ${context} preference ${timeText}.`;
+  }
+  return `${structure}, which is why the recommendation feels wearable instead of experimental.`;
+}
+
+function buildGuidanceReason(outfit, answers) {
+  const style = Array.isArray(answers?.style) && answers.style.length ? answers.style[0] : "daily";
+  const itemNames = (Array.isArray(outfit) ? outfit : []).map((item) => item?.name).filter(Boolean);
+  const leadItems = itemNames.slice(0, 2).join(" + ");
+  if (leadItems) return `If you are unsure how to wear this, start with ${leadItems} and let the rest of the outfit stay simple.`;
+  return `When you want a safer ${style} outfit, keeping the silhouette clean and the palette focused is a reliable styling move.`;
+}
+
+function buildComfortSummary(outfit, answers, weatherCategory) {
+  const comfort = Array.isArray(answers?.comfort) ? answers.comfort : [];
+  const fitTags = (Array.isArray(outfit) ? outfit : []).map((item) => normalizeFitTag(item?.fit_tag || item?.fitTag || item?.fit));
+  const pieces = Array.isArray(outfit) ? outfit : [];
+  const hasLayering = pieces.filter((item) => item?.layer_type).length >= 2;
+
+  if (comfort.includes("Layered") && hasLayering) {
+    return {
+      badge: "Comfort: Layered match",
+      note: "Matches your layered comfort preference.",
+    };
+  }
+
+  if (comfort.includes("Relaxed") && fitTags.some((fit) => fit === "relaxed" || fit === "oversized")) {
+    return {
+      badge: "Comfort: Relaxed fit",
+      note: "Leans easier and less structured through the day.",
+    };
+  }
+
+  if (comfort.includes("Fitted") && fitTags.some((fit) => fit === "tailored" || fit === "slim" || fit === "athletic")) {
+    return {
+      badge: "Comfort: Structured fit",
+      note: "Keeps a closer, more polished shape like you asked for.",
+    };
+  }
+
+  if (comfort.includes("Stretchy")) {
+    return {
+      badge: "Comfort: Easy movement",
+      note: "The outfit stays simple and movement-friendly.",
+    };
+  }
+
+  if (weatherCategory === "cold" || weatherCategory === "cool") {
+    return {
+      badge: "Comfort: Weather support",
+      note: "Extra warmth should make this easier to wear today.",
+    };
+  }
+
+  return {
+    badge: comfort.length ? "Comfort: Balanced" : "Comfort: Everyday",
+    note: comfort.length ? "Keeps the outfit easy to wear without overcomplicating it." : "A simple option that should feel comfortable for everyday wear.",
+  };
+}
+
+function getWeatherGlyph(category, isLoading) {
+  if (isLoading) return "...";
+  if (category === "cold") return "Cold";
+  if (category === "cool") return "Cool";
+  if (category === "warm") return "Warm";
+  if (category === "hot") return "Hot";
+  return "Mild";
+}
+
+function buildWeatherPresentation({ category, tempF, loading, source, message }) {
+  if (loading) {
+    return {
+      glyph: getWeatherGlyph(category, true),
+      headline: "Detecting weather",
+      subline: "Getting your local conditions now.",
+      status: "Checking local weather",
+      detail: "",
+    };
+  }
+
+  const categoryLabel = titleCase(category || "mild");
+  const hasTemp = tempF != null && Number.isFinite(Number(tempF));
+  const tempLabel = hasTemp ? `${tempF} F` : categoryLabel;
+
+  if (source === "override") {
+    return {
+      glyph: getWeatherGlyph(category, false),
+      headline: tempLabel,
+      subline: `${categoryLabel} weather selected manually`,
+      status: "Manual weather override",
+      detail: "Recommendations are using the weather you picked.",
+    };
+  }
+
+  if (source === "fallback") {
+    return {
+      glyph: getWeatherGlyph(category, false),
+      headline: "Weather unavailable",
+      subline: "Using balanced recommendations for now",
+      status: "Fallback mode",
+      detail: message || "We could not read live weather, so FitGPT is using a safe default.",
+    };
+  }
+
+  return {
+    glyph: getWeatherGlyph(category, false),
+    headline: tempLabel,
+    subline: `Live weather: ${categoryLabel}`,
+    status: "Live weather active",
+    detail: hasTemp ? "Recommendations are using your current local temperature." : "",
+  };
+}
+
 export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -56,11 +260,13 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [saveMsg, setSaveMsg] = useState("");
   const [savingSig, setSavingSig] = useState("");
   const [savedSigs, setSavedSigs] = useState(() => new Set());
+  const [recentRecommendationSigs, setRecentRecommendationSigs] = useState(() => new Set(readRecentRecommendationSigs()));
 
   const [recentExactSigs, setRecentExactSigs] = useState(() => new Set());
   const [recentItemCounts, setRecentItemCounts] = useState(() => new Map());
 
   const [weatherLoading, setWeatherLoading] = useState(() => !readWeatherOverride());
+  const [weatherSource, setWeatherSource] = useState(() => (readWeatherOverride() ? "override" : "auto"));
   const [weatherMsg, setWeatherMsg] = useState("");
   const [weatherTempF, setWeatherTempF] = useState(null);
   const [weatherCategory, setWeatherCategory] = useState(() => readWeatherOverride() || "mild");
@@ -69,8 +275,13 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
   const [timeCategory, setTimeCategory] = useState(() => readTimeOverride() || timeCategoryFromDate(new Date()));
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [selectedOccasion, setSelectedOccasion] = useState("");
+  const [selectedStyle, setSelectedStyle] = useState("");
+  const [showOccasionPicker, setShowOccasionPicker] = useState(false);
+  const [showStylePicker, setShowStylePicker] = useState(false);
+  const [showWhyDetails, setShowWhyDetails] = useState(false);
+  const [showRefineControls, setShowRefineControls] = useState(false);
 
-  // AI recommendation state
   const [aiOutfits, setAiOutfits] = useState(null);
   const [aiExplanations, setAiExplanations] = useState([]);
   const [aiLoading, setAiLoading] = useState(true);
@@ -78,10 +289,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [aiRefreshToken, setAiRefreshToken] = useState(0);
   const [aiHasResolved, setAiHasResolved] = useState(false);
 
-  const [upcomingPlan, setUpcomingPlan] = useState(null);
 
-
-  // Persist recSeed so recommendations survive navigation
   useEffect(() => {
     writeRecSeed(recSeed);
   }, [recSeed]);
@@ -89,48 +297,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   useEffect(() => {
     let alive = true;
 
-    async function loadUpcomingPlan() {
-      try {
-        const res = await plannedOutfitsApi.listPlanned(user);
-        const list = Array.isArray(res?.planned_outfits) ? res.planned_outfits : [];
-
-        const now = new Date();
-        const todayStr = now.toISOString().slice(0, 10);
-        const limit = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-
-        const upcoming = list
-          .filter((p) => {
-            const d = (p?.planned_date || "").toString();
-            return d >= todayStr && d <= limit;
-          })
-          .sort((a, b) => (a?.planned_date || "").localeCompare(b?.planned_date || ""));
-
-        if (alive) setUpcomingPlan(upcoming.length > 0 ? upcoming[0] : null);
-      } catch {
-        if (alive) setUpcomingPlan(null);
-      }
-    }
-
-    loadUpcomingPlan();
-
-    const onPlannedChange = () => loadUpcomingPlan();
-    window.addEventListener(EVT_PLANNED_OUTFITS_CHANGED, onPlannedChange);
-
-    return () => {
-      alive = false;
-      window.removeEventListener(EVT_PLANNED_OUTFITS_CHANGED, onPlannedChange);
-    };
-  }, [user]);
-
-  useEffect(() => {
-    let alive = true;
-
     async function loadSavedSigs() {
-      if (!user) {
-        if (alive) setSavedSigs(new Set());
-        return;
-      }
-
       try {
         const res = await savedOutfitsApi.listSaved(user);
         const list = Array.isArray(res?.saved_outfits) ? res.saved_outfits : [];
@@ -186,6 +353,8 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const loadWeather = async () => {
     const override = readWeatherOverride();
     if (override) {
+      setWeatherSource("override");
+      setWeatherTempF(null);
       setWeatherCategory(override);
       setWeatherMsg("");
       setWeatherLoading(false);
@@ -193,11 +362,13 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     }
 
     setWeatherLoading(true);
+    setWeatherSource("auto");
     setWeatherMsg("");
 
     const w = await getWeatherContext();
     setWeatherTempF(w.tempF);
     setWeatherCategory(w.category);
+    setWeatherSource(w.source || "auto");
     setWeatherMsg(w.message || "");
     setWeatherLoading(false);
   };
@@ -234,14 +405,19 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
   }, []);
 
-  // Dot animation for "Detecting Weather" text
   useEffect(() => {
     if (!weatherLoading) return;
     const id = window.setInterval(() => setDotCount((c) => (c % 3) + 1), 400);
     return () => window.clearInterval(id);
   }, [weatherLoading]);
 
-  // Fetch AI recommendations in background (debounced to avoid re-fires on mount)
+  const effectiveAnswers = useMemo(() => {
+    const next = { ...(answers || {}) };
+    if (selectedOccasion) next.dressFor = [selectedOccasion];
+    if (selectedStyle) next.style = [selectedStyle];
+    return next;
+  }, [answers, selectedOccasion, selectedStyle]);
+
   useEffect(() => {
     let alive = true;
 
@@ -263,13 +439,13 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         setAiLoading(true);
 
         try {
-          const dressFor = Array.isArray(answers?.dressFor) ? answers.dressFor : [];
-          const style = Array.isArray(answers?.style) ? answers.style : [];
+          const dressFor = Array.isArray(effectiveAnswers?.dressFor) ? effectiveAnswers.dressFor : [];
+          const style = Array.isArray(effectiveAnswers?.style) ? effectiveAnswers.style : [];
 
           const context = {
             weather_category: weatherCategory || "mild",
             time_category: timeCategory || "work hours",
-            body_type: answers?.bodyType || DEFAULT_BODY_TYPE,
+            body_type: effectiveAnswers?.bodyType || DEFAULT_BODY_TYPE,
             occasion: dressFor.length ? dressFor[0] : "daily",
             style_preferences: style,
           };
@@ -288,6 +464,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                   const found = byId.get(id.toString());
                   if (!found) return null;
                   return {
+                    ...found,
                     id: found.id ?? id,
                     name: found.name || "Wardrobe item",
                     category: normalizeCategory(found.category),
@@ -331,10 +508,9 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       alive = false;
       clearTimeout(timerId);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wardrobe, weatherCategory, timeCategory, answers, aiRefreshToken]);
+  }, [wardrobe, weatherCategory, timeCategory, effectiveAnswers, aiRefreshToken]);
 
-  const bodyTypeId = answers?.bodyType ? answers.bodyType : DEFAULT_BODY_TYPE;
+  const bodyTypeId = effectiveAnswers?.bodyType ? effectiveAnswers.bodyType : DEFAULT_BODY_TYPE;
 
   const generatedOutfits = useMemo(
     () =>
@@ -346,15 +522,14 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         recentItemCounts,
         weatherCategory,
         timeCategory,
-        answers,
+        effectiveAnswers,
         savedSigs
       ),
-    [wardrobe, recSeed, bodyTypeId, recentExactSigs, recentItemCounts, weatherCategory, timeCategory, answers, savedSigs]
+    [wardrobe, recSeed, bodyTypeId, recentExactSigs, recentItemCounts, weatherCategory, timeCategory, effectiveAnswers, savedSigs]
   );
 
   const reused = useMemo(() => readReuseOutfit(), []);
 
-  // Pair outfits with their AI explanations, filtering out saved outfits
   const { outfits, pairedExplanations } = useMemo(() => {
     let raw;
     let rawExplanations;
@@ -365,14 +540,11 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       raw = [reusedOutfit, ...rest].slice(0, 3);
       rawExplanations = raw.map(() => "");
     } else if (aiOutfits && aiOutfits.length > 0) {
-      // Pair AI outfits with explanations before filtering
       const paired = aiOutfits.map((outfit, i) => ({ outfit, explanation: aiExplanations[i] || "" }));
-      // Filter out saved AI outfits
       const filtered = paired.filter(({ outfit }) => {
         const sig = idsSignature((outfit || []).map((x) => x?.id));
         return !sig || !savedSigs.has(sig);
       });
-      // Pad with local outfits (already exclude saved via generateThreeOutfits)
       let localIdx = 0;
       while (filtered.length < 3 && localIdx < generatedOutfits.length) {
         filtered.push({ outfit: generatedOutfits[localIdx++], explanation: "" });
@@ -385,15 +557,52 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       rawExplanations = generatedOutfits.map(() => "");
     }
 
-    return { outfits: raw, pairedExplanations: rawExplanations };
-  }, [generatedOutfits, reused, wardrobe, aiOutfits, aiExplanations, savedSigs]);
+    if (reused) {
+      return { outfits: raw, pairedExplanations: rawExplanations };
+    }
+
+    const ranked = raw
+      .map((outfit, idx) => ({
+        outfit,
+        explanation: rawExplanations[idx] || "",
+        signature: recommendationSignature(outfit),
+        score: scoreOutfitForDisplay(outfit, {
+          weatherCategory,
+          timeCategory,
+          answers: effectiveAnswers,
+          bodyTypeId,
+        }),
+      }))
+      .sort((a, b) => {
+        const aSeen = a.signature && recentRecommendationSigs.has(a.signature) ? 1 : 0;
+        const bSeen = b.signature && recentRecommendationSigs.has(b.signature) ? 1 : 0;
+        return (aSeen - bSeen) || (b.score - a.score);
+      });
+
+    return {
+      outfits: ranked.map((entry) => entry.outfit),
+      pairedExplanations: ranked.map((entry) => entry.explanation),
+    };
+  }, [
+    generatedOutfits,
+    reused,
+    wardrobe,
+    aiOutfits,
+    aiExplanations,
+    savedSigs,
+    weatherCategory,
+    timeCategory,
+    effectiveAnswers,
+    bodyTypeId,
+    recentRecommendationSigs,
+  ]);
 
   const [selectedIdx, setSelectedIdx] = useState(null);
 
-  // Clamp selectedIdx when outfits shrink (e.g. after saving removes an option)
   useEffect(() => {
-    if (selectedIdx != null && selectedIdx >= outfits.length && outfits.length > 0) {
-      setSelectedIdx(0);
+    if (selectedIdx != null && selectedIdx >= outfits.length) {
+      setSelectedIdx(null);
+    setShowWhyDetails(false);
     }
   }, [outfits.length, selectedIdx]);
 
@@ -404,25 +613,79 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     }
 
     const activeOutfit = outfits[selectedIdx] || outfits[0] || [];
-    const text = buildExplanation({ answers, outfit: activeOutfit, weatherCategory, timeCategory });
+    const text = buildExplanation({ answers: effectiveAnswers, outfit: activeOutfit, weatherCategory, timeCategory });
     const cleaned = (text || "").toString().trim();
     return cleaned || "Pick a style and an occasion in onboarding to get a personalized explanation.";
-  }, [answers, outfits, selectedIdx, aiSource, pairedExplanations, reused, weatherCategory, timeCategory]);
+  }, [effectiveAnswers, outfits, selectedIdx, aiSource, pairedExplanations, reused, weatherCategory, timeCategory]);
+
+  const explanationDetails = useMemo(() => {
+    const activeOutfit = outfits[selectedIdx ?? 0] || outfits[0] || [];
+    if (!activeOutfit.length) return [];
+
+    return [
+      { title: "Color Reasoning", body: buildColorReason(activeOutfit) },
+      { title: "Comfort Check", body: buildComfortReason(activeOutfit, effectiveAnswers, weatherCategory) },
+      { title: "Why This Works", body: buildLogicReason(activeOutfit, effectiveAnswers, weatherCategory, timeCategory) },
+      { title: "Style Guidance", body: buildGuidanceReason(activeOutfit, effectiveAnswers) },
+    ];
+  }, [outfits, selectedIdx, effectiveAnswers, weatherCategory, timeCategory]);
+
+  const explanationSummaryText = useMemo(() => {
+    return summarizeExplanation(explanationText);
+  }, [explanationText]);
 
   const chipText = useMemo(() => {
-    const dressFor = Array.isArray(answers?.dressFor) ? answers.dressFor : [];
+    const dressFor = Array.isArray(effectiveAnswers?.dressFor) ? effectiveAnswers.dressFor : [];
     return dressFor.length ? titleCase(dressFor[0]) : "Daily";
-  }, [answers]);
+  }, [effectiveAnswers]);
+
+  const outfitSummaries = useMemo(() => {
+    return outfits.map((outfit, idx) => {
+      const score = scoreOutfitForDisplay(outfit, {
+        weatherCategory,
+        timeCategory,
+        answers: effectiveAnswers,
+        bodyTypeId,
+      });
+
+      const rankLabel = idx === 0 ? "Top Match" : idx === 1 ? "Strong Pick" : "Fresh Option";
+      const confidenceLabel = score >= 88 ? "Excellent" : score >= 76 ? "Strong" : score >= 64 ? "Good" : "Flexible";
+      const pieces = Array.isArray(outfit) ? outfit : [];
+      const hasOnePiece = pieces.some((item) => item?.is_one_piece);
+      const layerCount = pieces.filter((item) => item?.layer_type).length;
+      const accessoryCount = pieces.filter((item) => (item?.category || "") === "Accessories").length;
+      const setIds = pieces.map((item) => (item?.set_id || "").toString().trim().toLowerCase()).filter(Boolean);
+      const hasSet = setIds.some((setId) => pieces.filter((item) => ((item?.set_id || "").toString().trim().toLowerCase() === setId)).length >= 2);
+      const comfortSummary = buildComfortSummary(outfit, effectiveAnswers, weatherCategory);
+      const explanation = aiSource === "ai" && !reused && pairedExplanations[idx]
+        ? pairedExplanations[idx]
+        : buildExplanation({ answers: effectiveAnswers, outfit, weatherCategory, timeCategory });
+      const explanationPreview = summarizeExplanation(explanation) || buildColorReason(outfit);
+
+      const traits = [];
+      if (hasOnePiece) traits.push("One-piece");
+      if (layerCount >= 2) traits.push("Layered");
+      if (hasSet) traits.push("Matched set");
+      if (accessoryCount > 0) traits.push(accessoryCount === 1 ? "1 accessory" : `${accessoryCount} accessories`);
+      if (!traits.length) traits.push("Balanced basics");
+
+      return { score, rankLabel, confidenceLabel, traits, comfortSummary, explanationPreview };
+    });
+  }, [outfits, weatherCategory, timeCategory, effectiveAnswers, bodyTypeId, aiSource, reused, pairedExplanations]);
 
   const canRefresh = true;
 
+  const rememberCurrentRecommendations = () => {
+    const current = outfits.map((outfit) => recommendationSignature(outfit)).filter(Boolean);
+    if (!current.length) return;
+    setRecentRecommendationSigs((prev) => new Set(writeRecentRecommendationSigs([...prev, ...current])));
+  };
+
   const handleRefreshRecommendation = () => {
+    rememberCurrentRecommendations();
     clearReuseOutfit();
     setSelectedIdx(0);
-    // New seed for local fallback (only used if AI fails)
     setRecSeed((prev) => prev + Math.floor(Math.random() * 100000) + 1);
-    // Keep current AI outfits visible while new ones load —
-    // only clear source/explanations so the word animation replays
     setAiExplanations([]);
     setAiRefreshToken((prev) => prev + 1);
   };
@@ -444,7 +707,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     const calUrl = buildGoogleCalendarUrl({ date, occasion: "", itemNames });
     window.open(calUrl, "_blank", "noopener");
 
-    // Also save locally so it shows in the app
     const itemIds = outfit.map((x) => x?.id).filter(Boolean);
     const itemDetails = outfit.map((x) => ({
       id: (x?.id ?? "").toString(),
@@ -466,22 +728,10 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     window.setTimeout(() => setSaveMsg(""), 2500);
   };
 
-  const handleWearPlanNow = () => {
-    if (!upcomingPlan) return;
-    const itemIds = Array.isArray(upcomingPlan.item_ids) ? upcomingPlan.item_ids : [];
-    if (!itemIds.length) return;
-    setReuseOutfit(itemIds, upcomingPlan.planned_id);
-    outfitHistoryApi.recordWorn({
-      item_ids: itemIds,
-      source: "planner",
-      context: { occasion: upcomingPlan.occasion || "" },
-    }, user).catch(() => {});
-    window.location.reload();
-  };
+
 
   function outfitSignature(outfit) {
-    const ids = normalizeItems((outfit || []).map((x) => x?.id));
-    return ids.join("|");
+    return recommendationSignature(outfit);
   }
 
 
@@ -521,6 +771,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     setSavingSig(sig);
 
     try {
+      rememberCurrentRecommendations();
       const itemDetails = (outfit || []).map((x) => ({
         id: (x?.id ?? "").toString(),
         name: x?.name || "",
@@ -550,7 +801,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         return next;
       });
 
-      // Record to outfit history
       if (created) {
         outfitHistoryApi.recordWorn({
           item_ids: normalized,
@@ -569,7 +819,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
       window.setTimeout(() => setSaveMsg(""), 2500);
 
-      // Refresh AI recommendations to backfill the saved slot
       setAiExplanations([]);
       setAiRefreshToken((prev) => prev + 1);
     } catch (e) {
@@ -585,6 +834,16 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     return t ? titleCase(t) : "Work Hours";
   }, [timeCategory]);
 
+  const weatherPresentation = useMemo(() => {
+    return buildWeatherPresentation({
+      category: weatherCategory,
+      tempF: weatherTempF,
+      loading: weatherLoading,
+      source: weatherSource,
+      message: weatherMsg,
+    });
+  }, [weatherCategory, weatherTempF, weatherLoading, weatherSource, weatherMsg]);
+
   const applyWeatherOverride = (next) => {
     const v = (next || "").toString().trim().toLowerCase();
     if (!v) {
@@ -594,6 +853,8 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       return;
     }
     setWeatherOverride(v);
+    setWeatherSource("override");
+    setWeatherTempF(null);
     setWeatherCategory(v);
     setShowWeatherPicker(false);
     setWeatherMsg("");
@@ -631,104 +892,169 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         <div className="dashWeatherHud">
           <div className="dashWeatherMain">
             <span className="dashWeatherEmoji">
-              {weatherLoading ? "\u26C5" :
-               weatherCategory === "cold" ? "\u2744\uFE0F" :
-               weatherCategory === "cool" ? "\uD83C\uDF2C\uFE0F" :
-               weatherCategory === "warm" ? "\u2600\uFE0F" :
-               weatherCategory === "hot" ? "\uD83D\uDD25" : "\u26C5"}
+              {weatherPresentation.glyph}
             </span>
             <div className="dashWeatherInfo">
               <div className="dashWeatherTemp">
-                {weatherLoading
-                  ? `Detecting Weather${".".repeat(dotCount)}`
-                  : weatherTempF != null && Number.isFinite(Number(weatherTempF))
-                    ? `${weatherTempF}\u00B0F`
-                    : titleCase(weatherCategory)}
+                {weatherLoading ? `Detecting Weather${".".repeat(dotCount)}` : weatherPresentation.headline}
               </div>
               <div className="dashWeatherLabel">
-                {weatherLoading
-                  ? ""
-                  : weatherTempF != null && Number.isFinite(Number(weatherTempF))
-                    ? titleCase(weatherCategory)
-                    : "Today's Weather"}
+                {weatherLoading ? "" : weatherPresentation.subline}
               </div>
             </div>
           </div>
 
-          <div className="dashWeatherChips">
+          <div className="dashRefineSummary">
+            <div className="dashRefinePills">
+              <span className="dashMiniPill">{weatherLoading ? `Detecting${".".repeat(dotCount)}` : weatherPresentation.status}</span>
+              <span className="dashMiniPill">{timeLine}</span>
+              {selectedOccasion ? <span className="dashMiniPill">{titleCase(selectedOccasion)}</span> : null}
+              {selectedStyle ? <span className="dashMiniPill">{titleCase(selectedStyle)}</span> : null}
+            </div>
             <button
               type="button"
-              className={"dashContextChip" + (showWeatherPicker ? " active" : "")}
-              onClick={() => { setShowWeatherPicker((p) => !p); setShowTimePicker(false); }}
+              className={showRefineControls ? "dashRefineToggle active" : "dashRefineToggle"}
+              onClick={() => setShowRefineControls((prev) => !prev)}
+              aria-expanded={showRefineControls}
             >
-              <span className="dashContextChipIcon">{"\u2601\uFE0F"}</span>
-              <span>{weatherLoading ? `Detecting${".".repeat(dotCount)}` : titleCase(weatherCategory)}</span>
-            </button>
-
-            <button
-              type="button"
-              className={"dashContextChip" + (showTimePicker ? " active" : "")}
-              onClick={() => { setShowTimePicker((p) => !p); setShowWeatherPicker(false); }}
-            >
-              <span className="dashContextChipIcon">{"\uD83D\uDD52"}</span>
-              <span>{timeLine}</span>
+              {showRefineControls ? "Hide refine controls" : "Refine outfit"}
             </button>
           </div>
         </div>
 
-        {weatherMsg && !weatherLoading ? (
-          <div className="dashWeatherStatus">{weatherMsg}</div>
+        {!weatherLoading && weatherPresentation.detail ? (
+          <div className={"dashWeatherStatus" + (weatherSource === "fallback" ? " fallback" : "")}>{weatherPresentation.detail}</div>
         ) : null}
 
-        {showWeatherPicker ? (
-          <div className="dashContextPicker">
-            {["", "cold", "cool", "mild", "warm", "hot"].map((val) => {
-              const current = readWeatherOverride() || "";
-              const isActive = val === current;
+        {showRefineControls ? (
+          <>
+            <div className="dashWeatherChips">
+              <button
+                type="button"
+                className={"dashContextChip" + (showWeatherPicker ? " active" : "")}
+                onClick={() => { setShowWeatherPicker((p) => !p); setShowTimePicker(false); setShowOccasionPicker(false); setShowStylePicker(false); }}
+              >
+                <span className="dashContextChipIcon">{getWeatherGlyph(weatherCategory, weatherLoading)}</span>
+                <span>{weatherLoading ? `Detecting${".".repeat(dotCount)}` : weatherPresentation.status}</span>
+              </button>
 
-              const label = val ? titleCase(val) : "Live Weather";
-              return (
-                <button
-                  key={val}
-                  type="button"
-                  className={"dashContextPickerBtn" + (isActive ? " active" : "")}
-                  onClick={() => applyWeatherOverride(val)}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
+              <button
+                type="button"
+                className={"dashContextChip" + (showTimePicker ? " active" : "")}
+                onClick={() => { setShowTimePicker((p) => !p); setShowWeatherPicker(false); setShowOccasionPicker(false); setShowStylePicker(false); }}
+              >
+                <span className="dashContextChipIcon">{"\u25F7"}</span>
+                <span>{timeLine}</span>
+              </button>
+            </div>
 
-        {showTimePicker ? (
-          <div className="dashContextPicker">
-            {["", "morning", "work hours", "evening", "night"].map((val) => {
-              const current = readTimeOverride() || "";
-              const isActive = val === current;
-              const label = val ? titleCase(val) : "System Time";
-              return (
-                <button
-                  key={val}
-                  type="button"
-                  className={"dashContextPickerBtn" + (isActive ? " active" : "")}
-                  onClick={() => applyTimeOverride(val)}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+            {showWeatherPicker ? (
+              <div className="dashContextPicker">
+                {["", "cold", "cool", "mild", "warm", "hot"].map((val) => {
+                  const current = readWeatherOverride() || "";
+                  const isActive = val === current;
+
+                  const label = val ? titleCase(val) : "Live Weather";
+                  return (
+                    <button
+                      key={val}
+                      type="button"
+                      className={"dashContextPickerBtn" + (isActive ? " active" : "")}
+                      onClick={() => applyWeatherOverride(val)}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {showTimePicker ? (
+              <div className="dashContextPicker">
+                {["", "morning", "work hours", "evening", "night"].map((val) => {
+                  const current = readTimeOverride() || "";
+                  const isActive = val === current;
+                  const label = val ? titleCase(val) : "System Time";
+                  return (
+                    <button
+                      key={val}
+                      type="button"
+                      className={"dashContextPickerBtn" + (isActive ? " active" : "")}
+                      onClick={() => applyTimeOverride(val)}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <div className="dashPreferenceRow">
+              <button
+                type="button"
+                className={"dashContextChip" + (showOccasionPicker ? " active" : "")}
+                onClick={() => { setShowOccasionPicker((p) => !p); setShowStylePicker(false); setShowWeatherPicker(false); setShowTimePicker(false); }}
+              >
+                <span className="dashContextChipIcon">{String.fromCharCode(9672)}</span>
+                <span>{selectedOccasion ? titleCase(selectedOccasion) : "Occasion"}</span>
+              </button>
+
+              <button
+                type="button"
+                className={"dashContextChip" + (showStylePicker ? " active" : "")}
+                onClick={() => { setShowStylePicker((p) => !p); setShowOccasionPicker(false); setShowWeatherPicker(false); setShowTimePicker(false); }}
+              >
+                <span className="dashContextChipIcon">{String.fromCharCode(10022)}</span>
+                <span>{selectedStyle ? titleCase(selectedStyle) : "Style"}</span>
+              </button>
+            </div>
+
+            {showOccasionPicker ? (
+              <div className="dashContextPicker">
+                {OCCASION_OPTIONS.map((val) => {
+                  const isActive = val === selectedOccasion;
+                  const label = val ? titleCase(val) : "From Onboarding";
+                  return (
+                    <button
+                      key={val || "default"}
+                      type="button"
+                      className={"dashContextPickerBtn" + (isActive ? " active" : "")}
+                      onClick={() => { setSelectedOccasion(val); setShowOccasionPicker(false); }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {showStylePicker ? (
+              <div className="dashContextPicker">
+                {STYLE_OPTIONS.map((val) => {
+                  const isActive = val === selectedStyle;
+                  const label = val ? titleCase(val) : "From Onboarding";
+                  return (
+                    <button
+                      key={val || "default"}
+                      type="button"
+                      className={"dashContextPickerBtn" + (isActive ? " active" : "")}
+                      onClick={() => { setSelectedStyle(val); setShowStylePicker(false); }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </>
         ) : null}
       </section>
-
-      <UpcomingPlanCard plan={upcomingPlan} wardrobe={wardrobe} onWearNow={handleWearPlanNow} />
 
       <section className="card dashWide dashRecCard">
         <div className="dashRecHeader">
           <ErrorBoundary fallback={null}><MeshGradient className="dashRecHeaderGradient" /></ErrorBoundary>
           <div className="dashRecHeaderLeft">
-            <div className="dashRecTitle">Today’s Recommendation</div>
+            <div className="dashRecTitle">Today's Recommendation</div>
             {reused ? (
               <div className="dashMuted" style={{ fontSize: 12, marginTop: 4 }}>
                 Reused from saved outfits
@@ -768,34 +1094,74 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           ) : outfits.length === 0 ? (
             <div className="dashEmptyWardrobe">
               <div className="dashEmptyIcon">&#x1F455;</div>
-              <div className="dashEmptyTitle">Your wardrobe is empty</div>
-              <div className="dashEmptySub">Add some clothing items to get personalized outfit recommendations.</div>
-              <button className="btn primary" type="button" onClick={() => navigate("/wardrobe")}>
-                Add to Wardrobe
-              </button>
+              <div className="dashEmptyTitle">Your wardrobe is ready for its first look</div>
+              <div className="dashEmptySub">Add a few tops, bottoms, or shoes and FitGPT will start building outfit recommendations for you.</div>
+              <div className="dashEmptyActions">
+                <button className="btn primary" type="button" onClick={() => navigate("/wardrobe")}>
+                  Add clothing items
+                </button>
+                <button className="btn" type="button" onClick={() => navigate("/wardrobe")}>
+                  Open wardrobe
+                </button>
+              </div>
             </div>
           ) : outfits.map((outfit, idx) => {
             const sig = outfitSignature(outfit);
             const isSaved = savedSigs.has(sig);
             const disabled = !sig || savingSig === sig;
             const label = isSaved ? "Unsave" : savingSig === sig ? "Saving..." : "Save";
+            const summary = outfitSummaries[idx] || { score: 0, rankLabel: "Option", confidenceLabel: "Flexible", traits: [] };
 
             return (
               <div
                 key={`opt_${idx}`}
                 className={"dashOutfitOption" + (idx === selectedIdx ? " dashOutfitSelected" : "")}
                 style={{ animationDelay: `${idx * 120}ms`, marginTop: idx === 0 ? 0 : 18, cursor: "pointer" }}
-                onClick={() => setSelectedIdx(idx)}
+                onClick={() => { setSelectedIdx(idx); setShowWhyDetails(false); }}
               >
-                <div className="optionLabel">
-                  <span className="optionLabelNum">{String(idx + 1).padStart(2, "0")}</span>
-                  <span className="optionLabelSlash">{"//"}</span>
-                  <span className="optionLabelText">OPTION</span>
+                <div className="dashOptionTopRow">
+                  <div className="optionLabel">
+                    <span className="optionLabelNum">{String(idx + 1).padStart(2, "0")}</span>
+                    <span className="optionLabelSlash">{"//"}</span>
+                    <span className="optionLabelText">OPTION</span>
+                  </div>
+
+                  <div className="dashOptionMeta">
+                    <div className="dashOptionScore">
+                      <span className="dashOptionScoreValue">{summary.score}</span>
+                      <span className="dashOptionScoreLabel">match</span>
+                    </div>
+
+                    <div className="dashOptionRankGroup">
+                      <span className="dashOptionRank">{summary.rankLabel}</span>
+                      <span className="dashOptionConfidence">{summary.confidenceLabel}</span>
+                    </div>
+                  </div>
                 </div>
+
+                <div className="dashOptionTraits">
+                  {summary.traits.map((trait) => (
+                    <span key={`${idx}-${trait}`} className="dashOptionTrait">{trait}</span>
+                  ))}
+                </div>
+
+                {summary.comfortSummary ? (
+                  <div className="dashComfortStrip">
+                    <span className="dashComfortBadge">{summary.comfortSummary.badge}</span>
+                    <span className="dashComfortText">{summary.comfortSummary.note}</span>
+                  </div>
+                ) : null}
 
                 <div className="dashOutfitGridFigma">
                   {outfit.map((item, itemIdx) => (
-                    <div key={item.id} className="dashSquareTile dashTileReveal" style={{ animationDelay: `${itemIdx * 90 + idx * 140}ms` }} onPointerMove={onTiltMove} onPointerLeave={onTiltLeave}>
+                    <div
+                      key={item.id}
+                      className={"dashSquareTile dashTileReveal" + (normalizeCategory(item?.category) === "Accessories" ? " accessory" : "")}
+                      style={{ animationDelay: `${itemIdx * 90 + idx * 140}ms` }}
+                      onPointerMove={onTiltMove}
+                      onPointerLeave={onTiltLeave}
+                    >
+                      <div className="dashSquareRole">{outfitRoleLabel(item)}</div>
                       {idx === selectedIdx ? (
                         <ErrorBoundary fallback={item.image_url ? <img className="dashSquareImg" src={item.image_url} alt={item.name} /> : <div className="dashSquareImg" aria-hidden="true" />}><ClothCard imageUrl={item.image_url} className="dashSquareImg" /></ErrorBoundary>
                       ) : item.image_url ? (
@@ -826,6 +1192,11 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                     </button>
                   </div>
                 </div>
+
+                <div className="dashOptionReason">
+                  <div className="dashOptionReasonLabel">Why this works</div>
+                  <div className="dashOptionReasonText">{summary.explanationPreview}</div>
+                </div>
               </div>
             );
           })}
@@ -843,23 +1214,47 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
       {selectedIdx != null && ReactDOM.createPortal(
         <div className="dashWhyFloat" aria-live="polite">
-          <div className="dashInfoTitle">
-            Why Option {String(selectedIdx + 1).padStart(2, "0")}?
-            {aiSource === "ai" && !reused ? <span className="dashAiBadge">AI Powered Suggestion</span> : null}
+          <div className="dashWhyHeader">
+            <div className="dashInfoTitle">
+              Why Option {String(selectedIdx + 1).padStart(2, "0")}?
+              {aiSource === "ai" && !reused ? <span className="dashAiBadge">AI Powered Suggestion</span> : null}
+            </div>
+            <div className="dashWhyActions">
+              <button type="button" className="dashWhyToggle" onClick={() => setShowWhyDetails((prev) => !prev)}>
+                {showWhyDetails ? "Hide details" : "Show details"}
+                <span className={showWhyDetails ? "dashWhyToggleIcon open" : "dashWhyToggleIcon"}>v</span>
+              </button>
+              <button type="button" className="dashWhyClose" onClick={() => { setSelectedIdx(null); setShowWhyDetails(false); }} aria-label="Close explanation">
+                x
+              </button>
+            </div>
           </div>
           {aiLoading ? (
             <div className="dashAiLoading">Thinking...</div>
           ) : (
-            <div className="dashSubText" style={{ lineHeight: 1.45 }}>
-              <span key={`${selectedIdx}-${aiRefreshToken}-${recSeed}`} className="dashAiReveal">
-                {explanationText.split(" ").map((word, i) => (
-                  <React.Fragment key={i}>
-                    <span className="dashAiWord" style={{ animationDelay: `${i * 40}ms` }}>
-                      {word}
-                    </span>{" "}
-                  </React.Fragment>
-                ))}
-              </span>
+            <div className="dashWhyContent">
+              <div className="dashSubText" style={{ lineHeight: 1.45 }}>
+                <span key={`${selectedIdx}-${aiRefreshToken}-${recSeed}`} className="dashAiReveal">
+                  {(explanationSummaryText || explanationText).split(" ").map((word, i) => (
+                    <React.Fragment key={i}>
+                      <span className="dashAiWord" style={{ animationDelay: `${i * 28}ms` }}>
+                        {word}
+                      </span>{" "}
+                    </React.Fragment>
+                  ))}
+                </span>
+              </div>
+
+              {showWhyDetails ? (
+                <div className="dashWhyGrid">
+                  {explanationDetails.map((detail) => (
+                    <div key={detail.title} className="dashWhyCard">
+                      <div className="dashWhyCardTitle">{detail.title}</div>
+                      <div className="dashWhyCardText">{detail.body}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           )}
         </div>,
@@ -870,3 +1265,4 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   );
 
 }
+
