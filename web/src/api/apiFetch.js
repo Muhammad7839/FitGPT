@@ -16,19 +16,22 @@ export function hasApi() {
 }
 
 function getToken() {
-  return localStorage.getItem(TOKEN_KEY) || "";
+  return localStorage.getItem("access_token") || localStorage.getItem(TOKEN_KEY) || "";
 }
 
 export function setToken(token) {
   const t = (token || "").toString().trim();
   if (!t) {
+    localStorage.removeItem("access_token");
     localStorage.removeItem(TOKEN_KEY);
     return;
   }
+  localStorage.setItem("access_token", t);
   localStorage.setItem(TOKEN_KEY, t);
 }
 
 export function clearToken() {
+  localStorage.removeItem("access_token");
   localStorage.removeItem(TOKEN_KEY);
 }
 
