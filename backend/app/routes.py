@@ -228,7 +228,7 @@ def get_my_wardrobe(
 @router.put("/wardrobe/items/{item_id}", response_model=schemas.ClothingItemResponse)
 def update_wardrobe_item(
     item_id: int,
-    updated_item: schemas.ClothingItemCreate,
+    updated_item: schemas.ClothingItemUpdate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -408,3 +408,121 @@ def chat_endpoint(request: ChatRequest):
     if reply is None:
         return {"reply": "Sorry, the assistant is unavailable right now. Please try again later."}
     return {"reply": reply}
+
+# =============================
+# Saved Outfits / History / Planning
+# =============================
+
+@router.get("/saved-outfits")
+def list_saved_outfits_endpoint(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    return {"saved_outfits": crud.list_saved_outfits(db, current_user.id)}
+
+
+@router.post("/saved-outfits")
+def create_saved_outfit_endpoint(
+    payload: schemas.SavedOutfitCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    signature = "|".join(sorted(str(x).strip() for x in payload.items if str(x).strip()))
+    if not signature:
+        return {"created": False, "message": "Nothing to save."}
+
+    existing = crud.get_saved_outfit_by_signature(db, current_user.id, signature)
+    if existing:
+        return {"created": False, "message": "This outfit is already in your saved outfits.", "saved_outfit": crud._saved_outfit_to_dict(existing)}
+
+    saved = crud.create_saved_outfit(db, current_user.id, payload, signature)
+    return {"created": True, "message": "Saved.", "saved_outfit": saved}
+
+
+@router.delete("/saved-outfits/{signature}")
+def delete_saved_outfit_endpoint(
+    signature: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    row = crud.get_saved_outfit_by_signature(db, current_user.id, signature)
+    if not row:
+        return {"deleted": True}
+    crud.delete_saved_outfit(db, row)
+    return {"deleted": True}
+
+
+@router.get("/outfit-history")
+def list_outfit_history_endpoint(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    return {"history": crud.list_history_entries(db, current_user.id)}
+
+
+@router.post("/outfit-history")
+def create_outfit_history_endpoint(
+    payload: schemas.OutfitHistoryCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    item_ids = [str(x).strip() for x in payload.item_ids if str(x).strip()]
+    if not item_ids:
+        return {"created": False, "message": "Nothing to record."}
+    payload.item_ids = sorted(item_ids)
+    entry = crud.create_history_entry(db, current_user.id, payload)
+    return {"created": True, "message": "Added to history.", "history_entry": entry}
+
+
+@router.delete("/outfit-history/{signature}")
+def delete_outfit_history_by_signature_endpoint(
+    signature: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    deleted = crud.remove_history_by_signature(db, current_user.id, signature)
+    return {"deleted": deleted >= 0}
+
+
+@router.delete("/outfit-history")
+def clear_outfit_history_endpoint(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    crud.clear_history_entries(db, current_user.id)
+    return {"cleared": True}
+
+
+@router.get("/planned-outfits")
+def list_planned_outfits_endpoint(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    return {"planned_outfits": crud.list_planned_outfits(db, current_user.id)}
+
+
+@router.post("/planned-outfits")
+def create_planned_outfit_endpoint(
+    payload: schemas.PlannedOutfitCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    item_ids = [str(x).strip() for x in payload.item_ids if str(x).strip()]
+    if not item_ids:
+        return {"created": False, "message": "Nothing to plan."}
+    payload.item_ids = sorted(item_ids)
+    planned = crud.create_planned_outfit(db, current_user.id, payload, "|".join(payload.item_ids))
+    return {"created": True, "message": "Outfit planned!", "planned_outfit": planned}
+
+
+@router.delete("/planned-outfits/{planned_id}")
+def delete_planned_outfit_endpoint(
+    planned_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    row = crud.get_planned_outfit_by_id(db, current_user.id, planned_id)
+    if not row:
+        return {"deleted": True}
+    crud.delete_planned_outfit(db, row)
+    return {"deleted": True}

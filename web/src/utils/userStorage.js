@@ -1,11 +1,9 @@
-// Centralized per-user storage utility.
-// Namespaces storage keys with user ID so each account has isolated data.
-// Guests (no user) use the base key; signed-in users use baseKey_<userId>.
+
 
 import { GUEST_WARDROBE_KEY, WARDROBE_KEY, SAVED_OUTFITS_KEY, OUTFIT_HISTORY_KEY, PLANNED_OUTFITS_KEY, PROFILE_KEY, ONBOARDING_ANSWERS_KEY, ONBOARDED_KEY, EVT_WARDROBE_CHANGED, REC_SEED_KEY, TIME_OVERRIDE_KEY, WEATHER_OVERRIDE_KEY, DEMO_AUTH_KEY, PROFILE_PIC_KEY, EVT_PROFILE_PIC_CHANGED, TUTORIAL_DONE_KEY } from "./constants";
 import { safeParse } from "./helpers";
+import { normalizeItemMetadata, mergeWardrobeMetadata } from "./wardrobeOptions";
 
-// Maps base key → which storage object it lives in
 const KEY_STORAGE_MAP = [
   { key: GUEST_WARDROBE_KEY, storage: "session" },
   { key: WARDROBE_KEY, storage: "local" },
@@ -17,7 +15,7 @@ const KEY_STORAGE_MAP = [
   { key: ONBOARDED_KEY, storage: "local" },
 ];
 
-/** Extract stable user ID from user object. Returns null for guests. */
+
 export function getUserId(user) {
   if (!user) return null;
   const id = user.id ?? user.user_id ?? user.email ?? user.demoEmail ?? null;
@@ -25,7 +23,6 @@ export function getUserId(user) {
   return s || null;
 }
 
-/** Returns namespaced key for the user, or the base key for guests. */
 export function userKey(baseKey, user) {
   const id = getUserId(user);
   if (!id) return baseKey;
@@ -38,37 +35,34 @@ function readArray(store, key) {
   return Array.isArray(parsed) ? parsed : [];
 }
 
-/** Load wardrobe items for the given user (or guest). */
 export function loadWardrobe(user) {
   const id = getUserId(user);
   const guestKey = userKey(GUEST_WARDROBE_KEY, user);
   const lsKey = userKey(WARDROBE_KEY, user);
 
-  // Try namespaced keys first
-  const guest = readArray(sessionStorage, guestKey);
+ 
+  const guest = readArray(sessionStorage, guestKey).map(normalizeItemMetadata);
   if (guest.length > 0) return guest;
 
-  const ls = readArray(localStorage, lsKey);
+  const ls = readArray(localStorage, lsKey).map(normalizeItemMetadata);
   if (ls.length > 0) return ls;
 
-  // For signed-in users, fall back to base (un-namespaced) keys.
-  // Handles cases where migration hasn't run yet or was blocked.
   if (id) {
-    const baseGuest = readArray(sessionStorage, GUEST_WARDROBE_KEY);
+    const baseGuest = readArray(sessionStorage, GUEST_WARDROBE_KEY).map(normalizeItemMetadata);
     if (baseGuest.length > 0) return baseGuest;
 
-    const baseLs = readArray(localStorage, WARDROBE_KEY);
+    const baseLs = readArray(localStorage, WARDROBE_KEY).map(normalizeItemMetadata);
     if (baseLs.length > 0) return baseLs;
   }
 
   return [];
 }
 
-/** Save wardrobe items to sessionStorage (primary) and localStorage (durable). */
+
 export function saveWardrobe(items, user) {
   const sessionKey = userKey(GUEST_WARDROBE_KEY, user);
   const localKey = userKey(WARDROBE_KEY, user);
-  const safe = Array.isArray(items) ? items : [];
+  const safe = (Array.isArray(items) ? items : []).map(normalizeItemMetadata);
   const json = JSON.stringify(safe);
   try {
     sessionStorage.setItem(sessionKey, json);
@@ -79,10 +73,7 @@ export function saveWardrobe(items, user) {
   }
 }
 
-/**
- * Copy un-namespaced guest data to the user's namespaced keys.
- * Only copies if the namespaced key doesn't already have meaningful data.
- */
+
 export function migrateGuestData(user) {
   const id = getUserId(user);
   if (!id) return;
@@ -94,7 +85,7 @@ export function migrateGuestData(user) {
     const baseRaw = store.getItem(baseKey);
     if (!baseRaw) continue;
 
-    // Only skip if the namespaced key has meaningful data (not empty arrays)
+   
     const existingRaw = store.getItem(namespacedKey);
     if (existingRaw) {
       const existingParsed = safeParse(existingRaw);
@@ -106,7 +97,11 @@ export function migrateGuestData(user) {
   }
 }
 
-/** Remove all un-namespaced guest data after migration. */
+
+export function mergeWardrobeWithLocalMetadata(remoteItems, localItems) {
+  return mergeWardrobeMetadata(remoteItems, localItems);
+}
+
 export function clearGuestData() {
   for (const { key: baseKey, storage } of KEY_STORAGE_MAP) {
     const store = storage === "session" ? sessionStorage : localStorage;
@@ -114,10 +109,7 @@ export function clearGuestData() {
   }
 }
 
-/**
- * Factory for per-user localStorage read/write with optional event dispatch.
- * Eliminates identical readLocal/writeLocal boilerplate across API modules.
- */
+
 export function makeLocalStore(storageKey, eventName) {
   return {
     read(user) {
@@ -134,10 +126,7 @@ export function makeLocalStore(storageKey, eventName) {
   };
 }
 
-/**
- * Factory for per-user localStorage read/write for object values (e.g. profile).
- * Similar to makeLocalStore but defaults to {} instead of [].
- */
+
 export function makeObjectStore(storageKey, eventName) {
   return {
     read(user) {
@@ -154,7 +143,7 @@ export function makeObjectStore(storageKey, eventName) {
   };
 }
 
-// ── Session-storage override helpers (Dashboard context chips) ──
+
 
 const ALLOWED_WEATHER = new Set(["cold", "cool", "mild", "warm", "hot"]);
 const ALLOWED_TIMES = new Set(["morning", "work hours", "evening", "night"]);
@@ -208,7 +197,7 @@ export function writeTimeOverride(nextOrEmpty) {
   sessionStorage.setItem(TIME_OVERRIDE_KEY, JSON.stringify(v));
 }
 
-// ── Demo auth helpers (Profile + TopNav) ──
+
 
 export function readDemoAuth() {
   const raw = localStorage.getItem(DEMO_AUTH_KEY);
@@ -221,7 +210,7 @@ export function writeDemoAuth(objOrNull) {
   else localStorage.setItem(DEMO_AUTH_KEY, JSON.stringify(objOrNull));
 }
 
-// ── Onboarding persistence (AppRoutes) ──
+
 
 export function loadAnswers(user) {
   try {
@@ -250,7 +239,7 @@ export function clearOnboarding(user) {
   localStorage.removeItem(userKey(ONBOARDED_KEY, user));
 }
 
-// ── Profile picture helpers (Profile + TopNav) ──
+
 
 export function loadProfilePic(user) {
   const key = userKey(PROFILE_PIC_KEY, user);
@@ -264,7 +253,7 @@ export function saveProfilePic(pic, user) {
   window.dispatchEvent(new Event(EVT_PROFILE_PIC_CHANGED));
 }
 
-// ── Tutorial flag ──
+
 
 export function isTutorialDone() {
   return localStorage.getItem(TUTORIAL_DONE_KEY) === "1";
@@ -276,7 +265,7 @@ export function markTutorialDone() {
   } catch {}
 }
 
-// Re-export key constants for use in event listener checks
+
 export {
   GUEST_WARDROBE_KEY,
   WARDROBE_KEY,

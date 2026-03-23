@@ -9,6 +9,7 @@ const TEST_USER = { id: "test-user-123" };
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
+  delete global.fetch;
 });
 
 describe("savedOutfitsApi.saveOutfit", () => {
@@ -48,6 +49,34 @@ describe("savedOutfitsApi.listSaved", () => {
     await savedOutfitsApi.saveOutfit({ items: ["x", "y"] }, TEST_USER);
     const result = await savedOutfitsApi.listSaved(TEST_USER);
     expect(result.saved_outfits).toHaveLength(1);
+  });
+
+  test("merges server data with offline local outfits instead of overwriting them", async () => {
+    global.fetch = jest.fn()
+      .mockRejectedValueOnce(new Error("Failed to fetch"))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => "application/json" },
+        json: async () => ({
+          saved_outfits: [
+            {
+              saved_outfit_id: "42",
+              items: ["server-top", "server-bottom"],
+              outfit_signature: "server-bottom|server-top",
+              created_at: "2026-03-23T12:00:00.000Z",
+            },
+          ],
+        }),
+      });
+
+    await savedOutfitsApi.saveOutfit({ items: ["local-top", "local-bottom"] }, TEST_USER);
+    const result = await savedOutfitsApi.listSaved(TEST_USER);
+
+    expect(result.saved_outfits.map((o) => o.outfit_signature).sort()).toEqual([
+      "local-bottom|local-top",
+      "server-bottom|server-top",
+    ]);
   });
 });
 

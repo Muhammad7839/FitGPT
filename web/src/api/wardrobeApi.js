@@ -7,6 +7,11 @@ const PATHS = {
   remove: (id) => `/wardrobe/items/${id}`,
 };
 
+function isServerItemId(id) {
+  const text = `${id ?? ""}`.trim();
+  return /^\d+$/.test(text);
+}
+
 function ensureApi() {
   if (!hasApi()) throw new Error("API base URL is missing.");
 }
@@ -50,6 +55,7 @@ export const wardrobeApi = {
 
   async updateItem(id, payload) {
     ensureApi();
+    if (!isServerItemId(id)) return null;
 
     const hasFile = !!payload?.imageFile;
     if (hasFile) {
@@ -65,11 +71,13 @@ export const wardrobeApi = {
 
   async deleteItem(id) {
     ensureApi();
+    if (!isServerItemId(id)) return null;
     return apiFetch(PATHS.remove(id), { method: "DELETE" });
   },
 
   async setFavorite(id, is_favorite) {
     ensureApi();
+    if (!isServerItemId(id)) return null;
     return apiFetch(PATHS.update(id), {
       method: "PUT",
       body: JSON.stringify({ is_favorite }),
@@ -78,6 +86,7 @@ export const wardrobeApi = {
 
   async archiveItem(id) {
     ensureApi();
+    if (!isServerItemId(id)) return null;
     return apiFetch(PATHS.update(id), {
       method: "PUT",
       body: JSON.stringify({ is_active: false }),
@@ -86,6 +95,7 @@ export const wardrobeApi = {
 
   async unarchiveItem(id) {
     ensureApi();
+    if (!isServerItemId(id)) return null;
     return apiFetch(PATHS.update(id), {
       method: "PUT",
       body: JSON.stringify({ is_active: true }),

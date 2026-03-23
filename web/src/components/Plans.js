@@ -157,11 +157,14 @@ export default function Plans() {
         <div className="profileEmpty" style={{ marginTop: 24 }}>
           <div className="dashStrong">No planned outfits yet</div>
           <div className="dashSubText" style={{ marginTop: 6 }}>
-            Plan outfits from your history or dashboard to see them here.
+            Plan looks ahead for class, work, events, or weekends so you already know what to wear.
           </div>
-          <div style={{ marginTop: 12 }}>
-            <button className="btn primary" type="button" onClick={() => navigate("/history")}>
-              Go to History
+          <div style={{ marginTop: 12, display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+            <button className="btn primary" type="button" onClick={() => navigate("/dashboard")}>
+              Go to Dashboard
+            </button>
+            <button className="btn" type="button" onClick={() => navigate("/history")}>
+              Open History
             </button>
           </div>
         </div>

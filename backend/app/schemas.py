@@ -121,6 +121,17 @@ class ClothingItemCreate(BaseModel):
     image_url: Optional[str] = None
 
 
+class ClothingItemUpdate(BaseModel):
+    name: Optional[str] = None
+    category: Optional[CategoryEnum] = None
+    color: Optional[ColorEnum] = None
+    fit_type: Optional[FitTypeEnum] = None
+    style_tag: Optional[StyleTagEnum] = None
+    image_url: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_favorite: Optional[bool] = None
+
+
 class ClothingItemResponse(BaseModel):
     id: int
     name: str
@@ -129,6 +140,8 @@ class ClothingItemResponse(BaseModel):
     fit_type: FitTypeEnum
     style_tag: StyleTagEnum
     image_url: Optional[str] = None
+    is_active: bool = True
+    is_favorite: bool = False
 
     class Config:
         from_attributes = True
@@ -221,3 +234,31 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
+
+# =============================
+# Saved / History / Planning Schemas
+# =============================
+
+class SavedOutfitCreate(BaseModel):
+    items: List[str]
+    item_details: Optional[List[dict]] = []
+    source: Optional[str] = "recommended"
+    context: Optional[dict] = {}
+    notes: Optional[str] = ""
+    name: Optional[str] = ""
+
+
+class OutfitHistoryCreate(BaseModel):
+    item_ids: List[str]
+    source: Optional[str] = "recommendation"
+    context: Optional[dict] = {}
+    confidence_score: Optional[float] = None
+
+
+class PlannedOutfitCreate(BaseModel):
+    item_ids: List[str]
+    item_details: Optional[List[dict]] = []
+    planned_date: Optional[str] = ""
+    occasion: Optional[str] = ""
+    notes: Optional[str] = ""
+    source: Optional[str] = "planner"
