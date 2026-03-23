@@ -22,7 +22,7 @@ export default function SavedOutfits() {
 
   const wardrobeById = useMemo(() => buildWardrobeMap(wardrobe), [wardrobe]);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     setLoading(true);
     setMsg("");
 
@@ -36,12 +36,12 @@ export default function SavedOutfits() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [user]);
 
   useEffect(() => {
     refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+   
+  }, [refresh]);
 
   useEffect(() => {
     const onChanged = () => refresh();
@@ -54,8 +54,8 @@ export default function SavedOutfits() {
       window.removeEventListener(EVT_SAVED_OUTFITS_CHANGED, onChanged);
       window.removeEventListener("focus", onFocus);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+   
+  }, [refresh]);
 
   const sorted = useMemo(() => {
     return [...saved].sort((a, b) => {
@@ -127,7 +127,7 @@ export default function SavedOutfits() {
     });
     window.open(calUrl, "_blank", "noopener");
 
-    // Also save locally
+   
     plannedOutfitsApi.planOutfit({
       item_ids: itemIds,
       item_details: itemDetails,
@@ -197,11 +197,14 @@ export default function SavedOutfits() {
           <div className="historyCard" style={{ justifyContent: "center", textAlign: "center", padding: 32 }}>
             <div className="historyCardTitle" style={{ marginTop: 0 }}>No saved outfits yet</div>
             <div className="historyItemsLine" style={{ marginTop: 8 }}>
-              Save an outfit from your recommendations to see it here.
+              Save your favorite recommendations here so you can reuse them later in one tap.
             </div>
-            <div className="historyActions" style={{ justifyContent: "center" }}>
+            <div className="historyActions" style={{ justifyContent: "center", flexWrap: "wrap", gap: 10 }}>
               <button className="btn primary" onClick={() => navigate("/dashboard")}>
                 Go to Recommendations
+              </button>
+              <button className="btn" onClick={() => navigate("/plans")}>
+                Open Plans
               </button>
             </div>
           </div>
@@ -253,7 +256,7 @@ export default function SavedOutfits() {
                 <div className="historyItemsLine">
                   {itemIds
                     .map((id) => resolveItem(id, o)?.name || "Item")
-                    .join(" • ")}
+                    .join(" | ")}
                 </div>
 
                 <div className="historyActions">
@@ -280,3 +283,4 @@ export default function SavedOutfits() {
     </div>
   );
 }
+

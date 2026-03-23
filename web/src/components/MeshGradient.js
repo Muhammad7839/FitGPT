@@ -1,8 +1,7 @@
-import React, { useRef, useMemo, useEffect, useCallback } from "react";
+import React, { useRef, useMemo, useEffect, useCallback, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
-/* ───────── Simplex 3D noise (Ashima/webgl-noise, MIT) ───────── */
 
 const noiseGLSL = `
 vec3 mod289(vec3 x){ return x - floor(x * (1.0/289.0)) * 289.0; }
@@ -106,7 +105,7 @@ void main() {
 }
 `;
 
-/* ───────── Parse CSS color to vec3 ───────── */
+
 
 function cssColorToVec3(cssColor) {
   if (!cssColor) return [0.1, 0.1, 0.1];
@@ -120,7 +119,6 @@ function cssColorToVec3(cssColor) {
   return [parseInt(m[0]) / 255, parseInt(m[1]) / 255, parseInt(m[2]) / 255];
 }
 
-/* ───────── Gradient plane ───────── */
 
 function GradientPlane({ colors }) {
   const meshRef = useRef();
@@ -134,8 +132,7 @@ function GradientPlane({ colors }) {
       u_color3: { value: new THREE.Color(...colors[2]) },
       u_color4: { value: new THREE.Color(...colors[3]) },
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [colors]
   );
 
   useEffect(() => {
@@ -161,17 +158,16 @@ function GradientPlane({ colors }) {
   );
 }
 
-/* ───────── Public component ───────── */
 
 function MeshGradient({ className, style }) {
-  const [colors, setColors] = React.useState(() => readThemeColors());
+  const [colors, setColors] = useState(() => readThemeColors());
 
   const updateColors = useCallback(() => {
     setColors(readThemeColors());
   }, []);
 
   useEffect(() => {
-    // Re-read colors when theme changes (data-theme attribute or inline vars)
+    
     const observer = new MutationObserver(updateColors);
     observer.observe(document.documentElement, {
       attributes: true,
