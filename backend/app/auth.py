@@ -1,3 +1,5 @@
+"""Authentication utilities: password hashing, JWT creation, and user resolution."""
+
 import os
 from datetime import datetime, timedelta
 from typing import Optional
@@ -11,36 +13,30 @@ from sqlalchemy.orm import Session
 from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
 
+from app.config import SECRET_KEY, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 from app.database.database import get_db
 from app import models
 
-# =============================
-# Password Hashing
-# =============================
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
 def hash_password(password: str) -> str:
+    """Hash a plaintext password using bcrypt."""
     return pwd_context.hash(password)
 
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Validate a plaintext password against a stored hash."""
     return pwd_context.verify(plain_password, hashed_password)
 
-
-# =============================
-# JWT Configuration
-# =============================
-
-SECRET_KEY = os.environ.get("SECRET_KEY", "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """Create a signed JWT access token for API authentication."""
     to_encode = data.copy()
 
     if expires_delta:
@@ -50,17 +46,15 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
     to_encode.update({"exp": expire})
 
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=JWT_ALGORITHM)
     return encoded_jwt
 
 
-# =============================
-# Get Current User Dependency
-# =============================
 def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
-):
+) -> models.User:
+    """Resolve the authenticated user from the bearer token."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid authentication credentials",
@@ -68,7 +62,7 @@ def get_current_user(
     )
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[JWT_ALGORITHM])
         user_id = payload.get("sub")
 
         if user_id is None:
@@ -76,7 +70,7 @@ def get_current_user(
 
         user_id = int(user_id)
 
-    except JWTError:
+    except (JWTError, ValueError, TypeError):
         raise credentials_exception
 
     user = db.query(models.User).filter(models.User.id == user_id).first()

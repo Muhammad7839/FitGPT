@@ -1,8 +1,13 @@
 # Python
 backend/venv/
+backend/.venv/
+backend/.env
+.env
 backend/__pycache__/
 backend/*.db
 backend/*.sqlite3
+backend/uploads/
+fitgpt_test.db
 
 # Python cache
 __pycache__/
@@ -14,6 +19,7 @@ __pycache__/
 # Android build
 build/
 .gradle/
+.kotlin/
 local.properties
 
 node_modules
