@@ -47,10 +47,10 @@ if exist "%~dp0backend\requirements.txt" (
         pip install -r "%~dp0backend\requirements.txt"
     )
 ) else (
-    pip show fastapi uvicorn sqlalchemy passlib python-jose pydantic python-dotenv requests groq >nul 2>&1
+    pip show fastapi uvicorn sqlalchemy passlib python-jose pydantic python-dotenv requests groq psycopg2-binary google-auth >nul 2>&1
     if !errorlevel! neq 0 (
         echo       Installing Python dependencies...
-        pip install fastapi uvicorn sqlalchemy passlib python-jose pydantic[email] python-dotenv python-multipart requests groq
+        pip install fastapi uvicorn[standard] sqlalchemy passlib[bcrypt] bcrypt==4.0.1 python-jose[cryptography] pydantic[email] python-dotenv python-multipart requests groq psycopg2-binary google-auth
     )
 )
 echo       Python dependencies OK.

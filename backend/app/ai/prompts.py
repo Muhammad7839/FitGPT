@@ -12,17 +12,26 @@ def _safe_text(value: Optional[str], fallback: str = "unspecified") -> str:
     return cleaned or fallback
 
 
-def build_chat_system_prompt(user: models.User, wardrobe_items: list[models.ClothingItem]) -> str:
+def build_chat_system_prompt(
+    user: Optional[models.User], wardrobe_items: list[models.ClothingItem]
+) -> str:
     """Builds a concise system prompt scoped to the authenticated user's context."""
+    base = (
+        "You are FitGPT, a practical personal stylist. "
+        "Give clear and short recommendations with actionable next steps. "
+        "Stay focused on clothing, wardrobe planning, and outfit decisions.\n\n"
+    )
+
+    if user is None:
+        return base + "The user is a guest (not signed in). No wardrobe data is available."
+
     item_preview = ", ".join(
         f"{item.category}:{item.color}" for item in wardrobe_items[:20]
     ) or "No wardrobe items available yet"
 
     return (
-        "You are FitGPT, a practical personal stylist. "
-        "Give clear and short recommendations with actionable next steps. "
-        "Stay focused on clothing, wardrobe planning, and outfit decisions.\n\n"
-        f"User profile: body_type={_safe_text(user.body_type)}, "
+        base
+        + f"User profile: body_type={_safe_text(user.body_type)}, "
         f"lifestyle={_safe_text(user.lifestyle)}, "
         f"comfort_preference={_safe_text(user.comfort_preference)}.\n"
         f"Wardrobe snapshot: {item_preview}."
