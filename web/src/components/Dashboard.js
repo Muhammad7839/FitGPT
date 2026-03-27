@@ -877,7 +877,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     <div className="onboarding onboardingPage">
       <div className="dashHeroBar">
         <div className="dashHeroLeft">
-          <div className="dashHeroDate">{formatToday()}</div>
+          <div className="dashHeroDate">{formatToday()} · TEST DEPLOY</div>
           <div className="dashQuickRow">
             <button type="button" className="dashQuickBtn" onClick={goAddItem}>+ Add Item</button>
             <button type="button" className="dashQuickBtn" onClick={openPlanModal}>{"\u2606"} Plan Outfit</button>
@@ -1265,4 +1265,3 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   );
 
 }
-
