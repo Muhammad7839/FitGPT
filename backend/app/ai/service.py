@@ -63,7 +63,7 @@ class AiService:
     def run_chat(
         self,
         *,
-        user: models.User,
+        user: Optional[models.User],
         wardrobe_items: list[models.ClothingItem],
         messages: list[ProviderMessage],
         request_id: str,

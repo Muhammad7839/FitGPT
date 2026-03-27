@@ -19,6 +19,7 @@ from app.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     create_access_token,
     get_current_user,
+    get_optional_user,
     verify_password,
 )
 from app.config import EXPOSE_RESET_TOKEN_IN_RESPONSE, MAX_UPLOAD_IMAGE_BYTES
@@ -1015,13 +1016,13 @@ def get_recommendation_options(
 def chat_with_ai(
     payload: schemas.ChatRequest,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: Optional[models.User] = Depends(get_optional_user),
 ):
     request_id = uuid4().hex[:12]
-    wardrobe_items = crud.get_clothing_items_for_user(
-        db=db,
-        user_id=current_user.id,
-        include_archived=False,
+    wardrobe_items = (
+        crud.get_clothing_items_for_user(db=db, user_id=current_user.id, include_archived=False)
+        if current_user
+        else []
     )
     messages = [ProviderMessage(role=entry.role, content=entry.content) for entry in payload.messages]
 
@@ -1031,10 +1032,11 @@ def chat_with_ai(
         messages=messages,
         request_id=request_id,
     )
+    user_id = current_user.id if current_user else "guest"
     logger.info(
         "request_id=%s endpoint=/ai/chat user_id=%s source=%s fallback=%s warning=%s",
         request_id,
-        current_user.id,
+        user_id,
         result.source,
         result.fallback_used,
         result.warning,
@@ -1051,7 +1053,7 @@ def chat_with_ai(
 def chat_with_ai_alias(
     payload: schemas.ChatRequest,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: Optional[models.User] = Depends(get_optional_user),
 ):
     """Compatibility alias for web clients expecting /chat."""
     return chat_with_ai(payload=payload, db=db, current_user=current_user)
