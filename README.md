@@ -67,7 +67,6 @@ The Android app is built using modern Android development practices.
 ## Web Application (web/)
 
 The web folder is reserved for the frontend team.
-Production frontend: https://www.fitgpt.tech
 
 ### Web Team Responsibilities
 - Implement the same features as the Android app
