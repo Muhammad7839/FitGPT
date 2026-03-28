@@ -59,6 +59,10 @@ function mergeSavedOutfits(remoteList, localList) {
 
 export const savedOutfitsApi = {
   async listSaved(user) {
+    if (!user) {
+      return { saved_outfits: [] };
+    }
+
     if (!canUseApi(user)) {
       return { saved_outfits: readLocal(user) };
     }
@@ -75,6 +79,10 @@ export const savedOutfitsApi = {
   },
 
   async unsaveOutfit(signature, user) {
+    if (!user) {
+      return { deleted: false, message: "Sign in to manage saved outfits." };
+    }
+
     const next = readLocal(user).filter((o) => (o?.outfit_signature || "") !== signature);
     writeLocal(next, user);
 
@@ -90,6 +98,10 @@ export const savedOutfitsApi = {
   },
 
   async saveOutfit(payload, user) {
+    if (!user) {
+      return { created: false, message: "Sign in to save outfits." };
+    }
+
     const itemIds = Array.isArray(payload?.items) ? payload.items : [];
     const normalized = normalizeItems(itemIds);
     const sig = idsSignature(normalized);

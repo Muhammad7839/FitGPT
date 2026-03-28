@@ -7,6 +7,7 @@ import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 import { loadWardrobe } from "../utils/userStorage";
 import { EVT_SAVED_OUTFITS_CHANGED } from "../utils/constants";
 import { buildWardrobeMap, formatCardDate, labelFromSource, setReuseOutfit as setReuse, buildGoogleCalendarUrl, tomorrowDateStr } from "../utils/helpers";
+import GuestModeNotice from "./GuestModeNotice";
 
 export default function SavedOutfits() {
   const navigate = useNavigate();
@@ -149,6 +150,20 @@ export default function SavedOutfits() {
     el.style.setProperty("--holo-angle", `${angle}deg`);
     el.style.setProperty("--holo-spot", `${x * 100}% ${y * 100}%`);
   }, []);
+
+  if (!user) {
+    return (
+      <div className="onboarding onboardingPage">
+        <div className="historyTopBar">
+          <div>
+            <div className="historyTitle">Saved Outfits</div>
+            <div className="historySub">Sign in to save and revisit outfit combinations</div>
+          </div>
+        </div>
+        <GuestModeNotice compact />
+      </div>
+    );
+  }
 
   return (
     <div className="onboarding onboardingPage">

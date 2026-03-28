@@ -59,6 +59,10 @@ function mergePlannedOutfits(remoteList, localList) {
 
 export const plannedOutfitsApi = {
   async listPlanned(user) {
+    if (!user) {
+      return { planned_outfits: [] };
+    }
+
     if (!canUseApi(user)) {
       return { planned_outfits: readLocal(user) };
     }
@@ -75,6 +79,10 @@ export const plannedOutfitsApi = {
   },
 
   async planOutfit(payload, user) {
+    if (!user) {
+      return { created: false, message: "Sign in to save outfit plans." };
+    }
+
     const itemIds = Array.isArray(payload?.item_ids) ? payload.item_ids : [];
     const normalized = normalizeItems(itemIds);
 
@@ -101,6 +109,10 @@ export const plannedOutfitsApi = {
   },
 
   async removePlanned(id, user) {
+    if (!user) {
+      return { deleted: false, message: "Sign in to manage outfit plans." };
+    }
+
     writeLocal(readLocal(user).filter((o) => (o?.planned_id || "") !== id), user);
 
     if (!canUseApi(user)) {

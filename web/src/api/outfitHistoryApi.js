@@ -56,6 +56,10 @@ function mergeHistoryEntries(remoteList, localList) {
 
 export const outfitHistoryApi = {
   async listHistory(user) {
+    if (!user) {
+      return { history: [] };
+    }
+
     if (!canUseApi(user)) {
       return { history: readLocal(user) };
     }
@@ -72,6 +76,10 @@ export const outfitHistoryApi = {
   },
 
   async removeBySignature(signature, user) {
+    if (!user) {
+      return { deleted: false, message: "Sign in to manage outfit history." };
+    }
+
     const next = readLocal(user).filter((h) => {
       const ids = Array.isArray(h?.item_ids) ? h.item_ids : [];
       const sig = normalizeItems(ids).join("|");
@@ -91,6 +99,10 @@ export const outfitHistoryApi = {
   },
 
   async clearHistory(user) {
+    if (!user) {
+      return { cleared: false, message: "Sign in to manage outfit history." };
+    }
+
     writeLocal([], user);
 
     if (!canUseApi(user)) {
@@ -105,6 +117,10 @@ export const outfitHistoryApi = {
   },
 
   async recordWorn(payload, user) {
+    if (!user) {
+      return { created: false, message: "Sign in to track outfit history." };
+    }
+
     const itemIds = Array.isArray(payload?.item_ids) ? payload.item_ids : [];
     const normalized = normalizeItems(itemIds);
 

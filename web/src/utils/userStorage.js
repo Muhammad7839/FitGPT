@@ -40,20 +40,19 @@ export function loadWardrobe(user) {
   const guestKey = userKey(GUEST_WARDROBE_KEY, user);
   const lsKey = userKey(WARDROBE_KEY, user);
 
- 
   const guest = readArray(sessionStorage, guestKey).map(normalizeItemMetadata);
   if (guest.length > 0) return guest;
+
+  if (!id) return [];
 
   const ls = readArray(localStorage, lsKey).map(normalizeItemMetadata);
   if (ls.length > 0) return ls;
 
-  if (id) {
-    const baseGuest = readArray(sessionStorage, GUEST_WARDROBE_KEY).map(normalizeItemMetadata);
-    if (baseGuest.length > 0) return baseGuest;
+  const baseGuest = readArray(sessionStorage, GUEST_WARDROBE_KEY).map(normalizeItemMetadata);
+  if (baseGuest.length > 0) return baseGuest;
 
-    const baseLs = readArray(localStorage, WARDROBE_KEY).map(normalizeItemMetadata);
-    if (baseLs.length > 0) return baseLs;
-  }
+  const baseLs = readArray(localStorage, WARDROBE_KEY).map(normalizeItemMetadata);
+  if (baseLs.length > 0) return baseLs;
 
   return [];
 }
@@ -66,7 +65,11 @@ export function saveWardrobe(items, user) {
   const json = JSON.stringify(safe);
   try {
     sessionStorage.setItem(sessionKey, json);
-    localStorage.setItem(localKey, json);
+    if (getUserId(user)) {
+      localStorage.setItem(localKey, json);
+    } else {
+      localStorage.removeItem(WARDROBE_KEY);
+    }
     window.dispatchEvent(new Event(EVT_WARDROBE_CHANGED));
   } catch (e) {
     console.warn("Storage quota exceeded, skipping save:", e);
@@ -107,6 +110,32 @@ export function clearGuestData() {
     const store = storage === "session" ? sessionStorage : localStorage;
     store.removeItem(baseKey);
   }
+}
+
+export function mirrorUserDataToGuest(user) {
+  const id = getUserId(user);
+  if (!id) return;
+
+  const keysToMirror = [
+    { key: GUEST_WARDROBE_KEY, storage: "session" },
+    { key: WARDROBE_KEY, storage: "local" },
+    { key: PROFILE_KEY, storage: "local" },
+    { key: ONBOARDING_ANSWERS_KEY, storage: "local" },
+    { key: ONBOARDED_KEY, storage: "local" },
+    { key: PROFILE_PIC_KEY, storage: "local" },
+  ];
+
+  for (const { key: baseKey, storage } of keysToMirror) {
+    const store = storage === "session" ? sessionStorage : localStorage;
+    const namespacedKey = `${baseKey}_${id}`;
+    const raw = store.getItem(namespacedKey);
+
+    if (raw == null) continue;
+    store.setItem(baseKey, raw);
+  }
+
+  window.dispatchEvent(new Event(EVT_WARDROBE_CHANGED));
+  window.dispatchEvent(new Event(EVT_PROFILE_PIC_CHANGED));
 }
 
 

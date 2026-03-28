@@ -11,12 +11,18 @@ import {
 import { colorToCss } from "../utils/recommendationEngine";
 
 const CATEGORIES = ["Tops", "Bottoms", "Outerwear", "Shoes", "Accessories"];
-const COLOR_PICKER_OPTIONS = ["Black", "White", "Gray", "Beige", "Brown", "Navy", "Blue", "Green", "Olive", "Yellow", "Orange", "Red", "Pink", "Purple", "Gold", "Silver"];
+const COLOR_PICKER_OPTIONS = ["Black", "White", "Gray", "Beige", "Brown", "Navy", "Blue", "Green", "Olive", "Yellow", "Orange", "Red", "Pink", "Purple", "Gold", "Silver", "Burgundy", "Teal", "Cream", "Charcoal"];
 
 
 function parseColors(value) {
   if (!value) return [];
   return value.split(",").map((c) => c.trim()).filter(Boolean);
+}
+
+function isValidCustomColor(raw) {
+  const value = (raw || "").trim();
+  if (!value) return false;
+  return /^[A-Za-z][A-Za-z\s-]*$/.test(value);
 }
 
 function ColorChipInput({ value, onChange }) {
@@ -25,7 +31,7 @@ function ColorChipInput({ value, onChange }) {
 
   const addColor = useCallback((raw) => {
     const c = raw.trim();
-    if (!c) return;
+    if (!isValidCustomColor(c)) return;
     const existing = parseColors(value);
     if (existing.some((e) => e.toLowerCase() === c.toLowerCase())) return;
     onChange([...existing, c].join(", "));
@@ -79,13 +85,25 @@ function ColorChipInput({ value, onChange }) {
       </div>
 
       <div className="colorPickerRow">
-        <select className="colorChipSelect" value={selected} onChange={(e) => setSelected(e.target.value)}>
-          <option value="">Pick a color</option>
-          {COLOR_PICKER_OPTIONS.map((option) => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </select>
-        <button type="button" className="colorPickerAddBtn" onClick={() => addColor(selected)} disabled={!selected}>
+        <input
+          className="colorChipSelect"
+          value={selected}
+          onChange={(e) => setSelected(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addColor(selected);
+            }
+          }}
+          placeholder="Type a color name"
+          aria-label="Type a custom color"
+        />
+        <button
+          type="button"
+          className="colorPickerAddBtn"
+          onClick={() => addColor(selected)}
+          disabled={!isValidCustomColor(selected)}
+        >
           Add
         </button>
       </div>
@@ -165,6 +183,7 @@ function ItemFormFields({
           onChange={(e) => onNameChange(e.target.value)}
           placeholder="Example: White tee"
         />
+        <span className="wardrobeFieldHelp">Give this piece a short name you will recognize later.</span>
       </label>
 
       <label className="wardrobeLabel">
@@ -177,6 +196,7 @@ function ItemFormFields({
           </select>
           {isClassifying && <span className="classifyingHint">Detecting...</span>}
         </div>
+        <span className="wardrobeFieldHelp">Choose the main outfit role this item plays.</span>
       </label>
 
       <label className="wardrobeLabel">
@@ -187,11 +207,13 @@ function ItemFormFields({
             <option key={option} value={option}>{optionLabel(option)}</option>
           ))}
         </select>
+        <span className="wardrobeFieldHelp">Use a specific type like hoodie, blazer, tee, or jeans when it fits.</span>
       </label>
 
       <label className="wardrobeLabel">
         Color(s)
         <ColorChipInput value={color} onChange={onColorChange} />
+        <span className="wardrobeFieldHelp">Add one or more visible colors so recommendations can coordinate better.</span>
       </label>
 
       <div className="wardrobeAdvancedCard">
@@ -220,6 +242,7 @@ function ItemFormFields({
                   <option key={x.value} value={x.value}>{x.label}</option>
                 ))}
               </select>
+              <span className="wardrobeFieldHelp">Fit helps the app understand whether the piece feels relaxed, fitted, or oversized.</span>
             </label>
 
             <label className="wardrobeLabel">
@@ -229,6 +252,7 @@ function ItemFormFields({
                   <option key={option.value || "blank"} value={option.value}>{option.label}</option>
                 ))}
               </select>
+              <span className="wardrobeFieldHelp">Layer type tells FitGPT whether this works as a base, mid, or outer layer.</span>
             </label>
 
             <label className="wardrobeLabel">
@@ -239,6 +263,7 @@ function ItemFormFields({
                 onChange={(e) => onSetIdChange(e.target.value)}
                 placeholder="Example: navy-suit"
               />
+              <span className="wardrobeFieldHelp">Use the same set ID on matching pieces you usually wear together.</span>
             </label>
 
             <label className="wardrobeLabel" style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -249,20 +274,24 @@ function ItemFormFields({
               />
               One-piece item
             </label>
+            <div className="wardrobeFieldHelp" style={{ marginTop: -4 }}>Mark dresses, jumpsuits, rompers, or overalls that replace a separate top and bottom.</div>
 
             <label className="wardrobeLabel">
               Style tags
               <MultiSelectChipField options={STYLE_TAG_OPTIONS} value={styleTags} onChange={onStyleTagsChange} />
+              <span className="wardrobeFieldHelp">Style tags help recommendations stay casual, formal, athletic, and more.</span>
             </label>
 
             <label className="wardrobeLabel">
               Occasion tags
               <MultiSelectChipField options={OCCASION_TAG_OPTIONS} value={occasionTags} onChange={onOccasionTagsChange} />
+              <span className="wardrobeFieldHelp">Occasion tags help FitGPT match the outfit to work, social, athletic, and similar contexts.</span>
             </label>
 
             <label className="wardrobeLabel">
               Season tags
               <MultiSelectChipField options={SEASON_TAG_OPTIONS} value={seasonTags} onChange={onSeasonTagsChange} />
+              <span className="wardrobeFieldHelp">Season tags help the app avoid winter pieces in summer and vice versa.</span>
             </label>
           </div>
         ) : null}

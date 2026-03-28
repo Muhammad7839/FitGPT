@@ -4,11 +4,12 @@ import ReactDOM from "react-dom";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { logout } from "../api/authApi";
-import { readDemoAuth, writeDemoAuth, loadProfilePic, saveProfilePic, loadAnswers, saveAnswers } from "../utils/userStorage";
+import { readDemoAuth, writeDemoAuth, loadProfilePic, saveProfilePic, loadAnswers, saveAnswers, mirrorUserDataToGuest } from "../utils/userStorage";
 import { fileToDataUrl } from "../utils/helpers";
-import { STYLE_OPTIONS, COMFORT_OPTIONS, DRESS_FOR_OPTIONS, BODY_TYPE_OPTIONS } from "../utils/formOptions";
+import { STYLE_OPTIONS, COMFORT_OPTIONS, DRESS_FOR_OPTIONS, BODY_TYPE_OPTIONS, GENDER_OPTIONS } from "../utils/formOptions";
+import GuestModeNotice from "./GuestModeNotice";
 
-const DEFAULT_PREFS = { style: [], comfort: [], dressFor: [], bodyType: null };
+const DEFAULT_PREFS = { style: [], comfort: [], dressFor: [], bodyType: null, gender: "", heightCm: "" };
 
 export default function Profile({ onResetOnboarding = () => {} }) {
   const navigate = useNavigate();
@@ -47,6 +48,8 @@ export default function Profile({ onResetOnboarding = () => {} }) {
       comfort: Array.isArray(p?.comfort) ? p.comfort : [],
       dressFor: Array.isArray(p?.dressFor) ? p.dressFor : [],
       bodyType: p?.bodyType ?? null,
+      gender: (p?.gender || "").toString(),
+      heightCm: (p?.heightCm || "").toString(),
     };
   }, [effectiveUser]);
 
@@ -91,17 +94,38 @@ export default function Profile({ onResetOnboarding = () => {} }) {
     updatePrefs((prev) => ({ ...prev, bodyType: prev.bodyType === id ? null : id }));
   }, [updatePrefs]);
 
+  const setScalarPref = useCallback((key, value) => {
+    updatePrefs((prev) => ({ ...prev, [key]: value }));
+  }, [updatePrefs]);
+
   const handleLogout = async () => {
     try {
       await logout();
     } catch {
       // ignore if backend is offline
     } finally {
+      mirrorUserDataToGuest(effectiveUser);
       if (typeof setUser === "function") setUser(null);
       writeDemoAuth(null);
       navigate("/dashboard", { replace: true });
     }
   };
+
+  if (!user) {
+    return (
+      <div className="onboarding onboardingPage profilePage">
+        <div className="card dashWide profileCard">
+          <div className="profileHeaderRow">
+            <div>
+              <h1 className="heroTitle profileTitle">Profile</h1>
+              <p className="heroSub profileSub">Sign in to save and manage your profile.</p>
+            </div>
+          </div>
+          <GuestModeNotice compact />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="onboarding onboardingPage profilePage">
@@ -256,6 +280,28 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div style={{ marginTop: 16, display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                <label className="wardrobeLabel">
+                  Gender
+                  <select className="wardrobeInput" value={prefs.gender || ""} onChange={(e) => setScalarPref("gender", e.target.value)}>
+                    {GENDER_OPTIONS.map((option) => (
+                      <option key={option.value || "blank"} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="wardrobeLabel">
+                  Height (cm)
+                  <input
+                    className="wardrobeInput"
+                    inputMode="numeric"
+                    placeholder="Example: 170"
+                    value={prefs.heightCm || ""}
+                    onChange={(e) => setScalarPref("heightCm", e.target.value.replace(/[^\d.]/g, ""))}
+                  />
+                </label>
               </div>
             </div>
 

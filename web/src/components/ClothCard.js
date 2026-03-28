@@ -138,9 +138,14 @@ function ClothMesh({ texture, mouseRef }) {
 
 function TexturedClothMesh({ imageUrl, mouseRef }) {
   const [texture, setTexture] = useState(null);
+  const textureRef = useRef(null);
 
   useEffect(() => {
     if (!imageUrl) {
+      if (textureRef.current) {
+        textureRef.current.dispose();
+        textureRef.current = null;
+      }
       setTexture(null);
       return;
     }
@@ -153,12 +158,25 @@ function TexturedClothMesh({ imageUrl, mouseRef }) {
       }
       tex.minFilter = THREE.LinearFilter;
       tex.magFilter = THREE.LinearFilter;
-      setTexture(tex);
+      setTexture((current) => {
+        if (current) current.dispose();
+        textureRef.current = tex;
+        return tex;
+      });
     });
     return () => {
       cancelled = true;
     };
   }, [imageUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (textureRef.current) {
+        textureRef.current.dispose();
+        textureRef.current = null;
+      }
+    };
+  }, []);
 
   return <ClothMesh texture={texture} mouseRef={mouseRef} />;
 }

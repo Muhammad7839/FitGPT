@@ -13,6 +13,12 @@ beforeEach(() => {
 });
 
 describe("savedOutfitsApi.saveOutfit", () => {
+  test("guest mode cannot save outfits", async () => {
+    const result = await savedOutfitsApi.saveOutfit({ items: ["a", "b"] }, null);
+    expect(result.created).toBe(false);
+    expect(result.message).toMatch(/sign in/i);
+  });
+
   test("saves an outfit and returns created: true", async () => {
     const payload = {
       items: ["shirt-1", "pants-2", "shoes-3"],
@@ -40,6 +46,11 @@ describe("savedOutfitsApi.saveOutfit", () => {
 });
 
 describe("savedOutfitsApi.listSaved", () => {
+  test("guest mode returns an empty list", async () => {
+    const result = await savedOutfitsApi.listSaved(null);
+    expect(result.saved_outfits).toEqual([]);
+  });
+
   test("returns empty list initially", async () => {
     const result = await savedOutfitsApi.listSaved(TEST_USER);
     expect(result.saved_outfits).toEqual([]);

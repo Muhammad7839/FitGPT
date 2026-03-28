@@ -30,6 +30,23 @@ function fileIsOk(file) {
   return isImage && under10mb;
 }
 
+function uploadIssueMessage(file) {
+  const wrongType = !(file?.type === "image/jpeg" || file?.type === "image/png" || file?.type === "image/webp");
+  const tooLarge = Number(file?.size || 0) > 10 * 1024 * 1024;
+
+  if (wrongType && tooLarge) return "Upload not allowed. Use JPG, PNG, or WEBP files under 10MB.";
+  if (tooLarge) return "This photo is too large. Please upload an image under 10MB.";
+  if (wrongType) return "Upload not allowed. Please use JPG, PNG, or WEBP images.";
+  return "Upload failed. Please try another image.";
+}
+
+function uploadBatchMessage(invalidFiles, validCount) {
+  if (!invalidFiles.length) return "";
+  if (invalidFiles.length === 1 && validCount === 0) return uploadIssueMessage(invalidFiles[0]);
+  if (validCount > 0) return `${invalidFiles.length} file${invalidFiles.length > 1 ? "s were" : " was"} skipped. Use JPG, PNG, or WEBP files under 10MB.`;
+  return "Upload not allowed. Please use JPG, PNG, or WEBP images under 10MB.";
+}
+
 function fileToObjectUrl(file) {
   return URL.createObjectURL(file);
 }
@@ -164,6 +181,7 @@ function guessCategoryFromName(name) {
 export default function Wardrobe() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isGuestMode = !user;
 
   const userBodyType = useMemo(() => {
     const answers = loadAnswers(user);
@@ -208,6 +226,7 @@ export default function Wardrobe() {
   const [bodyFitOn, setBodyFitOn] = useState(false);
   const [view, setView] = useState("grid");
   const [toast, setToast] = useState("");
+  const [uploadError, setUploadError] = useState("");
   const [showUploadPanel, setShowUploadPanel] = useState(false);
   const [showCategoryTabs, setShowCategoryTabs] = useState(false);
 
@@ -230,6 +249,10 @@ export default function Wardrobe() {
   }, [filterOpen]);
 
   const [tab, setTab] = useState("active");
+
+  useEffect(() => {
+    if (isGuestMode && tab !== "active") setTab("active");
+  }, [isGuestMode, tab]);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
@@ -561,12 +584,15 @@ export default function Wardrobe() {
     if (!file) return;
 
     if (!fileIsOk(file)) {
-      setToast("Only JPG/PNG/WEBP up to 10MB are supported.");
+      const message = uploadIssueMessage(file);
+      setUploadError(message);
+      setToast(message);
       window.setTimeout(() => setToast(""), 2500);
       return;
     }
 
     try {
+      setUploadError("");
       const preview = fileToObjectUrl(file);
       setPendingPreview(preview);
       setPendingFile(file);
@@ -599,16 +625,29 @@ export default function Wardrobe() {
   };
 
   const onPickFile = async (fileList) => {
-    const files = Array.from(fileList || []).filter(fileIsOk);
+    const allFiles = Array.from(fileList || []);
+    const files = allFiles.filter(fileIsOk);
+    const invalidFiles = allFiles.filter((file) => !fileIsOk(file));
     if (!files.length) {
       if (fileList?.length) {
-        setToast("Only JPG/PNG/WEBP up to 10MB are supported.");
+        const message = uploadBatchMessage(invalidFiles, 0);
+        setUploadError(message);
+        setToast(message);
         window.setTimeout(() => setToast(""), 2500);
       }
       return;
     }
 
-    if (files.length === 1) {
+    if (invalidFiles.length) {
+      const message = uploadBatchMessage(invalidFiles, files.length);
+      setUploadError(message);
+      setToast(message);
+      window.setTimeout(() => setToast(""), 2800);
+    } else {
+      setUploadError("");
+    }
+
+      if (files.length === 1) {
       openAddModalForFile(files[0]);
     } else {
       const entries = await Promise.all(
@@ -722,7 +761,7 @@ export default function Wardrobe() {
         setAddOpen(false);
         resetAddForm();
 
-        setToast("Item added (guest mode).");
+        setToast("Item added for this session. Sign in to save it permanently.");
         window.setTimeout(() => setToast(""), 2000);
         return;
       }
@@ -932,7 +971,7 @@ export default function Wardrobe() {
       setBulkOpen(false);
       setBulkItems([]);
 
-      setToast(`${newItems.length} item${newItems.length > 1 ? "s" : ""} added.`);
+      setToast(isGuestMode ? `${newItems.length} item${newItems.length > 1 ? "s added for this session" : " added for this session"}.` : `${newItems.length} item${newItems.length > 1 ? "s" : ""} added.`);
       window.setTimeout(() => setToast(""), 2000);
     } catch (e) {
       setIsBulkSaving(false);
@@ -1118,6 +1157,12 @@ export default function Wardrobe() {
   };
 
   const toggleFavorite = async (id) => {
+    if (isGuestMode) {
+      setToast("Sign in to use favorites.");
+      window.setTimeout(() => setToast(""), 2200);
+      return;
+    }
+
     const current = items.find((x) => x.id === id);
     const nextVal = !(current?.is_favorite === true);
 
@@ -1143,7 +1188,7 @@ export default function Wardrobe() {
             <div className="wardrobeTitle">Wardrobe</div>
           </div>
           <div className="wardrobeSub">
-            Upload and manage your clothing items
+            {isGuestMode ? "Upload pieces and generate recommendations in guest mode. Guest wardrobes stay temporary." : "Upload and manage your clothing items"}
             {!effectiveSignedIn && !backendOffline ? (
               <button type="button" className="btn primary" onClick={() => navigate("/login")} style={{ marginLeft: 12, fontSize: "0.85rem", padding: "6px 16px", verticalAlign: "middle" }}>
                 Sign in to save
@@ -1174,28 +1219,32 @@ export default function Wardrobe() {
         >
           Active ({activeItems.length})
         </button>
-        <button
-          type="button"
-          className={tab === "favorites" ? "wardrobeTab active" : "wardrobeTab"}
-          onClick={() => {
-            setTab("favorites");
-            setActiveCategory("All Items");
-          }}
-          aria-pressed={tab === "favorites" ? "true" : "false"}
-        >
-          Favorites ({favoriteItems.length})
-        </button>
-        <button
-          type="button"
-          className={tab === "archived" ? "wardrobeTab active" : "wardrobeTab"}
-          onClick={() => {
-            setTab("archived");
-            setActiveCategory("All Items");
-          }}
-          aria-pressed={tab === "archived" ? "true" : "false"}
-        >
-          Archived ({archivedItems.length})
-        </button>
+        {!isGuestMode ? (
+          <>
+            <button
+              type="button"
+              className={tab === "favorites" ? "wardrobeTab active" : "wardrobeTab"}
+              onClick={() => {
+                setTab("favorites");
+                setActiveCategory("All Items");
+              }}
+              aria-pressed={tab === "favorites" ? "true" : "false"}
+            >
+              Favorites ({favoriteItems.length})
+            </button>
+            <button
+              type="button"
+              className={tab === "archived" ? "wardrobeTab active" : "wardrobeTab"}
+              onClick={() => {
+                setTab("archived");
+                setActiveCategory("All Items");
+              }}
+              aria-pressed={tab === "archived" ? "true" : "false"}
+            >
+              Archived ({archivedItems.length})
+            </button>
+          </>
+        ) : null}
       </section>
 
       <section className="wardrobeActionStrip">
@@ -1245,6 +1294,7 @@ export default function Wardrobe() {
               Choose Files
             </button>
             <div className="wardrobeUploadHint">Supports JPG, PNG, WEBP up to 10MB each</div>
+            {uploadError ? <div className="wardrobeFormError" style={{ marginTop: 12, width: "min(520px, 100%)" }}>{uploadError}</div> : null}
           </div>
         </section>
       ) : null}
@@ -1484,6 +1534,8 @@ export default function Wardrobe() {
             onUnarchive={unarchiveItem}
             onDelete={askDelete}
             isItemBusy={isItemBusy}
+            allowFavorites={!isGuestMode}
+            allowArchive={!isGuestMode}
             onTiltMove={onTiltMove}
             onTiltLeave={onTiltLeave}
           />

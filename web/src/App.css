@@ -1332,7 +1332,7 @@ a {
 
 .heroTitle {
   margin: 0;
-  font-size: 46px;
+  font-size: 52px;
   line-height: 1.05;
   letter-spacing: -0.8px;
 }
@@ -1594,6 +1594,23 @@ a {
   border-radius: 14px;
   padding: 14px;
   background: var(--bgSoft);
+}
+
+.reviewCardButton {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.reviewCardButton:hover,
+.reviewCardButton:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(139, 30, 30, 0.28);
+  box-shadow: 0 14px 28px rgba(17, 24, 39, 0.08);
+  outline: none;
 }
 
 .reviewLabel {
@@ -3021,7 +3038,7 @@ img.dashSquareImg {
 }
 
 .profileTitle {
-  font-size: 40px;
+  font-size: 46px;
   letter-spacing: -0.8px;
 }
 
@@ -3214,7 +3231,7 @@ img.dashSquareImg {
 }
 
 .wardrobeTitle {
-  font-size: 34px;
+  font-size: 40px;
   font-weight: 900;
   letter-spacing: -0.8px;
 }
@@ -3970,6 +3987,13 @@ img.dashSquareImg {
   color: rgba(17, 24, 39, 0.82);
 }
 
+.wardrobeFieldHelp {
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(17, 24, 39, 0.68);
+  font-weight: 600;
+}
+
 .wardrobeInput {
   height: 42px;
   border-radius: 12px;
@@ -4108,7 +4132,7 @@ img.dashSquareImg {
 }
 
 .historyTitle {
-  font-size: 40px;
+  font-size: 46px;
   font-weight: 950;
   letter-spacing: -0.8px;
 }
@@ -4781,7 +4805,7 @@ select:focus-visible {
 
 @media (max-width: 860px) {
   .heroTitle {
-    font-size: 38px;
+    font-size: 42px;
   }
 
   .featureGrid {
@@ -4819,7 +4843,7 @@ select:focus-visible {
   }
 
   .heroTitle {
-    font-size: 32px;
+    font-size: 36px;
   }
 
   .wardrobeSearchWrap {
@@ -5978,6 +6002,10 @@ select:focus-visible {
 
 [data-theme="dark"] .wardrobeLabel {
   color: rgba(232, 230, 227, 0.9);
+}
+
+[data-theme="dark"] .wardrobeFieldHelp {
+  color: rgba(232, 230, 227, 0.72);
 }
 
 [data-theme="dark"] .modalTitle {

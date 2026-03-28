@@ -31,6 +31,13 @@ function recommendationSignature(outfit) {
   return idsSignature((Array.isArray(outfit) ? outfit : []).map((item) => item?.id));
 }
 
+function clothCardKey(outfit, item, refreshToken, recSeed) {
+  const outfitSig = recommendationSignature(outfit);
+  const itemId = (item?.id ?? "").toString();
+  const image = (item?.image_url || "").toString();
+  return `${outfitSig}|${itemId}|${image}|${refreshToken}|${recSeed}`;
+}
+
 function readRecentRecommendationSigs() {
   const raw = sessionStorage.getItem(RECENT_RECOMMENDATION_SIGS_KEY);
   const parsed = raw ? safeParse(raw) : [];
@@ -198,15 +205,19 @@ function buildComfortSummary(outfit, answers, weatherCategory) {
 }
 
 function getWeatherGlyph(category, isLoading) {
-  if (isLoading) return "...";
-  if (category === "cold") return "Cold";
-  if (category === "cool") return "Cool";
-  if (category === "warm") return "Warm";
-  if (category === "hot") return "Hot";
-  return "Mild";
+  if (isLoading) return "⌛";
+  if (category === "cold") return "😮‍💨";
+  if (category === "cool") return "🧥";
+  if (category === "warm") return "☀️";
+  if (category === "hot") return "🥵";
+  return "🙂";
 }
 
 function buildWeatherPresentation({ category, tempF, loading, source, message }) {
+  const tempNumber = Number(tempF);
+  const hasTemp = Number.isFinite(tempNumber);
+  const tempC = hasTemp ? Math.round(((tempNumber - 32) * 5) / 9) : null;
+
   if (loading) {
     return {
       glyph: getWeatherGlyph(category, true),
@@ -218,8 +229,7 @@ function buildWeatherPresentation({ category, tempF, loading, source, message })
   }
 
   const categoryLabel = titleCase(category || "mild");
-  const hasTemp = tempF != null && Number.isFinite(Number(tempF));
-  const tempLabel = hasTemp ? `${tempF} F` : categoryLabel;
+  const tempLabel = hasTemp ? `${Math.round(tempNumber)} F / ${tempC} C` : categoryLabel;
 
   if (source === "override") {
     return {
@@ -253,6 +263,7 @@ function buildWeatherPresentation({ category, tempF, loading, source, message })
 export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isGuestMode = !user;
 
   const wardrobe = useWardrobe(user);
   const [recSeed, setRecSeed] = useState(() => readRecSeed());
@@ -697,6 +708,12 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   };
 
   const openPlanModal = () => {
+    if (isGuestMode) {
+      setSaveMsg("Sign in to save outfit plans.");
+      window.setTimeout(() => setSaveMsg(""), 2500);
+      return;
+    }
+
     const idx = selectedIdx ?? 0;
     const outfit = outfits[idx] || outfits[0] || [];
     if (!outfit.length) return;
@@ -737,6 +754,12 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
 
   async function handleSaveOutfit(outfit) {
+    if (isGuestMode) {
+      setSaveMsg("Sign in to save outfits.");
+      window.setTimeout(() => setSaveMsg(""), 2500);
+      return;
+    }
+
     const itemIds = (outfit || []).map((x) => x?.id).filter(Boolean);
     const normalized = normalizeItems(itemIds);
     const sig = normalized.join("|");
@@ -880,8 +903,12 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           <div className="dashHeroDate">{formatToday()} · TEST DEPLOY</div>
           <div className="dashQuickRow">
             <button type="button" className="dashQuickBtn" onClick={goAddItem}>+ Add Item</button>
-            <button type="button" className="dashQuickBtn" onClick={openPlanModal}>{"\u2606"} Plan Outfit</button>
-            <button type="button" className="dashQuickBtn" onClick={() => navigate("/history")}>{"\u29D6"} History</button>
+            {!isGuestMode ? (
+              <>
+                <button type="button" className="dashQuickBtn" onClick={openPlanModal}>{"\u2606"} Plan Outfit</button>
+                <button type="button" className="dashQuickBtn" onClick={() => navigate("/history")}>{"\u29D6"} History</button>
+              </>
+            ) : null}
           </div>
         </div>
         <div className="dashHeroRight">
@@ -924,6 +951,12 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
         {!weatherLoading && weatherPresentation.detail ? (
           <div className={"dashWeatherStatus" + (weatherSource === "fallback" ? " fallback" : "")}>{weatherPresentation.detail}</div>
+        ) : null}
+
+        {isGuestMode ? (
+          <div className="noteBox" style={{ marginTop: 12 }}>
+            Guest mode lets you upload items and generate recommendations for this session. Sign in to save outfits, plans, history, and profile details.
+          </div>
         ) : null}
 
         {showRefineControls ? (
@@ -1109,7 +1142,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             const sig = outfitSignature(outfit);
             const isSaved = savedSigs.has(sig);
             const disabled = !sig || savingSig === sig;
-            const label = isSaved ? "Unsave" : savingSig === sig ? "Saving..." : "Save";
+            const label = isGuestMode ? "Sign in to save" : isSaved ? "Unsave" : savingSig === sig ? "Saving..." : "Save";
             const summary = outfitSummaries[idx] || { score: 0, rankLabel: "Option", confidenceLabel: "Flexible", traits: [] };
 
             return (
@@ -1163,7 +1196,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                     >
                       <div className="dashSquareRole">{outfitRoleLabel(item)}</div>
                       {idx === selectedIdx ? (
-                        <ErrorBoundary fallback={item.image_url ? <img className="dashSquareImg" src={item.image_url} alt={item.name} /> : <div className="dashSquareImg" aria-hidden="true" />}><ClothCard imageUrl={item.image_url} className="dashSquareImg" /></ErrorBoundary>
+                        <ErrorBoundary fallback={item.image_url ? <img className="dashSquareImg" src={item.image_url} alt={item.name} /> : <div className="dashSquareImg" aria-hidden="true" />}><ClothCard key={clothCardKey(outfit, item, aiRefreshToken, recSeed)} imageUrl={item.image_url} className="dashSquareImg" /></ErrorBoundary>
                       ) : item.image_url ? (
                         <img className="dashSquareImg" src={item.image_url} alt={item.name} />
                       ) : (

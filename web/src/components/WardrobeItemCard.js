@@ -29,18 +29,20 @@ function MetaBadge({ children }) {
   );
 }
 
-function ItemActions({ item, tab, onToggleFavorite, onEdit, onArchive, onUnarchive, onDelete, isBusy }) {
+function ItemActions({ item, tab, onToggleFavorite, onEdit, onArchive, onUnarchive, onDelete, isBusy, allowFavorites, allowArchive }) {
   return (
     <>
-      <button
-        type="button"
-        className={item.is_favorite ? "wardrobeIconBtn fav active" : "wardrobeIconBtn fav"}
-        onClick={() => onToggleFavorite(item.id)}
-        aria-label="Toggle favorite"
-        title="Favorite"
-      >
-        {item.is_favorite ? "\u2665" : "\u2661"}
-      </button>
+      {allowFavorites ? (
+        <button
+          type="button"
+          className={item.is_favorite ? "wardrobeIconBtn fav active" : "wardrobeIconBtn fav"}
+          onClick={() => onToggleFavorite(item.id)}
+          aria-label="Toggle favorite"
+          title="Favorite"
+        >
+          {item.is_favorite ? "\u2665" : "\u2661"}
+        </button>
+      ) : null}
 
       <button
         type="button"
@@ -52,29 +54,31 @@ function ItemActions({ item, tab, onToggleFavorite, onEdit, onArchive, onUnarchi
         {"\u270E"}
       </button>
 
-      {tab === "active" ? (
-        <button
-          type="button"
-          className="wardrobeIconBtn"
-          onClick={() => onArchive(item.id)}
-          aria-label="Archive item"
-          title="Archive"
-          disabled={isBusy}
-        >
-          {isBusy ? "..." : "\u21E7"}
-        </button>
-      ) : (
-        <button
-          type="button"
-          className="wardrobeIconBtn"
-          onClick={() => onUnarchive(item.id)}
-          aria-label="Unarchive item"
-          title="Unarchive"
-          disabled={isBusy}
-        >
-          {isBusy ? "..." : "\u21BA"}
-        </button>
-      )}
+      {allowArchive ? (
+        tab === "active" ? (
+          <button
+            type="button"
+            className="wardrobeIconBtn"
+            onClick={() => onArchive(item.id)}
+            aria-label="Archive item"
+            title="Archive"
+            disabled={isBusy}
+          >
+            {isBusy ? "..." : "\u21E7"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="wardrobeIconBtn"
+            onClick={() => onUnarchive(item.id)}
+            aria-label="Unarchive item"
+            title="Unarchive"
+            disabled={isBusy}
+          >
+            {isBusy ? "..." : "\u21BA"}
+          </button>
+        )
+      ) : null}
 
       <button
         type="button"
@@ -126,12 +130,14 @@ function WardrobeItemCard({
   onUnarchive,
   onDelete,
   isItemBusy,
+  allowFavorites = true,
+  allowArchive = true,
   onTiltMove,
   onTiltLeave,
 }) {
   const fitText = fitLabel(item.fit_tag || item.fitTag || item.fit);
   const isBusy = isItemBusy(item.id);
-  const actionProps = { item, tab, onToggleFavorite, onEdit, onArchive, onUnarchive, onDelete, isBusy };
+  const actionProps = { item, tab, onToggleFavorite, onEdit, onArchive, onUnarchive, onDelete, isBusy, allowFavorites, allowArchive };
   const badges = metadataSummary(item);
   const colors = colorList(item.color);
 

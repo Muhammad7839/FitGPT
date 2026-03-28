@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { HistoryContent } from "./History";
 import { AnalyticsContent } from "./Analytics";
 import ErrorBoundary from "./ErrorBoundary";
+import GuestModeNotice from "./GuestModeNotice";
+import { useAuth } from "../auth/AuthProvider";
 
 const TABS = [
   { key: "history", label: "History" },
@@ -17,6 +19,7 @@ const TAB_META = {
 const TAB_INDEX = { history: 0, analytics: 1 };
 
 export default function HistoryAnalytics() {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") === "analytics" ? "analytics" : "history";
   const meta = TAB_META[activeTab];
@@ -34,6 +37,20 @@ export default function HistoryAnalytics() {
       setSearchParams({ tab: key }, { replace: true });
     }
   };
+
+  if (!user) {
+    return (
+      <div className="onboarding onboardingPage">
+        <div className="historyTopBar">
+          <div>
+            <div className="historyTitle">{meta.title}</div>
+            <div className="historySub">Sign in to track outfit history and analytics</div>
+          </div>
+        </div>
+        <GuestModeNotice compact />
+      </div>
+    );
+  }
 
   return (
     <div className="onboarding onboardingPage">
