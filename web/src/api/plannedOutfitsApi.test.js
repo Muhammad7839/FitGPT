@@ -9,6 +9,12 @@ beforeEach(() => {
 });
 
 describe("plannedOutfitsApi.planOutfit", () => {
+  test("guest mode cannot plan outfits", async () => {
+    const result = await plannedOutfitsApi.planOutfit({ item_ids: ["shirt-1"] }, null);
+    expect(result.created).toBe(false);
+    expect(result.message).toMatch(/sign in/i);
+  });
+
   test("plans an outfit and returns created: true", async () => {
     const payload = {
       item_ids: ["shirt-1", "pants-2"],
@@ -30,6 +36,11 @@ describe("plannedOutfitsApi.planOutfit", () => {
 });
 
 describe("plannedOutfitsApi.listPlanned", () => {
+  test("guest mode returns an empty plan list", async () => {
+    const result = await plannedOutfitsApi.listPlanned(null);
+    expect(result.planned_outfits).toEqual([]);
+  });
+
   test("returns empty list initially", async () => {
     const result = await plannedOutfitsApi.listPlanned(TEST_USER);
     expect(result.planned_outfits).toEqual([]);

@@ -6,6 +6,7 @@ import { loadWardrobe } from "../utils/userStorage";
 import { EVT_PLANNED_OUTFITS_CHANGED } from "../utils/constants";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
 import { buildWardrobeMap, formatPlanDate, setReuseOutfit, buildGoogleCalendarUrl } from "../utils/helpers";
+import GuestModeNotice from "./GuestModeNotice";
 
 export default function Plans() {
   const navigate = useNavigate();
@@ -78,7 +79,7 @@ export default function Plans() {
 
   const renderCard = (p) => {
     const details = Array.isArray(p?.item_details) ? p.item_details : [];
-    const previewIds = Array.isArray(p?.item_ids) ? p.item_ids.slice(0, 4) : [];
+    const previewIds = Array.isArray(p?.item_ids) ? p.item_ids : [];
 
     return (
       <div key={p?.planned_id} className="plannedCard">
@@ -92,7 +93,7 @@ export default function Plans() {
 
         <div className="savedOutfitItems" style={{ marginTop: 10 }}>
           {details.length > 0
-            ? details.slice(0, 4).map((d, idx) => (
+            ? details.map((d, idx) => (
                 <div key={`${p?.planned_id}_d_${idx}`} className="savedOutfitItemChip">
                   {d?.image_url ? (
                     <img className="savedOutfitItemImg" src={d.image_url} alt={d?.name || "Item"} />
@@ -135,6 +136,20 @@ export default function Plans() {
       </div>
     );
   };
+
+  if (!user) {
+    return (
+      <div className="onboarding onboardingPage">
+        <div className="historyTopBar">
+          <div>
+            <div className="historyTitle">Planned Outfits</div>
+            <div className="historySub">Sign in to save calendar-ready outfit plans</div>
+          </div>
+        </div>
+        <GuestModeNotice compact />
+      </div>
+    );
+  }
 
   return (
     <div className="onboarding onboardingPage">

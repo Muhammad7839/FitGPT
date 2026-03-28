@@ -8,7 +8,7 @@ function UpcomingPlanCard({ plan, wardrobe, onWearNow }) {
   if (!plan) return null;
 
   const details = Array.isArray(plan.item_details) ? plan.item_details : [];
-  const previewIds = Array.isArray(plan.item_ids) ? plan.item_ids.slice(0, 4) : [];
+  const previewIds = Array.isArray(plan.item_ids) ? plan.item_ids : [];
   const wardrobeMap = buildWardrobeMap(wardrobe);
   const dateLabel = formatPlanDate(plan.planned_date);
 
@@ -33,7 +33,7 @@ function UpcomingPlanCard({ plan, wardrobe, onWearNow }) {
 
       <div className="upcomingPlanItems">
         {details.length > 0
-          ? details.slice(0, 4).map((d, idx) => (
+          ? details.map((d, idx) => (
               <div key={`up_d_${idx}`} className="upcomingPlanItem">
                 {d?.image_url ? (
                   <img className="upcomingPlanItemImg" src={d.image_url} alt={d?.name || "Item"} />

@@ -12,6 +12,12 @@ beforeEach(() => {
 });
 
 describe("outfitHistoryApi.recordWorn", () => {
+  test("guest mode cannot create history entries", async () => {
+    const result = await outfitHistoryApi.recordWorn({ item_ids: ["shirt-1"] }, null);
+    expect(result.created).toBe(false);
+    expect(result.message).toMatch(/sign in/i);
+  });
+
   test("records an outfit and returns created: true", async () => {
     const payload = {
       item_ids: ["shirt-1", "pants-2"],
@@ -31,6 +37,11 @@ describe("outfitHistoryApi.recordWorn", () => {
 });
 
 describe("outfitHistoryApi.listHistory", () => {
+  test("guest mode returns an empty history list", async () => {
+    const result = await outfitHistoryApi.listHistory(null);
+    expect(result.history).toEqual([]);
+  });
+
   test("returns empty list initially", async () => {
     const result = await outfitHistoryApi.listHistory(TEST_USER);
     expect(result.history).toEqual([]);

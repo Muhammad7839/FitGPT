@@ -113,9 +113,19 @@ export function formatPlanDate(iso) {
 
 /** Build a Google Calendar event creation URL for a planned outfit. */
 export function buildGoogleCalendarUrl({ date, occasion, itemNames }) {
-  const title = occasion ? `FitGPT: ${occasion}` : "FitGPT: Outfit Plan";
   const names = Array.isArray(itemNames) ? itemNames.filter(Boolean) : [];
-  const details = names.length > 0 ? `Outfit: ${names.join(", ")}` : "Planned outfit from FitGPT";
+  const leadItems = names.slice(0, 2);
+  const summary = leadItems.length >= 2 ? `${leadItems[0]} + ${leadItems[1]}` : "";
+  const title = occasion
+    ? (summary ? `FitGPT: ${occasion} - ${summary}` : `FitGPT: ${occasion}`)
+    : (summary ? `FitGPT: Outfit Plan - ${summary}` : "FitGPT: Outfit Plan");
+  const displayDate = date || new Date().toISOString().slice(0, 10);
+  const details = [
+    "Planned with FitGPT",
+    `Date: ${displayDate}`,
+    occasion ? `Occasion: ${occasion}` : "",
+    names.length > 0 ? `Outfit:\n- ${names.join("\n- ")}` : "Outfit: Planned outfit from FitGPT",
+  ].filter(Boolean).join("\n\n");
 
   // Google Calendar uses all-day format: YYYYMMDD/YYYYMMDD (next day for end)
   const d = (date || "").replace(/-/g, "");

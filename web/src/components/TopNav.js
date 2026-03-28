@@ -22,6 +22,7 @@ export default function TopNav() {
   const { user } = useAuth();
   const demoUser = useMemo(() => readDemoAuth(), []);
   const effectiveUser = user || demoUser;
+  const visibleNavItems = user ? NAV_ITEMS : NAV_ITEMS.filter((item) => item.to === "/dashboard" || item.to === "/wardrobe");
   const [profilePic, setProfilePic] = useState(() => loadProfilePic(effectiveUser));
   const safeProfilePic = (profilePic || "").toString();
   const isGif = safeProfilePic.startsWith("data:image/gif");
@@ -55,7 +56,7 @@ export default function TopNav() {
   return (
     <header className="topNav">
       <nav className="topNavInner" aria-label="Main navigation">
-        <div className="topNavBrand">
+        <NavLink to="/" className="topNavBrand" aria-label="Go to home page">
           <img
             className="topNavLogo"
             src="/officialLogo.png"
@@ -66,9 +67,9 @@ export default function TopNav() {
             }}
           />
           <span className="topNavBrandName">FitGPT</span>
-        </div>
+        </NavLink>
         <div className="topNavLinks">
-          {NAV_ITEMS.map(({ to, label }) => (
+          {visibleNavItems.map(({ to, label }) => (
             <NavLink
               key={to}
               to={to}

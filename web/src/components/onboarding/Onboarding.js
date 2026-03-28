@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import SplashCrumple from "./SplashCrumple";
-import { STYLE_OPTIONS, COMFORT_OPTIONS, DRESS_FOR_OPTIONS, BODY_TYPE_OPTIONS } from "../../utils/formOptions";
+import { STYLE_OPTIONS, COMFORT_OPTIONS, DRESS_FOR_OPTIONS, BODY_TYPE_OPTIONS, GENDER_OPTIONS } from "../../utils/formOptions";
 
 const TOTAL_STEPS = 5;
 
@@ -86,6 +86,8 @@ function normalizeAnswers(raw) {
     comfort: Array.isArray(raw?.comfort) ? raw.comfort : [],
     dressFor: Array.isArray(raw?.dressFor) ? raw.dressFor : [],
     bodyType: raw?.bodyType ?? null,
+    gender: (raw?.gender || "").toString(),
+    heightCm: (raw?.heightCm || "").toString(),
   };
 }
 
@@ -104,6 +106,8 @@ function withDefaultsOnFinish(answers) {
 
   if (!Array.isArray(next.style)) next.style = [];
   if (!Array.isArray(next.dressFor)) next.dressFor = [];
+  if (!next.gender) next.gender = "";
+  if (!next.heightCm) next.heightCm = "";
 
   return next;
 }
@@ -180,6 +184,10 @@ export default function Onboarding({
 
   const setSingle = (key, value) => {
     setAnswers((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const jumpToStep = (targetStep) => {
+    setStep(clampStep(targetStep));
   };
 
   const bodyTypeLabel = useMemo(() => {
@@ -357,6 +365,36 @@ export default function Onboarding({
           <div className="noteBox">
             Selected: {bodyTypeLabel ?? `Skipped (default will be ${defaultBodyTypeLabel})`}
           </div>
+
+          <div className="noteBox" style={{ marginTop: 16 }}>
+            Add any optional profile details you want FitGPT to remember for your account setup.
+          </div>
+
+          <div style={{ marginTop: 16, display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+            <label className="wardrobeLabel">
+              Gender (optional)
+              <select
+                className="wardrobeInput"
+                value={answers.gender || ""}
+                onChange={(e) => setSingle("gender", e.target.value)}
+              >
+                {GENDER_OPTIONS.map((option) => (
+                  <option key={option.value || "blank"} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="wardrobeLabel">
+              Height in centimeters (optional)
+              <input
+                className="wardrobeInput"
+                inputMode="numeric"
+                placeholder="Example: 170"
+                value={answers.heightCm || ""}
+                onChange={(e) => setSingle("heightCm", e.target.value.replace(/[^\d.]/g, ""))}
+              />
+            </label>
+          </div>
         </div>
       );
     }
@@ -364,38 +402,52 @@ export default function Onboarding({
     return (
       <div>
         <h1 className="heroTitle">Review</h1>
-        <p className="heroSub">Go back to change anything, or finish to continue.</p>
+        <p className="heroSub">Click any preference to jump straight back and edit it, or finish to continue.</p>
 
         <div className="reviewGrid">
-          <div className="reviewCard">
+          <button type="button" className="reviewCard reviewCardButton" onClick={() => jumpToStep(2)}>
             <div className="reviewLabel">Style</div>
             <div className="reviewValue">
               {answers.style.length ? answers.style.join(", ") : "Skipped"}
             </div>
-          </div>
+          </button>
 
-          <div className="reviewCard">
+          <button type="button" className="reviewCard reviewCardButton" onClick={() => jumpToStep(2)}>
             <div className="reviewLabel">Comfort</div>
             <div className="reviewValue">
               {answers.comfort.length
                 ? answers.comfort.join(", ")
                 : "Skipped (default will be Balanced)"}
             </div>
-          </div>
+          </button>
 
-          <div className="reviewCard">
+          <button type="button" className="reviewCard reviewCardButton" onClick={() => jumpToStep(3)}>
             <div className="reviewLabel">Dressing for</div>
             <div className="reviewValue">
               {answers.dressFor.length ? answers.dressFor.join(", ") : "Skipped"}
             </div>
-          </div>
+          </button>
 
-          <div className="reviewCard">
+          <button type="button" className="reviewCard reviewCardButton" onClick={() => jumpToStep(4)}>
             <div className="reviewLabel">Body type</div>
             <div className="reviewValue">
               {bodyTypeLabel ?? `Skipped (default will be ${defaultBodyTypeLabel})`}
             </div>
-          </div>
+          </button>
+
+          <button type="button" className="reviewCard reviewCardButton" onClick={() => jumpToStep(4)}>
+            <div className="reviewLabel">Gender</div>
+            <div className="reviewValue">
+              {answers.gender || "Skipped"}
+            </div>
+          </button>
+
+          <button type="button" className="reviewCard reviewCardButton" onClick={() => jumpToStep(4)}>
+            <div className="reviewLabel">Height</div>
+            <div className="reviewValue">
+              {answers.heightCm ? `${answers.heightCm} cm` : "Skipped"}
+            </div>
+          </button>
         </div>
 
         <div className="noteBox">

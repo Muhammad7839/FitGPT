@@ -1,6 +1,6 @@
 import {
   getUserId, userKey, makeLocalStore, makeObjectStore,
-  loadWardrobe, saveWardrobe, migrateGuestData, clearGuestData, mergeWardrobeWithLocalMetadata,
+  loadWardrobe, saveWardrobe, migrateGuestData, clearGuestData, mirrorUserDataToGuest, mergeWardrobeWithLocalMetadata,
   readWeatherOverride, setWeatherOverride,
   readRecSeed, writeRecSeed, readTimeOverride, writeTimeOverride,
   readDemoAuth, writeDemoAuth,
@@ -135,10 +135,16 @@ describe("loadWardrobe", () => {
   });
 
   test("falls back to localStorage when sessionStorage empty", () => {
-    localStorage.setItem(WARDROBE_KEY, JSON.stringify([{ id: "l1" }]));
-    const result = loadWardrobe(null);
+    localStorage.setItem(`${WARDROBE_KEY}_u1`, JSON.stringify([{ id: "l1" }]));
+    const result = loadWardrobe({ id: "u1" });
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ id: "l1" });
+  });
+
+  test("guest mode ignores base localStorage wardrobe snapshots", () => {
+    localStorage.setItem(WARDROBE_KEY, JSON.stringify([{ id: "l1" }]));
+    const result = loadWardrobe(null);
+    expect(result).toEqual([]);
   });
 
   test("uses namespaced keys for signed-in users", () => {
@@ -161,13 +167,22 @@ describe("loadWardrobe", () => {
 describe("saveWardrobe", () => {
   test("saves to both sessionStorage and localStorage", () => {
     const items = [{ id: "a" }];
+    saveWardrobe(items, { id: "u1" });
+    expect(JSON.parse(sessionStorage.getItem(`${GUEST_WARDROBE_KEY}_u1`))).toEqual([
+      expect.objectContaining({ id: "a" }),
+    ]);
+    expect(JSON.parse(localStorage.getItem(`${WARDROBE_KEY}_u1`))).toEqual([
+      expect.objectContaining({ id: "a" }),
+    ]);
+  });
+
+  test("guest mode saves wardrobe to sessionStorage only", () => {
+    const items = [{ id: "a" }];
     saveWardrobe(items, null);
     expect(JSON.parse(sessionStorage.getItem(GUEST_WARDROBE_KEY))).toEqual([
       expect.objectContaining({ id: "a" }),
     ]);
-    expect(JSON.parse(localStorage.getItem(WARDROBE_KEY))).toEqual([
-      expect.objectContaining({ id: "a" }),
-    ]);
+    expect(localStorage.getItem(WARDROBE_KEY)).toBeNull();
   });
 
   test("uses namespaced keys for users", () => {
@@ -233,6 +248,25 @@ describe("clearGuestData", () => {
     localStorage.setItem(`${WARDROBE_KEY}_u1`, "user-data");
     clearGuestData();
     expect(localStorage.getItem(`${WARDROBE_KEY}_u1`)).toBe("user-data");
+  });
+});
+
+describe("mirrorUserDataToGuest", () => {
+  test("copies signed-in wardrobe and profile data back to guest keys", () => {
+    const user = { id: "u1" };
+    sessionStorage.setItem(`${GUEST_WARDROBE_KEY}_u1`, JSON.stringify([{ id: "look-1" }]));
+    localStorage.setItem(`${WARDROBE_KEY}_u1`, JSON.stringify([{ id: "look-1" }]));
+    localStorage.setItem(`${ONBOARDING_ANSWERS_KEY}_u1`, JSON.stringify({ style: ["casual"] }));
+    localStorage.setItem(`${ONBOARDED_KEY}_u1`, "1");
+    localStorage.setItem(`${PROFILE_PIC_KEY}_u1`, "data:image/png;base64,abc");
+
+    mirrorUserDataToGuest(user);
+
+    expect(JSON.parse(sessionStorage.getItem(GUEST_WARDROBE_KEY))).toEqual([{ id: "look-1" }]);
+    expect(JSON.parse(localStorage.getItem(WARDROBE_KEY))).toEqual([{ id: "look-1" }]);
+    expect(JSON.parse(localStorage.getItem(ONBOARDING_ANSWERS_KEY))).toEqual({ style: ["casual"] });
+    expect(localStorage.getItem(ONBOARDED_KEY)).toBe("1");
+    expect(localStorage.getItem(PROFILE_PIC_KEY)).toBe("data:image/png;base64,abc");
   });
 });
 

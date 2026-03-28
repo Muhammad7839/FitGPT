@@ -15,3 +15,11 @@ export const BODY_TYPE_OPTIONS = [
   { id: "rectangle", label: "Rectangle", note: "Add shape with layers and contrast." },
   { id: "inverted", label: "Inverted Triangle", note: "Balance shoulders with volume below." },
 ];
+
+export const GENDER_OPTIONS = [
+  { value: "", label: "Prefer not to say" },
+  { value: "woman", label: "Woman" },
+  { value: "man", label: "Man" },
+  { value: "nonbinary", label: "Nonbinary" },
+  { value: "other", label: "Other" },
+];
