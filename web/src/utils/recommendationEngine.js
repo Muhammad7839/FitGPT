@@ -366,17 +366,67 @@ function normalizeClothingType(value) {
   return (value || "").toString().trim().toLowerCase();
 }
 
-function normalizeLayerType(value, category) {
+function normalizeLayerType(value, clothingType, category) {
   const raw = (value || "").toString().trim().toLowerCase();
   if (raw === "base" || raw === "mid" || raw === "outer") return raw;
 
-  const type = normalizeClothingType(value);
+  const type = normalizeClothingType(clothingType);
   const cat = normalizeCategory(category);
-  if (["t-shirt", "tank top", "long sleeve", "blouse", "dress shirt", "polo"].includes(type)) return "base";
-  if (["hoodie", "sweater", "cardigan"].includes(type)) return "mid";
-  if (["jacket", "coat", "blazer", "parka", "windbreaker"].includes(type)) return "outer";
+  if (["t-shirt", "tank top", "long sleeve", "blouse", "dress shirt", "polo", "camisole", "henley"].includes(type)) return "base";
+  if (["hoodie", "sweater", "cardigan", "fleece", "vest", "pullover", "turtleneck", "sweatshirt"].includes(type)) return "mid";
+  if (["jacket", "coat", "blazer", "parka", "windbreaker", "overcoat", "trench coat", "raincoat", "anorak", "duster"].includes(type)) return "outer";
   if (cat === "Outerwear") return "outer";
   return "";
+}
+
+/* ── Layering warmth system ──────────────────────────────────────────── */
+
+const LAYER_WARMTH = {
+  "tank top": 1, camisole: 1, "crop top": 1,
+  "t-shirt": 2, polo: 2, blouse: 2, henley: 2,
+  "dress shirt": 3, "long sleeve": 3,
+  turtleneck: 4, sweater: 5, hoodie: 5, sweatshirt: 5, fleece: 5,
+  cardigan: 4, pullover: 5, vest: 3,
+  blazer: 4, "light jacket": 4, windbreaker: 4, "denim jacket": 4,
+  jacket: 5, "leather jacket": 5, raincoat: 4,
+  coat: 7, overcoat: 7, parka: 8, "trench coat": 6, anorak: 6, "down jacket": 8, "puffer jacket": 8, duster: 5,
+  shorts: -1, sandals: -1,
+};
+
+export function layerWarmth(item) {
+  const type = normalizeClothingType(item?.clothing_type || item?.type || item?.name || "");
+  if (LAYER_WARMTH[type] !== undefined) return LAYER_WARMTH[type];
+  const layer = item?.layer_type || normalizeLayerType(undefined, type, item?.category);
+  if (layer === "outer") return 5;
+  if (layer === "mid") return 4;
+  if (layer === "base") return 2;
+  return 1;
+}
+
+function outfitTotalWarmth(outfit) {
+  return (Array.isArray(outfit) ? outfit : [])
+    .filter((item) => itemRole(item) !== "accessory" && itemRole(item) !== "shoes")
+    .reduce((sum, item) => sum + layerWarmth(item), 0);
+}
+
+function warmthTarget(weatherCat) {
+  const cat = (weatherCat || "mild").toString().trim().toLowerCase();
+  if (cat === "cold") return { min: 10, ideal: 14, max: 20 };
+  if (cat === "cool") return { min: 6, ideal: 9, max: 14 };
+  if (cat === "mild") return { min: 3, ideal: 6, max: 10 };
+  if (cat === "warm") return { min: 1, ideal: 3, max: 6 };
+  /* hot */ return { min: 1, ideal: 2, max: 4 };
+}
+
+function warmthScore(outfit, weatherCat) {
+  const total = outfitTotalWarmth(outfit);
+  const target = warmthTarget(weatherCat);
+  if (total >= target.min && total <= target.max) {
+    const dist = Math.abs(total - target.ideal);
+    return Math.max(0, 8 - dist * 2);
+  }
+  if (total < target.min) return -(target.min - total) * 3;
+  return -(total - target.max) * 3;
 }
 
 function normalizeSetId(value) {
@@ -534,7 +584,7 @@ function metadataScore(item, context) {
 function createNormalizedItem(x, idx) {
   const category = normalizeCategory(x?.category);
   const type = normalizeClothingType(x?.clothing_type || x?.type || "");
-  const layerType = normalizeLayerType(x?.layer_type, category || type);
+  const layerType = normalizeLayerType(x?.layer_type, type, category);
   const styles = normalizeTagArray(x?.style_tags).map(normalizeStyleValue);
   const occasions = normalizeTagArray(x?.occasion_tags).map(normalizeOccasionValue);
   const seasons = normalizeTagArray(x?.season_tags);
@@ -578,10 +628,17 @@ function itemsConflict(a, b) {
   const typeB = normalizeClothingType(b.clothing_type || b.name);
 
   if (a.layer_type && b.layer_type && a.layer_type === b.layer_type && a.layer_type !== "base") return true;
-  if (["coat", "parka"].includes(typeA) && ["coat", "parka"].includes(typeB)) return true;
-  if (["hoodie", "sweater", "cardigan"].includes(typeA) && ["hoodie", "sweater", "cardigan"].includes(typeB)) return true;
-  if ((typeA === "blazer" && ["gym shorts", "athletic shorts", "running shorts"].includes(typeB)) || (typeB === "blazer" && ["gym shorts", "athletic shorts", "running shorts"].includes(typeA))) return true;
-  if ((typeA === "dress shoes" && ["gym shorts", "athletic shorts", "running shorts"].includes(typeB)) || (typeB === "dress shoes" && ["gym shorts", "athletic shorts", "running shorts"].includes(typeA))) return true;
+  if (["coat", "parka", "overcoat", "down jacket", "puffer jacket"].includes(typeA) && ["coat", "parka", "overcoat", "down jacket", "puffer jacket"].includes(typeB)) return true;
+  if (["hoodie", "sweater", "cardigan", "fleece", "pullover", "sweatshirt"].includes(typeA) && ["hoodie", "sweater", "cardigan", "fleece", "pullover", "sweatshirt"].includes(typeB)) return true;
+
+  const athleticShorts = ["gym shorts", "athletic shorts", "running shorts"];
+  if ((typeA === "blazer" && athleticShorts.includes(typeB)) || (typeB === "blazer" && athleticShorts.includes(typeA))) return true;
+  if ((typeA === "dress shoes" && athleticShorts.includes(typeB)) || (typeB === "dress shoes" && athleticShorts.includes(typeA))) return true;
+
+  /* Layering realism: lightweight base under heavy outer needs a mid */
+  const lightBase = ["tank top", "camisole", "crop top"];
+  const heavyOuter = ["parka", "overcoat", "down jacket", "puffer jacket"];
+  if ((lightBase.includes(typeA) && heavyOuter.includes(typeB)) || (lightBase.includes(typeB) && heavyOuter.includes(typeA))) return true;
 
   return false;
 }
@@ -742,14 +799,36 @@ function buildOutfitCandidate(buckets, rng, context, variant) {
     }
   }
 
-  if (layerTargets.includes("mid") && (roleCounts.get("top") || 0) && variant % 2 === 0) {
-    const midCandidates = topCandidates.filter((item) => item.layer_type === "mid");
-    addItem(chooseFirstCompatible(midCandidates, outfit));
+  /* ── Layering: mid-layer selection ────────────────────────────────── */
+  const wCat = (context.weatherCat || "mild").toString().trim().toLowerCase();
+  const needsMid = layerTargets.includes("mid");
+  const hasTop = (roleCounts.get("top") || 0) > 0;
+
+  if (needsMid && hasTop) {
+    /* cold: always try mid-layer; cool: most variants get one */
+    const tryMid = wCat === "cold" || (wCat === "cool" && variant % 3 !== 2);
+    if (tryMid) {
+      const midPool = topCandidates.filter((item) => item.layer_type === "mid");
+      /* rank mid-layers by warmth for cold weather */
+      const sortedMid = wCat === "cold"
+        ? [...midPool].sort((a, b) => layerWarmth(b) - layerWarmth(a))
+        : midPool;
+      addItem(chooseFirstCompatible(sortedMid, outfit));
+    }
   }
 
-  if (layerTargets.includes("outer") || (context.weatherCat === "cool" && variant % 3 !== 2)) {
+  /* ── Layering: outer-layer selection ────────────────────────────── */
+  const needsOuter = layerTargets.includes("outer") || (wCat === "cool" && variant % 3 !== 2);
+  /* warm/hot: skip outerwear entirely */
+  const skipOuter = wCat === "warm" || wCat === "hot";
+
+  if (needsOuter && !skipOuter) {
     const preferredOuter = outerCandidates.filter((item) => !item.layer_type || item.layer_type === "outer");
-    addItem(chooseFirstCompatible(preferredOuter.length ? preferredOuter : outerCandidates, outfit));
+    /* cold weather: prefer heavier outerwear */
+    const sortedOuter = wCat === "cold"
+      ? [...(preferredOuter.length ? preferredOuter : outerCandidates)].sort((a, b) => layerWarmth(b) - layerWarmth(a))
+      : preferredOuter.length ? preferredOuter : outerCandidates;
+    addItem(chooseFirstCompatible(sortedOuter, outfit));
   }
 
   const shoeContext = outfit.filter((item) => ["one-piece", "top", "bottom", "outerwear"].includes(itemRole(item)));
@@ -815,6 +894,25 @@ function scoreOutfitCandidate(outfit, context) {
   if ((context.weatherCat === "warm" || context.weatherCat === "hot") && (roles.has("outerwear") || layers.has("outer"))) {
     score -= 8;
   }
+
+  /* ── Layering realism bonuses / penalties ───────────────────────── */
+  const wCat = (context.weatherCat || "mild").toString().trim().toLowerCase();
+
+  /* Full 3-layer bonus for cold weather */
+  if (wCat === "cold" && layers.has("base") && layers.has("mid") && layers.has("outer")) {
+    score += 12;
+  }
+  /* 2-layer bonus for cool weather */
+  if (wCat === "cool" && layers.has("base") && (layers.has("mid") || layers.has("outer"))) {
+    score += 6;
+  }
+  /* Penalty: cold weather missing mid-layer */
+  if (wCat === "cold" && layers.has("base") && !layers.has("mid") && layers.has("outer")) {
+    score -= 4;
+  }
+
+  /* Warmth budget scoring */
+  score += warmthScore(outfit, wCat);
 
   for (const item of outfit) {
     score += metadataScore(item, { ...context, outfitSoFar: outfit.filter((entry) => entry?.id !== item?.id) });

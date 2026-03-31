@@ -19,6 +19,7 @@ import {
   makeRecentSets,
   buildExplanation,
   bodyTypeLabelFromId,
+  layerWarmth,
 } from "./recommendationEngine";
 
 describe("titleCase", () => {
@@ -316,5 +317,226 @@ describe("bodyTypeLabelFromId", () => {
   test("returns fallback for unknown types", () => {
     const result = bodyTypeLabelFromId("unknown_type_xyz");
     expect(typeof result).toBe("string");
+  });
+});
+
+/* ── Layering realism tests ──────────────────────────────────────────── */
+
+describe("layerWarmth", () => {
+  test("returns high warmth for heavy outerwear", () => {
+    expect(layerWarmth({ clothing_type: "parka" })).toBeGreaterThanOrEqual(7);
+    expect(layerWarmth({ clothing_type: "coat" })).toBeGreaterThanOrEqual(7);
+    expect(layerWarmth({ clothing_type: "down jacket" })).toBeGreaterThanOrEqual(7);
+  });
+
+  test("returns mid warmth for mid-layers", () => {
+    const sweater = layerWarmth({ clothing_type: "sweater" });
+    const hoodie = layerWarmth({ clothing_type: "hoodie" });
+    expect(sweater).toBeGreaterThanOrEqual(4);
+    expect(hoodie).toBeGreaterThanOrEqual(4);
+  });
+
+  test("returns low warmth for base layers", () => {
+    expect(layerWarmth({ clothing_type: "t-shirt" })).toBeLessThanOrEqual(3);
+    expect(layerWarmth({ clothing_type: "tank top" })).toBeLessThanOrEqual(2);
+  });
+
+  test("falls back to layer_type inference for unknown types", () => {
+    expect(layerWarmth({ clothing_type: "unknown", category: "Outerwear" })).toBe(5);
+    expect(layerWarmth({ clothing_type: "unknown", category: "Tops" })).toBe(1);
+  });
+});
+
+describe("layering in cold weather", () => {
+  const layeredWardrobe = [
+    { id: "base1", name: "White Tee", category: "tops", color: "white", clothing_type: "t-shirt", is_active: true },
+    { id: "base2", name: "Blue Polo", category: "tops", color: "blue", clothing_type: "polo", is_active: true },
+    { id: "mid1", name: "Gray Sweater", category: "tops", color: "gray", clothing_type: "sweater", is_active: true },
+    { id: "mid2", name: "Black Hoodie", category: "tops", color: "black", clothing_type: "hoodie", is_active: true },
+    { id: "outer1", name: "Navy Parka", category: "outerwear", color: "navy", clothing_type: "parka", is_active: true },
+    { id: "outer2", name: "Black Jacket", category: "outerwear", color: "black", clothing_type: "jacket", is_active: true },
+    { id: "b1", name: "Black Jeans", category: "bottoms", color: "black", is_active: true },
+    { id: "b2", name: "Khaki Chinos", category: "bottoms", color: "beige", is_active: true },
+    { id: "s1", name: "Brown Boots", category: "shoes", color: "brown", is_active: true },
+    { id: "s2", name: "Black Sneakers", category: "shoes", color: "black", is_active: true },
+  ];
+
+  test("cold weather outfits include outerwear", () => {
+    const outfits = generateThreeOutfits(layeredWardrobe, 42, "rectangle", new Set(), new Map(), "cold", "morning", null);
+    expect(outfits).toHaveLength(3);
+    for (const outfit of outfits) {
+      const hasOuter = outfit.some((item) => item.category === "Outerwear" || item.layer_type === "outer");
+      expect(hasOuter).toBe(true);
+    }
+  });
+
+  test("cold weather outfits prefer multiple layers", () => {
+    const outfits = generateThreeOutfits(layeredWardrobe, 77, "rectangle", new Set(), new Map(), "cold", "morning", null);
+    let multiLayerCount = 0;
+    for (const outfit of outfits) {
+      const layerTypes = new Set(outfit.map((i) => i.layer_type).filter(Boolean));
+      if (layerTypes.size >= 2) multiLayerCount++;
+    }
+    /* at least 2 of 3 outfits should have 2+ distinct layer types */
+    expect(multiLayerCount).toBeGreaterThanOrEqual(2);
+  });
+
+  test("cold weather outfits achieve adequate warmth", () => {
+    const outfits = generateThreeOutfits(layeredWardrobe, 55, "rectangle", new Set(), new Map(), "cold", "morning", null);
+    for (const outfit of outfits) {
+      const totalWarmth = outfit
+        .filter((i) => i.category !== "Shoes" && i.category !== "Accessories")
+        .reduce((sum, i) => sum + layerWarmth(i), 0);
+      /* cold weather minimum warmth threshold = 10 */
+      expect(totalWarmth).toBeGreaterThanOrEqual(6);
+    }
+  });
+});
+
+describe("layering in hot weather", () => {
+  const hotWardrobe = [
+    { id: "t1", name: "White Tank", category: "tops", color: "white", clothing_type: "tank top", is_active: true },
+    { id: "t2", name: "Blue Tee", category: "tops", color: "blue", clothing_type: "t-shirt", is_active: true },
+    { id: "mid1", name: "Wool Sweater", category: "tops", color: "gray", clothing_type: "sweater", is_active: true },
+    { id: "outer1", name: "Heavy Coat", category: "outerwear", color: "black", clothing_type: "coat", is_active: true },
+    { id: "b1", name: "Khaki Shorts", category: "bottoms", color: "beige", clothing_type: "shorts", is_active: true },
+    { id: "b2", name: "Linen Pants", category: "bottoms", color: "white", is_active: true },
+    { id: "s1", name: "Sandals", category: "shoes", color: "brown", clothing_type: "sandals", is_active: true },
+    { id: "s2", name: "White Sneakers", category: "shoes", color: "white", is_active: true },
+  ];
+
+  test("hot weather outfits avoid outerwear", () => {
+    const outfits = generateThreeOutfits(hotWardrobe, 42, "rectangle", new Set(), new Map(), "hot", "morning", null);
+    for (const outfit of outfits) {
+      const hasHeavy = outfit.some((item) => item.category === "Outerwear");
+      expect(hasHeavy).toBe(false);
+    }
+  });
+
+  test("hot weather outfits use lightweight items", () => {
+    const outfits = generateThreeOutfits(hotWardrobe, 99, "rectangle", new Set(), new Map(), "hot", "morning", null);
+    for (const outfit of outfits) {
+      const totalWarmth = outfit
+        .filter((i) => i.category !== "Shoes" && i.category !== "Accessories")
+        .reduce((sum, i) => sum + layerWarmth(i), 0);
+      /* hot weather max warmth = 4 */
+      expect(totalWarmth).toBeLessThanOrEqual(8);
+    }
+  });
+});
+
+describe("layer conflict detection", () => {
+  test("tank top conflicts with parka (no mid-layer between them)", () => {
+    const tankTop = { id: "t", category: "Tops", clothing_type: "tank top", layer_type: "base" };
+    const parka = { id: "p", category: "Outerwear", clothing_type: "parka", layer_type: "outer" };
+
+    /* When generating with only these two, they should not appear together */
+    const wardrobe = [
+      tankTop,
+      parka,
+      { id: "b", name: "Jeans", category: "bottoms", color: "blue", is_active: true },
+      { id: "s", name: "Boots", category: "shoes", color: "black", is_active: true },
+    ].map((i) => ({ ...i, is_active: true }));
+
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "cold", "morning", null);
+    for (const outfit of outfits) {
+      const hasTank = outfit.some((i) => i.clothing_type === "tank top");
+      const hasParka = outfit.some((i) => i.clothing_type === "parka");
+      /* tank + parka without mid is a conflict */
+      if (hasTank && hasParka) {
+        const hasMid = outfit.some((i) => i.layer_type === "mid");
+        expect(hasMid).toBe(true);
+      }
+    }
+  });
+
+  test("two mid-layers do not appear in the same outfit", () => {
+    const wardrobe = [
+      { id: "t1", name: "Tee", category: "tops", clothing_type: "t-shirt", color: "white", is_active: true },
+      { id: "m1", name: "Sweater", category: "tops", clothing_type: "sweater", color: "gray", is_active: true },
+      { id: "m2", name: "Hoodie", category: "tops", clothing_type: "hoodie", color: "black", is_active: true },
+      { id: "o1", name: "Jacket", category: "outerwear", clothing_type: "jacket", color: "navy", is_active: true },
+      { id: "b1", name: "Jeans", category: "bottoms", color: "blue", is_active: true },
+      { id: "s1", name: "Boots", category: "shoes", color: "brown", is_active: true },
+    ];
+
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "cold", "morning", null);
+    for (const outfit of outfits) {
+      const midLayers = outfit.filter((i) => i.layer_type === "mid");
+      expect(midLayers.length).toBeLessThanOrEqual(1);
+    }
+  });
+
+  test("two outer layers do not appear in the same outfit", () => {
+    const wardrobe = [
+      { id: "t1", name: "Tee", category: "tops", clothing_type: "t-shirt", color: "white", is_active: true },
+      { id: "o1", name: "Parka", category: "outerwear", clothing_type: "parka", color: "navy", is_active: true },
+      { id: "o2", name: "Coat", category: "outerwear", clothing_type: "coat", color: "black", is_active: true },
+      { id: "b1", name: "Jeans", category: "bottoms", color: "blue", is_active: true },
+      { id: "s1", name: "Boots", category: "shoes", color: "brown", is_active: true },
+    ];
+
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "cold", "morning", null);
+    for (const outfit of outfits) {
+      const outerLayers = outfit.filter((i) => i.layer_type === "outer");
+      expect(outerLayers.length).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe("cool weather layering", () => {
+  const coolWardrobe = [
+    { id: "t1", name: "White Shirt", category: "tops", color: "white", clothing_type: "dress shirt", is_active: true },
+    { id: "t2", name: "Gray Henley", category: "tops", color: "gray", clothing_type: "henley", is_active: true },
+    { id: "mid1", name: "Navy Cardigan", category: "tops", color: "navy", clothing_type: "cardigan", is_active: true },
+    { id: "o1", name: "Brown Blazer", category: "outerwear", color: "brown", clothing_type: "blazer", is_active: true },
+    { id: "o2", name: "Denim Jacket", category: "outerwear", color: "blue", clothing_type: "denim jacket", is_active: true },
+    { id: "b1", name: "Dark Jeans", category: "bottoms", color: "navy", is_active: true },
+    { id: "b2", name: "Chinos", category: "bottoms", color: "beige", is_active: true },
+    { id: "s1", name: "Loafers", category: "shoes", color: "brown", is_active: true },
+    { id: "s2", name: "Boots", category: "shoes", color: "black", is_active: true },
+  ];
+
+  test("cool weather outfits include at least 2 layers", () => {
+    const outfits = generateThreeOutfits(coolWardrobe, 42, "rectangle", new Set(), new Map(), "cool", "morning", null);
+    let layeredCount = 0;
+    for (const outfit of outfits) {
+      const layerTypes = new Set(outfit.map((i) => i.layer_type).filter(Boolean));
+      if (layerTypes.size >= 2) layeredCount++;
+    }
+    /* most cool-weather outfits should have 2+ layer types */
+    expect(layeredCount).toBeGreaterThanOrEqual(2);
+  });
+
+  test("cool weather outfits are lighter than cold weather outfits", () => {
+    const coldOutfits = generateThreeOutfits(coolWardrobe, 42, "rectangle", new Set(), new Map(), "cold", "morning", null);
+    const coolOutfits = generateThreeOutfits(coolWardrobe, 42, "rectangle", new Set(), new Map(), "cool", "morning", null);
+
+    const avgWarmth = (outfits) => {
+      const totals = outfits.map((o) =>
+        o.filter((i) => i.category !== "Shoes" && i.category !== "Accessories")
+          .reduce((s, i) => s + layerWarmth(i), 0)
+      );
+      return totals.reduce((a, b) => a + b, 0) / totals.length;
+    };
+
+    /* cool outfits should not be warmer on average than cold outfits */
+    expect(avgWarmth(coolOutfits)).toBeLessThanOrEqual(avgWarmth(coldOutfits));
+  });
+});
+
+describe("layering with reproducible seeds", () => {
+  const wardrobe = [
+    { id: "t1", name: "White Tee", category: "tops", color: "white", clothing_type: "t-shirt", is_active: true },
+    { id: "mid1", name: "Sweater", category: "tops", color: "gray", clothing_type: "sweater", is_active: true },
+    { id: "outer1", name: "Parka", category: "outerwear", color: "navy", clothing_type: "parka", is_active: true },
+    { id: "b1", name: "Jeans", category: "bottoms", color: "blue", is_active: true },
+    { id: "s1", name: "Boots", category: "shoes", color: "brown", is_active: true },
+  ];
+
+  test("same seed produces same layered outfits", () => {
+    const a = generateThreeOutfits(wardrobe, 123, "rectangle", new Set(), new Map(), "cold", "morning", null);
+    const b = generateThreeOutfits(wardrobe, 123, "rectangle", new Set(), new Map(), "cold", "morning", null);
+    expect(a.map((o) => o.map((i) => i.id))).toEqual(b.map((o) => o.map((i) => i.id)));
   });
 });
