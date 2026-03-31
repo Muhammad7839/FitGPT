@@ -30,20 +30,29 @@ def _get_client():
 def build_system_prompt() -> str:
     return (
         "You are a professional fashion stylist AI. "
-        "Given a list of wardrobe items with their IDs, categories, colors, fit types, and style tags, "
-        "create exactly 3 outfit combinations.\n\n"
+        "Given a list of wardrobe items with their IDs, categories, colors, fit types, style tags, "
+        "and layer types, create exactly 3 outfit combinations.\n\n"
         "Rules:\n"
         "- ONLY use item IDs from the provided list. Never invent IDs.\n"
         "- Each outfit MUST include one item from EVERY category present in the wardrobe "
         "(top, bottom, shoes, outerwear, accessory). If the wardrobe has items in 5 categories, "
         "each outfit should have 5 items — one per category.\n"
         "- Never skip a category that has items available.\n"
-        "- Each outfit must have AT MOST one item per category (one top, one bottom, one shoes, etc.). Never include two tops or two bottoms in the same outfit.\n"
+        "- Each outfit must have AT MOST one item per category (one top, one bottom, one shoes, etc.). "
+        "Never include two tops or two bottoms in the same outfit.\n"
         "- Consider the provided context: weather, time of day, body type, occasion, and style preferences.\n"
-        "- For cold/cool weather, prioritize outerwear if available.\n"
         "- Ensure color harmony — neutrals pair with everything, avoid clashing warm+cool.\n"
         "- Each outfit should be distinct from the others.\n"
         "- Provide a brief 1-2 sentence explanation for each outfit.\n\n"
+        "LAYERING RULES (critical for realism):\n"
+        "- Items have a layer_type: 'base' (t-shirts, polos), 'mid' (sweaters, hoodies), or 'outer' (jackets, coats).\n"
+        "- For COLD weather: build 3 layers — a base top + a mid-layer (sweater/hoodie) + an outer layer (coat/jacket). "
+        "All 3 layers are strongly preferred.\n"
+        "- For COOL weather: build 2 layers — a base top + an outer layer (jacket/blazer). A mid-layer is optional.\n"
+        "- For MILD weather: a base top is sufficient. A light jacket is optional.\n"
+        "- For WARM/HOT weather: use only lightweight base items. Do NOT include outerwear, heavy sweaters, or coats.\n"
+        "- Never pair a tank top or camisole directly with a heavy coat/parka — a mid-layer must be between them.\n"
+        "- Never include two mid-layers or two outer layers in the same outfit.\n\n"
         "Respond with valid JSON only, no markdown, no extra text. Use this exact format:\n"
         '{"outfits": [\n'
         '  {"item_ids": ["id1", "id2", "id3"], "explanation": "Why this outfit works."},\n'
@@ -56,14 +65,18 @@ def build_system_prompt() -> str:
 def build_user_prompt(items: list, context: dict) -> str:
     serialized_items = []
     for item in items:
-        serialized_items.append({
+        entry = {
             "id": str(item.get("id", "")),
             "name": item.get("name", ""),
             "category": item.get("category", ""),
             "color": item.get("color", ""),
             "fit_type": item.get("fit_type", ""),
             "style_tag": item.get("style_tag", ""),
-        })
+        }
+        layer = item.get("layer_type", "")
+        if layer:
+            entry["layer_type"] = layer
+        serialized_items.append(entry)
 
     categories_present = sorted({item.get("category", "") for item in items if item.get("category", "")})
 
