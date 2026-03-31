@@ -1227,7 +1227,10 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                 </div>
 
                 <div className="dashOptionReason">
-                  <div className="dashOptionReasonLabel">Why this works</div>
+                  <div className="dashOptionReasonHead">
+                    <div className="dashOptionReasonLabel">Why this works</div>
+                    <div className="dashOptionReasonHint">Quick summary</div>
+                  </div>
                   <div className="dashOptionReasonText">{summary.explanationPreview}</div>
                 </div>
               </div>
@@ -1248,13 +1251,19 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       {selectedIdx != null && ReactDOM.createPortal(
         <div className="dashWhyFloat" aria-live="polite">
           <div className="dashWhyHeader">
-            <div className="dashInfoTitle">
-              Why Option {String(selectedIdx + 1).padStart(2, "0")}?
-              {aiSource === "ai" && !reused ? <span className="dashAiBadge">AI Powered Suggestion</span> : null}
+            <div className="dashWhyHeaderCopy">
+              <div className="dashWhyEyebrow">Selected outfit breakdown</div>
+              <div className="dashInfoTitle">
+                Option {String(selectedIdx + 1).padStart(2, "0")} breakdown
+                {aiSource === "ai" && !reused ? <span className="dashAiBadge">AI Powered Suggestion</span> : null}
+              </div>
+              <div className="dashWhyIntro">
+                Start with the short explanation below, then open the full breakdown for color, comfort, and styling details.
+              </div>
             </div>
             <div className="dashWhyActions">
               <button type="button" className="dashWhyToggle" onClick={() => setShowWhyDetails((prev) => !prev)}>
-                {showWhyDetails ? "Hide details" : "Show details"}
+                {showWhyDetails ? "Hide full breakdown" : "Show full breakdown"}
                 <span className={showWhyDetails ? "dashWhyToggleIcon open" : "dashWhyToggleIcon"}>v</span>
               </button>
               <button type="button" className="dashWhyClose" onClick={() => { setSelectedIdx(null); setShowWhyDetails(false); }} aria-label="Close explanation">
@@ -1266,7 +1275,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             <div className="dashAiLoading">Thinking...</div>
           ) : (
             <div className="dashWhyContent">
-              <div className="dashSubText" style={{ lineHeight: 1.45 }}>
+              <div className="dashWhyLead">
                 <span key={`${selectedIdx}-${aiRefreshToken}-${recSeed}`} className="dashAiReveal">
                   {(explanationSummaryText || explanationText).split(" ").map((word, i) => (
                     <React.Fragment key={i}>
