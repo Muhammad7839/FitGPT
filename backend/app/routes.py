@@ -7,7 +7,6 @@ from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, UploadFile, status
-from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 from starlette.datastructures import FormData
@@ -419,13 +418,16 @@ def register_user_alias(user: schemas.UserCreate, db: Session = Depends(get_db))
 
 @router.post("/login", response_model=schemas.Token)
 def login_user(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
+    payload: schemas.LoginRequest,
+    db: Session = Depends(get_db),
 ):
+    # OAuth2PasswordRequestForm was removed because it enforces form-encoded
+    # username/password fields, while our clients send JSON email/password.
+    # Accepting JSON here keeps /login consistent with /register and clients.
     return _login_with_credentials(
         db=db,
-        email=form_data.username,
-        password=form_data.password,
+        email=payload.email,
+        password=payload.password,
     )
 
 
