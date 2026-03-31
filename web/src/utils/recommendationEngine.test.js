@@ -540,3 +540,211 @@ describe("layering with reproducible seeds", () => {
     expect(a.map((o) => o.map((i) => i.id))).toEqual(b.map((o) => o.map((i) => i.id)));
   });
 });
+
+/* ── One-piece item tests ────────────────────────────────────────────── */
+
+describe("one-piece auto-detection", () => {
+  test("dress is auto-detected as one-piece", () => {
+    const wardrobe = [
+      { id: "d1", name: "Black Dress", category: "tops", clothing_type: "dress", color: "black", is_active: true },
+      { id: "s1", name: "Heels", category: "shoes", color: "black", is_active: true },
+    ];
+    const buckets = bucketWardrobe(wardrobe);
+    expect(buckets.OnePieces).toHaveLength(1);
+    expect(buckets.OnePieces[0].is_one_piece).toBe(true);
+  });
+
+  test("jumpsuit is auto-detected as one-piece", () => {
+    const wardrobe = [
+      { id: "j1", name: "Navy Jumpsuit", category: "tops", clothing_type: "jumpsuit", color: "navy", is_active: true },
+    ];
+    const buckets = bucketWardrobe(wardrobe);
+    expect(buckets.OnePieces).toHaveLength(1);
+  });
+
+  test("romper is auto-detected as one-piece", () => {
+    const wardrobe = [
+      { id: "r1", name: "Floral Romper", category: "tops", clothing_type: "romper", color: "pink", is_active: true },
+    ];
+    const buckets = bucketWardrobe(wardrobe);
+    expect(buckets.OnePieces).toHaveLength(1);
+  });
+
+  test("overalls are auto-detected as one-piece", () => {
+    const wardrobe = [
+      { id: "o1", name: "Denim Overalls", category: "bottoms", clothing_type: "overalls", color: "blue", is_active: true },
+    ];
+    const buckets = bucketWardrobe(wardrobe);
+    expect(buckets.OnePieces).toHaveLength(1);
+  });
+
+  test("t-shirt is NOT auto-detected as one-piece", () => {
+    const wardrobe = [
+      { id: "t1", name: "White Tee", category: "tops", clothing_type: "t-shirt", color: "white", is_active: true },
+    ];
+    const buckets = bucketWardrobe(wardrobe);
+    expect(buckets.OnePieces).toHaveLength(0);
+  });
+
+  test("explicit is_one_piece flag overrides type detection", () => {
+    const wardrobe = [
+      { id: "x1", name: "Custom Piece", category: "tops", clothing_type: "unknown", is_one_piece: true, color: "gray", is_active: true },
+    ];
+    const buckets = bucketWardrobe(wardrobe);
+    expect(buckets.OnePieces).toHaveLength(1);
+  });
+});
+
+describe("one-piece outfit generation", () => {
+  const onePieceWardrobe = [
+    { id: "d1", name: "Black Dress", category: "tops", clothing_type: "dress", color: "black", is_active: true },
+    { id: "d2", name: "Red Dress", category: "tops", clothing_type: "dress", color: "red", is_active: true },
+    { id: "t1", name: "White Tee", category: "tops", clothing_type: "t-shirt", color: "white", is_active: true },
+    { id: "b1", name: "Black Jeans", category: "bottoms", color: "black", is_active: true },
+    { id: "s1", name: "Black Heels", category: "shoes", color: "black", is_active: true },
+    { id: "s2", name: "White Sneakers", category: "shoes", color: "white", is_active: true },
+    { id: "o1", name: "Leather Jacket", category: "outerwear", clothing_type: "jacket", color: "black", is_active: true },
+    { id: "a1", name: "Gold Necklace", category: "accessories", clothing_type: "necklace", color: "gold", is_active: true },
+  ];
+
+  test("one-piece outfits do not include separate tops or bottoms", () => {
+    const outfits = generateThreeOutfits(onePieceWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    for (const outfit of outfits) {
+      const hasOnePiece = outfit.some((i) => i.is_one_piece);
+      if (hasOnePiece) {
+        const hasTop = outfit.some((i) => !i.is_one_piece && i.category === "Tops");
+        const hasBottom = outfit.some((i) => !i.is_one_piece && i.category === "Bottoms");
+        expect(hasTop).toBe(false);
+        expect(hasBottom).toBe(false);
+      }
+    }
+  });
+
+  test("one-piece outfits can include outerwear", () => {
+    const outfits = generateThreeOutfits(onePieceWardrobe, 42, "rectangle", new Set(), new Map(), "cool", "morning", null);
+    const onePieceOutfits = outfits.filter((o) => o.some((i) => i.is_one_piece));
+    if (onePieceOutfits.length > 0) {
+      const someHaveOuter = onePieceOutfits.some((o) => o.some((i) => i.category === "Outerwear"));
+      expect(someHaveOuter).toBe(true);
+    }
+  });
+
+  test("one-piece outfits always include shoes", () => {
+    const outfits = generateThreeOutfits(onePieceWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    for (const outfit of outfits) {
+      const hasShoes = outfit.some((i) => i.category === "Shoes");
+      expect(hasShoes).toBe(true);
+    }
+  });
+
+  test("generates valid outfits when only one-pieces and shoes exist", () => {
+    const minimal = [
+      { id: "d1", name: "Black Dress", category: "tops", clothing_type: "dress", color: "black", is_active: true },
+      { id: "s1", name: "Heels", category: "shoes", color: "black", is_active: true },
+    ];
+    const outfits = generateThreeOutfits(minimal, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    expect(outfits).toHaveLength(3);
+    for (const outfit of outfits) {
+      expect(outfit.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+});
+
+/* ── Clothing set tests ──────────────────────────────────────────────── */
+
+describe("matching set handling", () => {
+  const setWardrobe = [
+    { id: "st1", name: "Linen Shirt", category: "tops", clothing_type: "dress shirt", color: "beige", set_id: "linen-set", is_active: true },
+    { id: "sb1", name: "Linen Pants", category: "bottoms", color: "beige", set_id: "linen-set", is_active: true },
+    { id: "t1", name: "Blue Tee", category: "tops", clothing_type: "t-shirt", color: "blue", is_active: true },
+    { id: "b1", name: "Black Jeans", category: "bottoms", color: "black", is_active: true },
+    { id: "s1", name: "Loafers", category: "shoes", color: "brown", is_active: true },
+    { id: "s2", name: "Sneakers", category: "shoes", color: "white", is_active: true },
+  ];
+
+  test("set items appear together in at least one outfit", () => {
+    /* Try several seeds — set partner selection is variant/scoring dependent */
+    let found = false;
+    for (const seed of [1, 7, 13, 42, 99, 200, 555]) {
+      const outfits = generateThreeOutfits(setWardrobe, seed, "rectangle", new Set(), new Map(), "mild", "morning", null);
+      if (outfits.some((outfit) => {
+        const ids = outfit.map((i) => i.id);
+        return ids.includes("st1") && ids.includes("sb1");
+      })) {
+        found = true;
+        break;
+      }
+    }
+    expect(found).toBe(true);
+  });
+
+  test("set items share the same set_id in output", () => {
+    const outfits = generateThreeOutfits(setWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    for (const outfit of outfits) {
+      const setItems = outfit.filter((i) => i.set_id);
+      if (setItems.length >= 2) {
+        const setIds = setItems.map((i) => i.set_id);
+        /* All set items in one outfit should share the same set_id */
+        expect(new Set(setIds).size).toBe(1);
+      }
+    }
+  });
+
+  test("partial set still generates valid outfits", () => {
+    const partialSetWardrobe = [
+      { id: "st1", name: "Linen Shirt", category: "tops", clothing_type: "dress shirt", color: "beige", set_id: "linen-set", is_active: true },
+      /* Bottom from the set is missing */
+      { id: "b1", name: "Black Jeans", category: "bottoms", color: "black", is_active: true },
+      { id: "s1", name: "Loafers", category: "shoes", color: "brown", is_active: true },
+    ];
+    const outfits = generateThreeOutfits(partialSetWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    expect(outfits).toHaveLength(3);
+    for (const outfit of outfits) {
+      expect(outfit.length).toBeGreaterThanOrEqual(2);
+      /* The lone set item should pair with a non-set bottom */
+      const hasTop = outfit.some((i) => i.category === "Tops");
+      const hasBottom = outfit.some((i) => i.category === "Bottoms");
+      expect(hasTop).toBe(true);
+      expect(hasBottom).toBe(true);
+    }
+  });
+
+  test("multi-category sets link across shoes and accessories", () => {
+    const multiCatSet = [
+      { id: "st1", name: "Suit Jacket", category: "outerwear", clothing_type: "blazer", color: "navy", set_id: "navy-suit", is_active: true },
+      { id: "sb1", name: "Suit Pants", category: "bottoms", color: "navy", set_id: "navy-suit", is_active: true },
+      { id: "t1", name: "White Shirt", category: "tops", clothing_type: "dress shirt", color: "white", is_active: true },
+      { id: "s1", name: "Oxford Shoes", category: "shoes", color: "black", is_active: true },
+    ];
+    const outfits = generateThreeOutfits(multiCatSet, 42, "rectangle", new Set(), new Map(), "cool", "morning", null);
+    const hasSuitOutfit = outfits.some((outfit) => {
+      const ids = outfit.map((i) => i.id);
+      return ids.includes("st1") && ids.includes("sb1");
+    });
+    expect(hasSuitOutfit).toBe(true);
+  });
+});
+
+describe("one-piece with sets", () => {
+  test("one-piece item in a set pairs with set accessories", () => {
+    const wardrobe = [
+      { id: "d1", name: "Red Dress", category: "tops", clothing_type: "dress", color: "red", set_id: "red-set", is_active: true },
+      { id: "a1", name: "Red Clutch", category: "accessories", clothing_type: "bag", color: "red", set_id: "red-set", is_active: true },
+      { id: "s1", name: "Black Heels", category: "shoes", color: "black", is_active: true },
+      { id: "t1", name: "White Tee", category: "tops", clothing_type: "t-shirt", color: "white", is_active: true },
+      { id: "b1", name: "Jeans", category: "bottoms", color: "blue", is_active: true },
+    ];
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "evening", null);
+    const dressOutfits = outfits.filter((o) => o.some((i) => i.id === "d1"));
+    if (dressOutfits.length > 0) {
+      /* Dress outfit should include the matching clutch */
+      const hasClutch = dressOutfits.some((o) => o.some((i) => i.id === "a1"));
+      expect(hasClutch).toBe(true);
+      /* And should not have a separate top or bottom */
+      for (const outfit of dressOutfits) {
+        expect(outfit.some((i) => i.id === "t1")).toBe(false);
+        expect(outfit.some((i) => i.id === "b1")).toBe(false);
+      }
+    }
+  });
+});

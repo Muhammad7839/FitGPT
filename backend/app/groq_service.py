@@ -53,6 +53,12 @@ def build_system_prompt() -> str:
         "- For WARM/HOT weather: use only lightweight base items. Do NOT include outerwear, heavy sweaters, or coats.\n"
         "- Never pair a tank top or camisole directly with a heavy coat/parka — a mid-layer must be between them.\n"
         "- Never include two mid-layers or two outer layers in the same outfit.\n\n"
+        "ONE-PIECE & SET RULES:\n"
+        "- Items with is_one_piece=true (dresses, jumpsuits, rompers, overalls) replace BOTH top and bottom. "
+        "When using a one-piece, do NOT include a separate top or bottom — only add shoes, outerwear, and accessories.\n"
+        "- Items sharing the same set_id belong to a matching set. Always try to include all set members together in one outfit. "
+        "If only one item of a set is available, it can still be used normally.\n"
+        "- Never combine a one-piece with a standalone top or standalone bottom.\n\n"
         "Respond with valid JSON only, no markdown, no extra text. Use this exact format:\n"
         '{"outfits": [\n'
         '  {"item_ids": ["id1", "id2", "id3"], "explanation": "Why this outfit works."},\n'
@@ -76,6 +82,11 @@ def build_user_prompt(items: list, context: dict) -> str:
         layer = item.get("layer_type", "")
         if layer:
             entry["layer_type"] = layer
+        if item.get("is_one_piece"):
+            entry["is_one_piece"] = True
+        set_id = item.get("set_id", "")
+        if set_id:
+            entry["set_id"] = set_id
         serialized_items.append(entry)
 
     categories_present = sorted({item.get("category", "") for item in items if item.get("category", "")})

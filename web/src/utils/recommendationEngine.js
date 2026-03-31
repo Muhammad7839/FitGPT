@@ -581,6 +581,18 @@ function metadataScore(item, context) {
   return score;
 }
 
+const ONE_PIECE_TYPES = new Set([
+  "dress", "jumpsuit", "romper", "overalls", "onesie", "bodysuit",
+  "maxi dress", "midi dress", "mini dress", "wrap dress", "shirt dress",
+  "sundress", "gown", "coveralls", "playsuit", "catsuit", "unitard",
+]);
+
+function isOnePiece(flag, clothingType) {
+  if (flag === true || String(flag).toLowerCase() === "true") return true;
+  const type = normalizeClothingType(clothingType);
+  return ONE_PIECE_TYPES.has(type);
+}
+
 function createNormalizedItem(x, idx) {
   const category = normalizeCategory(x?.category);
   const type = normalizeClothingType(x?.clothing_type || x?.type || "");
@@ -602,7 +614,7 @@ function createNormalizedItem(x, idx) {
     occasion_tags: occasions,
     season_tags: seasons,
     set_id: normalizeSetId(x?.set_id),
-    is_one_piece: x?.is_one_piece === true || String(x?.is_one_piece).toLowerCase() === "true",
+    is_one_piece: isOnePiece(x?.is_one_piece, type),
   };
 }
 
@@ -623,6 +635,10 @@ function itemsConflict(a, b) {
   const roleA = itemRole(a);
   const roleB = itemRole(b);
   if (roleA === roleB && roleA !== "accessory") return true;
+
+  /* One-piece covers top + bottom — conflicts with standalone tops and bottoms */
+  if (roleA === "one-piece" && (roleB === "top" || roleB === "bottom")) return true;
+  if (roleB === "one-piece" && (roleA === "top" || roleA === "bottom")) return true;
 
   const typeA = normalizeClothingType(a.clothing_type || a.name);
   const typeB = normalizeClothingType(b.clothing_type || b.name);
@@ -737,10 +753,22 @@ function sortCandidates(candidates, context, outfitSoFar, rng) {
     .map((entry) => entry.item);
 }
 
-function findSetPartner(item, candidates) {
+function findAllSetPartners(item, allPools) {
   const setId = normalizeSetId(item?.set_id);
-  if (!setId) return null;
-  return (Array.isArray(candidates) ? candidates : []).find((candidate) => candidate?.id !== item?.id && normalizeSetId(candidate?.set_id) === setId) || null;
+  if (!setId) return [];
+  const partners = [];
+  const seenIds = new Set([(item?.id ?? "").toString()]);
+  for (const pool of allPools) {
+    for (const candidate of Array.isArray(pool) ? pool : []) {
+      const cId = (candidate?.id ?? "").toString();
+      if (seenIds.has(cId)) continue;
+      if (normalizeSetId(candidate?.set_id) === setId) {
+        partners.push(candidate);
+        seenIds.add(cId);
+      }
+    }
+  }
+  return partners;
 }
 
 function chooseFirstCompatible(candidates, outfitSoFar) {
@@ -766,6 +794,11 @@ function buildOutfitCandidate(buckets, rng, context, variant) {
 
     outfit.push(item);
     roleCounts.set(role, (roleCounts.get(role) || 0) + 1);
+    /* One-piece fills both top and bottom roles */
+    if (role === "one-piece") {
+      roleCounts.set("top", (roleCounts.get("top") || 0) + 1);
+      roleCounts.set("bottom", (roleCounts.get("bottom") || 0) + 1);
+    }
     if (item.layer_type) selectedLayerTypes.add(item.layer_type);
     return true;
   };
@@ -777,25 +810,58 @@ function buildOutfitCandidate(buckets, rng, context, variant) {
   const outerCandidates = sortCandidates(buckets.Outerwear, context, outfit, rng);
   const accessoryCandidates = sortCandidates([...buckets.Accessories, ...buckets.Other], context, outfit, rng);
 
+  const allPools = [topCandidates, bottomCandidates, outerCandidates, shoeCandidates, accessoryCandidates, onePieceCandidates];
   const preferOnePiece = variant % 3 === 1 || (onePieceCandidates.length > 0 && topCandidates.length < 2);
 
   if (preferOnePiece) {
-    addItem(chooseFirstCompatible(onePieceCandidates, outfit));
+    const picked = chooseFirstCompatible(onePieceCandidates, outfit);
+    if (addItem(picked)) {
+      /* Try to add all set partners of the one-piece across every category */
+      for (const partner of findAllSetPartners(picked, allPools)) {
+        addItem(partner);
+      }
+    }
   }
 
-  if (!outfit.some((item) => itemRole(item) === "one-piece")) {
+  const hasOnePiece = outfit.some((item) => itemRole(item) === "one-piece");
+
+  if (!hasOnePiece) {
     const baseLayerTopCandidates = topCandidates.filter((item) => {
       if (!item.layer_type) return true;
       return layerTargets.includes(item.layer_type) || item.layer_type === "base";
     });
-    const firstTop = chooseFirstCompatible(baseLayerTopCandidates.length ? baseLayerTopCandidates : topCandidates, outfit);
-    addItem(firstTop);
+    const topPool = baseLayerTopCandidates.length ? baseLayerTopCandidates : topCandidates;
 
-    const setBottom = findSetPartner(firstTop, bottomCandidates);
-    if (setBottom) addItem(setBottom);
+    /* For some variants, prefer tops that have set partners available */
+    let firstTop = null;
+    if (variant % 4 === 0) {
+      const setTops = topPool.filter((item) => normalizeSetId(item?.set_id) && findAllSetPartners(item, allPools).length > 0);
+      firstTop = chooseFirstCompatible(setTops, outfit);
+    }
+    if (!firstTop) firstTop = chooseFirstCompatible(topPool, outfit);
+
+    if (addItem(firstTop)) {
+      /* Try set partners across ALL categories, not just bottoms */
+      for (const partner of findAllSetPartners(firstTop, allPools)) {
+        addItem(partner);
+      }
+    }
 
     if (!(roleCounts.get("bottom") || 0)) {
-      addItem(chooseFirstCompatible(bottomCandidates, outfit));
+      /* For some variants, prefer bottoms with set partners */
+      let firstBottom = null;
+      if (variant % 4 === 0) {
+        const setBots = bottomCandidates.filter((item) => normalizeSetId(item?.set_id) && findAllSetPartners(item, allPools).length > 0);
+        firstBottom = chooseFirstCompatible(setBots, outfit);
+      }
+      if (!firstBottom) firstBottom = chooseFirstCompatible(bottomCandidates, outfit);
+
+      if (addItem(firstBottom)) {
+        /* Bottom may also have set partners (e.g. matching shoes or accessories) */
+        for (const partner of findAllSetPartners(firstBottom, allPools)) {
+          addItem(partner);
+        }
+      }
     }
   }
 
@@ -876,8 +942,13 @@ function scoreOutfitCandidate(outfit, context) {
   const roles = new Set(outfit.map(itemRole));
   let score = 0;
 
-  if (roles.has("one-piece")) score += 14;
-  else {
+  if (roles.has("one-piece")) {
+    /* One-piece covers top + bottom — award full coverage credit */
+    score += 24;
+    /* Penalize if a standalone top or bottom sneaked in alongside */
+    if (roles.has("top")) score -= 15;
+    if (roles.has("bottom")) score -= 15;
+  } else {
     if (roles.has("top")) score += 12;
     if (roles.has("bottom")) score += 12;
   }
@@ -924,10 +995,10 @@ function scoreOutfitCandidate(outfit, context) {
   const familySet = new Set(accessories.map(accessoryFamily));
   if (familySet.size !== accessories.length) score -= 8;
 
-  const setIds = outfit.map((item) => normalizeSetId(item?.set_id)).filter(Boolean);
+  const setIds = [...new Set(outfit.map((item) => normalizeSetId(item?.set_id)).filter(Boolean))];
   for (const setId of setIds) {
     const matches = outfit.filter((item) => normalizeSetId(item?.set_id) === setId).length;
-    if (matches >= 2) score += 10;
+    if (matches >= 2) score += 10 + (matches - 2) * 4;
   }
 
   for (let i = 0; i < outfit.length; i += 1) {
