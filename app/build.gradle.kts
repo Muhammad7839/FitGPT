@@ -22,8 +22,13 @@ android {
         val googleWebClientId = project.findProperty("GOOGLE_WEB_CLIENT_ID") as String? ?: ""
         val apiBaseUrlRaw = project.findProperty("API_BASE_URL") as String? ?: "http://10.0.2.2:8000/"
         val apiBaseUrl = if (apiBaseUrlRaw.endsWith("/")) apiBaseUrlRaw else "$apiBaseUrlRaw/"
+        val apiLanBaseUrlRaw = project.findProperty("API_LAN_BASE_URL") as String? ?: ""
+        val apiLanBaseUrl = apiLanBaseUrlRaw.trim().let { value ->
+            if (value.isBlank()) "" else if (value.endsWith("/")) value else "$value/"
+        }
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        buildConfigField("String", "API_LAN_BASE_URL", "\"$apiLanBaseUrl\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -5,8 +5,7 @@ from typing import Optional
 
 from passlib.context import CryptContext
 from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.config import SECRET_KEY, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
@@ -25,7 +24,44 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Validate a plaintext password against a stored hash."""
     return pwd_context.verify(plain_password, hashed_password)
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+
+def _credentials_exception() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid authentication credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def _extract_bearer_token(authorization: str) -> Optional[str]:
+    value = authorization.strip()
+    if not value:
+        return None
+
+    parts = value.split(" ", 1)
+    if len(parts) != 2:
+        return None
+
+    scheme, token = parts[0].strip(), parts[1].strip()
+    if scheme.lower() != "bearer" or not token:
+        return None
+
+    return token
+
+
+def get_bearer_token(
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+) -> str:
+    token = _extract_bearer_token(authorization or "")
+    if not token:
+        raise _credentials_exception()
+    return token
+
+
+def get_optional_bearer_token(
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+) -> Optional[str]:
+    return _extract_bearer_token(authorization or "")
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -43,11 +79,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
-oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/login", auto_error=False)
-
-
 def get_optional_user(
-    token: Optional[str] = Depends(oauth2_scheme_optional),
+    token: Optional[str] = Depends(get_optional_bearer_token),
     db: Session = Depends(get_db),
 ) -> Optional[models.User]:
     """Resolve the authenticated user if a valid token is present, otherwise return None."""
@@ -65,15 +98,11 @@ def get_optional_user(
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    token: str = Depends(get_bearer_token),
     db: Session = Depends(get_db)
 ) -> models.User:
     """Resolve the authenticated user from the bearer token."""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid authentication credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    credentials_exception = _credentials_exception()
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[JWT_ALGORITHM])
