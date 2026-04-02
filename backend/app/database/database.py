@@ -1,20 +1,13 @@
-import os
+"""SQLAlchemy engine and session management for the FitGPT backend."""
+
+from collections.abc import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./fitgpt.db")
-
-# Railway uses postgres:// but SQLAlchemy 1.4+ requires postgresql://
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+from app.config import DATABASE_URL
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-
-engine = create_engine(
-    DATABASE_URL,
-    connect_args=connect_args
-)
+engine = create_engine(DATABASE_URL, connect_args=connect_args)
 
 SessionLocal = sessionmaker(
     autocommit=False,
@@ -25,8 +18,8 @@ SessionLocal = sessionmaker(
 Base = declarative_base()
 
 
-# Dependency for routes later
-def get_db():
+def get_db() -> Generator:
+    """Yield a DB session for a single request lifecycle."""
     db = SessionLocal()
     try:
         yield db
