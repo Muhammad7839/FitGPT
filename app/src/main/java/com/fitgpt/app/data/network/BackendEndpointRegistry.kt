@@ -1,5 +1,5 @@
 /**
- * Tracks backend base URL candidates and remembers the last reachable endpoint.
+ * Tracks a single configured backend endpoint for stable API origin routing.
  */
 package com.fitgpt.app.data.network
 
@@ -8,8 +8,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 object BackendEndpointRegistry {
     private const val DEFAULT_EMULATOR_BASE_URL = "http://10.0.2.2:8000/"
-    private const val DEFAULT_LOCALHOST_BASE_URL = "http://127.0.0.1:8000/"
-    private const val DEFAULT_LOOPBACK_BASE_URL = "http://localhost:8000/"
 
     @Volatile
     private var configuredBaseUrl: String = DEFAULT_EMULATOR_BASE_URL
@@ -25,17 +23,10 @@ object BackendEndpointRegistry {
 
     fun activeBaseUrl(): String = activeBaseUrl
 
+    @Suppress("UNUSED_PARAMETER")
     fun candidateBaseUrls(currentUrl: HttpUrl, allowFallback: Boolean): List<String> {
-        val candidates = linkedSetOf<String>()
-        candidates += normalizeFromUrl(currentUrl)
-        candidates += activeBaseUrl
-        if (allowFallback) {
-            candidates += configuredBaseUrl
-            candidates += DEFAULT_EMULATOR_BASE_URL
-            candidates += DEFAULT_LOCALHOST_BASE_URL
-            candidates += DEFAULT_LOOPBACK_BASE_URL
-        }
-        return candidates.toList()
+        // Keep all requests on one backend origin to avoid cross-host auth/data drift.
+        return listOf(activeBaseUrl)
     }
 
     fun markReachable(baseUrl: String) {
@@ -57,7 +48,4 @@ object BackendEndpointRegistry {
         return if (trimmed.endsWith("/")) trimmed else "$trimmed/"
     }
 
-    private fun normalizeFromUrl(url: HttpUrl): String {
-        return "${url.scheme}://${url.host}:${url.port}/"
-    }
 }

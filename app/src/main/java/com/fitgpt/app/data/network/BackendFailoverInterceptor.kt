@@ -1,5 +1,5 @@
 /**
- * Retries backend requests across known local-host candidates when connection fails.
+ * Routes requests through the pinned backend origin selected by the endpoint registry.
  */
 package com.fitgpt.app.data.network
 

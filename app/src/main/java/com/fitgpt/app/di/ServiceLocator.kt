@@ -26,7 +26,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object ServiceLocator {
-    private const val FALLBACK_BASE_URL = "http://10.0.2.2:8000/"
+    private const val EMULATOR_BASE_URL = "http://10.0.2.2:8000/"
     private const val NETWORK_LOG_TAG = "FitGPTNetwork"
 
     @Volatile
@@ -87,7 +87,10 @@ object ServiceLocator {
 
     private fun provideApiService(context: Context): ApiService {
         return apiService ?: synchronized(this) {
-            val baseUrl = BuildConfig.API_BASE_URL.ifBlank { FALLBACK_BASE_URL }
+            // Temporary stabilization mode: force emulator backend and bypass environment routing.
+            // Re-enable later by restoring BackendEnvironmentResolver.resolveBaseUrl(...).
+            val baseUrl = EMULATOR_BASE_URL
+            Log.d("Backend", "Using emulator base URL: http://10.0.2.2:8000/")
             BackendEndpointRegistry.initialize(baseUrl)
             Log.i(NETWORK_LOG_TAG, "Retrofit baseUrl=$baseUrl")
             apiService ?: Retrofit.Builder()
