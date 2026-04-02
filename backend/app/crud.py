@@ -1,27 +1,67 @@
-import json
+"""Data-access helpers for users, wardrobe items, and outfit workflows."""
+
+import hashlib
+import uuid
 from datetime import datetime
+from typing import Optional
+
+from passlib.context import CryptContext
+from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+
 from app import models, schemas
-from app.auth import hash_password
+from app.ai import deterministic, history
+from app.config import RESET_TOKEN_EXPIRE_MINUTES
+from app.weather import map_temperature_to_category
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # =============================
 # User CRUD
 # =============================
 
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
 
 def create_user(db: Session, user: schemas.UserCreate):
     hashed_password = hash_password(user.password)
-
     db_user = models.User(
         email=user.email,
         hashed_password=hashed_password
     )
-
+    _apply_default_preferences(db_user)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+    return db_user
 
+
+def get_or_create_google_user(db: Session, email: str, full_name: Optional[str]):
+    existing_user = get_user_by_email(db, email)
+    if existing_user:
+        if full_name and not existing_user.full_name:
+            existing_user.full_name = full_name
+            db.commit()
+            db.refresh(existing_user)
+        return existing_user
+
+    generated_password = uuid.uuid4().hex
+    db_user = models.User(
+        email=email,
+        full_name=full_name,
+        hashed_password=hash_password(generated_password),
+    )
+    _apply_default_preferences(db_user)
+    db.add(db_user)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return get_user_by_email(db, email)
+    db.refresh(db_user)
     return db_user
 
 
@@ -31,23 +71,117 @@ def get_user_by_email(db: Session, email: str):
     ).first()
 
 
-def get_user_by_google_id(db: Session, google_id: str):
+def _hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def create_password_reset_token(db: Session, db_user: models.User) -> str:
+    token = uuid.uuid4().hex
+    expires_at = int(datetime.utcnow().timestamp()) + (RESET_TOKEN_EXPIRE_MINUTES * 60)
+    db_user.reset_token_hash = _hash_reset_token(token)
+    db_user.reset_token_expires_at = expires_at
+    db.commit()
+    db.refresh(db_user)
+    return token
+
+
+def get_user_by_reset_token(db: Session, token: str):
+    token_hash = _hash_reset_token(token)
+    now = int(datetime.utcnow().timestamp())
     return db.query(models.User).filter(
-        models.User.google_id == google_id
+        models.User.reset_token_hash == token_hash,
+        models.User.reset_token_expires_at.is_not(None),
+        models.User.reset_token_expires_at >= now,
     ).first()
 
 
-def create_google_user(db: Session, email: str, google_id: str):
-    db_user = models.User(
-        email=email,
-        google_id=google_id,
-        auth_provider="google",
-        hashed_password=None,
-    )
-    db.add(db_user)
+def reset_user_password(db: Session, db_user: models.User, new_password: str):
+    db_user.hashed_password = hash_password(new_password)
+    db_user.reset_token_hash = None
+    db_user.reset_token_expires_at = None
     db.commit()
     db.refresh(db_user)
     return db_user
+
+
+def _normalize_optional_text(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
+def _normalize_tag_list(values: Optional[list[str]]) -> list[str]:
+    if not values:
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in values:
+        cleaned = str(raw).strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(cleaned)
+    return normalized
+
+
+def _first_or_default(values: list[str], fallback: str) -> str:
+    if values:
+        return values[0]
+    return fallback
+
+
+def _apply_default_preferences(db_user: models.User) -> None:
+    db_user.body_type = _normalize_optional_text(db_user.body_type) or schemas.DEFAULT_BODY_TYPE
+    db_user.lifestyle = _normalize_optional_text(db_user.lifestyle) or schemas.DEFAULT_LIFESTYLE
+    db_user.comfort_preference = (
+        _normalize_optional_text(db_user.comfort_preference) or schemas.DEFAULT_COMFORT_PREFERENCE
+    )
+
+
+def build_profile_summary(db: Session, db_user: models.User) -> dict:
+    """Return a compact profile summary payload with preference + wardrobe stats."""
+    wardrobe_count = db.query(models.ClothingItem).filter(
+        models.ClothingItem.owner_id == db_user.id
+    ).count()
+    active_wardrobe_count = db.query(models.ClothingItem).filter(
+        models.ClothingItem.owner_id == db_user.id,
+        models.ClothingItem.is_archived.is_(False),
+    ).count()
+    favorite_count = db.query(models.ClothingItem).filter(
+        models.ClothingItem.owner_id == db_user.id,
+        models.ClothingItem.is_favorite.is_(True),
+        models.ClothingItem.is_archived.is_(False),
+    ).count()
+    saved_outfit_count = db.query(models.SavedOutfit).filter(
+        models.SavedOutfit.owner_id == db_user.id
+    ).count()
+    planned_outfit_count = db.query(models.PlannedOutfit).filter(
+        models.PlannedOutfit.owner_id == db_user.id
+    ).count()
+    history_count = db.query(models.OutfitHistory).filter(
+        models.OutfitHistory.owner_id == db_user.id
+    ).count()
+
+    return {
+        "id": db_user.id,
+        "email": db_user.email,
+        "full_name": db_user.full_name,
+        "avatar_url": db_user.avatar_url,
+        "body_type": db_user.body_type,
+        "lifestyle": db_user.lifestyle,
+        "comfort_preference": db_user.comfort_preference,
+        "onboarding_complete": db_user.onboarding_complete,
+        "wardrobe_count": wardrobe_count,
+        "active_wardrobe_count": active_wardrobe_count,
+        "favorite_count": favorite_count,
+        "saved_outfit_count": saved_outfit_count,
+        "planned_outfit_count": planned_outfit_count,
+        "history_count": history_count,
+    }
 
 
 # =============================
@@ -71,6 +205,8 @@ def update_user_profile(
     if updated_data.onboarding_complete is not None:
         db_user.onboarding_complete = updated_data.onboarding_complete
 
+    _apply_default_preferences(db_user)
+
     db.commit()
     db.refresh(db_user)
 
@@ -82,17 +218,34 @@ def update_user_profile(
 # =============================
 
 def create_clothing_item(db: Session, item: schemas.ClothingItemCreate, user_id: int):
+    colors = _normalize_tag_list(item.colors)
+    season_tags = _normalize_tag_list(item.season_tags)
+    style_tags = _normalize_tag_list(item.style_tags)
+    occasion_tags = _normalize_tag_list(item.occasion_tags)
     db_item = models.ClothingItem(
         name=item.name,
         category=item.category,
-        color=item.color,
-        fit_type=item.fit_type,
-        style_tag=item.style_tag,
+        clothing_type=item.clothing_type,
+        layer_type=item.layer_type,
+        is_one_piece=item.is_one_piece,
+        set_identifier=item.set_identifier,
+        fit_tag=item.fit_tag,
+        color=_first_or_default(colors, item.color),
+        season=_first_or_default(season_tags, item.season),
+        accessory_type=item.accessory_type,
+        comfort_level=item.comfort_level,
         image_url=item.image_url,
-        is_active=True,
-        is_favorite=False,
+        brand=item.brand,
+        is_available=item.is_available,
+        is_favorite=item.is_favorite,
+        is_archived=item.is_archived,
+        last_worn_timestamp=item.last_worn_timestamp,
         owner_id=user_id
     )
+    db_item.colors = colors
+    db_item.season_tags = season_tags
+    db_item.style_tags = style_tags
+    db_item.occasion_tags = occasion_tags
 
     db.add(db_item)
     db.commit()
@@ -101,11 +254,131 @@ def create_clothing_item(db: Session, item: schemas.ClothingItemCreate, user_id:
     return db_item
 
 
-def get_clothing_items_for_user(db: Session, user_id: int):
-    return db.query(models.ClothingItem).filter(
+def bulk_create_clothing_items(
+    db: Session,
+    user_id: int,
+    items: list[schemas.ClothingItemCreate]
+) -> list[dict]:
+    """Create clothing items in batch, isolating failures per entry."""
+    results: list[dict] = []
+    for index, item in enumerate(items):
+        try:
+            created_item = create_clothing_item(db, item, user_id)
+            results.append(
+                {
+                    "index": index,
+                    "status": "success",
+                    "item": created_item,
+                    "error": None,
+                }
+            )
+        except Exception as exc:  # noqa: BLE001
+            db.rollback()
+            results.append(
+                {
+                    "index": index,
+                    "status": "failed",
+                    "item": None,
+                    "error": str(exc),
+                }
+            )
+    return results
+
+
+def get_clothing_items_for_user(
+    db: Session,
+    user_id: int,
+    include_archived: bool = False,
+    search: Optional[str] = None,
+    category: Optional[str] = None,
+    color: Optional[str] = None,
+    clothing_type: Optional[str] = None,
+    season: Optional[str] = None,
+    fit_tag: Optional[str] = None,
+    layer_type: Optional[str] = None,
+    is_one_piece: Optional[bool] = None,
+    set_identifier: Optional[str] = None,
+    style_tag: Optional[str] = None,
+    season_tag: Optional[str] = None,
+    occasion_tag: Optional[str] = None,
+    accessory_type: Optional[str] = None,
+    favorites_only: bool = False,
+):
+    query = db.query(models.ClothingItem).filter(
         models.ClothingItem.owner_id == user_id,
-        models.ClothingItem.is_deleted == False
-    ).all()
+    )
+    if not include_archived:
+        query = query.filter(models.ClothingItem.is_archived.is_(False))
+    if favorites_only:
+        query = query.filter(models.ClothingItem.is_favorite.is_(True))
+
+    if category:
+        query = query.filter(models.ClothingItem.category.ilike(f"%{category.strip()}%"))
+    if color:
+        cleaned_color = color.strip()
+        query = query.filter(
+            or_(
+                models.ClothingItem.color.ilike(f"%{cleaned_color}%"),
+                models.ClothingItem.colors_json.ilike(f"%{cleaned_color}%"),
+            )
+        )
+    if clothing_type:
+        query = query.filter(models.ClothingItem.clothing_type.ilike(f"%{clothing_type.strip()}%"))
+    if season:
+        cleaned_season = season.strip()
+        query = query.filter(
+            or_(
+                models.ClothingItem.season.ilike(f"%{cleaned_season}%"),
+                models.ClothingItem.season_tags_json.ilike(f"%{cleaned_season}%"),
+            )
+        )
+    if fit_tag:
+        query = query.filter(models.ClothingItem.fit_tag.ilike(f"%{fit_tag.strip()}%"))
+    if layer_type:
+        query = query.filter(models.ClothingItem.layer_type.ilike(f"%{layer_type.strip()}%"))
+    if is_one_piece is not None:
+        query = query.filter(models.ClothingItem.is_one_piece.is_(is_one_piece))
+    if set_identifier:
+        query = query.filter(models.ClothingItem.set_identifier.ilike(f"%{set_identifier.strip()}%"))
+    if style_tag:
+        query = query.filter(models.ClothingItem.style_tags_json.ilike(f"%{style_tag.strip()}%"))
+    if season_tag:
+        query = query.filter(models.ClothingItem.season_tags_json.ilike(f"%{season_tag.strip()}%"))
+    if occasion_tag:
+        query = query.filter(models.ClothingItem.occasion_tags_json.ilike(f"%{occasion_tag.strip()}%"))
+    if accessory_type:
+        query = query.filter(models.ClothingItem.accessory_type.ilike(f"%{accessory_type.strip()}%"))
+
+    if search:
+        cleaned_search = search.strip()
+        query = query.filter(
+            or_(
+                models.ClothingItem.name.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.category.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.color.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.clothing_type.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.brand.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.fit_tag.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.layer_type.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.set_identifier.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.accessory_type.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.colors_json.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.style_tags_json.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.season_tags_json.ilike(f"%{cleaned_search}%"),
+                models.ClothingItem.occasion_tags_json.ilike(f"%{cleaned_search}%"),
+            )
+        )
+
+    return query.order_by(models.ClothingItem.id.desc()).all()
+
+
+def get_favorite_items_for_user(db: Session, user_id: int):
+    return get_clothing_items_for_user(
+        db=db,
+        user_id=user_id,
+        include_archived=False,
+        favorites_only=True,
+    )
 
 
 def get_clothing_item_by_id(db: Session, item_id: int):
@@ -119,22 +392,24 @@ def update_clothing_item(
     db_item: models.ClothingItem,
     updated_data: schemas.ClothingItemUpdate
 ):
-    if updated_data.name is not None:
-        db_item.name = updated_data.name
-    if updated_data.category is not None:
-        db_item.category = updated_data.category
-    if updated_data.color is not None:
-        db_item.color = updated_data.color
-    if updated_data.fit_type is not None:
-        db_item.fit_type = updated_data.fit_type
-    if updated_data.style_tag is not None:
-        db_item.style_tag = updated_data.style_tag
-    if updated_data.image_url is not None:
-        db_item.image_url = updated_data.image_url
-    if updated_data.is_active is not None:
-        db_item.is_active = updated_data.is_active
-    if updated_data.is_favorite is not None:
-        db_item.is_favorite = updated_data.is_favorite
+    payload = updated_data.model_dump(exclude_unset=True)
+    for field_name, field_value in payload.items():
+        if field_name in {"colors", "season_tags", "style_tags", "occasion_tags"}:
+            continue
+        setattr(db_item, field_name, field_value)
+
+    if "colors" in payload:
+        colors = _normalize_tag_list(payload["colors"])
+        db_item.colors = colors
+        db_item.color = _first_or_default(colors, db_item.color)
+    if "season_tags" in payload:
+        season_tags = _normalize_tag_list(payload["season_tags"])
+        db_item.season_tags = season_tags
+        db_item.season = _first_or_default(season_tags, db_item.season)
+    if "style_tags" in payload:
+        db_item.style_tags = _normalize_tag_list(payload["style_tags"])
+    if "occasion_tags" in payload:
+        db_item.occasion_tags = _normalize_tag_list(payload["occasion_tags"])
 
     db.commit()
     db.refresh(db_item)
@@ -142,154 +417,371 @@ def update_clothing_item(
     return db_item
 
 
+def set_item_favorite(
+    db: Session,
+    db_item: models.ClothingItem,
+    is_favorite: bool
+):
+    db_item.is_favorite = is_favorite
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+
 def delete_clothing_item(db: Session, db_item: models.ClothingItem):
-    db_item.is_deleted = True
+    db_item.is_archived = True
+    db.add(db_item)
     db.commit()
 
-def _json_loads(raw, fallback):
-    try:
-        return json.loads(raw) if raw else fallback
-    except Exception:
-        return fallback
+
+def _normalize_category(value: Optional[str]) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized in {"top", "tops", "shirt", "t-shirt"}:
+        return "top"
+    if normalized in {"bottom", "bottoms", "pants", "jeans", "shorts", "skirt"}:
+        return "bottom"
+    if normalized in {"shoe", "shoes", "sneakers", "boots", "sandals"}:
+        return "shoes"
+    if normalized in {"outerwear", "jacket", "coat", "hoodie", "sweater"}:
+        return "outerwear"
+    if normalized in {"accessory", "accessories"}:
+        return "accessory"
+    return normalized
 
 
-def _saved_outfit_to_dict(row: models.SavedOutfit):
-    return {
-        "saved_outfit_id": str(row.id),
-        "user_id": str(row.owner_id),
-        "name": row.name or "",
-        "items": _json_loads(row.items_json, []),
-        "item_details": _json_loads(row.item_details_json, []),
-        "created_at": row.created_at.isoformat() if row.created_at else "",
-        "source": row.source or "recommended",
-        "context": _json_loads(row.context_json, {}),
-        "notes": row.notes or "",
-        "outfit_signature": row.outfit_signature or "",
-    }
+def _item_text_blob(item: models.ClothingItem) -> str:
+    return " ".join(
+        [
+            item.name or "",
+            item.category or "",
+            item.clothing_type or "",
+            item.layer_type or "",
+            item.set_identifier or "",
+            item.accessory_type or "",
+            item.fit_tag or "",
+            item.color or "",
+            item.season or "",
+            item.brand or "",
+            " ".join(item.style_tags),
+            " ".join(item.season_tags),
+            " ".join(item.colors),
+            " ".join(item.occasion_tags),
+        ]
+    ).lower()
 
 
-def list_saved_outfits(db: Session, user_id: int):
-    rows = db.query(models.SavedOutfit).filter(models.SavedOutfit.owner_id == user_id).order_by(models.SavedOutfit.created_at.desc()).all()
-    return [_saved_outfit_to_dict(row) for row in rows]
+def _item_matches_exclusions(item: models.ClothingItem, exclusions: list[str]) -> bool:
+    if not exclusions:
+        return False
+    blob = _item_text_blob(item)
+    return any(token in blob for token in exclusions)
 
 
-def get_saved_outfit_by_signature(db: Session, user_id: int, signature: str):
-    return db.query(models.SavedOutfit).filter(models.SavedOutfit.owner_id == user_id, models.SavedOutfit.outfit_signature == signature).first()
+def _fit_penalty(item: models.ClothingItem, body_type: Optional[str]) -> int:
+    fit_tag = (item.fit_tag or "").strip().lower()
+    body = (body_type or "").strip().lower()
+    if not fit_tag or not body:
+        return 0
+
+    if body == "apple" and fit_tag in {"tight", "slim"}:
+        return 4
+    if body == "pear" and _normalize_category(item.category) == "bottom" and fit_tag in {"tight", "slim"}:
+        return 3
+    if body == "inverted" and _normalize_category(item.category) == "top" and fit_tag in {"tight", "slim"}:
+        return 3
+    if body == "hourglass" and fit_tag == "oversized":
+        return 2
+    return 0
 
 
-def create_saved_outfit(db: Session, user_id: int, payload: schemas.SavedOutfitCreate, signature: str):
-    row = models.SavedOutfit(
-        owner_id=user_id,
-        outfit_signature=signature,
-        name=payload.name or "",
-        items_json=json.dumps(payload.items),
-        item_details_json=json.dumps(payload.item_details or []),
-        source=payload.source or "recommended",
-        context_json=json.dumps(payload.context or {}),
-        notes=payload.notes or "",
-        created_at=datetime.utcnow(),
+def _occasion_penalty(item: models.ClothingItem, occasion: Optional[str]) -> int:
+    normalized_occasion = (occasion or "").strip().lower()
+    if not normalized_occasion:
+        return 0
+    blob = _item_text_blob(item)
+    occasion_tags = {tag.lower() for tag in item.occasion_tags}
+    if occasion_tags and any(token in occasion_tags for token in normalized_occasion.split()):
+        return 0
+
+    if any(token in normalized_occasion for token in ["formal", "wedding", "interview", "office", "work"]):
+        if any(token in blob for token in ["formal", "tailored", "blazer", "dress", "oxford", "loafer", "work"]):
+            return 0
+        return 2
+    if any(token in normalized_occasion for token in ["gym", "workout", "sport", "running"]):
+        if any(token in blob for token in ["sport", "athletic", "training", "running", "sneaker"]):
+            return 0
+        return 2
+    return 0
+
+
+def _temperature_penalty(item: models.ClothingItem, weather_category: str) -> int:
+    blob = _item_text_blob(item)
+    item_category = _normalize_category(item.category)
+    season_tags = {value.lower() for value in item.season_tags}
+    penalties = 0
+
+    if weather_category == "cold":
+        if item_category == "bottom" and any(token in blob for token in ["short", "mini"]):
+            penalties += 5
+        if item_category == "shoes" and any(token in blob for token in ["sandal", "flip flop"]):
+            penalties += 5
+        if any(token in blob for token in ["tank", "linen", "lightweight"]):
+            penalties += 3
+        if "summer" in season_tags:
+            penalties += 2
+    elif weather_category == "cool":
+        if item_category == "outerwear" and any(token in blob for token in ["parka", "heavy", "thick"]):
+            penalties += 3
+    elif weather_category == "warm":
+        if item_category == "outerwear":
+            penalties += 5
+        if any(token in blob for token in ["heavy", "wool", "thick", "sweater"]):
+            penalties += 3
+        if "winter" in season_tags:
+            penalties += 2
+    elif weather_category == "hot":
+        if item_category == "outerwear":
+            penalties += 8
+        if any(token in blob for token in ["jacket", "coat", "sweater", "heavy", "wool"]):
+            penalties += 4
+        if "winter" in season_tags:
+            penalties += 3
+
+    return penalties
+
+
+def _build_sort_key(
+    item: models.ClothingItem,
+    *,
+    weather_category: str,
+    occasion: Optional[str],
+    body_type: Optional[str],
+):
+    last_worn = item.last_worn_timestamp or 0
+    # Lower penalties are better; lower last_worn means less recently worn.
+    return (
+        _temperature_penalty(item, weather_category),
+        _occasion_penalty(item, occasion),
+        _fit_penalty(item, body_type),
+        last_worn,
+        item.id,
     )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return _saved_outfit_to_dict(row)
 
 
-def delete_saved_outfit(db: Session, row: models.SavedOutfit):
-    db.delete(row)
-    db.commit()
-
-
-def _history_entry_to_dict(row: models.OutfitHistoryEntry):
-    return {
-        "history_id": str(row.id),
-        "user_id": str(row.owner_id),
-        "item_ids": _json_loads(row.item_ids_json, []),
-        "worn_at": row.worn_at.isoformat() if row.worn_at else "",
-        "source": row.source or "recommendation",
-        "context": _json_loads(row.context_json, {}),
-        "confidence_score": row.confidence_score,
-    }
-
-
-def list_history_entries(db: Session, user_id: int):
-    rows = db.query(models.OutfitHistoryEntry).filter(models.OutfitHistoryEntry.owner_id == user_id).order_by(models.OutfitHistoryEntry.worn_at.desc()).all()
-    return [_history_entry_to_dict(row) for row in rows]
-
-
-def create_history_entry(db: Session, user_id: int, payload: schemas.OutfitHistoryCreate):
-    row = models.OutfitHistoryEntry(
-        owner_id=user_id,
-        item_ids_json=json.dumps(payload.item_ids),
-        source=payload.source or "recommendation",
-        context_json=json.dumps(payload.context or {}),
-        confidence_score=payload.confidence_score,
-        worn_at=datetime.utcnow(),
+def _choose_best(
+    candidates: list[models.ClothingItem],
+    *,
+    weather_category: str,
+    occasion: Optional[str],
+    body_type: Optional[str],
+    chosen_ids: set[int],
+) -> Optional[models.ClothingItem]:
+    available_candidates = [item for item in candidates if item.id not in chosen_ids]
+    if not available_candidates:
+        return None
+    available_candidates.sort(
+        key=lambda item: _build_sort_key(
+            item,
+            weather_category=weather_category,
+            occasion=occasion,
+            body_type=body_type,
+        )
     )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return _history_entry_to_dict(row)
+    return available_candidates[0]
 
 
-def remove_history_by_signature(db: Session, user_id: int, signature: str):
-    rows = db.query(models.OutfitHistoryEntry).filter(models.OutfitHistoryEntry.owner_id == user_id).all()
-    deleted = 0
-    for row in rows:
-        item_ids = _json_loads(row.item_ids_json, [])
-        if "|".join(sorted(str(x).strip() for x in item_ids if str(x).strip())) == signature:
-            db.delete(row)
-            deleted += 1
-    db.commit()
-    return deleted
+def get_recommendation_options_for_user(
+    db: Session,
+    user: models.User,
+    manual_temp: Optional[int] = None,
+    weather_category: Optional[str] = None,
+    occasion: Optional[str] = None,
+    exclude: Optional[str] = None,
+    limit: int = 3,
+) -> list[dict]:
+    normalized_limit = max(1, min(limit, 10))
+    all_items = get_clothing_items_for_user(db, user.id)
+    item_map = {item.id: item for item in all_items}
+    recent_fingerprints = set(history.get_recent_fingerprints(db, user.id))
 
-
-def clear_history_entries(db: Session, user_id: int):
-    db.query(models.OutfitHistoryEntry).filter(models.OutfitHistoryEntry.owner_id == user_id).delete()
-    db.commit()
-
-
-def _planned_outfit_to_dict(row: models.PlannedOutfit):
-    return {
-        "planned_id": str(row.id),
-        "item_ids": _json_loads(row.item_ids_json, []),
-        "item_details": _json_loads(row.item_details_json, []),
-        "planned_date": row.planned_date or "",
-        "occasion": row.occasion or "",
-        "notes": row.notes or "",
-        "created_at": row.created_at.isoformat() if row.created_at else "",
-        "source": row.source or "planner",
-        "outfit_signature": row.outfit_signature or "",
-    }
-
-
-def list_planned_outfits(db: Session, user_id: int):
-    rows = db.query(models.PlannedOutfit).filter(models.PlannedOutfit.owner_id == user_id).order_by(models.PlannedOutfit.planned_date.asc(), models.PlannedOutfit.created_at.desc()).all()
-    return [_planned_outfit_to_dict(row) for row in rows]
-
-
-def create_planned_outfit(db: Session, user_id: int, payload: schemas.PlannedOutfitCreate, signature: str):
-    row = models.PlannedOutfit(
-        owner_id=user_id,
-        outfit_signature=signature,
-        item_ids_json=json.dumps(payload.item_ids),
-        item_details_json=json.dumps(payload.item_details or []),
-        planned_date=payload.planned_date or "",
-        occasion=payload.occasion or "",
-        notes=payload.notes or "",
-        source=payload.source or "planner",
-        created_at=datetime.utcnow(),
+    candidates = deterministic.recommend_many(
+        items=all_items,
+        user=user,
+        manual_temp=manual_temp,
+        weather_category=weather_category,
+        occasion=occasion,
+        exclude=exclude,
+        style_preference=user.lifestyle,
+        preferred_seasons=[],
+        recent_fingerprints=recent_fingerprints,
+        max_options=max(normalized_limit, 3),
     )
-    db.add(row)
+
+    options: list[dict] = []
+    seen_fingerprints: set[str] = set()
+    for candidate in candidates:
+        if candidate.fingerprint in seen_fingerprints:
+            continue
+        outfit_items = [item_map[item_id] for item_id in candidate.item_ids if item_id in item_map]
+        if not outfit_items:
+            continue
+        seen_fingerprints.add(candidate.fingerprint)
+        options.append(
+            {
+                "items": outfit_items,
+                "explanation": candidate.explanation,
+                "outfit_score": round(candidate.score, 3),
+                "weather_category": candidate.weather_category,
+                "fingerprint": candidate.fingerprint,
+            }
+        )
+        if len(options) >= normalized_limit:
+            break
+    return options
+
+
+def get_recommendations_for_user(
+    db: Session,
+    user: models.User,
+    manual_temp: Optional[int] = None,
+    weather_category: Optional[str] = None,
+    occasion: Optional[str] = None,
+    exclude: Optional[str] = None,
+):
+    options = get_recommendation_options_for_user(
+        db=db,
+        user=user,
+        manual_temp=manual_temp,
+        weather_category=weather_category,
+        occasion=occasion,
+        exclude=exclude,
+        limit=1,
+    )
+    if not options:
+        return []
+    return options[0]["items"]
+
+
+def save_outfit_history(
+    db: Session,
+    user_id: int,
+    item_ids: list[int],
+    worn_at_timestamp: int,
+):
+    history = models.OutfitHistory(
+        owner_id=user_id,
+        item_ids_csv=",".join(str(item_id) for item_id in item_ids),
+        worn_at_timestamp=worn_at_timestamp,
+    )
+    db.add(history)
     db.commit()
-    db.refresh(row)
-    return _planned_outfit_to_dict(row)
+    db.refresh(history)
+    return history
 
 
-def get_planned_outfit_by_id(db: Session, user_id: int, planned_id: int):
-    return db.query(models.PlannedOutfit).filter(models.PlannedOutfit.owner_id == user_id, models.PlannedOutfit.id == planned_id).first()
+def get_outfit_history_for_user(db: Session, user_id: int):
+    return db.query(models.OutfitHistory).filter(
+        models.OutfitHistory.owner_id == user_id
+    ).order_by(models.OutfitHistory.worn_at_timestamp.desc()).all()
 
 
-def delete_planned_outfit(db: Session, row: models.PlannedOutfit):
-    db.delete(row)
+def clear_outfit_history_for_user(db: Session, user_id: int):
+    db.query(models.OutfitHistory).filter(
+        models.OutfitHistory.owner_id == user_id
+    ).delete()
     db.commit()
+
+
+def save_saved_outfit(
+    db: Session,
+    user_id: int,
+    item_ids: list[int],
+    saved_at_timestamp: Optional[int] = None,
+):
+    timestamp = saved_at_timestamp or int(datetime.utcnow().timestamp())
+    outfit = models.SavedOutfit(
+        owner_id=user_id,
+        item_ids_csv=",".join(str(item_id) for item_id in item_ids),
+        saved_at_timestamp=timestamp,
+    )
+    db.add(outfit)
+    db.commit()
+    db.refresh(outfit)
+    return outfit
+
+
+def get_saved_outfits_for_user(db: Session, user_id: int):
+    return db.query(models.SavedOutfit).filter(
+        models.SavedOutfit.owner_id == user_id
+    ).order_by(models.SavedOutfit.saved_at_timestamp.desc()).all()
+
+
+def delete_saved_outfit(db: Session, user_id: int, outfit_id: int) -> bool:
+    deleted = db.query(models.SavedOutfit).filter(
+        models.SavedOutfit.owner_id == user_id,
+        models.SavedOutfit.id == outfit_id,
+    ).delete()
+    db.commit()
+    return deleted > 0
+
+
+def save_planned_outfit(
+    db: Session,
+    user_id: int,
+    item_ids: list[int],
+    planned_date: str,
+    occasion: Optional[str] = None,
+    created_at_timestamp: Optional[int] = None,
+):
+    timestamp = created_at_timestamp or int(datetime.utcnow().timestamp())
+    outfit = models.PlannedOutfit(
+        owner_id=user_id,
+        item_ids_csv=",".join(str(item_id) for item_id in item_ids),
+        planned_date=planned_date,
+        occasion=occasion,
+        created_at_timestamp=timestamp,
+    )
+    db.add(outfit)
+    db.commit()
+    db.refresh(outfit)
+    return outfit
+
+
+def assign_planned_outfit_to_date(
+    db: Session,
+    user_id: int,
+    item_ids: list[int],
+    planned_date: str,
+    occasion: Optional[str],
+    replace_existing: bool,
+    created_at_timestamp: Optional[int] = None,
+):
+    if replace_existing:
+        db.query(models.PlannedOutfit).filter(
+            models.PlannedOutfit.owner_id == user_id,
+            models.PlannedOutfit.planned_date == planned_date,
+        ).delete()
+        db.commit()
+    return save_planned_outfit(
+        db=db,
+        user_id=user_id,
+        item_ids=item_ids,
+        planned_date=planned_date,
+        occasion=occasion,
+        created_at_timestamp=created_at_timestamp,
+    )
+
+
+def get_planned_outfits_for_user(db: Session, user_id: int):
+    return db.query(models.PlannedOutfit).filter(
+        models.PlannedOutfit.owner_id == user_id
+    ).order_by(models.PlannedOutfit.planned_date.asc()).all()
+
+
+def delete_planned_outfit(db: Session, user_id: int, outfit_id: int) -> bool:
+    deleted = db.query(models.PlannedOutfit).filter(
+        models.PlannedOutfit.owner_id == user_id,
+        models.PlannedOutfit.id == outfit_id,
+    ).delete()
+    db.commit()
+    return deleted > 0

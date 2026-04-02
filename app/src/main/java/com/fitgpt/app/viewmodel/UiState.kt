@@ -1,3 +1,6 @@
+/**
+ * Simple UI state wrapper for loading, success, and error rendering.
+ */
 package com.fitgpt.app.viewmodel
 
 sealed class UiState<out T> {

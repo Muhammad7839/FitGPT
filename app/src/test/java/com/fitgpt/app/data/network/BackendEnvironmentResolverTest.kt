@@ -1,0 +1,127 @@
+/**
+ * Verifies runtime backend host selection for emulator and physical Android devices.
+ */
+package com.fitgpt.app.data.network
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class BackendEnvironmentResolverTest {
+
+    @Test
+    fun emulatorDeviceAlwaysUsesEmulatorHost() {
+        val selected = BackendEnvironmentResolver.resolveBaseUrl(
+            physicalLanBaseUrl = "",
+            deviceInfo = BackendEnvironmentResolver.DeviceInfo(
+                fingerprint = "generic/sdk_gphone64_x86_64",
+                model = "Pixel 8",
+                hardware = "ranchu"
+            )
+        )
+
+        assertEquals("http://10.0.2.2:8000/", selected)
+    }
+
+    @Test
+    fun emulatorDetectionUsesModelCheck() {
+        val selected = BackendEnvironmentResolver.resolveBaseUrl(
+            physicalLanBaseUrl = "http://192.168.1.220:8000/",
+            deviceInfo = BackendEnvironmentResolver.DeviceInfo(
+                fingerprint = "google/device/build",
+                model = "Android Emulator",
+                hardware = "tensor"
+            )
+        )
+
+        assertEquals("http://10.0.2.2:8000/", selected)
+    }
+
+    @Test
+    fun emulatorDetectionUsesHardwareCheck() {
+        val selected = BackendEnvironmentResolver.resolveBaseUrl(
+            physicalLanBaseUrl = "http://192.168.1.220:8000/",
+            deviceInfo = BackendEnvironmentResolver.DeviceInfo(
+                fingerprint = "google/device/build",
+                model = "Pixel 7",
+                hardware = "goldfish_x86_64"
+            )
+        )
+
+        assertEquals("http://10.0.2.2:8000/", selected)
+    }
+
+    @Test
+    fun physicalDeviceUsesConfiguredLanHost() {
+        val selected = BackendEnvironmentResolver.resolveBaseUrl(
+            physicalLanBaseUrl = "http://192.168.1.220:8000",
+            deviceInfo = BackendEnvironmentResolver.DeviceInfo(
+                fingerprint = "google/pixel/pixel:14/AP1A",
+                model = "Pixel 7",
+                hardware = "tensor"
+            )
+        )
+
+        assertEquals("http://192.168.1.220:8000/", selected)
+    }
+
+    @Test
+    fun physicalDeviceRejectsBlankLanHost() {
+        val error = runCatching {
+            BackendEnvironmentResolver.resolveBaseUrl(
+                physicalLanBaseUrl = "   ",
+                deviceInfo = physicalDeviceInfo()
+            )
+        }.exceptionOrNull()
+
+        assertTrue(error is IllegalStateException)
+        assertTrue(error?.message?.contains("API_LAN_BASE_URL is blank") == true)
+    }
+
+    @Test
+    fun physicalDeviceRejectsLocalhost() {
+        val error = runCatching {
+            BackendEnvironmentResolver.resolveBaseUrl(
+                physicalLanBaseUrl = "http://localhost:8000/",
+                deviceInfo = physicalDeviceInfo()
+            )
+        }.exceptionOrNull()
+
+        assertTrue(error is IllegalStateException)
+        assertTrue(error?.message?.contains("not valid for physical devices") == true)
+    }
+
+    @Test
+    fun physicalDeviceRejectsLoopbackAddress() {
+        val error = runCatching {
+            BackendEnvironmentResolver.resolveBaseUrl(
+                physicalLanBaseUrl = "http://127.0.0.1:8000/",
+                deviceInfo = physicalDeviceInfo()
+            )
+        }.exceptionOrNull()
+
+        assertTrue(error is IllegalStateException)
+        assertTrue(error?.message?.contains("not valid for physical devices") == true)
+    }
+
+    @Test
+    fun physicalDeviceRejectsEmulatorBridgeAddress() {
+        val error = runCatching {
+            BackendEnvironmentResolver.resolveBaseUrl(
+                physicalLanBaseUrl = "http://10.0.2.2:8000/",
+                deviceInfo = physicalDeviceInfo()
+            )
+        }.exceptionOrNull()
+
+        assertTrue(error is IllegalStateException)
+        assertTrue(error?.message?.contains("not valid for physical devices") == true)
+    }
+
+    private fun physicalDeviceInfo(): BackendEnvironmentResolver.DeviceInfo {
+        return BackendEnvironmentResolver.DeviceInfo(
+            fingerprint = "samsung/b0qxxx/b0q:14/UP1A",
+            model = "SM-S911B",
+            hardware = "qcom"
+        )
+    }
+}

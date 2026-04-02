@@ -1,3 +1,6 @@
+/**
+ * Defines the shared DataStore instance used for lightweight app preferences.
+ */
 package com.fitgpt.app.data
 
 import android.content.Context
