@@ -91,7 +91,7 @@ Purpose: run one exact end-to-end acceptance pass for FitGPT before release.
 
 ## 4. Physical Phone Acceptance Run (Exact Click Path)
 
-1. Update Android app backend base URL to your LAN IP (example `http://192.168.1.25:8000`).
+1. Set `API_LAN_BASE_URL` in `gradle.properties` to your LAN IP (example `http://192.168.1.25:8000/`).
 2. Install/run app on phone.
 3. Repeat Section 3 steps 1-17 exactly.
 4. Expected: same behavior as emulator, including login, upload, and recommendations.
