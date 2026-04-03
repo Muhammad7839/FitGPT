@@ -28,7 +28,7 @@ class UserCreate(BaseModel):
         return value
 
 
-class UserLogin(BaseModel):
+class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)
 
@@ -39,6 +39,10 @@ class UserLogin(BaseModel):
         if cleaned != value:
             raise ValueError("password cannot have leading or trailing spaces")
         return value
+
+
+class UserLogin(LoginRequest):
+    """Backward-compatible alias for older code paths."""
 
 
 class UserResponse(BaseModel):

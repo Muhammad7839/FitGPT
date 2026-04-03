@@ -57,7 +57,31 @@ def get_bool_env(name: str, default: bool) -> bool:
     raise ValueError(f"{name} must be a boolean, got '{raw_value}'")
 
 
-DATABASE_URL = get_env("DATABASE_URL", "sqlite:///./fitgpt.db")
+def _normalize_database_url(raw_database_url: str) -> str:
+    """Normalize local SQLite URLs to a stable absolute path.
+
+    SQLite URLs like ``sqlite:///./fitgpt.db`` are resolved against the process
+    working directory, which can change between launches and accidentally create
+    multiple DB files. For local relative SQLite paths, anchor the DB file under
+    the backend directory so user records persist across restarts.
+    """
+    normalized = raw_database_url.strip()
+    sqlite_prefix = "sqlite:///"
+    if not normalized.startswith(sqlite_prefix):
+        return normalized
+
+    sqlite_path = normalized[len(sqlite_prefix):]
+    if sqlite_path in {"", ":memory:"}:
+        return normalized
+    if sqlite_path.startswith("/"):
+        return normalized
+
+    backend_dir = Path(__file__).resolve().parents[1]
+    absolute_path = (backend_dir / sqlite_path).resolve()
+    return f"{sqlite_prefix}{absolute_path.as_posix()}"
+
+
+DATABASE_URL = _normalize_database_url(get_env("DATABASE_URL", "sqlite:///./fitgpt.db"))
 SECRET_KEY = get_env("SECRET_KEY", "dev-only-change-me")
 JWT_ALGORITHM = get_env("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = get_int_env("ACCESS_TOKEN_EXPIRE_MINUTES", 60)
