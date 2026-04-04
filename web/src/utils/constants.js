@@ -34,6 +34,7 @@ export const CUSTOM_THEMES_KEY = "fitgpt_custom_themes_v1";
 export const STALE_CLEANUP_KEY = "fitgpt_stale_cleanup_v2";
 export const TUTORIAL_DONE_KEY = "fitgpt_tutorial_done_v1";
 export const CHAT_HISTORY_KEY = "fitgpt_chat_history_v1";
+export const REJECTED_OUTFITS_KEY = "fitgpt_rejected_outfits_v1";
 
 // Custom events
 export const EVT_WARDROBE_CHANGED = "fitgpt:guest-wardrobe-changed";

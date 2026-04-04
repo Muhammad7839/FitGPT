@@ -25,6 +25,12 @@ import {
   scoreOutfitForDisplay,
   suggestItemTags,
   analyzeWardrobeGaps,
+  outfitSimilarity,
+  buildWearProfile,
+  detectUnderusedItems,
+  getWashThreshold,
+  buildLaundryStatus,
+  getLaundryAlerts,
 } from "./recommendationEngine";
 
 describe("titleCase", () => {
@@ -2044,5 +2050,392 @@ describe("analyzeWardrobeGaps", () => {
     const bottomGap = gaps.find((g) => g.category === "Bottoms");
     expect(bottomGap).toBeDefined();
     expect(bottomGap.priority).toBe("high");
+  });
+});
+
+/* ── Outfit rejection and similarity tests ─────────────────────────── */
+
+describe("outfitSimilarity", () => {
+  test("identical outfits return 1", () => {
+    const a = [{ id: "1" }, { id: "2" }, { id: "3" }];
+    const b = [{ id: "1" }, { id: "2" }, { id: "3" }];
+    expect(outfitSimilarity(a, b)).toBe(1);
+  });
+
+  test("completely different outfits return 0", () => {
+    const a = [{ id: "1" }, { id: "2" }];
+    const b = [{ id: "3" }, { id: "4" }];
+    expect(outfitSimilarity(a, b)).toBe(0);
+  });
+
+  test("partial overlap returns correct ratio", () => {
+    const a = [{ id: "1" }, { id: "2" }, { id: "3" }, { id: "4" }];
+    const b = [{ id: "1" }, { id: "2" }, { id: "5" }, { id: "6" }];
+    expect(outfitSimilarity(a, b)).toBe(0.5);
+  });
+
+  test("empty outfits return 0", () => {
+    expect(outfitSimilarity([], [])).toBe(0);
+    expect(outfitSimilarity([{ id: "1" }], [])).toBe(0);
+    expect(outfitSimilarity([], [{ id: "1" }])).toBe(0);
+  });
+
+  test("different sizes handled correctly", () => {
+    const a = [{ id: "1" }, { id: "2" }];
+    const b = [{ id: "1" }, { id: "2" }, { id: "3" }, { id: "4" }];
+    expect(outfitSimilarity(a, b)).toBe(0.5);
+  });
+});
+
+describe("rejection penalty in outfit generation", () => {
+  const wardrobe = [
+    { id: "t1", name: "White Tee", category: "tops", clothing_type: "t-shirt", color: "white", is_active: true },
+    { id: "t2", name: "Blue Polo", category: "tops", clothing_type: "polo", color: "blue", is_active: true },
+    { id: "t3", name: "Red Henley", category: "tops", clothing_type: "henley", color: "red", is_active: true },
+    { id: "t4", name: "Black Turtleneck", category: "tops", clothing_type: "turtleneck", color: "black", is_active: true },
+    { id: "b1", name: "Black Jeans", category: "bottoms", color: "black", is_active: true },
+    { id: "b2", name: "Navy Chinos", category: "bottoms", color: "navy", is_active: true },
+    { id: "b3", name: "Beige Khakis", category: "bottoms", color: "beige", is_active: true },
+    { id: "s1", name: "White Sneakers", category: "shoes", color: "white", is_active: true },
+    { id: "s2", name: "Brown Boots", category: "shoes", color: "brown", is_active: true },
+    { id: "s3", name: "Black Oxfords", category: "shoes", color: "black", is_active: true },
+  ];
+
+  test("rejected outfits are deprioritized in results", () => {
+    const baseOutfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    const rejected = baseOutfits.map((outfit) => ({
+      items: outfit.map((x) => ({ id: x.id })),
+      timestamp: Date.now(),
+    }));
+    const newOutfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null, undefined, rejected);
+    const baseSigs = new Set(baseOutfits.map((o) => idsSignature(o.map((i) => i.id))));
+    const newSigs = new Set(newOutfits.map((o) => idsSignature(o.map((i) => i.id))));
+    const overlap = [...baseSigs].filter((s) => newSigs.has(s)).length;
+    expect(overlap).toBeLessThan(3);
+  });
+
+  test("still returns 3 outfits even with many rejections", () => {
+    const rejected = [];
+    for (let i = 0; i < 20; i++) {
+      rejected.push({
+        items: [{ id: `t${(i % 4) + 1}` }, { id: `b${(i % 3) + 1}` }, { id: `s${(i % 3) + 1}` }],
+        timestamp: Date.now(),
+      });
+    }
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null, undefined, rejected);
+    expect(outfits.length).toBe(3);
+    for (const outfit of outfits) {
+      expect(outfit.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  test("old rejections have less impact than recent ones", () => {
+    const baseOutfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    const recentRejected = baseOutfits.map((outfit) => ({
+      items: outfit.map((x) => ({ id: x.id })),
+      timestamp: Date.now(),
+    }));
+    const oldRejected = baseOutfits.map((outfit) => ({
+      items: outfit.map((x) => ({ id: x.id })),
+      timestamp: Date.now() - 45 * 24 * 60 * 60 * 1000,
+    }));
+    const withRecent = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null, undefined, recentRejected);
+    const withOld = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null, undefined, oldRejected);
+
+    const baseSigs = new Set(baseOutfits.map((o) => idsSignature(o.map((i) => i.id))));
+    const recentOverlap = [...baseSigs].filter((s) => new Set(withRecent.map((o) => idsSignature(o.map((i) => i.id)))).has(s)).length;
+    const oldOverlap = [...baseSigs].filter((s) => new Set(withOld.map((o) => idsSignature(o.map((i) => i.id)))).has(s)).length;
+    expect(oldOverlap).toBeGreaterThanOrEqual(recentOverlap);
+  });
+
+  test("no rejections passed works normally", () => {
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    expect(outfits.length).toBe(3);
+  });
+
+  test("empty rejection array works normally", () => {
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null, undefined, []);
+    expect(outfits.length).toBe(3);
+  });
+});
+
+/* ── Underused item detection and rotation tests ───────────────────── */
+
+describe("buildWearProfile", () => {
+  test("counts total wears per item", () => {
+    const items = [{ id: "t1" }, { id: "t2" }];
+    const history = [
+      { item_ids: ["t1", "t2"], worn_at: "2026-03-01" },
+      { item_ids: ["t1"], worn_at: "2026-03-15" },
+    ];
+    const profile = buildWearProfile(items, history);
+    expect(profile.get("t1").totalWears).toBe(2);
+    expect(profile.get("t2").totalWears).toBe(1);
+  });
+
+  test("tracks last worn date", () => {
+    const items = [{ id: "t1" }];
+    const history = [
+      { item_ids: ["t1"], worn_at: "2026-01-01" },
+      { item_ids: ["t1"], worn_at: "2026-03-01" },
+    ];
+    const profile = buildWearProfile(items, history);
+    expect(profile.get("t1").lastWornAt.toISOString()).toContain("2026-03-01");
+  });
+
+  test("items not in history have zero wears", () => {
+    const items = [{ id: "t1" }, { id: "t2" }];
+    const profile = buildWearProfile(items, []);
+    expect(profile.get("t1").totalWears).toBe(0);
+    expect(profile.get("t1").lastWornAt).toBeNull();
+    expect(profile.get("t2").totalWears).toBe(0);
+  });
+
+  test("handles empty inputs", () => {
+    expect(buildWearProfile([], []).size).toBe(0);
+    expect(buildWearProfile(null, null).size).toBe(0);
+  });
+});
+
+describe("detectUnderusedItems", () => {
+  test("never-worn items classified as neglected", () => {
+    const items = [
+      { id: "t1", name: "New Tee", category: "Tops", is_active: true },
+      { id: "t2", name: "Worn Tee", category: "Tops", is_active: true },
+    ];
+    const history = [{ item_ids: ["t2"], worn_at: new Date().toISOString() }];
+    const underused = detectUnderusedItems(items, history);
+    const neglected = underused.find((x) => x.id === "t1");
+    expect(neglected).toBeDefined();
+    expect(neglected._wearStatus).toBe("neglected");
+    expect(neglected._wearReason).toContain("never been worn");
+  });
+
+  test("recently-worn items are not flagged", () => {
+    const items = [
+      { id: "t1", name: "Active Tee", category: "Tops", is_active: true },
+    ];
+    const history = [
+      { item_ids: ["t1"], worn_at: new Date().toISOString() },
+      { item_ids: ["t1"], worn_at: new Date(Date.now() - 3 * 86400000).toISOString() },
+    ];
+    const underused = detectUnderusedItems(items, history);
+    expect(underused.find((x) => x.id === "t1")).toBeUndefined();
+  });
+
+  test("items worn long ago classified as neglected", () => {
+    const items = [
+      { id: "t1", name: "Old Fav", category: "Tops", is_active: true },
+    ];
+    const history = [{ item_ids: ["t1"], worn_at: new Date(Date.now() - 45 * 86400000).toISOString() }];
+    const underused = detectUnderusedItems(items, history);
+    const found = underused.find((x) => x.id === "t1");
+    expect(found).toBeDefined();
+    expect(found._wearStatus).toBe("neglected");
+  });
+
+  test("low-wear items worn 15+ days ago classified as underused", () => {
+    const items = [
+      { id: "t1", name: "Rarely Worn", category: "Tops", is_active: true },
+    ];
+    const history = [{ item_ids: ["t1"], worn_at: new Date(Date.now() - 20 * 86400000).toISOString() }];
+    const underused = detectUnderusedItems(items, history);
+    const found = underused.find((x) => x.id === "t1");
+    expect(found).toBeDefined();
+    expect(found._wearStatus).toBe("underused");
+  });
+
+  test("archived items are excluded", () => {
+    const items = [
+      { id: "t1", name: "Archived", category: "Tops", is_active: false },
+    ];
+    const underused = detectUnderusedItems(items, []);
+    expect(underused).toHaveLength(0);
+  });
+
+  test("results sorted: neglected first, then by wear count", () => {
+    const items = [
+      { id: "t1", name: "Worn Once", category: "Tops", is_active: true },
+      { id: "t2", name: "Never Worn", category: "Tops", is_active: true },
+    ];
+    const history = [{ item_ids: ["t1"], worn_at: new Date(Date.now() - 20 * 86400000).toISOString() }];
+    const result = detectUnderusedItems(items, history);
+    expect(result.length).toBe(2);
+    expect(result[0].id).toBe("t2");
+  });
+});
+
+describe("rotation boost in outfit generation", () => {
+  const rotationWardrobe = [
+    { id: "t1", name: "Neglected Tee", category: "tops", color: "white", is_active: true },
+    { id: "t2", name: "Popular Polo", category: "tops", color: "blue", is_active: true },
+    { id: "t3", name: "Common Henley", category: "tops", color: "red", is_active: true },
+    { id: "b1", name: "Neglected Jeans", category: "bottoms", color: "black", is_active: true },
+    { id: "b2", name: "Popular Chinos", category: "bottoms", color: "beige", is_active: true },
+    { id: "b3", name: "Common Trousers", category: "bottoms", color: "gray", is_active: true },
+    { id: "s1", name: "Neglected Boots", category: "shoes", color: "brown", is_active: true },
+    { id: "s2", name: "Popular Sneakers", category: "shoes", color: "white", is_active: true },
+  ];
+
+  test("neglected items appear more with rotation boost", () => {
+    const neglectedIds = new Set(["t1", "b1", "s1"]);
+    const boosted = generateThreeOutfits(rotationWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null, undefined, undefined, undefined, neglectedIds);
+    const noBoosted = generateThreeOutfits(rotationWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+
+    const countNeglected = (outfits) => outfits.flat().filter((i) => neglectedIds.has(i.id)).length;
+    expect(countNeglected(boosted)).toBeGreaterThanOrEqual(countNeglected(noBoosted));
+  });
+
+  test("still returns 3 valid outfits with rotation boost", () => {
+    const neglectedIds = new Set(["t1", "b1"]);
+    const underusedIds = new Set(["t2", "b2"]);
+    const outfits = generateThreeOutfits(rotationWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null, undefined, undefined, underusedIds, neglectedIds);
+    expect(outfits.length).toBe(3);
+    for (const outfit of outfits) {
+      expect(outfit.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  test("no boost params works normally", () => {
+    const outfits = generateThreeOutfits(rotationWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    expect(outfits.length).toBe(3);
+  });
+});
+
+/* ── Laundry / reuse tracking tests ────────────────────────────────── */
+
+describe("getWashThreshold", () => {
+  test("returns per-type thresholds for known types", () => {
+    expect(getWashThreshold("t-shirt", "Tops")).toBe(1);
+    expect(getWashThreshold("jeans", "Bottoms")).toBe(4);
+    expect(getWashThreshold("blazer", "Outerwear")).toBe(5);
+    expect(getWashThreshold("sneakers", "Shoes")).toBe(10);
+    expect(getWashThreshold("coat", "Outerwear")).toBe(8);
+  });
+
+  test("falls back to category threshold for unknown types", () => {
+    expect(getWashThreshold("unknown_thing", "Tops")).toBe(2);
+    expect(getWashThreshold("unknown_thing", "Bottoms")).toBe(3);
+    expect(getWashThreshold("unknown_thing", "Outerwear")).toBe(6);
+    expect(getWashThreshold("unknown_thing", "Shoes")).toBe(10);
+  });
+
+  test("returns Infinity for items that don't need washing", () => {
+    expect(getWashThreshold("watch", "Accessories")).toBe(Infinity);
+    expect(getWashThreshold("sunglasses", "Accessories")).toBe(Infinity);
+  });
+
+  test("different tops have different thresholds", () => {
+    const tee = getWashThreshold("t-shirt", "Tops");
+    const sweater = getWashThreshold("sweater", "Tops");
+    expect(tee).toBeLessThan(sweater);
+  });
+});
+
+describe("buildLaundryStatus", () => {
+  const today = new Date().toISOString();
+  const recentDate = new Date(Date.now() - 2 * 86400000).toISOString();
+
+  test("unworn items are clean", () => {
+    const items = [{ id: "t1", name: "Tee", category: "Tops", clothing_type: "t-shirt", is_active: true }];
+    const result = buildLaundryStatus(items, []);
+    expect(result[0]._laundryStatus).toBe("clean");
+    expect(result[0]._wearsSinceWash).toBe(0);
+  });
+
+  test("t-shirt worn once is due for washing", () => {
+    const items = [{ id: "t1", name: "Tee", category: "Tops", clothing_type: "t-shirt", is_active: true }];
+    const history = [{ item_ids: ["t1"], worn_at: today }];
+    const result = buildLaundryStatus(items, history);
+    expect(result[0]._laundryStatus).toBe("due");
+  });
+
+  test("t-shirt worn twice is overdue", () => {
+    const items = [{ id: "t1", name: "Tee", category: "Tops", clothing_type: "t-shirt", is_active: true }];
+    const history = [
+      { item_ids: ["t1"], worn_at: today },
+      { item_ids: ["t1"], worn_at: recentDate },
+    ];
+    const result = buildLaundryStatus(items, history);
+    expect(result[0]._laundryStatus).toBe("overdue");
+    expect(result[0]._wearsSinceWash).toBe(2);
+  });
+
+  test("jeans worn 3 times are still clean", () => {
+    const items = [{ id: "b1", name: "Jeans", category: "Bottoms", clothing_type: "jeans", is_active: true }];
+    const history = [
+      { item_ids: ["b1"], worn_at: today },
+      { item_ids: ["b1"], worn_at: recentDate },
+      { item_ids: ["b1"], worn_at: new Date(Date.now() - 4 * 86400000).toISOString() },
+    ];
+    const result = buildLaundryStatus(items, history);
+    expect(result[0]._laundryStatus).toBe("clean");
+  });
+
+  test("jeans worn 4 times are due", () => {
+    const items = [{ id: "b1", name: "Jeans", category: "Bottoms", clothing_type: "jeans", is_active: true }];
+    const history = Array.from({ length: 4 }, (_, i) => ({
+      item_ids: ["b1"],
+      worn_at: new Date(Date.now() - i * 86400000).toISOString(),
+    }));
+    const result = buildLaundryStatus(items, history);
+    expect(result[0]._laundryStatus).toBe("due");
+  });
+
+  test("lookback window respected — old wears ignored", () => {
+    const items = [{ id: "t1", name: "Tee", category: "Tops", clothing_type: "t-shirt", is_active: true }];
+    const history = [{ item_ids: ["t1"], worn_at: new Date(Date.now() - 30 * 86400000).toISOString() }];
+    const result = buildLaundryStatus(items, history, 14);
+    expect(result[0]._laundryStatus).toBe("clean");
+    expect(result[0]._wearsSinceWash).toBe(0);
+  });
+
+  test("archived items excluded", () => {
+    const items = [{ id: "t1", name: "Archived", category: "Tops", is_active: false }];
+    const result = buildLaundryStatus(items, []);
+    expect(result).toHaveLength(0);
+  });
+
+  test("watch never triggers laundry alert", () => {
+    const items = [{ id: "a1", name: "Watch", category: "Accessories", clothing_type: "watch", is_active: true }];
+    const history = Array.from({ length: 50 }, (_, i) => ({
+      item_ids: ["a1"],
+      worn_at: new Date(Date.now() - i * 86400000).toISOString(),
+    }));
+    const result = buildLaundryStatus(items, history, 60);
+    expect(result[0]._laundryStatus).toBe("clean");
+  });
+});
+
+describe("getLaundryAlerts", () => {
+  test("returns only due and overdue items", () => {
+    const items = [
+      { id: "t1", name: "Dirty Tee", category: "Tops", clothing_type: "t-shirt", is_active: true },
+      { id: "b1", name: "Clean Jeans", category: "Bottoms", clothing_type: "jeans", is_active: true },
+    ];
+    const history = [{ item_ids: ["t1"], worn_at: new Date().toISOString() }];
+    const alerts = getLaundryAlerts(items, history);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].id).toBe("t1");
+  });
+
+  test("overdue items sorted before due items", () => {
+    const items = [
+      { id: "t1", name: "Due Tee", category: "Tops", clothing_type: "t-shirt", is_active: true },
+      { id: "t2", name: "Overdue Polo", category: "Tops", clothing_type: "polo", is_active: true },
+    ];
+    const history = [
+      { item_ids: ["t1"], worn_at: new Date().toISOString() },
+      { item_ids: ["t2"], worn_at: new Date().toISOString() },
+      { item_ids: ["t2"], worn_at: new Date(Date.now() - 86400000).toISOString() },
+      { item_ids: ["t2"], worn_at: new Date(Date.now() - 2 * 86400000).toISOString() },
+    ];
+    const alerts = getLaundryAlerts(items, history);
+    expect(alerts.length).toBeGreaterThanOrEqual(2);
+    expect(alerts[0]._laundryStatus).toBe("overdue");
+  });
+
+  test("empty wardrobe returns no alerts", () => {
+    expect(getLaundryAlerts([], [])).toHaveLength(0);
   });
 });
