@@ -250,3 +250,16 @@ class RecommendationFeedback(Base):
     item_ids_csv = Column(String, nullable=True)
     created_at_timestamp = Column(Integer, nullable=False)
     updated_at_timestamp = Column(Integer, nullable=False)
+
+
+class RecommendationInteraction(Base):
+    """Stores user recommendation interactions for personalization over time."""
+
+    __tablename__ = "recommendation_interactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    suggestion_id = Column(String, nullable=False, index=True)
+    signal = Column(String, nullable=False, index=True)
+    item_ids_csv = Column(String, nullable=True)
+    created_at_timestamp = Column(Integer, nullable=False, index=True)
