@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { sendChatMessage } from "../api/chatApi";
+import { sendChatMessage, buildChatContext } from "../api/chatApi";
+import { loadWardrobe } from "../utils/userStorage";
+import { loadAnswers } from "../utils/userStorage";
+import { useAuth } from "../auth/AuthProvider";
 import { CHAT_HISTORY_KEY } from "../utils/constants";
 
 const GREETING = "Hi! I'm AURA. Ask me anything about the app — features, how-tos, troubleshooting, and more.";
@@ -127,6 +130,7 @@ function formatRelativeDate(ts) {
 // ── Main component ──
 
 export default function Chatbot() {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -186,7 +190,10 @@ export default function Chatbot() {
     setLoading(true);
 
     try {
-      const data = await sendChatMessage(next);
+      const wardrobe = loadWardrobe(user);
+      const answers = loadAnswers();
+      const context = buildChatContext(wardrobe, answers);
+      const data = await sendChatMessage(next, context);
       const reply = { role: "assistant", content: data.reply };
       updateActiveChat((c) => {
         const updated = [...c.messages, reply];
@@ -203,7 +210,7 @@ export default function Chatbot() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, messages, updateActiveChat]);
+  }, [input, loading, messages, updateActiveChat, user]);
 
   const handleKey = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {

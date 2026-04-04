@@ -228,8 +228,14 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class ChatContext(BaseModel):
+    wardrobe_summary: Optional[str] = None
+    preferences: Optional[str] = None
+
+
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
+    context: Optional[ChatContext] = None
 
 
 class ChatResponse(BaseModel):
