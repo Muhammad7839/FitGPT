@@ -1564,3 +1564,111 @@ describe("layering and metadata in explanations", () => {
     expect(lower.includes("frame") || lower.includes("top") || lower.includes("balanc") || lower.includes("definition") || lower.includes("streamlin")).toBe(true);
   });
 });
+
+/* ── Comfort preference integration tests ──────────────────────────── */
+
+describe("comfort preferences affect outfit generation", () => {
+  const comfortWardrobe = [
+    { id: "t1", name: "Slim Tee", category: "tops", clothing_type: "t-shirt", color: "white", fit_tag: "slim", is_active: true },
+    { id: "t2", name: "Oversized Hoodie", category: "tops", clothing_type: "hoodie", color: "gray", fit_tag: "oversized", layer_type: "mid", is_active: true },
+    { id: "t3", name: "Fitted Polo", category: "tops", clothing_type: "polo", color: "navy", fit_tag: "tailored", is_active: true },
+    { id: "t4", name: "Relaxed Tee", category: "tops", clothing_type: "t-shirt", color: "black", fit_tag: "relaxed", is_active: true },
+    { id: "b1", name: "Slim Jeans", category: "bottoms", color: "blue", fit_tag: "slim", is_active: true },
+    { id: "b2", name: "Loose Sweats", category: "bottoms", color: "gray", fit_tag: "oversized", is_active: true },
+    { id: "b3", name: "Tailored Chinos", category: "bottoms", color: "beige", fit_tag: "tailored", is_active: true },
+    { id: "b4", name: "Relaxed Joggers", category: "bottoms", color: "black", fit_tag: "relaxed", is_active: true },
+    { id: "s1", name: "Sneakers", category: "shoes", color: "white", is_active: true },
+    { id: "s2", name: "Boots", category: "shoes", color: "brown", is_active: true },
+    { id: "o1", name: "Cardigan", category: "outerwear", clothing_type: "cardigan", color: "beige", fit_tag: "relaxed", layer_type: "mid", is_active: true },
+    { id: "o2", name: "Blazer", category: "outerwear", clothing_type: "blazer", color: "navy", fit_tag: "tailored", layer_type: "outer", is_active: true },
+  ];
+
+  test("relaxed comfort preference favors relaxed/oversized items", () => {
+    const answers = { comfort: ["Relaxed"] };
+    const outfits = generateThreeOutfits(comfortWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", answers);
+    const allIds = outfits.flat().map((item) => item.id);
+    const relaxedIds = ["t2", "t4", "b2", "b4", "o1"];
+    const fittedIds = ["t1", "t3", "b1", "b3", "o2"];
+    const relaxedCount = allIds.filter((id) => relaxedIds.includes(id)).length;
+    const fittedCount = allIds.filter((id) => fittedIds.includes(id)).length;
+    expect(relaxedCount).toBeGreaterThan(fittedCount);
+  });
+
+  test("fitted comfort preference favors fitted/tailored items", () => {
+    const answers = { comfort: ["Fitted"] };
+    const outfits = generateThreeOutfits(comfortWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", answers);
+    const allIds = outfits.flat().map((item) => item.id);
+    const fittedIds = ["t1", "t3", "b1", "b3", "o2"];
+    const relaxedIds = ["t2", "t4", "b2", "b4", "o1"];
+    const fittedCount = allIds.filter((id) => fittedIds.includes(id)).length;
+    const relaxedCount = allIds.filter((id) => relaxedIds.includes(id)).length;
+    expect(fittedCount).toBeGreaterThan(relaxedCount);
+  });
+
+  test("layered comfort preference produces outfits with more layers", () => {
+    const answers = { comfort: ["Layered"] };
+    const layeredOutfits = generateThreeOutfits(comfortWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", answers);
+    const noComfortOutfits = generateThreeOutfits(comfortWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+
+    const countLayers = (outfits) => outfits.flat().filter((item) => item.layer_type).length;
+    expect(countLayers(layeredOutfits)).toBeGreaterThanOrEqual(countLayers(noComfortOutfits));
+  });
+
+  test("no comfort preference still generates valid outfits", () => {
+    const outfits = generateThreeOutfits(comfortWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    expect(outfits.length).toBe(3);
+    for (const outfit of outfits) {
+      expect(outfit.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  test("different comfort preferences produce different outfit selections", () => {
+    const relaxedOutfits = generateThreeOutfits(comfortWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", { comfort: ["Relaxed"] });
+    const fittedOutfits = generateThreeOutfits(comfortWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", { comfort: ["Fitted"] });
+
+    const relaxedSigs = new Set(relaxedOutfits.map((o) => idsSignature(o.map((i) => i.id))));
+    const fittedSigs = new Set(fittedOutfits.map((o) => idsSignature(o.map((i) => i.id))));
+    const overlap = [...relaxedSigs].filter((s) => fittedSigs.has(s)).length;
+    expect(overlap).toBeLessThan(3);
+  });
+});
+
+describe("comfort preference scoring quality", () => {
+  test("relaxed outfit scores higher with relaxed preference than without", () => {
+    const relaxedOutfit = [
+      { id: "1", name: "Oversized Tee", category: "Tops", color: "gray", fit_tag: "oversized" },
+    ];
+    const withPref = scoreOutfitForDisplay(relaxedOutfit, { weatherCategory: "mild", timeCategory: "morning", answers: { comfort: ["Relaxed"] }, bodyTypeId: "rectangle" });
+    const withoutPref = scoreOutfitForDisplay(relaxedOutfit, { weatherCategory: "mild", timeCategory: "morning", answers: {}, bodyTypeId: "rectangle" });
+    expect(withPref).toBeGreaterThan(withoutPref);
+  });
+
+  test("fitted outfit scores higher with fitted preference than without", () => {
+    const fittedOutfit = [
+      { id: "1", name: "Slim Tee", category: "Tops", color: "white", fit_tag: "slim" },
+    ];
+    const withPref = scoreOutfitForDisplay(fittedOutfit, { weatherCategory: "mild", timeCategory: "morning", answers: { comfort: ["Fitted"] }, bodyTypeId: "rectangle" });
+    const withoutPref = scoreOutfitForDisplay(fittedOutfit, { weatherCategory: "mild", timeCategory: "morning", answers: {}, bodyTypeId: "rectangle" });
+    expect(withPref).toBeGreaterThan(withoutPref);
+  });
+
+  test("layered outfit scores higher with layered preference", () => {
+    const layeredOutfit = [
+      { id: "1", name: "Base Tee", category: "Tops", color: "white", layer_type: "base" },
+      { id: "2", name: "Sweater", category: "Tops", color: "gray", layer_type: "mid" },
+    ];
+    const withPref = scoreOutfitForDisplay(layeredOutfit, { weatherCategory: "mild", timeCategory: "morning", answers: { comfort: ["Layered"] }, bodyTypeId: "rectangle" });
+    const withoutPref = scoreOutfitForDisplay(layeredOutfit, { weatherCategory: "mild", timeCategory: "morning", answers: {}, bodyTypeId: "rectangle" });
+    expect(withPref).toBeGreaterThan(withoutPref);
+  });
+
+  test("mismatched comfort scores lower than matched", () => {
+    const relaxedOutfit = [
+      { id: "1", name: "Oversized Tee", category: "Tops", color: "gray", fit_tag: "oversized" },
+      { id: "2", name: "Loose Joggers", category: "Bottoms", color: "black", fit_tag: "relaxed" },
+    ];
+    const fittedCtx = { weatherCategory: "mild", timeCategory: "morning", answers: { comfort: ["Fitted"] }, bodyTypeId: "rectangle" };
+    const relaxedCtx = { weatherCategory: "mild", timeCategory: "morning", answers: { comfort: ["Relaxed"] }, bodyTypeId: "rectangle" };
+    expect(scoreOutfitForDisplay(relaxedOutfit, relaxedCtx)).toBeGreaterThan(scoreOutfitForDisplay(relaxedOutfit, fittedCtx));
+  });
+});
