@@ -10,6 +10,8 @@ import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.PromptFeedbackMetadata
 import com.fitgpt.app.data.model.TagSuggestion
+import com.fitgpt.app.data.model.TripPackingItem
+import com.fitgpt.app.data.model.TripPackingResult
 import com.fitgpt.app.data.model.UnderusedAlert
 import com.fitgpt.app.data.model.UnderusedAlertsResult
 import com.fitgpt.app.data.model.WardrobeGapAnalysis
@@ -21,6 +23,7 @@ import com.fitgpt.app.data.remote.dto.ChatResponseDto
 import com.fitgpt.app.data.remote.dto.AiRecommendationResponseDto
 import com.fitgpt.app.data.remote.dto.PromptFeedbackMetadataDto
 import com.fitgpt.app.data.remote.dto.TagSuggestionResponseDto
+import com.fitgpt.app.data.remote.dto.TripPackingResponseDto
 import com.fitgpt.app.data.remote.dto.UnderusedAlertsResponseDto
 import com.fitgpt.app.data.remote.dto.UnderusedItemAlertDto
 import com.fitgpt.app.data.remote.dto.WardrobeGapResponseDto
@@ -181,6 +184,26 @@ fun UnderusedAlertsResponseDto.toDomain(): UnderusedAlertsResult {
         generatedAtTimestamp = generatedAtTimestamp,
         analysisWindowDays = analysisWindowDays,
         alerts = alerts.map { it.toDomain() },
+        insufficientData = insufficientData
+    )
+}
+
+fun TripPackingResponseDto.toDomain(): TripPackingResult {
+    return TripPackingResult(
+        destinationCity = destinationCity,
+        startDate = startDate,
+        tripDays = tripDays,
+        weatherSummary = weatherSummary,
+        items = items.map { item ->
+            TripPackingItem(
+                category = item.category,
+                recommendedQuantity = item.recommendedQuantity,
+                selectedItemIds = item.selectedItemIds,
+                selectedItemNames = item.selectedItemNames,
+                missingQuantity = item.missingQuantity
+            )
+        },
+        generatedAtTimestamp = generatedAtTimestamp,
         insufficientData = insufficientData
     )
 }

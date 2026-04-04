@@ -664,6 +664,48 @@ class WeatherCurrentResponse(BaseModel):
     description: str
 
 
+class TripPackingRequest(BaseModel):
+    destination_city: str = Field(min_length=1, max_length=128)
+    start_date: str = Field(min_length=10, max_length=10)
+    trip_days: int = Field(ge=1, le=30)
+
+    @field_validator("destination_city")
+    @classmethod
+    def validate_destination_city(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("destination_city cannot be blank")
+        return cleaned
+
+    @field_validator("start_date")
+    @classmethod
+    def validate_start_date(cls, value: str) -> str:
+        cleaned = value.strip()
+        try:
+            datetime.strptime(cleaned, "%Y-%m-%d")
+        except ValueError as exc:
+            raise ValueError("start_date must be in YYYY-MM-DD format") from exc
+        return cleaned
+
+
+class TripPackingItem(BaseModel):
+    category: str
+    recommended_quantity: int
+    selected_item_ids: list[int] = Field(default_factory=list)
+    selected_item_names: list[str] = Field(default_factory=list)
+    missing_quantity: int = 0
+
+
+class TripPackingResponse(BaseModel):
+    destination_city: str
+    start_date: str
+    trip_days: int
+    weather_summary: str
+    items: list[TripPackingItem] = Field(default_factory=list)
+    generated_at_timestamp: int
+    insufficient_data: bool = False
+
+
 class OutfitHistoryCreate(BaseModel):
     item_ids: list[int] = Field(min_length=1, max_length=32)
     worn_at_timestamp: int = Field(gt=0)

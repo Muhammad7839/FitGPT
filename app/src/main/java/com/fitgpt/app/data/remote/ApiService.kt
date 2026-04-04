@@ -37,6 +37,8 @@ import com.fitgpt.app.data.remote.dto.ResetPasswordRequest
 import com.fitgpt.app.data.remote.dto.SavedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.SavedOutfitListResponseDto
 import com.fitgpt.app.data.remote.dto.TokenResponse
+import com.fitgpt.app.data.remote.dto.TripPackingRequestDto
+import com.fitgpt.app.data.remote.dto.TripPackingResponseDto
 import com.fitgpt.app.data.remote.dto.AvatarUploadResponse
 import com.fitgpt.app.data.remote.dto.UserProfileSummaryResponse
 import com.fitgpt.app.data.remote.dto.UserProfileUpdateRequest
@@ -296,4 +298,9 @@ interface ApiService {
     suspend fun deletePlannedOutfit(
         @Path("outfitId") outfitId: Long
     ): PlannedOutfitListResponseDto
+
+    @POST("plans/packing-list")
+    suspend fun generateTripPackingList(
+        @Body payload: TripPackingRequestDto
+    ): TripPackingResponseDto
 }

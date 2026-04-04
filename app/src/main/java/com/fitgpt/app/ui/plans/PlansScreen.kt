@@ -41,6 +41,7 @@ import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebBadge
 import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.ui.common.isValidPlanDate
+import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import java.time.Instant
 import java.time.ZoneId
@@ -56,9 +57,12 @@ fun PlansScreen(
     viewModel: WardrobeViewModel
 ) {
     val plans by viewModel.plannedState.collectAsState()
+    val tripPackingState by viewModel.tripPackingState.collectAsState()
     var planDate by remember { mutableStateOf("") }
     var planDatesCsv by remember { mutableStateOf("") }
     var occasion by remember { mutableStateOf("") }
+    var destinationCity by remember { mutableStateOf("") }
+    var tripDaysInput by remember { mutableStateOf("3") }
     var replaceExisting by remember { mutableStateOf(true) }
     var planError by remember { mutableStateOf<String?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -162,6 +166,38 @@ fun PlansScreen(
                     ) {
                         Text("Assign to Dates")
                     }
+                    OutlinedTextField(
+                        value = destinationCity,
+                        onValueChange = { destinationCity = it },
+                        label = { Text("Trip destination city") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = tripDaysInput,
+                        onValueChange = { tripDaysInput = it },
+                        label = { Text("Trip days") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Button(
+                        onClick = {
+                            val tripDays = tripDaysInput.trim().toIntOrNull()
+                            if (destinationCity.isBlank() || tripDays == null || tripDays <= 0) {
+                                planError = "Destination and trip days are required"
+                                return@Button
+                            }
+                            val effectiveStartDate = planDate.takeIf { isValidPlanDate(it) }
+                                ?: java.time.LocalDate.now().toString()
+                            planError = null
+                            viewModel.generateTripPackingList(
+                                destinationCity = destinationCity.trim(),
+                                startDate = effectiveStartDate,
+                                tripDays = tripDays
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Generate Packing List")
+                    }
                     planError?.let {
                         Text(
                             text = it,
@@ -173,6 +209,36 @@ fun PlansScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    when (val state = tripPackingState) {
+                        UiState.Loading -> {
+                            Text(
+                                text = "Building packing list...",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        is UiState.Success -> {
+                            state.data?.let { packing ->
+                                Text(
+                                    text = "Packing list for ${packing.destinationCity}: ${packing.weatherSummary}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                packing.items.take(5).forEach { item ->
+                                    Text(
+                                        text = "${item.category}: ${item.selectedItemNames.size}/${item.recommendedQuantity} packed",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        is UiState.Error -> {
+                            Text(
+                                text = state.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 }
             }
 

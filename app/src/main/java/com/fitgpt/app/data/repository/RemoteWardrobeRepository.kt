@@ -11,6 +11,7 @@ import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
 import com.fitgpt.app.data.model.TagSuggestion
 import com.fitgpt.app.data.model.UnderusedAlertsResult
+import com.fitgpt.app.data.model.TripPackingResult
 import com.fitgpt.app.data.model.UploadResult
 import com.fitgpt.app.data.model.WardrobeGapAnalysis
 import com.fitgpt.app.data.model.WeatherSnapshot
@@ -26,6 +27,7 @@ import com.fitgpt.app.data.remote.dto.PromptFeedbackEventRequestDto
 import com.fitgpt.app.data.remote.dto.SavedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.AiRecommendationRequestDto
 import com.fitgpt.app.data.remote.dto.RejectOutfitRequestDto
+import com.fitgpt.app.data.remote.dto.TripPackingRequestDto
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -365,6 +367,20 @@ class RemoteWardrobeRepository(
                 replaceExisting = replaceExisting
             )
         )
+    }
+
+    override suspend fun generateTripPackingList(
+        destinationCity: String,
+        startDate: String,
+        tripDays: Int
+    ): TripPackingResult {
+        return api.generateTripPackingList(
+            TripPackingRequestDto(
+                destinationCity = destinationCity,
+                startDate = startDate,
+                tripDays = tripDays
+            )
+        ).toDomain()
     }
 
     override suspend fun getPlannedOutfits(): List<PlannedOutfit> {
