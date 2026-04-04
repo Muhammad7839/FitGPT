@@ -9,6 +9,7 @@ import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
+import com.fitgpt.app.data.model.TagSuggestion
 import com.fitgpt.app.data.model.UploadResult
 import com.fitgpt.app.data.model.WeatherSnapshot
 import com.fitgpt.app.data.remote.ApiService
@@ -94,6 +95,19 @@ class RemoteWardrobeRepository(
             BulkCreateClothingItemsRequestDto(items = items.map { it.toCreateRequest() })
         )
         return response.results.mapNotNull { it.item?.toDomain() }
+    }
+
+    override suspend fun suggestTags(item: ClothingItem): TagSuggestion {
+        return api.suggestWardrobeTags(item.toCreateRequest()).toDomain()
+    }
+
+    override suspend fun getItemTagSuggestions(itemId: Int): TagSuggestion {
+        return api.getWardrobeItemTagSuggestions(itemId).toDomain()
+    }
+
+    override suspend fun applyItemTagSuggestions(itemId: Int): ClothingItem {
+        val updated = api.applyWardrobeItemTagSuggestions(itemId).toDomain()
+        return updated.copy(imageUrl = resolveApiUrl(updated.imageUrl))
     }
 
     override suspend fun uploadImage(bytes: ByteArray, fileName: String, mimeType: String): String {

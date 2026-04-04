@@ -128,12 +128,14 @@ fun AddItemScreen(
     val batchUploadState by viewModel.batchImageUploadState.collectAsState()
     val itemSaveState by viewModel.itemSaveState.collectAsState()
     val bulkItemSaveState by viewModel.bulkItemSaveState.collectAsState()
+    val tagSuggestionState by viewModel.tagSuggestionState.collectAsState()
     val isSavingItem = itemSaveState is UiState.Loading || bulkItemSaveState is UiState.Loading
 
     LaunchedEffect(Unit) {
         viewModel.clearImageUploadState(ImageUploadTarget.ADD_ITEM)
         viewModel.clearItemSaveState()
         viewModel.clearBulkItemSaveState()
+        viewModel.clearTagSuggestionState()
     }
 
     fun applyImageAutoFill(bytes: ByteArray, sourceName: String) {
@@ -204,6 +206,30 @@ fun AddItemScreen(
         } else {
             viewModel.addItem(draftItem)
         }
+    }
+
+    fun requestTagSuggestion() {
+        val resolvedCategory = category.resolveSelectedValue(categoryCustom).ifBlank { "Top" }
+        val resolvedClothingType = clothingType.resolveSelectedValue(clothingTypeCustom)
+        val resolvedFitTag = fitTag.resolveSelectedValue(fitTagCustom)
+        val resolvedColor = color.resolveSelectedValue(colorCustom).ifBlank { AUTO_FILL_UNKNOWN }
+        val resolvedSeason = season.resolveSelectedValue(seasonCustom).ifBlank { "All" }
+        val resolvedComfort = parseComfortLevel(comfort)
+        val draftItem = ClothingItem(
+            id = -1,
+            name = name.trim().takeIf { it.isNotBlank() },
+            category = resolvedCategory,
+            clothingType = resolvedClothingType.takeIf { it.isNotBlank() },
+            fitTag = resolvedFitTag.takeIf { it.isNotBlank() },
+            color = resolvedColor,
+            colors = colors.toCsvList(),
+            season = resolvedSeason,
+            seasonTags = seasonTags.toCsvList(),
+            styleTags = styleTags.toCsvList(),
+            occasionTags = occasionTags.toCsvList(),
+            comfortLevel = resolvedComfort
+        )
+        viewModel.suggestTagsForDraft(draftItem)
     }
 
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
@@ -344,6 +370,46 @@ fun AddItemScreen(
             Log.i(UPLOAD_LOG_TAG, "single upload success urlSet=true")
         } else if (upload is UiState.Error) {
             photoFlowState = PhotoFlowState.ERROR
+        }
+    }
+
+    LaunchedEffect(tagSuggestionState) {
+        when (val suggestionState = tagSuggestionState) {
+            is UiState.Success -> {
+                val suggestion = suggestionState.data ?: return@LaunchedEffect
+                if (!suggestion.generated) {
+                    snackbarHostState.showSnackbar("No suggested tags were generated for this item.")
+                    viewModel.clearTagSuggestionState()
+                    return@LaunchedEffect
+                }
+                if (clothingType.isBlank()) {
+                    clothingType = suggestion.suggestedClothingType.orEmpty()
+                }
+                if (fitTag.isBlank()) {
+                    fitTag = suggestion.suggestedFitTag.orEmpty()
+                }
+                if (colors.isBlank()) {
+                    colors = suggestion.suggestedColors.joinToString(",")
+                }
+                if (seasonTags.isBlank()) {
+                    seasonTags = suggestion.suggestedSeasonTags.joinToString(",")
+                }
+                if (styleTags.isBlank()) {
+                    styleTags = suggestion.suggestedStyleTags.joinToString(",")
+                }
+                if (occasionTags.isBlank()) {
+                    occasionTags = suggestion.suggestedOccasionTags.joinToString(",")
+                }
+                snackbarHostState.showSnackbar("Suggested tags applied to empty fields.")
+                viewModel.clearTagSuggestionState()
+            }
+
+            is UiState.Error -> {
+                snackbarHostState.showSnackbar(suggestionState.message)
+                viewModel.clearTagSuggestionState()
+            }
+
+            UiState.Loading -> Unit
         }
     }
 
@@ -818,6 +884,24 @@ fun AddItemScreen(
                                 )
                             }
                         }
+                    }
+
+                    Button(
+                        onClick = {
+                            if (!isSavingItem && tagSuggestionState !is UiState.Loading) {
+                                requestTagSuggestion()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isSavingItem && tagSuggestionState !is UiState.Loading,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        val label = if (tagSuggestionState is UiState.Loading) {
+                            "Suggesting tags..."
+                        } else {
+                            "Suggest Tags"
+                        }
+                        Text(label)
                     }
 
                     Button(

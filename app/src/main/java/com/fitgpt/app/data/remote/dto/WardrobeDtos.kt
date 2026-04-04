@@ -28,6 +28,18 @@ data class ClothingItemDto(
     val styleTags: List<String> = emptyList(),
     @SerializedName("occasion_tags")
     val occasionTags: List<String> = emptyList(),
+    @SerializedName("suggested_clothing_type")
+    val suggestedClothingType: String? = null,
+    @SerializedName("suggested_fit_tag")
+    val suggestedFitTag: String? = null,
+    @SerializedName("suggested_colors")
+    val suggestedColors: List<String> = emptyList(),
+    @SerializedName("suggested_season_tags")
+    val suggestedSeasonTags: List<String> = emptyList(),
+    @SerializedName("suggested_style_tags")
+    val suggestedStyleTags: List<String> = emptyList(),
+    @SerializedName("suggested_occasion_tags")
+    val suggestedOccasionTags: List<String> = emptyList(),
     @SerializedName("accessory_type")
     val accessoryType: String? = null,
     @SerializedName("comfort_level")
@@ -219,6 +231,22 @@ data class ImageBatchUploadEntryDto(
 
 data class ImageBatchUploadResponseDto(
     val results: List<ImageBatchUploadEntryDto>
+)
+
+data class TagSuggestionResponseDto(
+    val generated: Boolean,
+    @SerializedName("suggested_clothing_type")
+    val suggestedClothingType: String?,
+    @SerializedName("suggested_fit_tag")
+    val suggestedFitTag: String?,
+    @SerializedName("suggested_colors")
+    val suggestedColors: List<String>,
+    @SerializedName("suggested_season_tags")
+    val suggestedSeasonTags: List<String>,
+    @SerializedName("suggested_style_tags")
+    val suggestedStyleTags: List<String>,
+    @SerializedName("suggested_occasion_tags")
+    val suggestedOccasionTags: List<String>
 )
 
 data class BulkCreateClothingItemsRequestDto(

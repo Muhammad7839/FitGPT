@@ -57,6 +57,18 @@ def _ensure_runtime_schema() -> None:
             pending_alters.append("ALTER TABLE clothing_items ADD COLUMN colors_json VARCHAR DEFAULT '[]'")
         if "occasion_tags_json" not in clothing_columns:
             pending_alters.append("ALTER TABLE clothing_items ADD COLUMN occasion_tags_json VARCHAR DEFAULT '[]'")
+        if "suggested_clothing_type" not in clothing_columns:
+            pending_alters.append("ALTER TABLE clothing_items ADD COLUMN suggested_clothing_type VARCHAR")
+        if "suggested_fit_tag" not in clothing_columns:
+            pending_alters.append("ALTER TABLE clothing_items ADD COLUMN suggested_fit_tag VARCHAR")
+        if "suggested_colors_json" not in clothing_columns:
+            pending_alters.append("ALTER TABLE clothing_items ADD COLUMN suggested_colors_json VARCHAR DEFAULT '[]'")
+        if "suggested_season_tags_json" not in clothing_columns:
+            pending_alters.append("ALTER TABLE clothing_items ADD COLUMN suggested_season_tags_json VARCHAR DEFAULT '[]'")
+        if "suggested_style_tags_json" not in clothing_columns:
+            pending_alters.append("ALTER TABLE clothing_items ADD COLUMN suggested_style_tags_json VARCHAR DEFAULT '[]'")
+        if "suggested_occasion_tags_json" not in clothing_columns:
+            pending_alters.append("ALTER TABLE clothing_items ADD COLUMN suggested_occasion_tags_json VARCHAR DEFAULT '[]'")
         if "accessory_type" not in clothing_columns:
             pending_alters.append("ALTER TABLE clothing_items ADD COLUMN accessory_type VARCHAR")
         if pending_alters:

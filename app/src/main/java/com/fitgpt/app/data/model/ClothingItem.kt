@@ -18,6 +18,12 @@ data class ClothingItem(
     val seasonTags: List<String> = emptyList(),
     val styleTags: List<String> = emptyList(),
     val occasionTags: List<String> = emptyList(),
+    val suggestedClothingType: String? = null,
+    val suggestedFitTag: String? = null,
+    val suggestedColors: List<String> = emptyList(),
+    val suggestedSeasonTags: List<String> = emptyList(),
+    val suggestedStyleTags: List<String> = emptyList(),
+    val suggestedOccasionTags: List<String> = emptyList(),
     val accessoryType: String? = null,
     val comfortLevel: Int,
 

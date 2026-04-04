@@ -134,6 +134,152 @@ def _first_or_default(values: list[str], fallback: str) -> str:
     return fallback
 
 
+def _determine_suggested_clothing_type(
+    *,
+    category: str,
+    clothing_type: Optional[str],
+    name: Optional[str],
+) -> Optional[str]:
+    if clothing_type:
+        return _normalize_optional_text(clothing_type)
+    blob = f"{name or ''} {category}".lower()
+    keyword_to_type = (
+        ("blazer", "Blazer"),
+        ("hoodie", "Hoodie"),
+        ("sweater", "Sweater"),
+        ("shirt", "Shirt"),
+        ("tee", "T-Shirt"),
+        ("tshirt", "T-Shirt"),
+        ("jeans", "Jeans"),
+        ("shorts", "Shorts"),
+        ("boots", "Boots"),
+        ("sneakers", "Sneakers"),
+        ("sandal", "Sandals"),
+        ("coat", "Coat"),
+        ("jacket", "Jacket"),
+    )
+    for token, resolved in keyword_to_type:
+        if token in blob:
+            return resolved
+    normalized_category = _normalize_category(category)
+    fallback_map = {
+        "top": "Shirt",
+        "bottom": "Pants",
+        "shoes": "Shoes",
+        "outerwear": "Jacket",
+        "accessory": "Accessory",
+    }
+    return fallback_map.get(normalized_category)
+
+
+def _determine_suggested_fit_tag(*, fit_tag: Optional[str], name: Optional[str]) -> Optional[str]:
+    if fit_tag:
+        return _normalize_optional_text(fit_tag)
+    blob = (name or "").lower()
+    if any(token in blob for token in {"oversized", "baggy", "loose"}):
+        return "oversized"
+    if any(token in blob for token in {"slim", "skinny", "tailored"}):
+        return "slim"
+    if blob:
+        return "regular"
+    return None
+
+
+def _determine_suggested_season_tags(*, season: Optional[str], name: Optional[str], clothing_type: Optional[str]) -> list[str]:
+    if season and season.strip() and season.strip().lower() != "all":
+        return [season.strip()]
+    blob = f"{name or ''} {clothing_type or ''}".lower()
+    if any(token in blob for token in {"coat", "jacket", "hoodie", "sweater", "boots"}):
+        return ["Winter", "Fall"]
+    if any(token in blob for token in {"shorts", "tank", "sandal", "linen"}):
+        return ["Summer", "Spring"]
+    return []
+
+
+def _determine_suggested_style_tags(*, name: Optional[str], category: str, clothing_type: Optional[str]) -> list[str]:
+    blob = f"{name or ''} {category} {clothing_type or ''}".lower()
+    styles: list[str] = []
+    if any(token in blob for token in {"blazer", "dress", "formal", "tailored"}):
+        styles.append("formal")
+    if any(token in blob for token in {"running", "sport", "gym", "athletic", "training"}):
+        styles.append("athletic")
+    if any(token in blob for token in {"hoodie", "tee", "t-shirt", "jeans", "sneaker", "casual"}):
+        styles.append("casual")
+    if _normalize_category(category) == "outerwear" and "formal" not in styles:
+        styles.append("layered")
+    return _normalize_tag_list(styles)
+
+
+def _determine_suggested_occasion_tags(*, style_tags: list[str]) -> list[str]:
+    occasions: list[str] = []
+    lowered = {tag.lower() for tag in style_tags}
+    if "formal" in lowered:
+        occasions.extend(["work", "event"])
+    if "athletic" in lowered:
+        occasions.extend(["gym"])
+    if not occasions:
+        occasions.append("daily")
+    return _normalize_tag_list(occasions)
+
+
+def build_tag_suggestions(
+    *,
+    name: Optional[str],
+    category: str,
+    clothing_type: Optional[str],
+    fit_tag: Optional[str],
+    color: str,
+    colors: Optional[list[str]],
+    season: Optional[str],
+) -> dict:
+    suggested_clothing_type = _determine_suggested_clothing_type(
+        category=category,
+        clothing_type=clothing_type,
+        name=name,
+    )
+    suggested_fit_tag = _determine_suggested_fit_tag(fit_tag=fit_tag, name=name)
+    suggested_colors = _normalize_tag_list(colors or []) or _normalize_tag_list([color])
+    suggested_season_tags = _determine_suggested_season_tags(
+        season=season,
+        name=name,
+        clothing_type=suggested_clothing_type,
+    )
+    suggested_style_tags = _determine_suggested_style_tags(
+        name=name,
+        category=category,
+        clothing_type=suggested_clothing_type,
+    )
+    suggested_occasion_tags = _determine_suggested_occasion_tags(style_tags=suggested_style_tags)
+    generated = any(
+        [
+            bool(suggested_clothing_type),
+            bool(suggested_fit_tag),
+            bool(suggested_colors),
+            bool(suggested_season_tags),
+            bool(suggested_style_tags),
+            bool(suggested_occasion_tags),
+        ]
+    )
+    return {
+        "generated": generated,
+        "suggested_clothing_type": suggested_clothing_type,
+        "suggested_fit_tag": suggested_fit_tag,
+        "suggested_colors": suggested_colors,
+        "suggested_season_tags": suggested_season_tags,
+        "suggested_style_tags": suggested_style_tags,
+        "suggested_occasion_tags": suggested_occasion_tags,
+    }
+
+
+def _assign_suggested_tags(db_item: models.ClothingItem, suggestions: dict) -> None:
+    db_item.suggested_clothing_type = suggestions.get("suggested_clothing_type")
+    db_item.suggested_fit_tag = suggestions.get("suggested_fit_tag")
+    db_item.suggested_colors = suggestions.get("suggested_colors", [])
+    db_item.suggested_season_tags = suggestions.get("suggested_season_tags", [])
+    db_item.suggested_style_tags = suggestions.get("suggested_style_tags", [])
+    db_item.suggested_occasion_tags = suggestions.get("suggested_occasion_tags", [])
+
+
 def _apply_default_preferences(db_user: models.User) -> None:
     db_user.body_type = _normalize_optional_text(db_user.body_type) or schemas.DEFAULT_BODY_TYPE
     db_user.lifestyle = _normalize_optional_text(db_user.lifestyle) or schemas.DEFAULT_LIFESTYLE
@@ -246,6 +392,18 @@ def create_clothing_item(db: Session, item: schemas.ClothingItemCreate, user_id:
     db_item.season_tags = season_tags
     db_item.style_tags = style_tags
     db_item.occasion_tags = occasion_tags
+    _assign_suggested_tags(
+        db_item,
+        build_tag_suggestions(
+            name=item.name,
+            category=item.category,
+            clothing_type=item.clothing_type,
+            fit_tag=item.fit_tag,
+            color=item.color,
+            colors=colors,
+            season=item.season,
+        ),
+    )
 
     db.add(db_item)
     db.commit()
@@ -385,6 +543,51 @@ def get_clothing_item_by_id(db: Session, item_id: int):
     return db.query(models.ClothingItem).filter(
         models.ClothingItem.id == item_id
     ).first()
+
+
+def regenerate_item_tag_suggestions(db: Session, db_item: models.ClothingItem) -> dict:
+    suggestions = build_tag_suggestions(
+        name=db_item.name,
+        category=db_item.category,
+        clothing_type=db_item.clothing_type,
+        fit_tag=db_item.fit_tag,
+        color=db_item.color,
+        colors=db_item.colors,
+        season=db_item.season,
+    )
+    _assign_suggested_tags(db_item, suggestions)
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return suggestions
+
+
+def apply_suggested_tags(db: Session, db_item: models.ClothingItem) -> models.ClothingItem:
+    if not db_item.clothing_type and db_item.suggested_clothing_type:
+        db_item.clothing_type = db_item.suggested_clothing_type
+    if not db_item.fit_tag and db_item.suggested_fit_tag:
+        db_item.fit_tag = db_item.suggested_fit_tag
+    if not db_item.colors and db_item.suggested_colors:
+        db_item.colors = db_item.suggested_colors
+        db_item.color = _first_or_default(db_item.suggested_colors, db_item.color)
+    existing_season_tags = _normalize_tag_list(db_item.season_tags)
+    if (
+        db_item.suggested_season_tags
+        and (
+            not existing_season_tags
+            or (len(existing_season_tags) == 1 and existing_season_tags[0].lower() == "all")
+        )
+    ):
+        db_item.season_tags = db_item.suggested_season_tags
+        db_item.season = _first_or_default(db_item.suggested_season_tags, db_item.season)
+    if not db_item.style_tags and db_item.suggested_style_tags:
+        db_item.style_tags = db_item.suggested_style_tags
+    if not db_item.occasion_tags and db_item.suggested_occasion_tags:
+        db_item.occasion_tags = db_item.suggested_occasion_tags
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
 
 
 def update_clothing_item(

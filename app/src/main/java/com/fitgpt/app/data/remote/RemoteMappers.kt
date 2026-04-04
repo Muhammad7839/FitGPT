@@ -8,11 +8,13 @@ import com.fitgpt.app.data.model.AiChatResponse
 import com.fitgpt.app.data.model.AiRecommendationResult
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.data.model.OutfitOption
+import com.fitgpt.app.data.model.TagSuggestion
 import com.fitgpt.app.data.remote.dto.ClothingItemCreateRequest
 import com.fitgpt.app.data.remote.dto.ClothingItemDto
 import com.fitgpt.app.data.remote.dto.ChatMessageDto
 import com.fitgpt.app.data.remote.dto.ChatResponseDto
 import com.fitgpt.app.data.remote.dto.AiRecommendationResponseDto
+import com.fitgpt.app.data.remote.dto.TagSuggestionResponseDto
 
 fun ClothingItemDto.toDomain(): ClothingItem {
     return ClothingItem(
@@ -30,6 +32,12 @@ fun ClothingItemDto.toDomain(): ClothingItem {
         seasonTags = seasonTags,
         styleTags = styleTags,
         occasionTags = occasionTags,
+        suggestedClothingType = suggestedClothingType,
+        suggestedFitTag = suggestedFitTag,
+        suggestedColors = suggestedColors,
+        suggestedSeasonTags = suggestedSeasonTags,
+        suggestedStyleTags = suggestedStyleTags,
+        suggestedOccasionTags = suggestedOccasionTags,
         accessoryType = accessoryType,
         comfortLevel = comfortLevel,
         imageUrl = imageUrl,
@@ -38,6 +46,18 @@ fun ClothingItemDto.toDomain(): ClothingItem {
         isFavorite = isFavorite,
         isArchived = isArchived,
         lastWornTimestamp = lastWornTimestamp,
+    )
+}
+
+fun TagSuggestionResponseDto.toDomain(): TagSuggestion {
+    return TagSuggestion(
+        generated = generated,
+        suggestedClothingType = suggestedClothingType,
+        suggestedFitTag = suggestedFitTag,
+        suggestedColors = suggestedColors,
+        suggestedSeasonTags = suggestedSeasonTags,
+        suggestedStyleTags = suggestedStyleTags,
+        suggestedOccasionTags = suggestedOccasionTags
     )
 }
 

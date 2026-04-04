@@ -6,6 +6,7 @@ import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
+import com.fitgpt.app.data.model.TagSuggestion
 import com.fitgpt.app.data.model.UploadResult
 import com.fitgpt.app.data.model.WeatherSnapshot
 
@@ -31,6 +32,9 @@ interface WardrobeRepository {
     suspend fun addItem(item: ClothingItem)
     suspend fun addItemWithPhoto(item: ClothingItem, photo: UploadImagePayload): ClothingItem
     suspend fun addItemsBulk(items: List<ClothingItem>): List<ClothingItem>
+    suspend fun suggestTags(item: ClothingItem): TagSuggestion
+    suspend fun getItemTagSuggestions(itemId: Int): TagSuggestion
+    suspend fun applyItemTagSuggestions(itemId: Int): ClothingItem
     suspend fun uploadImage(bytes: ByteArray, fileName: String, mimeType: String): String
     suspend fun uploadImagesBatch(images: List<UploadImagePayload>): List<UploadResult>
     suspend fun deleteItem(item: ClothingItem)

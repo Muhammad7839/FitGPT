@@ -26,6 +26,7 @@ import com.fitgpt.app.data.remote.dto.RecommendationResponseDto
 import com.fitgpt.app.data.remote.dto.RecommendationOptionsResponseDto
 import com.fitgpt.app.data.remote.dto.AiRecommendationRequestDto
 import com.fitgpt.app.data.remote.dto.AiRecommendationResponseDto
+import com.fitgpt.app.data.remote.dto.TagSuggestionResponseDto
 import com.fitgpt.app.data.remote.dto.RegisterRequest
 import com.fitgpt.app.data.remote.dto.ResetPasswordRequest
 import com.fitgpt.app.data.remote.dto.SavedOutfitCreateRequest
@@ -141,6 +142,11 @@ interface ApiService {
         @Body payload: BulkCreateClothingItemsRequestDto
     ): BulkCreateClothingItemsResponseDto
 
+    @POST("wardrobe/tags/suggest")
+    suspend fun suggestWardrobeTags(
+        @Body payload: ClothingItemCreateRequest
+    ): TagSuggestionResponseDto
+
     @Multipart
     @POST("wardrobe/items/image")
     suspend fun uploadWardrobeImage(
@@ -163,6 +169,16 @@ interface ApiService {
     suspend fun toggleWardrobeFavorite(
         @Path("itemId") itemId: Int,
         @Body payload: FavoriteToggleRequestDto
+    ): ClothingItemDto
+
+    @GET("wardrobe/items/{itemId}/tag-suggestions")
+    suspend fun getWardrobeItemTagSuggestions(
+        @Path("itemId") itemId: Int
+    ): TagSuggestionResponseDto
+
+    @POST("wardrobe/items/{itemId}/tag-suggestions/apply")
+    suspend fun applyWardrobeItemTagSuggestions(
+        @Path("itemId") itemId: Int
     ): ClothingItemDto
 
     @DELETE("wardrobe/items/{itemId}")

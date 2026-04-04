@@ -6,6 +6,7 @@ import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
+import com.fitgpt.app.data.model.TagSuggestion
 import com.fitgpt.app.data.model.UploadResult
 import com.fitgpt.app.data.model.WeatherSnapshot
 
@@ -91,6 +92,45 @@ class FakeWardrobeRepository : WardrobeRepository {
     override suspend fun addItemsBulk(items: List<ClothingItem>): List<ClothingItem> {
         wardrobeItems.addAll(items)
         return items
+    }
+
+    override suspend fun suggestTags(item: ClothingItem): TagSuggestion {
+        val suggestedStyle = if (item.category.equals("Outerwear", ignoreCase = true)) {
+            listOf("layered")
+        } else {
+            listOf("casual")
+        }
+        return TagSuggestion(
+            generated = true,
+            suggestedClothingType = item.clothingType ?: item.category,
+            suggestedFitTag = item.fitTag ?: "regular",
+            suggestedColors = item.colors.ifEmpty { listOf(item.color) },
+            suggestedSeasonTags = item.seasonTags.ifEmpty { listOf(item.season) },
+            suggestedStyleTags = suggestedStyle,
+            suggestedOccasionTags = listOf("daily")
+        )
+    }
+
+    override suspend fun getItemTagSuggestions(itemId: Int): TagSuggestion {
+        val item = wardrobeItems.firstOrNull { it.id == itemId } ?: error("item not found")
+        return suggestTags(item)
+    }
+
+    override suspend fun applyItemTagSuggestions(itemId: Int): ClothingItem {
+        val index = wardrobeItems.indexOfFirst { it.id == itemId }
+        if (index == -1) error("item not found")
+        val current = wardrobeItems[index]
+        val suggestion = suggestTags(current)
+        val updated = current.copy(
+            clothingType = current.clothingType ?: suggestion.suggestedClothingType,
+            fitTag = current.fitTag ?: suggestion.suggestedFitTag,
+            colors = current.colors.ifEmpty { suggestion.suggestedColors },
+            seasonTags = current.seasonTags.ifEmpty { suggestion.suggestedSeasonTags },
+            styleTags = current.styleTags.ifEmpty { suggestion.suggestedStyleTags },
+            occasionTags = current.occasionTags.ifEmpty { suggestion.suggestedOccasionTags }
+        )
+        wardrobeItems[index] = updated
+        return updated
     }
 
     override suspend fun uploadImage(bytes: ByteArray, fileName: String, mimeType: String): String {
