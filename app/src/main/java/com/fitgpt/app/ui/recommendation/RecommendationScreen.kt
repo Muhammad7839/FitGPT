@@ -571,6 +571,19 @@ fun RecommendationScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    OutlinedButton(
+                        onClick = {
+                            if (recommendedItems.isEmpty()) return@OutlinedButton
+                            viewModel.rejectCurrentRecommendation()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = recommendedItems.isNotEmpty()
+                    ) {
+                        Text("Not for me")
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     Button(
                         onClick = {
                             if (recommendedItems.isEmpty()) return@Button

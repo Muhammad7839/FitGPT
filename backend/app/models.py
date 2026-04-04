@@ -208,3 +208,16 @@ class RecommendationFingerprint(Base):
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     fingerprint = Column(String, nullable=False, index=True)
     created_at_timestamp = Column(Integer, nullable=False, index=True)
+
+
+class RejectedOutfit(Base):
+    """Tracks rejected recommendation signatures per user for future filtering."""
+
+    __tablename__ = "rejected_outfits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    fingerprint = Column(String, nullable=False, index=True)
+    similarity_key = Column(String, nullable=False, index=True)
+    item_ids_csv = Column(String, nullable=False)
+    rejected_at_timestamp = Column(Integer, nullable=False, index=True)

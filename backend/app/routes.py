@@ -1138,6 +1138,34 @@ def get_recommendation_options(
     }
 
 
+@router.post("/recommendations/reject", response_model=schemas.RejectOutfitResponse)
+def reject_recommendation_outfit(
+    payload: schemas.RejectOutfitRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    _ensure_owned_items(db, current_user.id, payload.item_ids)
+    result = crud.record_rejected_outfit(
+        db,
+        user_id=current_user.id,
+        item_ids=payload.item_ids,
+        suggestion_id=payload.suggestion_id,
+    )
+    logger.info(
+        "Recorded recommendation rejection user_id=%s fingerprint=%s created=%s",
+        current_user.id,
+        result["fingerprint"],
+        result["created"],
+    )
+    detail = "Outfit rejection recorded" if result["created"] else "Outfit rejection already recorded"
+    return {
+        "detail": detail,
+        "fingerprint": result["fingerprint"],
+        "similarity_key": result["similarity_key"],
+        "created": result["created"],
+    }
+
+
 @router.post("/ai/chat", response_model=schemas.ChatResponse)
 def chat_with_ai(
     payload: schemas.ChatRequest,

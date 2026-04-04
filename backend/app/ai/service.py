@@ -110,6 +110,7 @@ class AiService:
     ) -> RecommendationResult:
         all_items = crud.get_clothing_items_for_user(db, user.id, include_archived=False)
         recent_fingerprints = set(history.get_recent_fingerprints(db, user.id))
+        item_map = {item.id: item for item in all_items}
 
         deterministic_options = deterministic.recommend_many(
             items=all_items,
@@ -123,9 +124,27 @@ class AiService:
             recent_fingerprints=recent_fingerprints,
             max_options=5,
         )
+        deterministic_options = crud.filter_rejected_candidates_for_user(
+            db=db,
+            user_id=user.id,
+            candidates=deterministic_options,
+            item_map=item_map,
+        )
+        if not deterministic_options:
+            deterministic_options = deterministic.recommend_many(
+                items=all_items,
+                user=user,
+                manual_temp=context.manual_temp,
+                weather_category=context.weather_category,
+                occasion=context.occasion,
+                exclude=context.exclude,
+                style_preference=context.style_preference,
+                preferred_seasons=context.preferred_seasons,
+                recent_fingerprints=recent_fingerprints,
+                max_options=1,
+            )
         deterministic_pick = deterministic_options[0]
 
-        item_map = {item.id: item for item in all_items}
         deterministic_items = [item_map[item_id] for item_id in deterministic_pick.item_ids if item_id in item_map]
         if not deterministic_items:
             return RecommendationResult(
@@ -195,6 +214,30 @@ class AiService:
                     source="fallback",
                     fallback_used=True,
                     warning="repeat_prevention_applied",
+                    weather_category=deterministic_pick.weather_category,
+                    item_explanations=deterministic_pick.item_explanations,
+                    suggestion_id=deterministic_pick.fingerprint,
+                    outfit_options=deterministic_options,
+                )
+            if crud.is_rejected_outfit(
+                db,
+                user_id=user.id,
+                items=ai_items,
+                fingerprint=ai_fingerprint,
+            ):
+                logger.info(
+                    "request_id=%s ai_recommendation_rejected_filtered fingerprint=%s",
+                    context.request_id,
+                    ai_fingerprint,
+                )
+                history.save_fingerprint(db, user.id, deterministic_pick.fingerprint)
+                return RecommendationResult(
+                    items=deterministic_items,
+                    explanation=deterministic_pick.explanation,
+                    outfit_score=deterministic_pick.score,
+                    source="fallback",
+                    fallback_used=True,
+                    warning="rejected_outfit_filtered",
                     weather_category=deterministic_pick.weather_category,
                     item_explanations=deterministic_pick.item_explanations,
                     suggestion_id=deterministic_pick.fingerprint,

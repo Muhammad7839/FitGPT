@@ -286,6 +286,10 @@ class FakeWardrobeRepository : WardrobeRepository {
         )
     }
 
+    override suspend fun rejectRecommendation(itemIds: List<Int>, suggestionId: String?) {
+        // In-memory fake repository does not persist rejected combinations.
+    }
+
     override suspend fun getRecommendationOptions(
         manualTemp: Int?,
         timeContext: String?,
