@@ -25,3 +25,7 @@ local.properties
 # IDE
 .idea/
 .vscode/
+
+.codex/
+fitgpt.db
+uploads/
