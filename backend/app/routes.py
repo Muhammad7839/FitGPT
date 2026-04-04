@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -26,7 +26,13 @@ from app.config import EXPOSE_RESET_TOKEN_IN_RESPONSE, MAX_UPLOAD_IMAGE_BYTES
 from app.database.database import get_db
 from app.google_oauth import GoogleTokenValidationError, verify_google_id_token
 from app.recommendation_explanations import RecommendationContext, build_recommendation_explanation
-from app.weather import WeatherLookupError, fetch_current_weather, fetch_forecast_weather, map_temperature_to_category
+from app.weather import (
+    ForecastSnapshot,
+    WeatherLookupError,
+    fetch_current_weather,
+    fetch_forecast_weather,
+    map_temperature_to_category,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1115,6 +1121,91 @@ def get_dashboard_context(
     }
 
 
+@router.get("/recommendations/forecast", response_model=schemas.ForecastRecommendationResponse)
+def get_forecast_recommendations(
+    city: Optional[str] = None,
+    lat: Optional[float] = None,
+    lon: Optional[float] = None,
+    hours_ahead: int = 24,
+    manual_temp: Optional[int] = None,
+    weather_category: Optional[str] = None,
+    occasion: Optional[str] = None,
+    exclude: Optional[str] = None,
+    style_preference: Optional[str] = None,
+    preferred_seasons: list[str] = Query(default_factory=list),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    forecast_warning: Optional[str] = None
+    try:
+        forecast = fetch_forecast_weather(
+            city=city,
+            lat=lat,
+            lon=lon,
+            hours_ahead=hours_ahead,
+        )
+    except WeatherLookupError as exc:
+        normalized_weather = _normalize_weather_category(weather_category) or "mild"
+        fallback_temp = manual_temp if manual_temp is not None else 68
+        fallback_city = city.strip() if city else "Current location"
+        forecast = ForecastSnapshot(
+            city=fallback_city,
+            forecast_timestamp=int(datetime.utcnow().timestamp()),
+            temperature_f=fallback_temp,
+            weather_category=normalized_weather,
+            condition="Unavailable",
+            description="Forecast unavailable, using fallback weather context",
+            wind_mph=0.0,
+            rain_mm=0.0,
+            snow_mm=0.0,
+            source="fallback",
+        )
+        forecast_warning = f"forecast_unavailable:{str(exc)}"
+
+    request_id = uuid4().hex[:12]
+    recommendation = ai_service.run_recommendation(
+        db=db,
+        user=current_user,
+        context=AiRecommendationContext(
+            manual_temp=forecast.temperature_f,
+            weather_category=forecast.weather_category,
+            occasion=occasion,
+            exclude=exclude,
+            style_preference=style_preference,
+            preferred_seasons=preferred_seasons,
+            request_id=request_id,
+        ),
+    )
+
+    warning_value = recommendation.warning
+    if forecast_warning:
+        warning_value = forecast_warning if not warning_value else f"{forecast_warning};{warning_value}"
+
+    return {
+        "items": recommendation.items,
+        "explanation": recommendation.explanation,
+        "outfit_score": recommendation.outfit_score,
+        "weather_category": recommendation.weather_category,
+        "occasion": occasion,
+        "source": recommendation.source,
+        "fallback_used": recommendation.fallback_used or forecast.source == "fallback",
+        "warning": warning_value,
+        "suggestion_id": recommendation.suggestion_id,
+        "forecast": {
+            "city": forecast.city,
+            "forecast_timestamp": forecast.forecast_timestamp,
+            "temperature_f": forecast.temperature_f,
+            "weather_category": forecast.weather_category,
+            "condition": forecast.condition,
+            "description": forecast.description,
+            "wind_mph": forecast.wind_mph,
+            "rain_mm": forecast.rain_mm,
+            "snow_mm": forecast.snow_mm,
+            "source": forecast.source,
+        },
+    }
+
+
 @router.get("/recommendations", response_model=schemas.RecommendationResponse)
 def get_recommendations(
     manual_temp: Optional[int] = None,
@@ -1503,7 +1594,7 @@ def generate_trip_packing_list(
         )
         forecast_days = [
             {
-                "date": day.date,
+                "date": day.date or payload.start_date,
                 "weather_category": day.weather_category,
                 "description": day.description,
             }

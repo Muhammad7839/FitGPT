@@ -757,6 +757,32 @@ class TripPackingResponse(BaseModel):
     insufficient_data: bool = False
 
 
+class WeatherForecastResponse(BaseModel):
+    city: str
+    forecast_timestamp: int
+    temperature_f: int
+    weather_category: str
+    condition: str
+    description: str
+    wind_mph: float
+    rain_mm: float
+    snow_mm: float
+    source: str = "forecast"
+
+
+class ForecastRecommendationResponse(BaseModel):
+    items: list[ClothingItemResponse]
+    explanation: str
+    outfit_score: float = 0.0
+    weather_category: str
+    occasion: Optional[str] = None
+    source: str
+    fallback_used: bool = False
+    warning: Optional[str] = None
+    suggestion_id: str
+    forecast: WeatherForecastResponse
+
+
 class OutfitHistoryCreate(BaseModel):
     item_ids: list[int] = Field(min_length=1, max_length=32)
     worn_at_timestamp: int = Field(gt=0)
