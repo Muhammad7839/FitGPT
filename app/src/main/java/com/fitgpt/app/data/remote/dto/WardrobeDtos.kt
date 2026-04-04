@@ -263,3 +263,26 @@ data class BulkCreateItemResultDto(
 data class BulkCreateClothingItemsResponseDto(
     val results: List<BulkCreateItemResultDto>
 )
+
+data class WardrobeGapSuggestionDto(
+    val category: String,
+    @SerializedName("item_name")
+    val itemName: String,
+    val reason: String,
+    @SerializedName("image_url")
+    val imageUrl: String?,
+    @SerializedName("shopping_link")
+    val shoppingLink: String
+)
+
+data class WardrobeGapResponseDto(
+    @SerializedName("baseline_categories")
+    val baselineCategories: List<String> = emptyList(),
+    @SerializedName("category_counts")
+    val categoryCounts: Map<String, Int> = emptyMap(),
+    @SerializedName("missing_categories")
+    val missingCategories: List<String> = emptyList(),
+    val suggestions: List<WardrobeGapSuggestionDto> = emptyList(),
+    @SerializedName("insufficient_data")
+    val insufficientData: Boolean = false
+)

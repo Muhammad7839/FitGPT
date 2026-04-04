@@ -36,6 +36,7 @@ import com.fitgpt.app.data.remote.dto.AvatarUploadResponse
 import com.fitgpt.app.data.remote.dto.UserProfileSummaryResponse
 import com.fitgpt.app.data.remote.dto.UserProfileUpdateRequest
 import com.fitgpt.app.data.remote.dto.UserResponse
+import com.fitgpt.app.data.remote.dto.WardrobeGapResponseDto
 import com.fitgpt.app.data.remote.dto.WeatherCurrentResponseDto
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -124,6 +125,9 @@ interface ApiService {
 
     @GET("wardrobe/items/favorites")
     suspend fun getFavoriteWardrobeItems(): List<ClothingItemDto>
+
+    @GET("wardrobe/gaps")
+    suspend fun getWardrobeGaps(): WardrobeGapResponseDto
 
     @POST("wardrobe/items")
     suspend fun addWardrobeItem(

@@ -8,6 +8,8 @@ import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
 import com.fitgpt.app.data.model.TagSuggestion
 import com.fitgpt.app.data.model.UploadResult
+import com.fitgpt.app.data.model.WardrobeGapAnalysis
+import com.fitgpt.app.data.model.WardrobeGapSuggestion
 import com.fitgpt.app.data.model.WeatherSnapshot
 
 class FakeWardrobeRepository : WardrobeRepository {
@@ -175,6 +177,48 @@ class FakeWardrobeRepository : WardrobeRepository {
 
     override suspend fun getFavoriteItems(): List<ClothingItem> {
         return wardrobeItems.filter { it.isFavorite && !it.isArchived }
+    }
+
+    override suspend fun getWardrobeGaps(): WardrobeGapAnalysis {
+        val baseline = linkedMapOf(
+            "top" to 2,
+            "bottom" to 2,
+            "shoes" to 1,
+            "outerwear" to 1
+        )
+        val counts = baseline.keys.associateWith { 0 }.toMutableMap()
+
+        wardrobeItems
+            .filter { !it.isArchived }
+            .forEach { item ->
+                val normalized = item.category.trim().lowercase()
+                when {
+                    normalized in setOf("top", "tops", "shirt", "t-shirt") -> counts["top"] = (counts["top"] ?: 0) + 1
+                    normalized in setOf("bottom", "bottoms", "pants", "jeans", "shorts", "skirt") ->
+                        counts["bottom"] = (counts["bottom"] ?: 0) + 1
+                    normalized in setOf("shoes", "shoe", "sneakers", "boots", "sandals") ->
+                        counts["shoes"] = (counts["shoes"] ?: 0) + 1
+                    normalized in setOf("outerwear", "jacket", "coat", "hoodie", "sweater") ->
+                        counts["outerwear"] = (counts["outerwear"] ?: 0) + 1
+                }
+            }
+
+        val missing = baseline.filter { (category, minCount) -> (counts[category] ?: 0) < minCount }.keys.toList()
+        return WardrobeGapAnalysis(
+            baselineCategories = baseline.keys.toList(),
+            categoryCounts = counts,
+            missingCategories = missing,
+            suggestions = missing.map { category ->
+                WardrobeGapSuggestion(
+                    category = category,
+                    itemName = "Suggested ${category.replaceFirstChar { it.uppercase() }} item",
+                    reason = "Wardrobe has fewer $category items than baseline.",
+                    imageUrl = null,
+                    shoppingLink = "https://www.target.com/s?searchTerm=$category"
+                )
+            },
+            insufficientData = wardrobeItems.count { !it.isArchived } < 3
+        )
     }
 
     override suspend fun getRecommendations(

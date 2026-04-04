@@ -13,6 +13,7 @@ import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
 import com.fitgpt.app.data.model.TagSuggestion
 import com.fitgpt.app.data.model.UploadResult
+import com.fitgpt.app.data.model.WardrobeGapAnalysis
 import com.fitgpt.app.data.model.WeatherSnapshot
 import com.fitgpt.app.data.repository.UploadImagePayload
 import com.fitgpt.app.data.repository.WardrobeRepository
@@ -105,6 +106,9 @@ class WardrobeViewModel(
 
     private val _savedOutfitsState = MutableStateFlow<List<SavedOutfit>>(emptyList())
     val savedOutfitsState: StateFlow<List<SavedOutfit>> = _savedOutfitsState
+    private val _wardrobeGapState =
+        MutableStateFlow<UiState<WardrobeGapAnalysis?>>(UiState.Success(null))
+    val wardrobeGapState: StateFlow<UiState<WardrobeGapAnalysis?>> = _wardrobeGapState
 
     private val _addItemImageUploadState = MutableStateFlow<UiState<String?>>(UiState.Success(null))
     val addItemImageUploadState: StateFlow<UiState<String?>> = _addItemImageUploadState
@@ -141,6 +145,7 @@ class WardrobeViewModel(
 
     init {
         refreshWardrobe()
+        fetchWardrobeGaps()
         refreshSavedOutfits()
         refreshHistory()
         refreshPlannedOutfits()
@@ -175,8 +180,21 @@ class WardrobeViewModel(
                 allItems.clear()
                 allItems.addAll(items)
                 _wardrobeState.value = UiState.Success(items)
+                fetchWardrobeGaps()
             } catch (_: Exception) {
                 _wardrobeState.value = UiState.Error("Failed to load wardrobe items")
+            }
+        }
+    }
+
+    fun fetchWardrobeGaps() {
+        _wardrobeGapState.value = UiState.Loading
+        viewModelScope.launch {
+            try {
+                val gaps = repository.getWardrobeGaps()
+                _wardrobeGapState.value = UiState.Success(gaps)
+            } catch (_: Exception) {
+                _wardrobeGapState.value = UiState.Error("Failed to load wardrobe gaps")
             }
         }
     }
