@@ -220,14 +220,44 @@ Do NOT answer questions unrelated to FitGPT. Politely redirect to app-related to
 """
 
 
-def get_chat_response(messages: list) -> Optional[str]:
+def _build_system_prompt(context: Optional[dict] = None) -> str:
+    """Build the system prompt, optionally injecting user context."""
+    if not context:
+        return SYSTEM_PROMPT
+
+    sections = []
+    wardrobe = (context.get("wardrobe_summary") or "").strip()
+    prefs = (context.get("preferences") or "").strip()
+
+    if wardrobe:
+        sections.append(
+            "## This User's Wardrobe\n"
+            "The user has shared their wardrobe with you. Use this to give personalized "
+            "styling advice. Only reference items that actually exist in this list — "
+            "do NOT invent items the user doesn't own.\n\n" + wardrobe
+        )
+    if prefs:
+        sections.append(
+            "## This User's Preferences\n"
+            "The user has shared their style preferences. Factor these into any outfit "
+            "suggestions or styling advice you give.\n\n" + prefs
+        )
+
+    if not sections:
+        return SYSTEM_PROMPT
+
+    return SYSTEM_PROMPT + "\n\n" + "\n\n".join(sections)
+
+
+def get_chat_response(messages: list, context: Optional[dict] = None) -> Optional[str]:
     """Send conversation to Groq and return the assistant's reply."""
     client = _get_client()
     if client is None:
         return None
 
     try:
-        api_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        system_prompt = _build_system_prompt(context)
+        api_messages = [{"role": "system", "content": system_prompt}]
         for msg in messages[-20:]:
             role = msg.get("role", "user")
             if role not in ("user", "assistant"):

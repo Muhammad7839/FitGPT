@@ -404,7 +404,13 @@ def get_ai_recommendations_endpoint(request: AIRecommendationRequest):
 @router.post("/chat", response_model=ChatResponse)
 def chat_endpoint(request: ChatRequest):
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
-    reply = get_chat_response(messages)
+    context = None
+    if request.context:
+        context = {
+            "wardrobe_summary": request.context.wardrobe_summary,
+            "preferences": request.context.preferences,
+        }
+    reply = get_chat_response(messages, context=context)
     if reply is None:
         return {"reply": "Sorry, the assistant is unavailable right now. Please try again later."}
     return {"reply": reply}
