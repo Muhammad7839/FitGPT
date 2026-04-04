@@ -22,6 +22,8 @@ import com.fitgpt.app.data.remote.dto.PlannedOutfitAssignmentRequestDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitAssignmentResponseDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.PlannedOutfitListResponseDto
+import com.fitgpt.app.data.remote.dto.PromptFeedbackEventRequestDto
+import com.fitgpt.app.data.remote.dto.PromptFeedbackEventResponseDto
 import com.fitgpt.app.data.remote.dto.RecommendationResponseDto
 import com.fitgpt.app.data.remote.dto.RecommendationOptionsResponseDto
 import com.fitgpt.app.data.remote.dto.AiRecommendationRequestDto
@@ -228,6 +230,11 @@ interface ApiService {
     suspend fun rejectRecommendation(
         @Body payload: RejectOutfitRequestDto
     ): RejectOutfitResponseDto
+
+    @POST("feedback/prompts/event")
+    suspend fun recordPromptFeedbackEvent(
+        @Body payload: PromptFeedbackEventRequestDto
+    ): PromptFeedbackEventResponseDto
 
     @POST("ai/chat")
     suspend fun sendChatMessage(

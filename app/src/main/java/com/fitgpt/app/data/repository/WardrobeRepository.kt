@@ -80,6 +80,7 @@ interface WardrobeRepository {
         preferredSeasons: List<String> = emptyList()
     ): AiRecommendationResult
     suspend fun rejectRecommendation(itemIds: List<Int>, suggestionId: String? = null)
+    suspend fun recordPromptFeedbackEvent(eventType: String, suggestionId: String? = null)
     suspend fun getCurrentWeather(city: String? = null, lat: Double? = null, lon: Double? = null): WeatherSnapshot
     suspend fun markOutfitAsWorn(items: List<ClothingItem>, wornAtTimestamp: Long)
 

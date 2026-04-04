@@ -221,3 +221,15 @@ class RejectedOutfit(Base):
     similarity_key = Column(String, nullable=False, index=True)
     item_ids_csv = Column(String, nullable=False)
     rejected_at_timestamp = Column(Integer, nullable=False, index=True)
+
+
+class FeedbackPromptEvent(Base):
+    """Stores user-scoped feedback prompt exposure and interaction events."""
+
+    __tablename__ = "feedback_prompt_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    event_type = Column(String, nullable=False, index=True)
+    suggestion_id = Column(String, nullable=True, index=True)
+    event_timestamp = Column(Integer, nullable=False, index=True)

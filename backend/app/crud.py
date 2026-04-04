@@ -17,6 +17,8 @@ from app.config import RESET_TOKEN_EXPIRE_MINUTES
 from app.weather import map_temperature_to_category
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+PROMPT_DEFAULT_COOLDOWN_SECONDS = 24 * 60 * 60
+PROMPT_IGNORE_COOLDOWN_SECONDS = 72 * 60 * 60
 
 
 # =============================
@@ -1054,6 +1056,85 @@ def get_recommendations_for_user(
     if not options:
         return []
     return options[0]["items"]
+
+
+def record_feedback_prompt_event(
+    db: Session,
+    *,
+    user_id: int,
+    event_type: str,
+    suggestion_id: Optional[str] = None,
+    event_timestamp: Optional[int] = None,
+):
+    timestamp = event_timestamp or int(datetime.utcnow().timestamp())
+    event = models.FeedbackPromptEvent(
+        owner_id=user_id,
+        event_type=event_type.strip().lower(),
+        suggestion_id=suggestion_id,
+        event_timestamp=timestamp,
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return event
+
+
+def build_feedback_prompt_metadata(
+    db: Session,
+    *,
+    user_id: int,
+    now_timestamp: Optional[int] = None,
+) -> dict:
+    now = now_timestamp or int(datetime.utcnow().timestamp())
+    recent_events = db.query(models.FeedbackPromptEvent).filter(
+        models.FeedbackPromptEvent.owner_id == user_id
+    ).order_by(models.FeedbackPromptEvent.event_timestamp.desc()).limit(20).all()
+
+    last_shown = next((event for event in recent_events if event.event_type == "shown"), None)
+    recent_interactions = [event for event in recent_events if event.event_type in {"ignored", "dismissed", "accepted"}]
+    recent_ignore_count = sum(1 for event in recent_interactions[:3] if event.event_type in {"ignored", "dismissed"})
+    cooldown_seconds = (
+        PROMPT_IGNORE_COOLDOWN_SECONDS if recent_ignore_count >= 3 else PROMPT_DEFAULT_COOLDOWN_SECONDS
+    )
+    if not last_shown:
+        return {
+            "should_prompt": True,
+            "reason": "no_previous_prompt",
+            "cooldown_seconds_remaining": 0,
+        }
+
+    elapsed = max(0, now - int(last_shown.event_timestamp))
+    remaining = max(0, cooldown_seconds - elapsed)
+    if remaining > 0:
+        reason = "cooldown_after_ignores" if recent_ignore_count >= 3 else "cooldown_active"
+        return {
+            "should_prompt": False,
+            "reason": reason,
+            "cooldown_seconds_remaining": remaining,
+        }
+
+    return {
+        "should_prompt": True,
+        "reason": "cadence_due",
+        "cooldown_seconds_remaining": 0,
+    }
+
+
+def maybe_record_feedback_prompt_impression(
+    db: Session,
+    *,
+    user_id: int,
+    suggestion_id: Optional[str],
+) -> dict:
+    metadata = build_feedback_prompt_metadata(db, user_id=user_id)
+    if metadata["should_prompt"]:
+        record_feedback_prompt_event(
+            db,
+            user_id=user_id,
+            event_type="shown",
+            suggestion_id=suggestion_id,
+        )
+    return metadata
 
 
 def save_outfit_history(

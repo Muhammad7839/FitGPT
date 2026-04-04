@@ -372,6 +372,7 @@ class RecommendationResponse(BaseModel):
     outfit_score: float = 0.0
     weather_category: Optional[str] = None
     occasion: Optional[str] = None
+    prompt_feedback: Optional["FeedbackPromptMetadata"] = None
 
 
 class OutfitOptionResponse(BaseModel):
@@ -400,11 +401,42 @@ class RejectOutfitRequest(BaseModel):
         return cleaned or None
 
 
+class FeedbackPromptMetadata(BaseModel):
+    should_prompt: bool
+    reason: str
+    cooldown_seconds_remaining: int = 0
+
+
+class FeedbackPromptEventCreate(BaseModel):
+    event_type: str = Field(min_length=1, max_length=32)
+    suggestion_id: Optional[str] = Field(default=None, max_length=128)
+
+    @field_validator("event_type")
+    @classmethod
+    def validate_event_type(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"shown", "ignored", "dismissed", "accepted"}:
+            raise ValueError("event_type must be shown/ignored/dismissed/accepted")
+        return normalized
+
+    @field_validator("suggestion_id")
+    @classmethod
+    def normalize_suggestion_id(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        cleaned = value.strip()
+        return cleaned or None
+
+
 class RejectOutfitResponse(BaseModel):
     detail: str
     fingerprint: str
     similarity_key: str
     created: bool
+
+
+class FeedbackPromptEventResponse(BaseModel):
+    detail: str
 
 
 class ChatMessage(BaseModel):
@@ -517,6 +549,7 @@ class AiRecommendationResponse(BaseModel):
     suggestion_id: str
     item_explanations: list[AiRecommendationItemExplanation] = Field(default_factory=list)
     outfit_options: list[OutfitOptionResponse] = Field(default_factory=list)
+    prompt_feedback: Optional[FeedbackPromptMetadata] = None
 
 
 class DashboardContextWeather(BaseModel):

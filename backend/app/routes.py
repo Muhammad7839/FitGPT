@@ -1078,12 +1078,18 @@ def get_recommendations(
     final_explanation = explanation
     if deterministic_explanation and deterministic_explanation.lower() not in explanation.lower():
         final_explanation = f"{deterministic_explanation} {explanation}".strip()
+    prompt_feedback = crud.maybe_record_feedback_prompt_impression(
+        db=db,
+        user_id=current_user.id,
+        suggestion_id=top_option.get("fingerprint"),
+    )
     return {
         "items": items,
         "explanation": final_explanation,
         "outfit_score": top_option["outfit_score"],
         "weather_category": normalized_weather_category,
         "occasion": occasion,
+        "prompt_feedback": prompt_feedback,
     }
 
 
@@ -1164,6 +1170,21 @@ def reject_recommendation_outfit(
         "similarity_key": result["similarity_key"],
         "created": result["created"],
     }
+
+
+@router.post("/feedback/prompts/event", response_model=schemas.FeedbackPromptEventResponse)
+def record_feedback_prompt_event(
+    payload: schemas.FeedbackPromptEventCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    crud.record_feedback_prompt_event(
+        db,
+        user_id=current_user.id,
+        event_type=payload.event_type,
+        suggestion_id=payload.suggestion_id,
+    )
+    return {"detail": "Feedback prompt event recorded"}
 
 
 @router.post("/ai/chat", response_model=schemas.ChatResponse)
@@ -1257,6 +1278,11 @@ def get_ai_recommendations(
         item.id: item
         for item in crud.get_clothing_items_for_user(db, current_user.id, include_archived=False)
     }
+    prompt_feedback = crud.maybe_record_feedback_prompt_impression(
+        db=db,
+        user_id=current_user.id,
+        suggestion_id=result.suggestion_id,
+    )
     return {
         "items": result.items,
         "explanation": result.explanation,
@@ -1283,6 +1309,7 @@ def get_ai_recommendations(
             }
             for option in result.outfit_options
         ],
+        "prompt_feedback": prompt_feedback,
     }
 
 
