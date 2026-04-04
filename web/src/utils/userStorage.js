@@ -1,6 +1,6 @@
 
 
-import { GUEST_WARDROBE_KEY, WARDROBE_KEY, SAVED_OUTFITS_KEY, OUTFIT_HISTORY_KEY, PLANNED_OUTFITS_KEY, PROFILE_KEY, ONBOARDING_ANSWERS_KEY, ONBOARDED_KEY, EVT_WARDROBE_CHANGED, REC_SEED_KEY, TIME_OVERRIDE_KEY, WEATHER_OVERRIDE_KEY, DEMO_AUTH_KEY, PROFILE_PIC_KEY, EVT_PROFILE_PIC_CHANGED, TUTORIAL_DONE_KEY } from "./constants";
+import { GUEST_WARDROBE_KEY, WARDROBE_KEY, SAVED_OUTFITS_KEY, OUTFIT_HISTORY_KEY, PLANNED_OUTFITS_KEY, PROFILE_KEY, ONBOARDING_ANSWERS_KEY, ONBOARDED_KEY, EVT_WARDROBE_CHANGED, REC_SEED_KEY, TIME_OVERRIDE_KEY, WEATHER_OVERRIDE_KEY, DEMO_AUTH_KEY, PROFILE_PIC_KEY, EVT_PROFILE_PIC_CHANGED, TUTORIAL_DONE_KEY, REJECTED_OUTFITS_KEY } from "./constants";
 import { safeParse } from "./helpers";
 import { normalizeItemMetadata, mergeWardrobeMetadata } from "./wardrobeOptions";
 
@@ -292,6 +292,38 @@ export function markTutorialDone() {
   try {
     localStorage.setItem(TUTORIAL_DONE_KEY, "1");
   } catch {}
+}
+
+
+const MAX_REJECTED_OUTFITS = 50;
+
+export function loadRejectedOutfits(user) {
+  const key = userKey(REJECTED_OUTFITS_KEY, user);
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
+export function saveRejectedOutfit(outfit, user) {
+  const items = (Array.isArray(outfit) ? outfit : []).map((x) => ({
+    id: (x?.id ?? "").toString(),
+    name: x?.name || "",
+    category: x?.category || "",
+    color: x?.color || "",
+  }));
+  if (!items.length) return;
+  const entry = { items, timestamp: Date.now() };
+  const existing = loadRejectedOutfits(user);
+  const updated = [entry, ...existing].slice(0, MAX_REJECTED_OUTFITS);
+  const key = userKey(REJECTED_OUTFITS_KEY, user);
+  try { localStorage.setItem(key, JSON.stringify(updated)); } catch {}
+}
+
+export function clearRejectedOutfits(user) {
+  const key = userKey(REJECTED_OUTFITS_KEY, user);
+  try { localStorage.removeItem(key); } catch {}
 }
 
 

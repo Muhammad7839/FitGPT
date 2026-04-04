@@ -737,6 +737,11 @@ function metadataScore(item, context) {
     if (comfortSet.has("layered") && item?.layer_type) score += 4;
   }
 
+  /* ── Rotation boost for underused items ──────────────────────────── */
+  const { underusedIds, neglectedIds } = context;
+  if (neglectedIds instanceof Set && neglectedIds.has(id)) score += 4;
+  else if (underusedIds instanceof Set && underusedIds.has(id)) score += 3;
+
   if (Array.isArray(outfitSoFar) && outfitSoFar.length) {
     const colorScore = outfitSoFar.reduce((total, existing) => total + pairScore(existing?.color, item?.color), 0) / outfitSoFar.length;
     score += colorScore * 8;
@@ -1187,7 +1192,7 @@ function scoreOutfitCandidate(outfit, context) {
   return score;
 }
 
-export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactSigs, recentItemCounts, weatherCat, timeCat, answers, savedSigs) {
+export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactSigs, recentItemCounts, weatherCat, timeCat, answers, savedSigs, rejectedOutfits, underusedIds, neglectedIds) {
   const active = (Array.isArray(items) ? items : []).filter(
     (x) => x && x.is_active !== false && String(x.is_active) !== "false"
   );
@@ -1208,6 +1213,8 @@ export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactS
     weatherCat: (weatherCat || "mild").toString().toLowerCase(),
     timeCat: (timeCat || "work hours").toString().toLowerCase(),
     selectedSeason: seasonFromDate(new Date()),
+    underusedIds: underusedIds instanceof Set ? underusedIds : new Set(),
+    neglectedIds: neglectedIds instanceof Set ? neglectedIds : new Set(),
   };
 
   const candidates = [];
@@ -1223,6 +1230,9 @@ export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactS
 
     let score = scoreOutfitCandidate(mapped, context);
     if (recentSigs.has(sig)) score -= 18;
+    if (Array.isArray(rejectedOutfits) && rejectedOutfits.length) {
+      score -= rejectionPenalty(mapped, rejectedOutfits, Date.now());
+    }
     score -= variant;
 
     seenSigs.add(sig);
@@ -1279,6 +1289,200 @@ export function makeRecentSets(historyList, recentN = 10) {
   }
 
   return { sigs, itemCounts };
+}
+
+/* ── Underused item detection ──────────────────────────────────────── */
+
+export function buildWearProfile(wardrobeItems, historyList) {
+  const history = Array.isArray(historyList) ? historyList : [];
+  const items = Array.isArray(wardrobeItems) ? wardrobeItems : [];
+  const profile = new Map();
+
+  for (const item of items) {
+    const id = (item?.id ?? "").toString().trim();
+    if (id) profile.set(id, { totalWears: 0, lastWornAt: null });
+  }
+
+  for (const entry of history) {
+    const ids = Array.isArray(entry?.item_ids) ? entry.item_ids : [];
+    const wornAt = entry?.worn_at ? new Date(entry.worn_at) : null;
+    for (const raw of ids) {
+      const id = (raw ?? "").toString().trim();
+      if (!id) continue;
+      const existing = profile.get(id);
+      if (existing) {
+        existing.totalWears += 1;
+        if (wornAt && (!existing.lastWornAt || wornAt > existing.lastWornAt)) existing.lastWornAt = wornAt;
+      }
+    }
+  }
+
+  return profile;
+}
+
+const NEGLECTED_DAYS = 30;
+const UNDERUSED_DAYS = 14;
+const UNDERUSED_MAX_WEARS = 2;
+
+export function detectUnderusedItems(wardrobeItems, historyList) {
+  const items = (Array.isArray(wardrobeItems) ? wardrobeItems : []).filter(
+    (x) => x && x.is_active !== false && String(x.is_active) !== "false"
+  );
+  const profile = buildWearProfile(items, historyList);
+  const now = new Date();
+  const results = [];
+
+  for (const item of items) {
+    const id = (item?.id ?? "").toString().trim();
+    if (!id) continue;
+    const data = profile.get(id);
+    if (!data) continue;
+
+    const daysSince = data.lastWornAt
+      ? (now - data.lastWornAt) / (1000 * 60 * 60 * 24)
+      : Infinity;
+
+    let status = "normal";
+    let reason = "";
+
+    if (data.totalWears === 0) {
+      status = "neglected";
+      reason = `${item.name || "This item"} has never been worn.`;
+    } else if (daysSince > NEGLECTED_DAYS) {
+      status = "neglected";
+      reason = `${item.name || "This item"} hasn't been worn in over ${Math.round(daysSince)} days.`;
+    } else if (data.totalWears < UNDERUSED_MAX_WEARS && daysSince > UNDERUSED_DAYS) {
+      status = "underused";
+      reason = `${item.name || "This item"} has only been worn ${data.totalWears} time${data.totalWears === 1 ? "" : "s"}.`;
+    }
+
+    if (status !== "normal") {
+      results.push({ ...item, _wearStatus: status, _wearReason: reason, _totalWears: data.totalWears, _daysSinceLastWorn: Math.round(daysSince) });
+    }
+  }
+
+  results.sort((a, b) => {
+    if (a._wearStatus === "neglected" && b._wearStatus !== "neglected") return -1;
+    if (b._wearStatus === "neglected" && a._wearStatus !== "neglected") return 1;
+    return a._totalWears - b._totalWears;
+  });
+
+  return results;
+}
+
+/* ── Laundry / reuse tracking ──────────────────────────────────────── */
+
+const WASH_THRESHOLDS = {
+  "t-shirt": 1, "tank top": 1, "camisole": 1, "polo": 2, "blouse": 2,
+  "dress shirt": 2, "henley": 2, "long sleeve": 2,
+  "turtleneck": 3, "hoodie": 3, "sweatshirt": 3, "sweater": 4, "cardigan": 4, "fleece": 4,
+  "blazer": 5, "jacket": 6, "coat": 8, "parka": 10, "windbreaker": 6,
+  "shorts": 2, "jeans": 4, "dress": 1, "jumpsuit": 1, "romper": 1, "skirt": 2,
+  "sneakers": 10, "boots": 12, "sandals": 5, "dress shoes": 15,
+  "hat": 5, "scarf": 5, "belt": 20, "watch": Infinity, "sunglasses": Infinity,
+};
+
+const CATEGORY_WASH_THRESHOLDS = {
+  Tops: 2,
+  Bottoms: 3,
+  Outerwear: 6,
+  Shoes: 10,
+  Accessories: 15,
+};
+
+export function getWashThreshold(clothingType, category) {
+  const type = normalizeClothingType(clothingType);
+  if (WASH_THRESHOLDS[type] !== undefined) return WASH_THRESHOLDS[type];
+  const cat = normalizeCategory(category);
+  return CATEGORY_WASH_THRESHOLDS[cat] || 3;
+}
+
+export function buildLaundryStatus(wardrobeItems, historyList, lookbackDays) {
+  const days = typeof lookbackDays === "number" && lookbackDays > 0 ? lookbackDays : 14;
+  const items = (Array.isArray(wardrobeItems) ? wardrobeItems : []).filter(
+    (x) => x && x.is_active !== false && String(x.is_active) !== "false"
+  );
+  const history = Array.isArray(historyList) ? historyList : [];
+  const cutoff = Date.now() - days * 86400000;
+
+  const wearCounts = new Map();
+  for (const entry of history) {
+    const wornAt = entry?.worn_at ? new Date(entry.worn_at).getTime() : 0;
+    if (wornAt < cutoff) continue;
+    for (const raw of Array.isArray(entry?.item_ids) ? entry.item_ids : []) {
+      const id = (raw ?? "").toString().trim();
+      if (id) wearCounts.set(id, (wearCounts.get(id) || 0) + 1);
+    }
+  }
+
+  const results = [];
+  for (const item of items) {
+    const id = (item?.id ?? "").toString().trim();
+    if (!id) continue;
+    const wears = wearCounts.get(id) || 0;
+    const threshold = getWashThreshold(item?.clothing_type, item?.category);
+
+    let status = "clean";
+    if (threshold !== Infinity) {
+      if (wears >= Math.ceil(threshold * 1.5)) status = "overdue";
+      else if (wears >= threshold) status = "due";
+    }
+
+    results.push({
+      ...item,
+      _wearsSinceWash: wears,
+      _washThreshold: threshold,
+      _laundryStatus: status,
+    });
+  }
+
+  return results;
+}
+
+export function getLaundryAlerts(wardrobeItems, historyList, lookbackDays) {
+  return buildLaundryStatus(wardrobeItems, historyList, lookbackDays)
+    .filter((item) => item._laundryStatus !== "clean")
+    .sort((a, b) => {
+      if (a._laundryStatus === "overdue" && b._laundryStatus !== "overdue") return -1;
+      if (b._laundryStatus === "overdue" && a._laundryStatus !== "overdue") return 1;
+      return b._wearsSinceWash - a._wearsSinceWash;
+    });
+}
+
+/* ── Outfit rejection / similarity ─────────────────────────────────── */
+
+export function outfitSimilarity(outfitA, outfitB) {
+  const toIds = (o) => new Set(
+    (Array.isArray(o) ? o : []).map((x) => (x?.id ?? "").toString()).filter(Boolean)
+  );
+  const a = toIds(outfitA);
+  const b = toIds(outfitB);
+  if (!a.size || !b.size) return 0;
+  const shared = [...a].filter((id) => b.has(id)).length;
+  return shared / Math.max(a.size, b.size);
+}
+
+const REJECTION_DECAY_DAYS = 30;
+const MAX_REJECTION_PENALTY = 30;
+
+function rejectionPenalty(outfit, rejectedOutfits, now) {
+  if (!Array.isArray(rejectedOutfits) || !rejectedOutfits.length) return 0;
+
+  let total = 0;
+  for (const entry of rejectedOutfits) {
+    const items = entry?.items || entry;
+    const sim = outfitSimilarity(outfit, items);
+    if (sim === 0) continue;
+
+    const age = entry?.timestamp ? (now - entry.timestamp) / (1000 * 60 * 60 * 24) : 0;
+    const decay = age > REJECTION_DECAY_DAYS ? 0.3 : age > 14 ? 0.6 : 1;
+
+    if (sim >= 0.8) total += 25 * decay;
+    else if (sim >= 0.5) total += 12 * decay;
+    else if (sim >= 0.3) total += 5 * decay;
+  }
+
+  return Math.min(total, MAX_REJECTION_PENALTY);
 }
 
 
