@@ -290,3 +290,30 @@ data class WardrobeGapResponseDto(
     @SerializedName("insufficient_data")
     val insufficientData: Boolean = false
 )
+
+
+data class UnderusedItemAlertDto(
+    @SerializedName("item_id")
+    val itemId: Int,
+    @SerializedName("item_name")
+    val itemName: String,
+    val category: String,
+    @SerializedName("wear_count")
+    val wearCount: Int,
+    @SerializedName("last_worn_timestamp")
+    val lastWornTimestamp: Long?,
+    @SerializedName("days_since_worn")
+    val daysSinceWorn: Int?,
+    @SerializedName("alert_level")
+    val alertLevel: String
+)
+
+data class UnderusedAlertsResponseDto(
+    @SerializedName("generated_at_timestamp")
+    val generatedAtTimestamp: Long,
+    @SerializedName("analysis_window_days")
+    val analysisWindowDays: Int,
+    val alerts: List<UnderusedItemAlertDto>,
+    @SerializedName("insufficient_data")
+    val insufficientData: Boolean
+)

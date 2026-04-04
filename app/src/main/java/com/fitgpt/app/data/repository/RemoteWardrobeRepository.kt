@@ -10,6 +10,7 @@ import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
 import com.fitgpt.app.data.model.TagSuggestion
+import com.fitgpt.app.data.model.UnderusedAlertsResult
 import com.fitgpt.app.data.model.UploadResult
 import com.fitgpt.app.data.model.WardrobeGapAnalysis
 import com.fitgpt.app.data.model.WeatherSnapshot
@@ -164,6 +165,13 @@ class RemoteWardrobeRepository(
 
     override suspend fun getWardrobeGaps(): WardrobeGapAnalysis {
         return api.getWardrobeGaps().toDomain()
+    }
+
+    override suspend fun getUnderusedAlerts(analysisWindowDays: Int, maxResults: Int): UnderusedAlertsResult {
+        return api.getUnderusedAlerts(
+            analysisWindowDays = analysisWindowDays,
+            maxResults = maxResults
+        ).toDomain()
     }
 
     override suspend fun getRecommendations(

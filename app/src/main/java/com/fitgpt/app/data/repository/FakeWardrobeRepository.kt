@@ -7,6 +7,8 @@ import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
 import com.fitgpt.app.data.model.TagSuggestion
+import com.fitgpt.app.data.model.UnderusedAlert
+import com.fitgpt.app.data.model.UnderusedAlertsResult
 import com.fitgpt.app.data.model.UploadResult
 import com.fitgpt.app.data.model.WardrobeGapAnalysis
 import com.fitgpt.app.data.model.WardrobeGapSuggestion
@@ -217,6 +219,36 @@ class FakeWardrobeRepository : WardrobeRepository {
                     shoppingLink = "https://www.target.com/s?searchTerm=$category"
                 )
             },
+            insufficientData = wardrobeItems.count { !it.isArchived } < 3
+        )
+    }
+
+    override suspend fun getUnderusedAlerts(analysisWindowDays: Int, maxResults: Int): UnderusedAlertsResult {
+        val now = System.currentTimeMillis() / 1000
+        val alerts = wardrobeItems
+            .filter { !it.isArchived }
+            .mapNotNull { item ->
+                val lastWorn = item.lastWornTimestamp?.div(1000)
+                val daysSince = lastWorn?.let { ((now - it) / 86400).toInt().coerceAtLeast(0) }
+                if (daysSince == null || daysSince >= analysisWindowDays) {
+                    UnderusedAlert(
+                        itemId = item.id,
+                        itemName = item.name ?: "Item ${item.id}",
+                        category = item.category,
+                        wearCount = if (lastWorn == null) 0 else 1,
+                        lastWornTimestamp = item.lastWornTimestamp,
+                        daysSinceWorn = daysSince,
+                        alertLevel = if (daysSince == null || daysSince >= analysisWindowDays * 2) "high" else "medium"
+                    )
+                } else {
+                    null
+                }
+            }
+            .take(maxResults)
+        return UnderusedAlertsResult(
+            generatedAtTimestamp = System.currentTimeMillis(),
+            analysisWindowDays = analysisWindowDays,
+            alerts = alerts,
             insufficientData = wardrobeItems.count { !it.isArchived } < 3
         )
     }

@@ -12,6 +12,7 @@ import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
 import com.fitgpt.app.data.model.TagSuggestion
+import com.fitgpt.app.data.model.UnderusedAlertsResult
 import com.fitgpt.app.data.model.UploadResult
 import com.fitgpt.app.data.model.WardrobeGapAnalysis
 import com.fitgpt.app.data.model.WeatherSnapshot
@@ -116,6 +117,9 @@ class WardrobeViewModel(
     private val _wardrobeGapState =
         MutableStateFlow<UiState<WardrobeGapAnalysis?>>(UiState.Success(null))
     val wardrobeGapState: StateFlow<UiState<WardrobeGapAnalysis?>> = _wardrobeGapState
+    private val _underusedAlertsState =
+        MutableStateFlow<UiState<UnderusedAlertsResult?>>(UiState.Success(null))
+    val underusedAlertsState: StateFlow<UiState<UnderusedAlertsResult?>> = _underusedAlertsState
 
     private val _addItemImageUploadState = MutableStateFlow<UiState<String?>>(UiState.Success(null))
     val addItemImageUploadState: StateFlow<UiState<String?>> = _addItemImageUploadState
@@ -153,6 +157,7 @@ class WardrobeViewModel(
     init {
         refreshWardrobe()
         fetchWardrobeGaps()
+        fetchUnderusedAlerts()
         refreshSavedOutfits()
         refreshHistory()
         refreshPlannedOutfits()
@@ -188,6 +193,7 @@ class WardrobeViewModel(
                 allItems.addAll(items)
                 _wardrobeState.value = UiState.Success(items)
                 fetchWardrobeGaps()
+                fetchUnderusedAlerts()
             } catch (_: Exception) {
                 _wardrobeState.value = UiState.Error("Failed to load wardrobe items")
             }
@@ -202,6 +208,21 @@ class WardrobeViewModel(
                 _wardrobeGapState.value = UiState.Success(gaps)
             } catch (_: Exception) {
                 _wardrobeGapState.value = UiState.Error("Failed to load wardrobe gaps")
+            }
+        }
+    }
+
+    fun fetchUnderusedAlerts(analysisWindowDays: Int = 21, maxResults: Int = 10) {
+        _underusedAlertsState.value = UiState.Loading
+        viewModelScope.launch {
+            try {
+                val result = repository.getUnderusedAlerts(
+                    analysisWindowDays = analysisWindowDays,
+                    maxResults = maxResults
+                )
+                _underusedAlertsState.value = UiState.Success(result)
+            } catch (_: Exception) {
+                _underusedAlertsState.value = UiState.Error("Failed to load underused alerts")
             }
         }
     }
