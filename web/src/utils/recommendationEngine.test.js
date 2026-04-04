@@ -23,6 +23,7 @@ import {
   analyzeColorRelationship,
   analyzeOutfitColors,
   scoreOutfitForDisplay,
+  suggestItemTags,
 } from "./recommendationEngine";
 
 describe("titleCase", () => {
@@ -1794,5 +1795,110 @@ describe("multi-factor explanation coherence", () => {
     const hasSeason = lower.includes("winter") || lower.includes("season") || lower.includes("year");
     expect(hasLayer).toBe(true);
     expect(hasSeason).toBe(true);
+  });
+});
+
+/* ── Tag suggestion tests ──────────────────────────────────────────── */
+
+describe("suggestItemTags", () => {
+  test("formal clothing types suggest formal/work tags", () => {
+    for (const type of ["blazer", "dress shirt", "coat", "dress shoes"]) {
+      const tags = suggestItemTags(type, "");
+      expect(tags.style_tags).toEqual(expect.arrayContaining(["formal"]));
+      expect(tags.occasion_tags).toEqual(expect.arrayContaining(["work"]));
+    }
+  });
+
+  test("casual clothing types suggest casual tags", () => {
+    for (const type of ["t-shirt", "hoodie", "sneakers", "shorts"]) {
+      const tags = suggestItemTags(type, "");
+      expect(tags.style_tags).toEqual(expect.arrayContaining(["casual"]));
+      expect(tags.occasion_tags).toEqual(expect.arrayContaining(["casual"]));
+    }
+  });
+
+  test("athletic items suggest athletic occasion", () => {
+    const tank = suggestItemTags("tank top", "Tops");
+    expect(tank.occasion_tags).toEqual(expect.arrayContaining(["athletic"]));
+
+    const wind = suggestItemTags("windbreaker", "Outerwear");
+    expect(wind.occasion_tags).toEqual(expect.arrayContaining(["athletic"]));
+  });
+
+  test("winter items suggest winter season", () => {
+    for (const type of ["parka", "turtleneck", "scarf", "boots"]) {
+      const tags = suggestItemTags(type, "");
+      expect(tags.season_tags).toEqual(expect.arrayContaining(["winter"]));
+    }
+  });
+
+  test("summer items suggest summer season", () => {
+    for (const type of ["tank top", "shorts", "sandals"]) {
+      const tags = suggestItemTags(type, "");
+      expect(tags.season_tags).toEqual(expect.arrayContaining(["summer"]));
+    }
+  });
+
+  test("layer_type inferred from clothing type", () => {
+    expect(suggestItemTags("t-shirt", "Tops").layer_type).toBe("base");
+    expect(suggestItemTags("sweater", "Tops").layer_type).toBe("mid");
+    expect(suggestItemTags("blazer", "Outerwear").layer_type).toBe("outer");
+    expect(suggestItemTags("jacket", "Outerwear").layer_type).toBe("outer");
+  });
+
+  test("unknown clothing type falls back to category defaults", () => {
+    const tags = suggestItemTags("unknown_garment", "Tops");
+    expect(tags.style_tags).toEqual(["casual"]);
+    expect(tags.occasion_tags).toEqual(["casual"]);
+  });
+
+  test("empty inputs return reasonable defaults", () => {
+    const tags = suggestItemTags("", "");
+    expect(tags.style_tags).toEqual(expect.any(Array));
+    expect(tags.occasion_tags).toEqual(expect.any(Array));
+    expect(tags.season_tags).toEqual(expect.any(Array));
+    expect(typeof tags.layer_type).toBe("string");
+  });
+
+  test("accessories return minimal tags", () => {
+    const watch = suggestItemTags("watch", "Accessories");
+    expect(watch.style_tags).toEqual([]);
+    expect(watch.occasion_tags).toEqual([]);
+
+    const unknown = suggestItemTags("", "Accessories");
+    expect(unknown.style_tags).toEqual([]);
+  });
+
+  test("dress is a one-piece with formal/social tags", () => {
+    const tags = suggestItemTags("dress", "Tops");
+    expect(tags.style_tags).toEqual(expect.arrayContaining(["formal"]));
+    expect(tags.occasion_tags).toEqual(expect.arrayContaining(["social"]));
+  });
+});
+
+describe("suggested tags integrate with recommendation scoring", () => {
+  test("items with suggested tags score higher than untagged items", () => {
+    const tagged = suggestItemTags("blazer", "Outerwear");
+    const taggedOutfit = [
+      { id: "1", name: "Blazer", category: "Outerwear", color: "navy", ...tagged },
+      { id: "2", name: "Shirt", category: "Tops", color: "white" },
+    ];
+    const untaggedOutfit = [
+      { id: "3", name: "Blazer", category: "Outerwear", color: "navy" },
+      { id: "4", name: "Shirt", category: "Tops", color: "white" },
+    ];
+    const ctx = { weatherCategory: "mild", timeCategory: "work hours", answers: { dressFor: ["work"], style: ["formal"] }, bodyTypeId: "rectangle" };
+    expect(scoreOutfitForDisplay(taggedOutfit, ctx)).toBeGreaterThanOrEqual(scoreOutfitForDisplay(untaggedOutfit, ctx));
+  });
+
+  test("suggested tags match the expected recommendation context", () => {
+    const hoodie = suggestItemTags("hoodie", "Tops");
+    expect(hoodie.style_tags).toContain("casual");
+    expect(hoodie.layer_type).toBe("mid");
+
+    const blazer = suggestItemTags("blazer", "Outerwear");
+    expect(blazer.style_tags).toContain("formal");
+    expect(blazer.occasion_tags).toContain("work");
+    expect(blazer.layer_type).toBe("outer");
   });
 });
