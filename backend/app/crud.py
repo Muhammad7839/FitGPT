@@ -4,6 +4,7 @@ import hashlib
 import uuid
 from datetime import datetime
 from typing import Optional
+from urllib.parse import quote_plus
 
 from passlib.context import CryptContext
 from sqlalchemy import or_
@@ -363,6 +364,39 @@ def update_user_profile(
 # Clothing CRUD
 # =============================
 
+WARDROBE_GAP_BASELINE: dict[str, dict[str, object]] = {
+    "top": {
+        "min_count": 2,
+        "item_name": "Everyday top",
+        "image_url": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab",
+        "shopping_query": "everyday tops",
+    },
+    "bottom": {
+        "min_count": 2,
+        "item_name": "Versatile bottoms",
+        "image_url": "https://images.unsplash.com/photo-1541099649105-f69ad21f3246",
+        "shopping_query": "versatile bottoms",
+    },
+    "shoes": {
+        "min_count": 1,
+        "item_name": "Daily shoes",
+        "image_url": "https://images.unsplash.com/photo-1549298916-b41d501d3772",
+        "shopping_query": "daily shoes",
+    },
+    "outerwear": {
+        "min_count": 1,
+        "item_name": "Layering jacket",
+        "image_url": "https://images.unsplash.com/photo-1544441893-675973e31985",
+        "shopping_query": "lightweight jacket",
+    },
+}
+
+
+def _build_target_shopping_link(query: str) -> str:
+    encoded_query = quote_plus(query.strip())
+    return f"https://www.target.com/s?searchTerm={encoded_query}"
+
+
 def create_clothing_item(db: Session, item: schemas.ClothingItemCreate, user_id: int):
     colors = _normalize_tag_list(item.colors)
     season_tags = _normalize_tag_list(item.season_tags)
@@ -537,6 +571,49 @@ def get_favorite_items_for_user(db: Session, user_id: int):
         include_archived=False,
         favorites_only=True,
     )
+
+
+def get_wardrobe_gap_analysis(db: Session, user_id: int) -> dict:
+    items = get_clothing_items_for_user(
+        db=db,
+        user_id=user_id,
+        include_archived=False,
+    )
+    category_counts = {category: 0 for category in WARDROBE_GAP_BASELINE}
+
+    for item in items:
+        normalized_category = _normalize_category(item.category)
+        if normalized_category in category_counts:
+            category_counts[normalized_category] += 1
+
+    missing_categories: list[str] = []
+    suggestions: list[dict] = []
+    for category, config in WARDROBE_GAP_BASELINE.items():
+        min_count = int(config.get("min_count", 1))
+        current_count = category_counts.get(category, 0)
+        if current_count >= min_count:
+            continue
+        missing_categories.append(category)
+        item_name = str(config.get("item_name") or f"{category.title()} staple")
+        shopping_query = str(config.get("shopping_query") or f"{category} clothing")
+        suggestions.append(
+            {
+                "category": category,
+                "item_name": item_name,
+                "reason": f"Only {current_count} item(s) found. Target baseline is {min_count}.",
+                "image_url": str(config.get("image_url") or "").strip() or None,
+                "shopping_link": _build_target_shopping_link(shopping_query),
+            }
+        )
+
+    insufficient_data = len(items) < 3
+    return {
+        "baseline_categories": list(WARDROBE_GAP_BASELINE.keys()),
+        "category_counts": category_counts,
+        "missing_categories": missing_categories,
+        "suggestions": suggestions,
+        "insufficient_data": insufficient_data,
+    }
 
 
 def get_clothing_item_by_id(db: Session, item_id: int):

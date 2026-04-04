@@ -835,6 +835,20 @@ def apply_wardrobe_item_tag_suggestions(
     return updated
 
 
+@router.get("/wardrobe/gaps", response_model=schemas.WardrobeGapResponse)
+def get_wardrobe_gaps(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    gap_analysis = crud.get_wardrobe_gap_analysis(db, current_user.id)
+    logger.info(
+        "Wardrobe gap analysis generated user_id=%s missing=%s",
+        current_user.id,
+        len(gap_analysis["missing_categories"]),
+    )
+    return gap_analysis
+
+
 @router.post("/wardrobe/items/image", response_model=schemas.ImageUploadResponse)
 def upload_wardrobe_image(
     image: UploadFile = File(...),

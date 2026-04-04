@@ -350,6 +350,22 @@ class TagSuggestionsResponse(BaseModel):
     suggested_occasion_tags: list[str] = Field(default_factory=list)
 
 
+class WardrobeGapSuggestion(BaseModel):
+    category: str
+    item_name: str
+    reason: str
+    image_url: Optional[str] = None
+    shopping_link: str
+
+
+class WardrobeGapResponse(BaseModel):
+    baseline_categories: list[str] = Field(default_factory=list)
+    category_counts: dict[str, int] = Field(default_factory=dict)
+    missing_categories: list[str] = Field(default_factory=list)
+    suggestions: list[WardrobeGapSuggestion] = Field(default_factory=list)
+    insufficient_data: bool = False
+
+
 class RecommendationResponse(BaseModel):
     items: list[ClothingItemResponse]
     explanation: str

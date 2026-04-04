@@ -66,6 +66,7 @@ fun DashboardScreen(
     val weatherState by viewModel.weatherState.collectAsState()
     val weatherCity by viewModel.weatherCityState.collectAsState()
     val weatherUiStatus by viewModel.weatherUiStatus.collectAsState()
+    val wardrobeGapState by viewModel.wardrobeGapState.collectAsState()
     var autoFetchAttempted by rememberSaveable { mutableStateOf(false) }
 
     val context = LocalContext.current
@@ -294,6 +295,76 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Get Outfit Recommendation")
+                    }
+                }
+            }
+
+            WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Wardrobe Gaps", style = MaterialTheme.typography.titleMedium)
+                    when (val state = wardrobeGapState) {
+                        UiState.Loading -> {
+                            Text(
+                                text = "Checking missing categories...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        is UiState.Success -> {
+                            val gap = state.data
+                            if (gap == null) {
+                                Text(
+                                    text = "Gap insights will appear after sync.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else if (gap.missingCategories.isEmpty()) {
+                                Text(
+                                    text = "Your core wardrobe categories are covered.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                Text(
+                                    text = "Missing: ${gap.missingCategories.joinToString(", ")}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                gap.suggestions.take(2).forEach { suggestion ->
+                                    Text(
+                                        text = "${suggestion.itemName} (${suggestion.category})",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    Text(
+                                        text = suggestion.reason,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                if (gap.insufficientData) {
+                                    Text(
+                                        text = "Add a few more items for stronger gap detection.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        is UiState.Error -> {
+                            Text(
+                                text = state.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                    Button(
+                        onClick = { viewModel.fetchWardrobeGaps() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Refresh Gap Insights")
                     }
                 }
             }

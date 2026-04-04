@@ -9,12 +9,16 @@ import com.fitgpt.app.data.model.AiRecommendationResult
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.TagSuggestion
+import com.fitgpt.app.data.model.WardrobeGapAnalysis
+import com.fitgpt.app.data.model.WardrobeGapSuggestion
 import com.fitgpt.app.data.remote.dto.ClothingItemCreateRequest
 import com.fitgpt.app.data.remote.dto.ClothingItemDto
 import com.fitgpt.app.data.remote.dto.ChatMessageDto
 import com.fitgpt.app.data.remote.dto.ChatResponseDto
 import com.fitgpt.app.data.remote.dto.AiRecommendationResponseDto
 import com.fitgpt.app.data.remote.dto.TagSuggestionResponseDto
+import com.fitgpt.app.data.remote.dto.WardrobeGapResponseDto
+import com.fitgpt.app.data.remote.dto.WardrobeGapSuggestionDto
 
 fun ClothingItemDto.toDomain(): ClothingItem {
     return ClothingItem(
@@ -122,5 +126,25 @@ fun AiRecommendationResponseDto.toDomain(): AiRecommendationResult {
                 outfitScore = option.outfitScore
             )
         }
+    )
+}
+
+fun WardrobeGapSuggestionDto.toDomain(): WardrobeGapSuggestion {
+    return WardrobeGapSuggestion(
+        category = category,
+        itemName = itemName,
+        reason = reason,
+        imageUrl = imageUrl,
+        shoppingLink = shoppingLink
+    )
+}
+
+fun WardrobeGapResponseDto.toDomain(): WardrobeGapAnalysis {
+    return WardrobeGapAnalysis(
+        baselineCategories = baselineCategories,
+        categoryCounts = categoryCounts,
+        missingCategories = missingCategories,
+        suggestions = suggestions.map { it.toDomain() },
+        insufficientData = insufficientData
     )
 }

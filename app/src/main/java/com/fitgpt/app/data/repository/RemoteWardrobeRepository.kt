@@ -11,6 +11,7 @@ import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
 import com.fitgpt.app.data.model.TagSuggestion
 import com.fitgpt.app.data.model.UploadResult
+import com.fitgpt.app.data.model.WardrobeGapAnalysis
 import com.fitgpt.app.data.model.WeatherSnapshot
 import com.fitgpt.app.data.remote.ApiService
 import com.fitgpt.app.data.remote.toCreateRequest
@@ -157,6 +158,10 @@ class RemoteWardrobeRepository(
         return api.getFavoriteWardrobeItems().map { dto ->
             dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl))
         }
+    }
+
+    override suspend fun getWardrobeGaps(): WardrobeGapAnalysis {
+        return api.getWardrobeGaps().toDomain()
     }
 
     override suspend fun getRecommendations(
