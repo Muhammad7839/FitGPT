@@ -366,6 +366,23 @@ class WardrobeGapResponse(BaseModel):
     insufficient_data: bool = False
 
 
+class UnderusedItemAlert(BaseModel):
+    item_id: int
+    item_name: str
+    category: str
+    wear_count: int
+    last_worn_timestamp: Optional[int] = None
+    days_since_worn: Optional[int] = None
+    alert_level: str
+
+
+class UnderusedAlertsResponse(BaseModel):
+    generated_at_timestamp: int
+    analysis_window_days: int
+    alerts: list[UnderusedItemAlert] = Field(default_factory=list)
+    insufficient_data: bool = False
+
+
 class RecommendationResponse(BaseModel):
     items: list[ClothingItemResponse]
     explanation: str

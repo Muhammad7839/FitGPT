@@ -7,6 +7,7 @@ import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
 import com.fitgpt.app.data.model.TagSuggestion
+import com.fitgpt.app.data.model.UnderusedAlertsResult
 import com.fitgpt.app.data.model.UploadResult
 import com.fitgpt.app.data.model.WardrobeGapAnalysis
 import com.fitgpt.app.data.model.WeatherSnapshot
@@ -43,6 +44,7 @@ interface WardrobeRepository {
     suspend fun setFavorite(itemId: Int, isFavorite: Boolean): ClothingItem
     suspend fun getFavoriteItems(): List<ClothingItem>
     suspend fun getWardrobeGaps(): WardrobeGapAnalysis
+    suspend fun getUnderusedAlerts(analysisWindowDays: Int = 21, maxResults: Int = 20): UnderusedAlertsResult
     suspend fun getRecommendations(
         manualTemp: Int? = null,
         timeContext: String? = null,

@@ -849,6 +849,30 @@ def get_wardrobe_gaps(
     return gap_analysis
 
 
+@router.get("/wardrobe/underused-alerts", response_model=schemas.UnderusedAlertsResponse)
+def get_underused_wardrobe_alerts(
+    analysis_window_days: int = 21,
+    max_results: int = 20,
+    reference_timestamp: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    alerts = crud.get_underused_clothing_alerts(
+        db,
+        user_id=current_user.id,
+        analysis_window_days=analysis_window_days,
+        max_results=max_results,
+        reference_timestamp=reference_timestamp,
+    )
+    logger.info(
+        "Generated underused alerts user_id=%s alerts=%s window_days=%s",
+        current_user.id,
+        len(alerts["alerts"]),
+        analysis_window_days,
+    )
+    return alerts
+
+
 @router.post("/wardrobe/items/image", response_model=schemas.ImageUploadResponse)
 def upload_wardrobe_image(
     image: UploadFile = File(...),

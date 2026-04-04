@@ -67,6 +67,7 @@ fun DashboardScreen(
     val weatherCity by viewModel.weatherCityState.collectAsState()
     val weatherUiStatus by viewModel.weatherUiStatus.collectAsState()
     val wardrobeGapState by viewModel.wardrobeGapState.collectAsState()
+    val underusedAlertsState by viewModel.underusedAlertsState.collectAsState()
     var autoFetchAttempted by rememberSaveable { mutableStateOf(false) }
 
     val context = LocalContext.current
@@ -399,6 +400,55 @@ fun DashboardScreen(
                         ) {
                             Text("Refresh Recommendation")
                         }
+                    }
+                }
+            }
+
+            WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Underused Items", style = MaterialTheme.typography.titleMedium)
+                    when (val state = underusedAlertsState) {
+                        UiState.Loading -> {
+                            Text(
+                                text = "Analyzing wardrobe usage...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        is UiState.Success -> {
+                            val alerts = state.data?.alerts.orEmpty()
+                            if (alerts.isEmpty()) {
+                                Text(
+                                    text = "No underused clothing alerts right now.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                alerts.take(3).forEach { alert ->
+                                    val timing = alert.daysSinceWorn?.let { "$it day(s) ago" } ?: "Never worn yet"
+                                    Text(
+                                        text = "${alert.itemName} • ${alert.category} • $timing",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                        }
+                        is UiState.Error -> {
+                            Text(
+                                text = state.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                    Button(
+                        onClick = { viewModel.fetchUnderusedAlerts() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Refresh Alerts")
                     }
                 }
             }

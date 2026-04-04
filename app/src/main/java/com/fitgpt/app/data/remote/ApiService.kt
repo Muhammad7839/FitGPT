@@ -31,6 +31,7 @@ import com.fitgpt.app.data.remote.dto.AiRecommendationResponseDto
 import com.fitgpt.app.data.remote.dto.TagSuggestionResponseDto
 import com.fitgpt.app.data.remote.dto.RejectOutfitRequestDto
 import com.fitgpt.app.data.remote.dto.RejectOutfitResponseDto
+import com.fitgpt.app.data.remote.dto.UnderusedAlertsResponseDto
 import com.fitgpt.app.data.remote.dto.RegisterRequest
 import com.fitgpt.app.data.remote.dto.ResetPasswordRequest
 import com.fitgpt.app.data.remote.dto.SavedOutfitCreateRequest
@@ -132,6 +133,12 @@ interface ApiService {
 
     @GET("wardrobe/gaps")
     suspend fun getWardrobeGaps(): WardrobeGapResponseDto
+
+    @GET("wardrobe/underused-alerts")
+    suspend fun getUnderusedAlerts(
+        @Query("analysis_window_days") analysisWindowDays: Int = 21,
+        @Query("max_results") maxResults: Int = 20
+    ): UnderusedAlertsResponseDto
 
     @POST("wardrobe/items")
     suspend fun addWardrobeItem(

@@ -1203,6 +1203,93 @@ def maybe_record_feedback_prompt_impression(
     return metadata
 
 
+def get_underused_clothing_alerts(
+    db: Session,
+    *,
+    user_id: int,
+    analysis_window_days: int = 21,
+    max_results: int = 20,
+    reference_timestamp: Optional[int] = None,
+) -> dict:
+    now_timestamp = reference_timestamp or int(datetime.utcnow().timestamp())
+    window_days = max(1, min(analysis_window_days, 180))
+    active_items = get_clothing_items_for_user(
+        db=db,
+        user_id=user_id,
+        include_archived=False,
+    )
+    wear_counts: dict[int, int] = {}
+    latest_worn_by_item: dict[int, int] = {}
+
+    history_entries = get_outfit_history_for_user(db, user_id)
+    for entry in history_entries:
+        for raw_item_id in (entry.item_ids_csv or "").split(","):
+            text = raw_item_id.strip()
+            if not text.isdigit():
+                continue
+            item_id = int(text)
+            wear_counts[item_id] = wear_counts.get(item_id, 0) + 1
+            previous_latest = latest_worn_by_item.get(item_id, 0)
+            latest_worn_by_item[item_id] = max(previous_latest, entry.worn_at_timestamp)
+
+    alerts: list[dict] = []
+    for item in active_items:
+        wear_count = wear_counts.get(item.id, 0)
+        last_worn_timestamp = item.last_worn_timestamp or latest_worn_by_item.get(item.id)
+        days_since_worn: Optional[int] = None
+        if last_worn_timestamp:
+            days_since_worn = max(0, int((now_timestamp - int(last_worn_timestamp)) / 86400))
+
+        is_underused = False
+        if wear_count == 0:
+            is_underused = True
+        elif days_since_worn is None:
+            is_underused = True
+        elif days_since_worn >= window_days:
+            is_underused = True
+        elif wear_count == 1 and days_since_worn >= max(7, window_days // 2):
+            is_underused = True
+
+        if not is_underused:
+            continue
+
+        if days_since_worn is None:
+            alert_level = "high"
+        elif days_since_worn >= window_days * 2:
+            alert_level = "high"
+        elif days_since_worn >= window_days:
+            alert_level = "medium"
+        else:
+            alert_level = "low"
+
+        alerts.append(
+            {
+                "item_id": item.id,
+                "item_name": item.name or f"Item {item.id}",
+                "category": item.category,
+                "wear_count": wear_count,
+                "last_worn_timestamp": last_worn_timestamp,
+                "days_since_worn": days_since_worn,
+                "alert_level": alert_level,
+            }
+        )
+
+    alerts.sort(
+        key=lambda entry: (
+            0 if entry["days_since_worn"] is None else -entry["days_since_worn"],
+            entry["wear_count"],
+            entry["item_id"],
+        )
+    )
+    limited_alerts = alerts[: max(1, min(max_results, 100))]
+    return {
+        "generated_at_timestamp": now_timestamp,
+        "analysis_window_days": window_days,
+        "alerts": limited_alerts,
+        "insufficient_data": len(active_items) < 3,
+    }
+
+
 def save_outfit_history(
     db: Session,
     user_id: int,

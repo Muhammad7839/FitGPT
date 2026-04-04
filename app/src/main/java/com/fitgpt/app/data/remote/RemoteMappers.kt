@@ -10,6 +10,8 @@ import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.PromptFeedbackMetadata
 import com.fitgpt.app.data.model.TagSuggestion
+import com.fitgpt.app.data.model.UnderusedAlert
+import com.fitgpt.app.data.model.UnderusedAlertsResult
 import com.fitgpt.app.data.model.WardrobeGapAnalysis
 import com.fitgpt.app.data.model.WardrobeGapSuggestion
 import com.fitgpt.app.data.remote.dto.ClothingItemCreateRequest
@@ -19,6 +21,8 @@ import com.fitgpt.app.data.remote.dto.ChatResponseDto
 import com.fitgpt.app.data.remote.dto.AiRecommendationResponseDto
 import com.fitgpt.app.data.remote.dto.PromptFeedbackMetadataDto
 import com.fitgpt.app.data.remote.dto.TagSuggestionResponseDto
+import com.fitgpt.app.data.remote.dto.UnderusedAlertsResponseDto
+import com.fitgpt.app.data.remote.dto.UnderusedItemAlertDto
 import com.fitgpt.app.data.remote.dto.WardrobeGapResponseDto
 import com.fitgpt.app.data.remote.dto.WardrobeGapSuggestionDto
 
@@ -156,6 +160,27 @@ fun WardrobeGapResponseDto.toDomain(): WardrobeGapAnalysis {
         categoryCounts = categoryCounts,
         missingCategories = missingCategories,
         suggestions = suggestions.map { it.toDomain() },
+        insufficientData = insufficientData
+    )
+}
+
+fun UnderusedItemAlertDto.toDomain(): UnderusedAlert {
+    return UnderusedAlert(
+        itemId = itemId,
+        itemName = itemName,
+        category = category,
+        wearCount = wearCount,
+        lastWornTimestamp = lastWornTimestamp,
+        daysSinceWorn = daysSinceWorn,
+        alertLevel = alertLevel
+    )
+}
+
+fun UnderusedAlertsResponseDto.toDomain(): UnderusedAlertsResult {
+    return UnderusedAlertsResult(
+        generatedAtTimestamp = generatedAtTimestamp,
+        analysisWindowDays = analysisWindowDays,
+        alerts = alerts.map { it.toDomain() },
         insufficientData = insufficientData
     )
 }
