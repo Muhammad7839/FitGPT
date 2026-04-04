@@ -555,7 +555,7 @@ fun RecommendationScreen(
                                         ) {
                                             val selected = if (index == selectedOptionIndex) " (selected)" else ""
                                             Text(
-                                                "Option ${index + 1} • ${"%.2f".format(option.outfitScore)}$selected"
+                                                "Option ${index + 1} • Confidence ${"%.2f".format(option.outfitScore)}$selected"
                                             )
                                         }
                                     }

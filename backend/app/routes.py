@@ -1087,6 +1087,7 @@ def get_recommendations(
         "items": items,
         "explanation": final_explanation,
         "outfit_score": top_option["outfit_score"],
+        "confidence_score": top_option["outfit_score"],
         "weather_category": normalized_weather_category,
         "occasion": occasion,
         "prompt_feedback": prompt_feedback,
@@ -1136,6 +1137,7 @@ def get_recommendation_options(
                 "items": option["items"],
                 "explanation": option["explanation"],
                 "outfit_score": option["outfit_score"],
+                "confidence_score": option["outfit_score"],
             }
             for option in options
         ],
@@ -1287,6 +1289,7 @@ def get_ai_recommendations(
         "items": result.items,
         "explanation": result.explanation,
         "outfit_score": result.outfit_score,
+        "confidence_score": result.outfit_score,
         "weather_category": result.weather_category,
         "occasion": payload.occasion,
         "source": result.source,
@@ -1306,6 +1309,7 @@ def get_ai_recommendations(
                 ],
                 "explanation": option.explanation,
                 "outfit_score": option.score,
+                "confidence_score": option.score,
             }
             for option in result.outfit_options
         ],

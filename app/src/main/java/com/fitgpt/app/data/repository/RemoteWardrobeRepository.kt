@@ -219,7 +219,7 @@ class RemoteWardrobeRepository(
             OutfitOption(
                 items = option.items.map { dto -> dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl)) },
                 explanation = option.explanation,
-                outfitScore = option.outfitScore
+                outfitScore = option.confidenceScore ?: option.outfitScore
             )
         }
     }
