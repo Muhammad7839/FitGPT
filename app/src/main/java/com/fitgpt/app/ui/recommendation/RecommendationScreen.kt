@@ -90,7 +90,7 @@ fun RecommendationScreen(
             .toBackendWeatherCategoryOrNull()
         val resolvedSeason = seasonSelection.resolveSelectedValue(seasonCustom)
         val preferredSeasons = if (resolvedSeason.isNullOrBlank()) {
-            emptyList()
+            listOf(currentSeasonTag())
         } else {
             listOf(resolvedSeason.lowercase())
         }
@@ -675,6 +675,15 @@ private fun String?.toBackendWeatherCategoryOrNull(): String? {
     return when (normalized) {
         "cold", "cool", "mild", "warm", "hot" -> normalized
         else -> null
+    }
+}
+
+private fun currentSeasonTag(): String {
+    return when (java.time.LocalDate.now().monthValue) {
+        12, 1, 2 -> "winter"
+        3, 4, 5 -> "spring"
+        6, 7, 8 -> "summer"
+        else -> "fall"
     }
 }
 

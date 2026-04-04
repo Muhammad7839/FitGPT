@@ -22,6 +22,32 @@ PROMPT_DEFAULT_COOLDOWN_SECONDS = 24 * 60 * 60
 PROMPT_IGNORE_COOLDOWN_SECONDS = 72 * 60 * 60
 
 
+def get_current_season_tag(*, reference_date: Optional[datetime] = None) -> str:
+    date = reference_date or datetime.utcnow()
+    month = date.month
+    if month in {12, 1, 2}:
+        return "winter"
+    if month in {3, 4, 5}:
+        return "spring"
+    if month in {6, 7, 8}:
+        return "summer"
+    return "fall"
+
+
+def resolve_preferred_seasons(preferred_seasons: Optional[list[str]]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for season in preferred_seasons or []:
+        cleaned = season.strip().lower()
+        if not cleaned or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        normalized.append(cleaned)
+    if normalized:
+        return normalized
+    return [get_current_season_tag()]
+
+
 # =============================
 # User CRUD
 # =============================
@@ -1037,6 +1063,7 @@ def get_recommendation_options_for_user(
     occasion: Optional[str] = None,
     exclude: Optional[str] = None,
     limit: int = 3,
+    preferred_seasons: Optional[list[str]] = None,
 ) -> list[dict]:
     normalized_limit = max(1, min(limit, 10))
     all_items = get_clothing_items_for_user(db, user.id)
@@ -1047,6 +1074,7 @@ def get_recommendation_options_for_user(
         user_id=user.id,
         items=all_items,
     )
+    effective_preferred_seasons = resolve_preferred_seasons(preferred_seasons)
 
     raw_candidates = deterministic.recommend_many(
         items=all_items,
@@ -1056,7 +1084,7 @@ def get_recommendation_options_for_user(
         occasion=occasion,
         exclude=exclude,
         style_preference=user.lifestyle,
-        preferred_seasons=[],
+        preferred_seasons=effective_preferred_seasons,
         recent_fingerprints=recent_fingerprints,
         max_options=max(normalized_limit, 3),
     )
