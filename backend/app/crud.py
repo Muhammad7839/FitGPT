@@ -2,6 +2,7 @@
 
 import hashlib
 import uuid
+from collections import defaultdict
 from datetime import datetime
 from typing import Optional
 from urllib.parse import quote_plus
@@ -980,6 +981,54 @@ def _choose_best(
     return available_candidates[0]
 
 
+def _build_feedback_signals(
+    db: Session,
+    *,
+    user_id: int,
+    items: list[models.ClothingItem],
+) -> dict:
+    favorite_item_ids = {
+        item.id
+        for item in items
+        if item.is_favorite and not item.is_archived
+    }
+    wear_counts: dict[int, int] = defaultdict(int)
+    history_rows = db.query(models.OutfitHistory).filter(
+        models.OutfitHistory.owner_id == user_id
+    ).order_by(models.OutfitHistory.worn_at_timestamp.desc()).limit(200).all()
+    for row in history_rows:
+        for raw_item_id in (row.item_ids_csv or "").split(","):
+            text = raw_item_id.strip()
+            if text.isdigit():
+                wear_counts[int(text)] += 1
+    return {
+        "favorite_item_ids": favorite_item_ids,
+        "wear_counts": wear_counts,
+    }
+
+
+def _feedback_adjustment_for_candidate(
+    candidate: deterministic.RecommendationCandidate,
+    *,
+    feedback_signals: dict,
+) -> float:
+    favorite_item_ids: set[int] = feedback_signals.get("favorite_item_ids", set())
+    wear_counts: dict[int, int] = feedback_signals.get("wear_counts", {})
+    if not favorite_item_ids and not wear_counts:
+        return 0.0
+
+    adjustment = 0.0
+    for item_id in candidate.item_ids:
+        if item_id in favorite_item_ids:
+            adjustment += 0.08
+        wear_count = wear_counts.get(item_id, 0)
+        if wear_count >= 4:
+            adjustment -= 0.12
+        elif wear_count >= 2:
+            adjustment -= 0.05
+    return round(adjustment, 3)
+
+
 def get_recommendation_options_for_user(
     db: Session,
     user: models.User,
@@ -993,8 +1042,13 @@ def get_recommendation_options_for_user(
     all_items = get_clothing_items_for_user(db, user.id)
     item_map = {item.id: item for item in all_items}
     recent_fingerprints = set(history.get_recent_fingerprints(db, user.id))
+    feedback_signals = _build_feedback_signals(
+        db,
+        user_id=user.id,
+        items=all_items,
+    )
 
-    candidates = deterministic.recommend_many(
+    raw_candidates = deterministic.recommend_many(
         items=all_items,
         user=user,
         manual_temp=manual_temp,
@@ -1009,8 +1063,16 @@ def get_recommendation_options_for_user(
     candidates = filter_rejected_candidates_for_user(
         db=db,
         user_id=user.id,
-        candidates=candidates,
+        candidates=raw_candidates,
         item_map=item_map,
+    )
+    candidates = sorted(
+        candidates,
+        key=lambda candidate: candidate.score + _feedback_adjustment_for_candidate(
+            candidate,
+            feedback_signals=feedback_signals,
+        ),
+        reverse=True,
     )
 
     options: list[dict] = []
@@ -1022,11 +1084,15 @@ def get_recommendation_options_for_user(
         if not outfit_items:
             continue
         seen_fingerprints.add(candidate.fingerprint)
+        adjusted_score = candidate.score + _feedback_adjustment_for_candidate(
+            candidate,
+            feedback_signals=feedback_signals,
+        )
         options.append(
             {
                 "items": outfit_items,
                 "explanation": candidate.explanation,
-                "outfit_score": round(candidate.score, 3),
+                "outfit_score": round(adjusted_score, 3),
                 "weather_category": candidate.weather_category,
                 "fingerprint": candidate.fingerprint,
             }
