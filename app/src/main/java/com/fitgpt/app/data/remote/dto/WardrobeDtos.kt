@@ -101,6 +101,8 @@ data class RecommendationResponseDto(
     val explanation: String,
     @SerializedName("outfit_score")
     val outfitScore: Float,
+    @SerializedName("confidence_score")
+    val confidenceScore: Float? = null,
     @SerializedName("weather_category")
     val weatherCategory: String?,
     val occasion: String?
@@ -110,7 +112,9 @@ data class OutfitOptionDto(
     val items: List<ClothingItemDto>,
     val explanation: String,
     @SerializedName("outfit_score")
-    val outfitScore: Float
+    val outfitScore: Float,
+    @SerializedName("confidence_score")
+    val confidenceScore: Float? = null
 )
 
 data class RecommendationOptionsResponseDto(

@@ -370,6 +370,7 @@ class RecommendationResponse(BaseModel):
     items: list[ClothingItemResponse]
     explanation: str
     outfit_score: float = 0.0
+    confidence_score: float = 0.0
     weather_category: Optional[str] = None
     occasion: Optional[str] = None
     prompt_feedback: Optional["FeedbackPromptMetadata"] = None
@@ -379,6 +380,7 @@ class OutfitOptionResponse(BaseModel):
     items: list[ClothingItemResponse]
     explanation: str
     outfit_score: float
+    confidence_score: float
 
 
 class RecommendationOptionsResponse(BaseModel):
@@ -541,6 +543,7 @@ class AiRecommendationResponse(BaseModel):
     items: list[ClothingItemResponse]
     explanation: str
     outfit_score: float = 0.0
+    confidence_score: float = 0.0
     weather_category: str
     occasion: Optional[str] = None
     source: str

@@ -54,6 +54,5 @@ fun recommendationWarningLabel(rawWarning: String?): String? {
 
 fun recommendationScoreLabel(score: Float, fallbackUsed: Boolean): String? {
     if (fallbackUsed || score <= 0f) return null
-    return "Match score ${"%.0f".format(score * 100)}%"
+    return "Confidence ${"%.0f".format(score * 100)}%"
 }
-

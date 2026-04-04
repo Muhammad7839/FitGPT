@@ -113,7 +113,7 @@ fun AiRecommendationResponseDto.toDomain(): AiRecommendationResult {
     return AiRecommendationResult(
         items = items.map { it.toDomain() },
         explanation = explanation,
-        outfitScore = outfitScore,
+        outfitScore = confidenceScore ?: outfitScore,
         source = source,
         fallbackUsed = fallbackUsed,
         warning = warning,
@@ -125,7 +125,7 @@ fun AiRecommendationResponseDto.toDomain(): AiRecommendationResult {
             OutfitOption(
                 items = option.items.map { it.toDomain() },
                 explanation = option.explanation,
-                outfitScore = option.outfitScore
+                outfitScore = option.confidenceScore ?: option.outfitScore
             )
         },
         promptFeedback = promptFeedback?.toDomain()
