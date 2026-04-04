@@ -9,6 +9,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.datastructures import FormData
 
@@ -454,7 +455,11 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     existing_user = crud.get_user_by_email(db, user.email)
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
-    return crud.create_user(db, user)
+    try:
+        return crud.create_user(db, user)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Email already registered") from exc
 
 
 @router.post("/auth/register", response_model=schemas.UserResponse)

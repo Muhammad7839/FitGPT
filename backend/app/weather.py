@@ -132,7 +132,17 @@ def _request_openweather(endpoint: str, *, city: Optional[str], lat: Optional[fl
     if not response.ok:
         raise WeatherLookupError("Weather lookup failed", status_code=400)
 
-    return response.json()
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise WeatherLookupError("Weather provider returned invalid data", status_code=502) from exc
+
+
+def _safe_float(value: Any, *, fallback: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return fallback
 
 
 def _fetch_weather_payload(*, city: Optional[str], lat: Optional[float], lon: Optional[float]) -> dict[str, Any]:
@@ -294,9 +304,9 @@ def fetch_forecast_weather(
     except (TypeError, ValueError) as exc:
         raise WeatherLookupError("Weather forecast is unavailable") from exc
 
-    wind_mph = round(float(wind.get("speed", 0.0) or 0.0), 1)
-    rain_mm = round(float(rain.get("3h", 0.0) or 0.0), 2)
-    snow_mm = round(float(snow.get("3h", 0.0) or 0.0), 2)
+    wind_mph = round(_safe_float(wind.get("speed", 0.0) or 0.0), 1)
+    rain_mm = round(_safe_float(rain.get("3h", 0.0) or 0.0), 2)
+    snow_mm = round(_safe_float(snow.get("3h", 0.0) or 0.0), 2)
     condition = str(first_weather.get("main", "")).strip() or "Unknown"
     description = str(first_weather.get("description", "")).strip() or "Unknown conditions"
     fallback_city = cleaned_city or "Current location"

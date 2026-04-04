@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from app.google_oauth import GoogleTokenValidationError
+from sqlalchemy.exc import IntegrityError
 
 from conftest import register_and_login
 
@@ -35,6 +36,22 @@ def test_auth_alias_register_login_and_me_success(client):
     me = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert me.status_code == 200
     assert me.json()["email"] == "alias-auth@example.com"
+
+
+def test_register_returns_400_when_uniqueness_conflict_happens_at_commit(client, monkeypatch):
+    monkeypatch.setattr("app.routes.crud.get_user_by_email", lambda *_args, **_kwargs: None)
+
+    def raise_integrity_error(*_args, **_kwargs):
+        raise IntegrityError("INSERT INTO users ...", {"email": "race@example.com"}, Exception("UNIQUE constraint failed"))
+
+    monkeypatch.setattr("app.routes.crud.create_user", raise_integrity_error)
+
+    response = client.post(
+        "/register",
+        json={"email": "race@example.com", "password": "password123"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Email already registered"
 
 
 def test_login_fails_with_wrong_password(client):
