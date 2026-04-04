@@ -588,6 +588,66 @@ function preferredStylesFromAnswers(answers) {
   return normalizeTagArray(answers?.style).map(normalizeStyleValue).filter(Boolean);
 }
 
+/* ── Metadata-based tag suggestion ─────────────────────────────────── */
+
+const TAG_SUGGESTIONS = {
+  "t-shirt":       { style: ["casual"],         occasion: ["casual"],           season: ["summer", "spring"] },
+  "tank top":      { style: ["casual"],         occasion: ["casual", "athletic"], season: ["summer"] },
+  "polo":          { style: ["smart casual"],   occasion: ["work", "casual"],   season: ["spring", "summer"] },
+  "dress shirt":   { style: ["formal"],         occasion: ["work", "formal"],   season: [] },
+  "blouse":        { style: ["smart casual"],   occasion: ["work", "social"],   season: [] },
+  "henley":        { style: ["casual"],         occasion: ["casual"],           season: ["fall", "spring"] },
+  "turtleneck":    { style: ["smart casual"],   occasion: ["work", "social"],   season: ["winter", "fall"] },
+  "hoodie":        { style: ["casual", "relaxed"], occasion: ["casual"],        season: ["fall", "winter"] },
+  "sweater":       { style: ["casual"],         occasion: ["casual", "work"],   season: ["winter", "fall"] },
+  "cardigan":      { style: ["smart casual"],   occasion: ["casual", "work"],   season: ["fall", "spring"] },
+  "sweatshirt":    { style: ["casual", "relaxed"], occasion: ["casual"],        season: ["fall", "winter"] },
+  "blazer":        { style: ["formal", "smart casual"], occasion: ["work", "formal"], season: [] },
+  "jacket":        { style: ["casual"],         occasion: ["casual"],           season: ["fall", "spring"] },
+  "coat":          { style: ["formal"],         occasion: ["work", "formal"],   season: ["winter"] },
+  "parka":         { style: ["casual"],         occasion: ["casual"],           season: ["winter"] },
+  "windbreaker":   { style: ["activewear"],     occasion: ["athletic", "casual"], season: ["spring", "fall"] },
+  "vest":          { style: ["smart casual"],   occasion: ["casual", "work"],   season: ["fall"] },
+  "shorts":        { style: ["casual"],         occasion: ["casual"],           season: ["summer"] },
+  "dress":         { style: ["formal"],         occasion: ["social", "formal"], season: [] },
+  "jumpsuit":      { style: ["smart casual"],   occasion: ["social"],           season: ["summer", "spring"] },
+  "skirt":         { style: ["smart casual"],   occasion: ["social", "work"],   season: [] },
+  "sneakers":      { style: ["casual"],         occasion: ["casual", "athletic"], season: [] },
+  "boots":         { style: ["casual"],         occasion: ["casual", "work"],   season: ["winter", "fall"] },
+  "sandals":       { style: ["casual"],         occasion: ["casual"],           season: ["summer"] },
+  "dress shoes":   { style: ["formal"],         occasion: ["work", "formal"],   season: [] },
+  "hat":           { style: ["casual"],         occasion: ["casual"],           season: ["summer"] },
+  "scarf":         { style: ["smart casual"],   occasion: ["casual"],           season: ["winter", "fall"] },
+  "watch":         { style: [],                 occasion: [],                   season: [] },
+  "belt":          { style: ["smart casual"],   occasion: ["work"],             season: [] },
+  "sunglasses":    { style: ["casual"],         occasion: ["casual"],           season: ["summer", "spring"] },
+};
+
+const CATEGORY_FALLBACK_TAGS = {
+  Tops:        { style: ["casual"],  occasion: ["casual"],  season: [] },
+  Bottoms:     { style: ["casual"],  occasion: ["casual"],  season: [] },
+  Outerwear:   { style: ["casual"],  occasion: ["casual"],  season: ["fall", "winter"] },
+  Shoes:       { style: ["casual"],  occasion: ["casual"],  season: [] },
+  Accessories: { style: [],          occasion: [],          season: [] },
+};
+
+export function suggestItemTags(clothingType, category) {
+  const type = normalizeClothingType(clothingType);
+  const cat = normalizeCategory(category);
+  const layer_type = normalizeLayerType(undefined, type, cat);
+
+  const match = TAG_SUGGESTIONS[type];
+  const fallback = CATEGORY_FALLBACK_TAGS[cat] || { style: [], occasion: [], season: [] };
+  const source = match || fallback;
+
+  return {
+    style_tags: [...source.style],
+    occasion_tags: [...source.occasion],
+    season_tags: [...source.season],
+    layer_type: layer_type || "",
+  };
+}
+
 function itemWeatherProfile(item) {
   const type = normalizeClothingType(item?.clothing_type);
   const cat = normalizeCategory(item?.category);
