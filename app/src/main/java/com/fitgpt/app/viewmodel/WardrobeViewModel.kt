@@ -70,7 +70,14 @@ data class RecommendationMeta(
     val weatherCategory: String? = null,
     val occasion: String? = null,
     val suggestionId: String? = null,
-    val itemExplanations: Map<Int, String> = emptyMap()
+    val itemExplanations: Map<Int, String> = emptyMap(),
+    val promptFeedback: PromptFeedbackUiMeta? = null
+)
+
+data class PromptFeedbackUiMeta(
+    val shouldPrompt: Boolean,
+    val reason: String,
+    val cooldownSecondsRemaining: Int
 )
 
 enum class ImageUploadTarget {
@@ -382,7 +389,14 @@ class WardrobeViewModel(
                     weatherCategory = aiResult.weatherCategory,
                     occasion = aiResult.occasion,
                     suggestionId = aiResult.suggestionId,
-                    itemExplanations = aiResult.itemExplanations
+                    itemExplanations = aiResult.itemExplanations,
+                    promptFeedback = aiResult.promptFeedback?.let { prompt ->
+                        PromptFeedbackUiMeta(
+                            shouldPrompt = prompt.shouldPrompt,
+                            reason = prompt.reason,
+                            cooldownSecondsRemaining = prompt.cooldownSecondsRemaining
+                        )
+                    }
                 )
                 _recommendationOptionsState.value = aiResult.outfitOptions.ifEmpty {
                     listOf(
@@ -419,7 +433,8 @@ class WardrobeViewModel(
                         fallbackUsed = true,
                         warning = "legacy_endpoint_fallback",
                         weatherCategory = weatherCategory ?: latestWeatherSnapshot?.weatherCategory,
-                        occasion = occasion
+                        occasion = occasion,
+                        promptFeedback = null
                     )
                     _recommendationOptionsState.value = recommendations.takeIf { it.isNotEmpty() }?.let {
                         listOf(
@@ -456,6 +471,22 @@ class WardrobeViewModel(
             explanation = selected.explanation,
             outfitScore = selected.outfitScore
         )
+    }
+
+    fun recordPromptInteraction(eventType: String) {
+        viewModelScope.launch {
+            try {
+                repository.recordPromptFeedbackEvent(
+                    eventType = eventType,
+                    suggestionId = _recommendationMeta.value.suggestionId
+                )
+                _recommendationMeta.value = _recommendationMeta.value.copy(
+                    promptFeedback = _recommendationMeta.value.promptFeedback?.copy(shouldPrompt = false)
+                )
+            } catch (_: Exception) {
+                // Prompt interaction logging should not block recommendation flows.
+            }
+        }
     }
 
     fun markWeatherManualFallback() {

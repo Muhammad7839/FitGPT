@@ -8,6 +8,7 @@ import com.fitgpt.app.data.model.AiChatResponse
 import com.fitgpt.app.data.model.AiRecommendationResult
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.data.model.OutfitOption
+import com.fitgpt.app.data.model.PromptFeedbackMetadata
 import com.fitgpt.app.data.model.TagSuggestion
 import com.fitgpt.app.data.model.WardrobeGapAnalysis
 import com.fitgpt.app.data.model.WardrobeGapSuggestion
@@ -16,6 +17,7 @@ import com.fitgpt.app.data.remote.dto.ClothingItemDto
 import com.fitgpt.app.data.remote.dto.ChatMessageDto
 import com.fitgpt.app.data.remote.dto.ChatResponseDto
 import com.fitgpt.app.data.remote.dto.AiRecommendationResponseDto
+import com.fitgpt.app.data.remote.dto.PromptFeedbackMetadataDto
 import com.fitgpt.app.data.remote.dto.TagSuggestionResponseDto
 import com.fitgpt.app.data.remote.dto.WardrobeGapResponseDto
 import com.fitgpt.app.data.remote.dto.WardrobeGapSuggestionDto
@@ -125,7 +127,16 @@ fun AiRecommendationResponseDto.toDomain(): AiRecommendationResult {
                 explanation = option.explanation,
                 outfitScore = option.outfitScore
             )
-        }
+        },
+        promptFeedback = promptFeedback?.toDomain()
+    )
+}
+
+fun PromptFeedbackMetadataDto.toDomain(): PromptFeedbackMetadata {
+    return PromptFeedbackMetadata(
+        shouldPrompt = shouldPrompt,
+        reason = reason,
+        cooldownSecondsRemaining = cooldownSecondsRemaining
     )
 }
 

@@ -68,7 +68,28 @@ data class AiRecommendationResponseDto(
     @SerializedName("item_explanations")
     val itemExplanations: List<AiRecommendationItemExplanationDto>,
     @SerializedName("outfit_options")
-    val outfitOptions: List<OutfitOptionDto> = emptyList()
+    val outfitOptions: List<OutfitOptionDto> = emptyList(),
+    @SerializedName("prompt_feedback")
+    val promptFeedback: PromptFeedbackMetadataDto? = null
+)
+
+data class PromptFeedbackMetadataDto(
+    @SerializedName("should_prompt")
+    val shouldPrompt: Boolean,
+    val reason: String,
+    @SerializedName("cooldown_seconds_remaining")
+    val cooldownSecondsRemaining: Int
+)
+
+data class PromptFeedbackEventRequestDto(
+    @SerializedName("event_type")
+    val eventType: String,
+    @SerializedName("suggestion_id")
+    val suggestionId: String? = null
+)
+
+data class PromptFeedbackEventResponseDto(
+    val detail: String
 )
 
 data class RejectOutfitRequestDto(

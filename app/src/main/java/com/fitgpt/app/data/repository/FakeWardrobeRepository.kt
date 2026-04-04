@@ -290,6 +290,10 @@ class FakeWardrobeRepository : WardrobeRepository {
         // In-memory fake repository does not persist rejected combinations.
     }
 
+    override suspend fun recordPromptFeedbackEvent(eventType: String, suggestionId: String?) {
+        // No-op in fake repository.
+    }
+
     override suspend fun getRecommendationOptions(
         manualTemp: Int?,
         timeContext: String?,

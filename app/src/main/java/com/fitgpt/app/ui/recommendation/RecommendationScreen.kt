@@ -295,6 +295,41 @@ fun RecommendationScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                     }
 
+                    recommendationMeta.promptFeedback?.takeIf { it.shouldPrompt }?.let { promptMeta ->
+                        WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "Quick feedback",
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Text(
+                                    text = "Was this recommendation useful for your style?",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    TextButton(onClick = { viewModel.recordPromptInteraction("accepted") }) {
+                                        Text("Yes")
+                                    }
+                                    TextButton(onClick = { viewModel.recordPromptInteraction("ignored") }) {
+                                        Text("Not now")
+                                    }
+                                }
+                                if (promptMeta.cooldownSecondsRemaining > 0) {
+                                    Text(
+                                        text = "Prompt cooldown active.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
                     WebCard(modifier = Modifier.fillMaxWidth()) {
                         Column(
                             modifier = Modifier.padding(12.dp),
