@@ -1582,7 +1582,150 @@ export function buildExplanation({ answers, outfit, weatherCategory, timeCategor
   return [opener, structureSent, colorSent, comfortSent, closing].filter(Boolean).join(" ").trim();
 }
 
-/* ?????? Outfit reuse helpers ??????????????????????????????????????????????????????????????????????????????????????????????????????????????? */
+/* ── Wardrobe gap detection ─────────────────────────────────────────── */
+
+const ESSENTIAL_CATEGORIES = ["Tops", "Bottoms", "Shoes"];
+const MIN_CATEGORY_COUNT = 2;
+const MAX_GAP_SUGGESTIONS = 5;
+
+const OCCASION_CLOTHING = {
+  work:     ["dress shirt", "blazer", "dress shoes", "trousers"],
+  formal:   ["dress shirt", "blazer", "dress shoes", "dress"],
+  athletic: ["tank top", "shorts", "sneakers", "windbreaker"],
+  casual:   ["t-shirt", "jeans", "sneakers", "hoodie"],
+  social:   ["blouse", "dress", "heels", "cardigan"],
+};
+
+const SEASON_CLOTHING = {
+  winter: { types: ["coat", "parka", "sweater", "turtleneck", "boots", "scarf"], categories: ["Outerwear"] },
+  summer: { types: ["tank top", "shorts", "sandals", "t-shirt"], categories: ["Tops", "Bottoms"] },
+  fall:   { types: ["jacket", "cardigan", "boots", "sweater"], categories: ["Outerwear"] },
+  spring: { types: ["windbreaker", "cardigan", "sneakers"], categories: ["Outerwear", "Shoes"] },
+};
+
+export function analyzeWardrobeGaps(items, answers, weatherCategory) {
+  const active = (Array.isArray(items) ? items : []).filter(
+    (x) => x && x.is_active !== false && String(x.is_active) !== "false"
+  );
+  const buckets = bucketWardrobe(active);
+  const gaps = [];
+
+  /* 1. Essential category gaps — high priority */
+  for (const cat of ESSENTIAL_CATEGORIES) {
+    if (!buckets[cat] || buckets[cat].length === 0) {
+      gaps.push({
+        category: cat,
+        suggestion: cat === "Tops" ? "A versatile t-shirt or button-up"
+          : cat === "Bottoms" ? "A pair of jeans or chinos"
+          : "Sneakers or casual shoes",
+        priority: "high",
+        reason: `You have no ${cat.toLowerCase()} — every outfit needs one.`,
+      });
+    }
+  }
+
+  /* 2. Category balance — medium priority */
+  const catCounts = ESSENTIAL_CATEGORIES.map((cat) => ({ cat, count: (buckets[cat] || []).length }));
+  const maxCount = Math.max(...catCounts.map((c) => c.count), 0);
+  if (maxCount >= 3) {
+    for (const { cat, count } of catCounts) {
+      if (count > 0 && count < MIN_CATEGORY_COUNT && count < maxCount / 2) {
+        gaps.push({
+          category: cat,
+          suggestion: `More ${cat.toLowerCase()} to balance your wardrobe`,
+          priority: "medium",
+          reason: `You have ${count} ${cat.toLowerCase()} but ${maxCount} in another category — adding variety here gives the algorithm more to work with.`,
+        });
+      }
+    }
+  }
+
+  /* 3. Occasion coverage — medium priority */
+  const preferredOccasions = preferredOccasionsFromAnswers(answers);
+  for (const occasion of preferredOccasions) {
+    const expectedTypes = OCCASION_CLOTHING[occasion] || [];
+    if (!expectedTypes.length) continue;
+    const itemTypes = active.map((x) => normalizeClothingType(x?.clothing_type || x?.type || ""));
+    const hasMatch = expectedTypes.some((t) => itemTypes.includes(t));
+    const taggedForOccasion = active.some((x) => normalizeTagArray(x?.occasion_tags).map(normalizeOccasionValue).includes(occasion));
+    if (!hasMatch && !taggedForOccasion) {
+      const readable = titleCase(occasion);
+      gaps.push({
+        category: readable,
+        suggestion: `A ${expectedTypes[0]} or ${expectedTypes[1]} for ${readable}`,
+        priority: "medium",
+        reason: `You dress for ${readable} but don't have typical ${readable.toLowerCase()} pieces yet.`,
+      });
+    }
+  }
+
+  /* 4. Season coverage — medium priority */
+  const currentSeason = seasonFromDate(new Date());
+  const seasonData = SEASON_CLOTHING[currentSeason];
+  if (seasonData) {
+    const itemTypes = active.map((x) => normalizeClothingType(x?.clothing_type || x?.type || ""));
+    const seasonTagged = active.filter((x) => normalizeTagArray(x?.season_tags).includes(currentSeason));
+    const hasSeasonType = seasonData.types.some((t) => itemTypes.includes(t));
+    if (!hasSeasonType && seasonTagged.length === 0) {
+      gaps.push({
+        category: titleCase(currentSeason),
+        suggestion: `A ${seasonData.types[0]} or ${seasonData.types[1]} for ${currentSeason}`,
+        priority: "medium",
+        reason: `It's ${currentSeason} and you don't have season-appropriate pieces.`,
+      });
+    }
+  }
+
+  /* 5. Layer gaps for cold/cool weather — medium priority */
+  const wCat = (weatherCategory || "mild").toString().trim().toLowerCase();
+  if ((wCat === "cold" || wCat === "cool") && active.length >= 3) {
+    const layerTypes = new Set(active.map((x) => normalizeLayerType(x?.layer_type, normalizeClothingType(x?.clothing_type || ""), normalizeCategory(x?.category))).filter(Boolean));
+    if (!layerTypes.has("outer") && (buckets.Outerwear || []).length === 0) {
+      gaps.push({
+        category: "Outerwear",
+        suggestion: wCat === "cold" ? "A warm coat or parka" : "A light jacket or cardigan",
+        priority: "medium",
+        reason: `It's ${wCat} weather and you have no outer layer for warmth.`,
+      });
+    }
+    if (wCat === "cold" && !layerTypes.has("mid")) {
+      gaps.push({
+        category: "Layers",
+        suggestion: "A sweater, hoodie, or fleece as a mid layer",
+        priority: "medium",
+        reason: "Cold weather works best with a mid layer between your base and outer.",
+      });
+    }
+  }
+
+  /* 6. Color variety — low priority */
+  if (active.length >= 4) {
+    const colors = active.map((x) => normalizeColorName(x?.color || "")).filter(Boolean);
+    const uniqueColors = new Set(colors);
+    if (uniqueColors.size === 1) {
+      const only = titleCase([...uniqueColors][0]);
+      gaps.push({
+        category: "Color variety",
+        suggestion: `Something in a contrasting color to ${only}`,
+        priority: "low",
+        reason: `All ${active.length} items are ${only} — adding a second color gives the algorithm more pairing options.`,
+      });
+    }
+  }
+
+  /* Deduplicate by category, keep highest priority */
+  const seen = new Set();
+  const deduped = [];
+  for (const gap of gaps) {
+    if (seen.has(gap.category)) continue;
+    seen.add(gap.category);
+    deduped.push(gap);
+  }
+
+  return deduped.slice(0, MAX_GAP_SUGGESTIONS);
+}
+
+/* ── Outfit reuse helpers ──────────────────────────────────────────── */
 
 export function buildOutfitFromIds(ids, wardrobe) {
   const pool = Array.isArray(wardrobe) ? wardrobe : [];

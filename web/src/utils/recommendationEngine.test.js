@@ -24,6 +24,7 @@ import {
   analyzeOutfitColors,
   scoreOutfitForDisplay,
   suggestItemTags,
+  analyzeWardrobeGaps,
 } from "./recommendationEngine";
 
 describe("titleCase", () => {
@@ -1900,5 +1901,148 @@ describe("suggested tags integrate with recommendation scoring", () => {
     expect(blazer.style_tags).toContain("formal");
     expect(blazer.occasion_tags).toContain("work");
     expect(blazer.layer_type).toBe("outer");
+  });
+});
+
+/* ── Wardrobe gap detection tests ──────────────────────────────────── */
+
+describe("analyzeWardrobeGaps", () => {
+  test("empty wardrobe returns essential category gaps", () => {
+    const gaps = analyzeWardrobeGaps([], {}, "mild");
+    expect(gaps.length).toBeGreaterThanOrEqual(3);
+    const categories = gaps.map((g) => g.category);
+    expect(categories).toContain("Tops");
+    expect(categories).toContain("Bottoms");
+    expect(categories).toContain("Shoes");
+    const essentials = gaps.filter((g) => ["Tops", "Bottoms", "Shoes"].includes(g.category));
+    for (const gap of essentials) {
+      expect(gap.priority).toBe("high");
+    }
+  });
+
+  test("missing shoes detected when tops and bottoms exist", () => {
+    const items = [
+      { id: "1", name: "Tee", category: "tops", color: "white", is_active: true },
+      { id: "2", name: "Jeans", category: "bottoms", color: "blue", is_active: true },
+    ];
+    const gaps = analyzeWardrobeGaps(items, {}, "mild");
+    const shoeGap = gaps.find((g) => g.category === "Shoes");
+    expect(shoeGap).toBeDefined();
+    expect(shoeGap.priority).toBe("high");
+  });
+
+  test("category imbalance flagged", () => {
+    const items = [
+      { id: "t1", name: "Tee 1", category: "tops", color: "white", is_active: true },
+      { id: "t2", name: "Tee 2", category: "tops", color: "blue", is_active: true },
+      { id: "t3", name: "Tee 3", category: "tops", color: "red", is_active: true },
+      { id: "t4", name: "Tee 4", category: "tops", color: "black", is_active: true },
+      { id: "b1", name: "Jeans", category: "bottoms", color: "blue", is_active: true },
+      { id: "s1", name: "Sneakers", category: "shoes", color: "white", is_active: true },
+    ];
+    const gaps = analyzeWardrobeGaps(items, {}, "mild");
+    const balanceGap = gaps.find((g) => g.category === "Bottoms" || g.category === "Shoes");
+    if (balanceGap) {
+      expect(balanceGap.priority).toBe("medium");
+      expect(balanceGap.reason).toContain("variety");
+    }
+  });
+
+  test("occasion gap when dressFor set but no matching items", () => {
+    const items = [
+      { id: "1", name: "Tee", category: "tops", clothing_type: "t-shirt", color: "white", is_active: true },
+      { id: "2", name: "Jeans", category: "bottoms", color: "blue", is_active: true },
+      { id: "3", name: "Sneakers", category: "shoes", color: "white", is_active: true },
+    ];
+    const gaps = analyzeWardrobeGaps(items, { dressFor: ["formal"] }, "mild");
+    const formalGap = gaps.find((g) => g.category === "Formal");
+    expect(formalGap).toBeDefined();
+    expect(formalGap.priority).toBe("medium");
+    expect(formalGap.reason.toLowerCase()).toContain("formal");
+  });
+
+  test("no occasion gap when matching items exist", () => {
+    const items = [
+      { id: "1", name: "Dress Shirt", category: "tops", clothing_type: "dress shirt", color: "white", occasion_tags: "work", is_active: true },
+      { id: "2", name: "Trousers", category: "bottoms", color: "black", is_active: true },
+      { id: "3", name: "Oxfords", category: "shoes", clothing_type: "dress shoes", color: "black", is_active: true },
+    ];
+    const gaps = analyzeWardrobeGaps(items, { dressFor: ["work"] }, "mild");
+    const workGap = gaps.find((g) => g.category === "Work");
+    expect(workGap).toBeUndefined();
+  });
+
+  test("cold weather without outerwear flags layer gap", () => {
+    const items = [
+      { id: "1", name: "Tee", category: "tops", clothing_type: "t-shirt", color: "white", is_active: true },
+      { id: "2", name: "Jeans", category: "bottoms", color: "blue", is_active: true },
+      { id: "3", name: "Sneakers", category: "shoes", color: "white", is_active: true },
+    ];
+    const gaps = analyzeWardrobeGaps(items, {}, "cold");
+    const outerGap = gaps.find((g) => g.category === "Outerwear");
+    expect(outerGap).toBeDefined();
+    expect(outerGap.reason.toLowerCase()).toContain("cold");
+  });
+
+  test("color monotony detected", () => {
+    const items = [
+      { id: "1", name: "Black Tee", category: "tops", color: "black", is_active: true },
+      { id: "2", name: "Black Jeans", category: "bottoms", color: "black", is_active: true },
+      { id: "3", name: "Black Shoes", category: "shoes", color: "black", is_active: true },
+      { id: "4", name: "Black Jacket", category: "outerwear", color: "black", is_active: true },
+    ];
+    const gaps = analyzeWardrobeGaps(items, {}, "mild");
+    const colorGap = gaps.find((g) => g.category === "Color variety");
+    expect(colorGap).toBeDefined();
+    expect(colorGap.priority).toBe("low");
+  });
+
+  test("well-stocked wardrobe returns few or no gaps", () => {
+    const items = [
+      { id: "t1", name: "Tee", category: "tops", clothing_type: "t-shirt", color: "white", is_active: true },
+      { id: "t2", name: "Dress Shirt", category: "tops", clothing_type: "dress shirt", color: "blue", occasion_tags: "work", is_active: true },
+      { id: "t3", name: "Polo", category: "tops", clothing_type: "polo", color: "navy", is_active: true },
+      { id: "b1", name: "Jeans", category: "bottoms", color: "blue", is_active: true },
+      { id: "b2", name: "Chinos", category: "bottoms", color: "beige", is_active: true },
+      { id: "b3", name: "Trousers", category: "bottoms", color: "gray", is_active: true },
+      { id: "s1", name: "Sneakers", category: "shoes", color: "white", is_active: true },
+      { id: "s2", name: "Boots", category: "shoes", color: "brown", is_active: true },
+      { id: "o1", name: "Blazer", category: "outerwear", clothing_type: "blazer", color: "navy", is_active: true },
+    ];
+    const gaps = analyzeWardrobeGaps(items, {}, "mild");
+    expect(gaps.length).toBeLessThanOrEqual(2);
+  });
+
+  test("max 5 suggestions enforced", () => {
+    const gaps = analyzeWardrobeGaps([], { dressFor: ["work", "formal", "athletic"] }, "cold");
+    expect(gaps.length).toBeLessThanOrEqual(5);
+  });
+
+  test("suggestions do not repeat categories", () => {
+    const gaps = analyzeWardrobeGaps([], { dressFor: ["work"] }, "cold");
+    const categories = gaps.map((g) => g.category);
+    expect(new Set(categories).size).toBe(categories.length);
+  });
+
+  test("each gap has required fields", () => {
+    const gaps = analyzeWardrobeGaps([], {}, "mild");
+    for (const gap of gaps) {
+      expect(gap.category).toBeTruthy();
+      expect(gap.suggestion).toBeTruthy();
+      expect(["high", "medium", "low"]).toContain(gap.priority);
+      expect(gap.reason).toBeTruthy();
+    }
+  });
+
+  test("archived items are excluded from analysis", () => {
+    const items = [
+      { id: "1", name: "Tee", category: "tops", color: "white", is_active: true },
+      { id: "2", name: "Archived Jeans", category: "bottoms", color: "blue", is_active: false },
+      { id: "3", name: "Sneakers", category: "shoes", color: "white", is_active: true },
+    ];
+    const gaps = analyzeWardrobeGaps(items, {}, "mild");
+    const bottomGap = gaps.find((g) => g.category === "Bottoms");
+    expect(bottomGap).toBeDefined();
+    expect(bottomGap.priority).toBe("high");
   });
 });
