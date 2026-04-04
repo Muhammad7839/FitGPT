@@ -15,6 +15,9 @@ import com.fitgpt.app.data.model.UploadResult
 import com.fitgpt.app.data.model.WardrobeGapAnalysis
 import com.fitgpt.app.data.model.WardrobeGapSuggestion
 import com.fitgpt.app.data.model.WeatherSnapshot
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 class FakeWardrobeRepository : WardrobeRepository {
 
@@ -391,6 +394,31 @@ class FakeWardrobeRepository : WardrobeRepository {
 
     override suspend fun getOutfitHistory(): List<OutfitHistoryEntry> {
         return historyEntries.toList()
+    }
+
+    override suspend fun getOutfitHistoryInRange(startDate: String, endDate: String): List<OutfitHistoryEntry> {
+        val zoneId = ZoneId.systemDefault()
+        val start = LocalDate.parse(startDate)
+        val end = LocalDate.parse(endDate)
+        return historyEntries.filter { entry ->
+            val localDate = Instant.ofEpochMilli(entry.wornAtTimestamp).atZone(zoneId).toLocalDate()
+            !localDate.isBefore(start) && !localDate.isAfter(end)
+        }
+    }
+
+    override suspend fun updateOutfitHistoryEntry(historyId: Long, itemIds: List<Int>?, wornAtTimestamp: Long?) {
+        val index = historyEntries.indexOfFirst { it.id == historyId }
+        if (index == -1) return
+        val existing = historyEntries[index]
+        val resolvedItems = itemIds?.let { ids -> wardrobeItems.filter { ids.contains(it.id) } } ?: existing.items
+        historyEntries[index] = existing.copy(
+            items = resolvedItems,
+            wornAtTimestamp = wornAtTimestamp ?: existing.wornAtTimestamp
+        )
+    }
+
+    override suspend fun deleteOutfitHistoryEntry(historyId: Long) {
+        historyEntries.removeAll { it.id == historyId }
     }
 
     override suspend fun clearOutfitHistory() {

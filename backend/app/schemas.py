@@ -720,6 +720,22 @@ class OutfitHistoryCreate(BaseModel):
         return value
 
 
+class OutfitHistoryUpdate(BaseModel):
+    item_ids: Optional[list[int]] = Field(default=None, min_length=1, max_length=32)
+    worn_at_timestamp: Optional[int] = Field(default=None, gt=0)
+
+    @field_validator("item_ids")
+    @classmethod
+    def validate_optional_item_ids(cls, value: Optional[list[int]]) -> Optional[list[int]]:
+        if value is None:
+            return value
+        if len(set(value)) != len(value):
+            raise ValueError("item_ids must be unique")
+        if any(item_id <= 0 for item_id in value):
+            raise ValueError("item_ids must contain positive integers")
+        return value
+
+
 class OutfitHistoryResponse(BaseModel):
     detail: str
 

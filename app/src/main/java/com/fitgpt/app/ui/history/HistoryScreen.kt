@@ -14,7 +14,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +36,8 @@ import com.fitgpt.app.ui.common.WebBadge
 import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -42,6 +46,17 @@ private enum class HistoryTab {
     HISTORY,
     ANALYTICS
 }
+
+private enum class HistoryRangeFilter {
+    LAST_7_DAYS,
+    LAST_30_DAYS,
+    ALL
+}
+
+private data class HistoryDateRange(
+    val startDate: String,
+    val endDate: String
+)
 
 /**
  * Combined History + Analytics screen mirroring the web tab structure.
@@ -57,6 +72,18 @@ fun HistoryScreen(
     val plannedOutfits by viewModel.plannedState.collectAsState()
 
     var activeTab by remember { mutableStateOf(HistoryTab.HISTORY) }
+    var rangeFilter by remember { mutableStateOf(HistoryRangeFilter.LAST_30_DAYS) }
+    val dateRange = remember(rangeFilter) { resolveRange(rangeFilter) }
+
+    LaunchedEffect(activeTab, rangeFilter) {
+        if (activeTab == HistoryTab.HISTORY) {
+            if (dateRange == null) {
+                viewModel.refreshHistory()
+            } else {
+                viewModel.refreshHistoryInRange(dateRange.startDate, dateRange.endDate)
+            }
+        }
+    }
 
     FitGptScaffold(
         navController = navController,
@@ -97,6 +124,24 @@ fun HistoryScreen(
                         Text("Clear History")
                     }
 
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = rangeFilter == HistoryRangeFilter.LAST_7_DAYS,
+                            onClick = { rangeFilter = HistoryRangeFilter.LAST_7_DAYS },
+                            label = { Text("Last 7 days") }
+                        )
+                        FilterChip(
+                            selected = rangeFilter == HistoryRangeFilter.LAST_30_DAYS,
+                            onClick = { rangeFilter = HistoryRangeFilter.LAST_30_DAYS },
+                            label = { Text("Last 30 days") }
+                        )
+                        FilterChip(
+                            selected = rangeFilter == HistoryRangeFilter.ALL,
+                            onClick = { rangeFilter = HistoryRangeFilter.ALL },
+                            label = { Text("All") }
+                        )
+                    }
+
                     if (history.isEmpty()) {
                         Column(
                             modifier = Modifier
@@ -118,39 +163,66 @@ fun HistoryScreen(
                             .fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        items(history) { entry ->
-                            WebCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                accentTop = false
-                            ) {
-                                Column(modifier = Modifier.padding(14.dp)) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        entry.items.take(4).forEach { item ->
-                                            RemoteImagePreview(
-                                                imageUrl = item.imageUrl,
-                                                contentDescription = item.category,
-                                                modifier = Modifier.size(52.dp)
+                        val groupedHistory = history.groupBy { formatDayHeader(it.wornAtTimestamp) }
+                        groupedHistory.forEach { (dayLabel, entriesForDay) ->
+                            item {
+                                Text(
+                                    text = dayLabel,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            items(entriesForDay, key = { entry -> entry.id }) { entry ->
+                                WebCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    accentTop = false
+                                ) {
+                                    Column(modifier = Modifier.padding(14.dp)) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            entry.items.take(4).forEach { item ->
+                                                RemoteImagePreview(
+                                                    imageUrl = item.imageUrl,
+                                                    contentDescription = item.category,
+                                                    modifier = Modifier.size(52.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.size(8.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = entry.items.joinToString { it.category },
+                                                style = MaterialTheme.typography.titleMedium
+                                            )
+                                            WebBadge(
+                                                text = entry.source.replaceFirstChar { it.uppercase() }
                                             )
                                         }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = formatTimestamp(entry.wornAtTimestamp),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            TextButton(
+                                                onClick = {
+                                                    viewModel.deleteHistoryEntry(
+                                                        historyId = entry.id,
+                                                        startDate = dateRange?.startDate,
+                                                        endDate = dateRange?.endDate
+                                                    )
+                                                }
+                                            ) {
+                                                Text("Delete")
+                                            }
+                                        }
                                     }
-                                    Spacer(modifier = Modifier.size(8.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(
-                                            text = entry.items.joinToString { it.category },
-                                            style = MaterialTheme.typography.titleMedium
-                                        )
-                                        WebBadge(
-                                            text = entry.source.replaceFirstChar { it.uppercase() }
-                                        )
-                                    }
-                                    Text(
-                                        text = formatTimestamp(entry.wornAtTimestamp),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
                                 }
                             }
                         }
@@ -240,7 +312,37 @@ private fun AnalyticsCard(label: String, value: String) {
     }
 }
 
+private fun resolveRange(filter: HistoryRangeFilter): HistoryDateRange? {
+    if (filter == HistoryRangeFilter.ALL) {
+        return null
+    }
+    val now = LocalDate.now()
+    val start = when (filter) {
+        HistoryRangeFilter.LAST_7_DAYS -> now.minusDays(6)
+        HistoryRangeFilter.LAST_30_DAYS -> now.minusDays(29)
+        HistoryRangeFilter.ALL -> now
+    }
+    val formatter = DateTimeFormatter.ISO_LOCAL_DATE
+    return HistoryDateRange(
+        startDate = start.format(formatter),
+        endDate = now.format(formatter)
+    )
+}
+
+private fun formatDayHeader(timestamp: Long): String {
+    val formatter = SimpleDateFormat("EEEE, MMM d yyyy", Locale.getDefault())
+    return formatter.format(Date(normalizeTimestamp(timestamp)))
+}
+
 private fun formatTimestamp(timestamp: Long): String {
     val formatter = SimpleDateFormat("EEE, MMM d yyyy • h:mm a", Locale.getDefault())
-    return formatter.format(Date(timestamp))
+    return formatter.format(Date(normalizeTimestamp(timestamp)))
+}
+
+private fun normalizeTimestamp(timestamp: Long): Long {
+    return if (timestamp < 100_000_000_000L) {
+        timestamp * 1000
+    } else {
+        timestamp
+    }
 }

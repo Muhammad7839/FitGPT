@@ -18,6 +18,8 @@ import com.fitgpt.app.data.remote.dto.ImageUploadResponseDto
 import com.fitgpt.app.data.remote.dto.MessageResponse
 import com.fitgpt.app.data.remote.dto.OutfitHistoryRequest
 import com.fitgpt.app.data.remote.dto.OutfitHistoryListResponseDto
+import com.fitgpt.app.data.remote.dto.OutfitHistoryEntryDto
+import com.fitgpt.app.data.remote.dto.OutfitHistoryUpdateRequestDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitAssignmentRequestDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitAssignmentResponseDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitCreateRequest
@@ -265,8 +267,25 @@ interface ApiService {
     @GET("outfits/history")
     suspend fun getOutfitHistory(): OutfitHistoryListResponseDto
 
+    @GET("outfits/history/range")
+    suspend fun getOutfitHistoryInRange(
+        @Query("start_date") startDate: String,
+        @Query("end_date") endDate: String
+    ): OutfitHistoryListResponseDto
+
     @DELETE("outfits/history")
     suspend fun clearOutfitHistory()
+
+    @PUT("outfits/history/{historyId}")
+    suspend fun updateOutfitHistoryEntry(
+        @Path("historyId") historyId: Long,
+        @Body payload: OutfitHistoryUpdateRequestDto
+    ): OutfitHistoryEntryDto
+
+    @DELETE("outfits/history/{historyId}")
+    suspend fun deleteOutfitHistoryEntry(
+        @Path("historyId") historyId: Long
+    ): MessageResponse
 
     @GET("outfits/saved")
     suspend fun getSavedOutfits(): SavedOutfitListResponseDto

@@ -8,7 +8,7 @@ from typing import Optional
 from urllib.parse import quote_plus
 
 from passlib.context import CryptContext
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -1415,6 +1415,63 @@ def get_outfit_history_for_user(db: Session, user_id: int):
     return db.query(models.OutfitHistory).filter(
         models.OutfitHistory.owner_id == user_id
     ).order_by(models.OutfitHistory.worn_at_timestamp.desc()).all()
+
+
+def get_outfit_history_for_user_in_range(
+    db: Session,
+    user_id: int,
+    start_timestamp: int,
+    end_timestamp: int,
+):
+    # Support both second-based and millisecond-based timestamps.
+    start_millis = start_timestamp * 1000
+    end_millis = (end_timestamp * 1000) + 999
+    return db.query(models.OutfitHistory).filter(
+        models.OutfitHistory.owner_id == user_id,
+        or_(
+            and_(
+                models.OutfitHistory.worn_at_timestamp >= start_timestamp,
+                models.OutfitHistory.worn_at_timestamp <= end_timestamp,
+            ),
+            and_(
+                models.OutfitHistory.worn_at_timestamp >= start_millis,
+                models.OutfitHistory.worn_at_timestamp <= end_millis,
+            ),
+        ),
+    ).order_by(models.OutfitHistory.worn_at_timestamp.desc()).all()
+
+
+def update_outfit_history_entry(
+    db: Session,
+    *,
+    user_id: int,
+    history_id: int,
+    item_ids: Optional[list[int]] = None,
+    worn_at_timestamp: Optional[int] = None,
+) -> Optional[models.OutfitHistory]:
+    entry = db.query(models.OutfitHistory).filter(
+        models.OutfitHistory.owner_id == user_id,
+        models.OutfitHistory.id == history_id,
+    ).first()
+    if not entry:
+        return None
+    if item_ids is not None:
+        entry.item_ids_csv = ",".join(str(item_id) for item_id in item_ids)
+    if worn_at_timestamp is not None:
+        entry.worn_at_timestamp = worn_at_timestamp
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+
+def delete_outfit_history_entry(db: Session, *, user_id: int, history_id: int) -> bool:
+    deleted = db.query(models.OutfitHistory).filter(
+        models.OutfitHistory.owner_id == user_id,
+        models.OutfitHistory.id == history_id,
+    ).delete()
+    db.commit()
+    return deleted > 0
 
 
 def clear_outfit_history_for_user(db: Session, user_id: int):

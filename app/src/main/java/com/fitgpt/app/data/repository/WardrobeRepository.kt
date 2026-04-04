@@ -88,6 +88,9 @@ interface WardrobeRepository {
     suspend fun markOutfitAsWorn(items: List<ClothingItem>, wornAtTimestamp: Long)
 
     suspend fun getOutfitHistory(): List<OutfitHistoryEntry>
+    suspend fun getOutfitHistoryInRange(startDate: String, endDate: String): List<OutfitHistoryEntry>
+    suspend fun updateOutfitHistoryEntry(historyId: Long, itemIds: List<Int>?, wornAtTimestamp: Long?)
+    suspend fun deleteOutfitHistoryEntry(historyId: Long)
     suspend fun clearOutfitHistory()
 
     suspend fun saveOutfit(itemIds: List<Int>, savedAtTimestamp: Long? = null)
