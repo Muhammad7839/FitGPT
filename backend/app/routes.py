@@ -134,6 +134,10 @@ def _legacy_signature_from_item_ids(item_ids: list[int]) -> str:
     return "|".join(normalized)
 
 
+def _suggestion_fingerprint(item_ids: list[int]) -> str:
+    return ",".join(str(item_id) for item_id in sorted(item_ids))
+
+
 def _timestamp_to_iso(timestamp: Optional[int]) -> str:
     if timestamp is None:
         return ""
@@ -1625,6 +1629,29 @@ def generate_trip_packing_list(
     return result
 
 
+@router.post("/recommendations/interactions", response_model=schemas.RecommendationInteractionResponse)
+def submit_recommendation_interaction(
+    payload: schemas.RecommendationInteractionCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if payload.item_ids:
+        _ensure_owned_items(db, current_user.id, payload.item_ids)
+    interaction = crud.record_recommendation_interaction(
+        db=db,
+        user_id=current_user.id,
+        suggestion_id=payload.suggestion_id,
+        signal=payload.signal,
+        item_ids=payload.item_ids,
+    )
+    return {
+        "detail": "Interaction recorded",
+        "suggestion_id": interaction.suggestion_id,
+        "signal": interaction.signal,
+        "created_at_timestamp": interaction.created_at_timestamp,
+    }
+
+
 # =============================
 # Outfit History Routes
 # =============================
@@ -1641,6 +1668,13 @@ def create_outfit_history(
         user_id=current_user.id,
         item_ids=payload.item_ids,
         worn_at_timestamp=payload.worn_at_timestamp,
+    )
+    crud.record_recommendation_interaction(
+        db=db,
+        user_id=current_user.id,
+        suggestion_id=_suggestion_fingerprint(payload.item_ids),
+        signal="wear",
+        item_ids=payload.item_ids,
     )
     return {"detail": "Outfit history saved"}
 
@@ -1849,6 +1883,13 @@ def save_outfit(
         user_id=current_user.id,
         item_ids=payload.item_ids,
         saved_at_timestamp=payload.saved_at_timestamp or int(datetime.utcnow().timestamp()),
+    )
+    crud.record_recommendation_interaction(
+        db=db,
+        user_id=current_user.id,
+        suggestion_id=_suggestion_fingerprint(payload.item_ids),
+        signal="save",
+        item_ids=payload.item_ids,
     )
     saved_outfits = crud.get_saved_outfits_for_user(db, current_user.id)
     return {"outfits": _serialize_saved_outfits(saved_outfits)}

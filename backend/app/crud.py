@@ -1291,6 +1291,86 @@ def upsert_recommendation_feedback(
     return entry, created
 
 
+_INTERACTION_SIGNAL_WEIGHT = {
+    "like": 0.45,
+    "save": 0.3,
+    "wear": 0.0,
+    "dislike": -0.55,
+    "reject": -0.9,
+}
+
+
+def record_recommendation_interaction(
+    db: Session,
+    *,
+    user_id: int,
+    suggestion_id: str,
+    signal: str,
+    item_ids: Optional[list[int]],
+) -> models.RecommendationInteraction:
+    timestamp = int(datetime.utcnow().timestamp())
+    interaction = models.RecommendationInteraction(
+        owner_id=user_id,
+        suggestion_id=suggestion_id,
+        signal=signal,
+        item_ids_csv=",".join(str(item_id) for item_id in (item_ids or [])) or None,
+        created_at_timestamp=timestamp,
+    )
+    db.add(interaction)
+    db.commit()
+    db.refresh(interaction)
+    return interaction
+
+
+def _parse_item_ids_csv(raw_value: Optional[str]) -> list[int]:
+    if not raw_value:
+        return []
+    item_ids: list[int] = []
+    for token in raw_value.split(","):
+        cleaned = token.strip()
+        if not cleaned:
+            continue
+        try:
+            parsed = int(cleaned)
+        except ValueError:
+            continue
+        if parsed > 0:
+            item_ids.append(parsed)
+    return item_ids
+
+
+def build_personalization_item_weights(db: Session, user_id: int) -> dict[int, float]:
+    weights: defaultdict[int, float] = defaultdict(float)
+
+    # Personalization weights are based on explicit interaction events only.
+    # Favorite/wear-history signals are already applied by existing feedback logic.
+    interactions = db.query(models.RecommendationInteraction).filter(
+        models.RecommendationInteraction.owner_id == user_id,
+    ).order_by(models.RecommendationInteraction.created_at_timestamp.desc()).limit(250).all()
+    for interaction in interactions:
+        signal_weight = _INTERACTION_SIGNAL_WEIGHT.get((interaction.signal or "").strip().lower(), 0.0)
+        if signal_weight == 0.0:
+            continue
+        for item_id in _parse_item_ids_csv(interaction.item_ids_csv):
+            weights[item_id] += signal_weight
+
+    # Clamp extreme values so sparse/conflicting signals remain stable.
+    clamped_weights = {
+        item_id: max(-1.2, min(weight, 1.2))
+        for item_id, weight in weights.items()
+    }
+    return clamped_weights
+
+
+def personalization_adjustment_for_candidate(item_ids: list[int], item_weights: dict[int, float]) -> float:
+    if not item_ids or not item_weights:
+        return 0.0
+    weighted_values = [item_weights.get(item_id, 0.0) for item_id in item_ids]
+    if not weighted_values:
+        return 0.0
+    return sum(weighted_values) / len(weighted_values)
+
+
 def get_recommendation_options_for_user(
     db: Session,
     user: models.User,
@@ -1312,6 +1392,7 @@ def get_recommendation_options_for_user(
     )
     effective_preferred_seasons = resolve_preferred_seasons(preferred_seasons)
     explicit_feedback_signals = get_recommendation_feedback_signals_for_user(db, user.id)
+    personalization_weights = build_personalization_item_weights(db, user.id)
 
     raw_candidates = deterministic.recommend_many(
         items=all_items,
@@ -1333,9 +1414,13 @@ def get_recommendation_options_for_user(
     )
     candidates = sorted(
         candidates,
-        key=lambda candidate: candidate.score + _feedback_adjustment_for_candidate(
-            candidate,
-            feedback_signals=implicit_feedback_signals,
+        key=lambda candidate: (
+            candidate.score
+            + _feedback_adjustment_for_candidate(
+                candidate,
+                feedback_signals=implicit_feedback_signals,
+            )
+            + personalization_adjustment_for_candidate(candidate.item_ids, personalization_weights)
         ),
         reverse=True,
     )
@@ -1353,6 +1438,10 @@ def get_recommendation_options_for_user(
         adjusted_score = candidate.score + _feedback_adjustment_for_candidate(
             candidate,
             feedback_signals=implicit_feedback_signals,
+        )
+        adjusted_score += personalization_adjustment_for_candidate(
+            candidate.item_ids,
+            personalization_weights,
         )
         signal = explicit_feedback_signals.get(candidate.fingerprint)
         adjusted_score += recommendation_feedback_delta(signal)
