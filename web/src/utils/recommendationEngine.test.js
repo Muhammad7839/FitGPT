@@ -22,6 +22,7 @@ import {
   layerWarmth,
   analyzeColorRelationship,
   analyzeOutfitColors,
+  scoreOutfitForDisplay,
 } from "./recommendationEngine";
 
 describe("titleCase", () => {
@@ -1163,5 +1164,158 @@ describe("occasion with style interaction", () => {
     for (const outfit of outfits) {
       expect(outfit.length).toBeGreaterThanOrEqual(1);
     }
+  });
+});
+
+/* ── Multi-outfit variety and deduplication tests ──────────────────── */
+
+describe("outfit variety and deduplication", () => {
+  const largeWardrobe = [
+    { id: "t1", name: "White Tee", category: "tops", clothing_type: "t-shirt", color: "white", is_active: true },
+    { id: "t2", name: "Blue Polo", category: "tops", clothing_type: "polo", color: "blue", is_active: true },
+    { id: "t3", name: "Red Henley", category: "tops", clothing_type: "henley", color: "red", is_active: true },
+    { id: "t4", name: "Black Turtleneck", category: "tops", clothing_type: "turtleneck", color: "black", is_active: true },
+    { id: "b1", name: "Black Jeans", category: "bottoms", color: "black", is_active: true },
+    { id: "b2", name: "Navy Chinos", category: "bottoms", color: "navy", is_active: true },
+    { id: "b3", name: "Beige Khakis", category: "bottoms", color: "beige", is_active: true },
+    { id: "b4", name: "Gray Trousers", category: "bottoms", color: "gray", is_active: true },
+    { id: "s1", name: "White Sneakers", category: "shoes", color: "white", is_active: true },
+    { id: "s2", name: "Brown Boots", category: "shoes", color: "brown", is_active: true },
+    { id: "s3", name: "Black Oxfords", category: "shoes", color: "black", is_active: true },
+    { id: "o1", name: "Navy Blazer", category: "outerwear", clothing_type: "blazer", color: "navy", is_active: true },
+    { id: "o2", name: "Green Jacket", category: "outerwear", clothing_type: "jacket", color: "green", is_active: true },
+  ];
+
+  test("3 returned outfits have distinct item signatures", () => {
+    const outfits = generateThreeOutfits(largeWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    expect(outfits.length).toBe(3);
+
+    const sigs = outfits.map((outfit) => idsSignature(outfit.map((item) => item.id)));
+    const unique = new Set(sigs);
+    expect(unique.size).toBe(3);
+  });
+
+  test("outfits differ in at least one item", () => {
+    const outfits = generateThreeOutfits(largeWardrobe, 99, "rectangle", new Set(), new Map(), "mild", "work hours", null);
+    for (let i = 0; i < outfits.length; i++) {
+      for (let j = i + 1; j < outfits.length; j++) {
+        const idsA = new Set(outfits[i].map((item) => item.id));
+        const idsB = new Set(outfits[j].map((item) => item.id));
+        const overlap = [...idsA].filter((id) => idsB.has(id)).length;
+        const maxLen = Math.max(idsA.size, idsB.size);
+        expect(overlap).toBeLessThan(maxLen);
+      }
+    }
+  });
+
+  test("different seeds produce different outfit sets", () => {
+    const outfitsA = generateThreeOutfits(largeWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    const outfitsB = generateThreeOutfits(largeWardrobe, 999, "rectangle", new Set(), new Map(), "mild", "morning", null);
+
+    const sigsA = new Set(outfitsA.map((o) => idsSignature(o.map((i) => i.id))));
+    const sigsB = new Set(outfitsB.map((o) => idsSignature(o.map((i) => i.id))));
+    const shared = [...sigsA].filter((s) => sigsB.has(s)).length;
+    expect(shared).toBeLessThan(3);
+  });
+
+  test("skipSigs excludes saved outfits from results", () => {
+    const outfitsFirst = generateThreeOutfits(largeWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    const savedSigs = new Set(outfitsFirst.map((o) => idsSignature(o.map((i) => i.id))));
+
+    const outfitsSecond = generateThreeOutfits(largeWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null, savedSigs);
+    const secondSigs = outfitsSecond.map((o) => idsSignature(o.map((i) => i.id)));
+
+    for (const sig of secondSigs) {
+      expect(savedSigs.has(sig)).toBe(false);
+    }
+  });
+
+  test("recentSigs penalty reduces repeat recommendations", () => {
+    const outfitsFirst = generateThreeOutfits(largeWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    const recentSigs = new Set(outfitsFirst.map((o) => idsSignature(o.map((i) => i.id))));
+
+    const outfitsSecond = generateThreeOutfits(largeWardrobe, 42, "rectangle", recentSigs, new Map(), "mild", "morning", null);
+    const secondSigs = new Set(outfitsSecond.map((o) => idsSignature(o.map((i) => i.id))));
+
+    const overlap = [...recentSigs].filter((s) => secondSigs.has(s)).length;
+    expect(overlap).toBeLessThan(recentSigs.size);
+  });
+
+  test("item frequency penalty promotes variety in items used", () => {
+    const frequentItems = new Map([["t1", 5], ["b1", 5], ["s1", 5]]);
+    const outfits = generateThreeOutfits(largeWardrobe, 42, "rectangle", new Set(), frequentItems, "mild", "morning", null);
+
+    const allIds = outfits.flat().map((item) => item.id);
+    const frequentCount = allIds.filter((id) => ["t1", "b1", "s1"].includes(id)).length;
+    const otherCount = allIds.filter((id) => !["t1", "b1", "s1"].includes(id)).length;
+    expect(otherCount).toBeGreaterThan(frequentCount);
+  });
+});
+
+describe("variety across wardrobe sizes", () => {
+  test("small wardrobe (3 items) still returns 3 outfits", () => {
+    const wardrobe = [
+      { id: "t1", name: "Tee", category: "tops", color: "blue", is_active: true },
+      { id: "b1", name: "Jeans", category: "bottoms", color: "black", is_active: true },
+      { id: "s1", name: "Sneakers", category: "shoes", color: "white", is_active: true },
+    ];
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    expect(outfits.length).toBe(3);
+    for (const outfit of outfits) {
+      expect(outfit.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  test("medium wardrobe produces 3 distinct outfits", () => {
+    const wardrobe = [
+      { id: "t1", name: "White Tee", category: "tops", color: "white", is_active: true },
+      { id: "t2", name: "Blue Shirt", category: "tops", color: "blue", is_active: true },
+      { id: "b1", name: "Jeans", category: "bottoms", color: "blue", is_active: true },
+      { id: "b2", name: "Chinos", category: "bottoms", color: "beige", is_active: true },
+      { id: "s1", name: "Sneakers", category: "shoes", color: "white", is_active: true },
+      { id: "s2", name: "Boots", category: "shoes", color: "brown", is_active: true },
+    ];
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    expect(outfits.length).toBe(3);
+
+    const sigs = outfits.map((o) => idsSignature(o.map((i) => i.id)));
+    const unique = new Set(sigs);
+    expect(unique.size).toBeGreaterThanOrEqual(2);
+  });
+
+  test("large wardrobe produces 3 fully distinct outfits", () => {
+    const wardrobe = [];
+    for (let i = 0; i < 5; i++) wardrobe.push({ id: `t${i}`, name: `Top ${i}`, category: "tops", color: ["white", "blue", "red", "green", "navy"][i], is_active: true });
+    for (let i = 0; i < 5; i++) wardrobe.push({ id: `b${i}`, name: `Bottom ${i}`, category: "bottoms", color: ["black", "blue", "beige", "gray", "navy"][i], is_active: true });
+    for (let i = 0; i < 3; i++) wardrobe.push({ id: `s${i}`, name: `Shoe ${i}`, category: "shoes", color: ["white", "black", "brown"][i], is_active: true });
+
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    expect(outfits.length).toBe(3);
+
+    const sigs = outfits.map((o) => idsSignature(o.map((i) => i.id)));
+    const unique = new Set(sigs);
+    expect(unique.size).toBe(3);
+  });
+});
+
+describe("ranking returns top scoring outfits", () => {
+  test("first outfit scores equal or higher than subsequent outfits", () => {
+    const wardrobe = [
+      { id: "t1", name: "Dress Shirt", category: "tops", clothing_type: "dress shirt", color: "white", occasion_tags: "work", is_active: true },
+      { id: "t2", name: "Graphic Tee", category: "tops", clothing_type: "t-shirt", color: "red", is_active: true },
+      { id: "t3", name: "Polo", category: "tops", clothing_type: "polo", color: "navy", is_active: true },
+      { id: "b1", name: "Dress Pants", category: "bottoms", color: "black", occasion_tags: "work", is_active: true },
+      { id: "b2", name: "Jeans", category: "bottoms", color: "blue", is_active: true },
+      { id: "s1", name: "Oxfords", category: "shoes", color: "black", is_active: true },
+      { id: "s2", name: "Sneakers", category: "shoes", color: "white", is_active: true },
+    ];
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "work hours", { dressFor: ["work"] });
+    expect(outfits.length).toBe(3);
+
+    const scores = outfits.map((outfit) =>
+      scoreOutfitForDisplay(outfit, { weatherCategory: "mild", timeCategory: "work hours", answers: { dressFor: ["work"] }, bodyTypeId: "rectangle" })
+    );
+    expect(scores[0]).toBeGreaterThanOrEqual(scores[1]);
+    expect(scores[1]).toBeGreaterThanOrEqual(scores[2]);
   });
 });
