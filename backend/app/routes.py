@@ -659,6 +659,27 @@ def update_profile_alias(
 # Wardrobe Routes
 # =============================
 
+def _log_duplicate_candidates_after_create(db: Session, user_id: int, item_id: int) -> None:
+    try:
+        duplicate_candidates = crud.get_duplicate_candidates_for_item(
+            db=db,
+            user_id=user_id,
+            item_id=item_id,
+            threshold=0.78,
+            limit=5,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Duplicate scan failed user_id=%s item_id=%s", user_id, item_id)
+        return
+    if duplicate_candidates:
+        logger.info(
+            "Duplicate scan found candidates user_id=%s item_id=%s count=%s",
+            user_id,
+            item_id,
+            len(duplicate_candidates),
+        )
+
+
 @router.post("/wardrobe/items", response_model=schemas.ClothingItemResponse)
 async def create_wardrobe_item(
     request: Request,
@@ -678,6 +699,7 @@ async def create_wardrobe_item(
         image_url = _store_uploaded_image(uploaded, current_user.id) if uploaded else None
         compat_item = _build_compat_wardrobe_item_from_form(form=form, image_url=image_url)
         created = crud.create_clothing_item(db, compat_item, current_user.id)
+        _log_duplicate_candidates_after_create(db, current_user.id, created.id)
         logger.info("Created wardrobe item user_id=%s item_id=%s", current_user.id, created.id)
         return created
 
@@ -692,6 +714,7 @@ async def create_wardrobe_item(
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
     created = crud.create_clothing_item(db, item, current_user.id)
+    _log_duplicate_candidates_after_create(db, current_user.id, created.id)
     logger.info("Created wardrobe item user_id=%s item_id=%s", current_user.id, created.id)
     return created
 
@@ -710,6 +733,10 @@ def create_wardrobe_items_bulk(
         len(payload.items),
         success_count,
     )
+    for result in results:
+        created_item = result.get("item")
+        if result.get("status") == "success" and created_item is not None:
+            _log_duplicate_candidates_after_create(db, current_user.id, created_item.id)
     return {"results": results}
 
 
@@ -871,6 +898,49 @@ def get_underused_wardrobe_alerts(
         analysis_window_days,
     )
     return alerts
+
+
+@router.get("/wardrobe/duplicates", response_model=schemas.DuplicateCandidatesResponse)
+def scan_duplicate_wardrobe_items(
+    threshold: float = 0.72,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    candidates = crud.get_duplicate_candidates_for_user(
+        db=db,
+        user_id=current_user.id,
+        threshold=threshold,
+        limit=limit,
+    )
+    return {
+        "threshold": max(0.0, min(threshold, 1.0)),
+        "candidates": candidates,
+    }
+
+
+@router.get("/wardrobe/items/{item_id}/duplicates", response_model=schemas.DuplicateCandidatesResponse)
+def scan_duplicate_candidates_for_item(
+    item_id: int,
+    threshold: float = 0.72,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    db_item = crud.get_clothing_item_by_id(db, item_id)
+    if not db_item or db_item.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Item not found")
+    candidates = crud.get_duplicate_candidates_for_item(
+        db=db,
+        user_id=current_user.id,
+        item_id=item_id,
+        threshold=threshold,
+        limit=limit,
+    )
+    return {
+        "threshold": max(0.0, min(threshold, 1.0)),
+        "candidates": candidates,
+    }
 
 
 @router.post("/wardrobe/items/image", response_model=schemas.ImageUploadResponse)

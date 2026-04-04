@@ -320,6 +320,18 @@ class BulkCreateClothingItemsResponse(BaseModel):
     results: list[BulkCreateItemResult]
 
 
+class DuplicateCandidateResponse(BaseModel):
+    item_id: int
+    duplicate_item_id: int
+    similarity_score: float = Field(ge=0.0, le=1.0)
+    reasons: list[str] = Field(default_factory=list)
+
+
+class DuplicateCandidatesResponse(BaseModel):
+    threshold: float = Field(ge=0.0, le=1.0)
+    candidates: list[DuplicateCandidateResponse]
+
+
 class ImageUploadResponse(BaseModel):
     image_url: str
 

@@ -4,6 +4,7 @@ import hashlib
 import uuid
 from collections import defaultdict
 from datetime import datetime
+from itertools import combinations
 from typing import Optional
 from urllib.parse import quote_plus
 
@@ -892,6 +893,166 @@ def _item_matches_exclusions(item: models.ClothingItem, exclusions: list[str]) -
         return False
     blob = _item_text_blob(item)
     return any(token in blob for token in exclusions)
+
+
+def _tokenize(value: Optional[str]) -> set[str]:
+    if not value:
+        return set()
+    normalized = "".join(char if char.isalnum() else " " for char in value.lower())
+    return {token for token in normalized.split() if len(token) >= 2}
+
+
+def _jaccard_similarity(left: set[str], right: set[str]) -> float:
+    if not left or not right:
+        return 0.0
+    overlap = left & right
+    union = left | right
+    if not union:
+        return 0.0
+    return len(overlap) / len(union)
+
+
+def _duplicate_similarity(item: models.ClothingItem, other: models.ClothingItem) -> tuple[float, list[str]]:
+    if _normalize_category(item.category) != _normalize_category(other.category):
+        return 0.0, []
+
+    score = 0.0
+    reasons: list[str] = ["same category"]
+
+    left_type = (item.clothing_type or "").strip().lower()
+    right_type = (other.clothing_type or "").strip().lower()
+    if left_type and right_type and left_type == right_type:
+        score += 0.22
+        reasons.append("matching clothing type")
+
+    left_color = (item.color or "").strip().lower()
+    right_color = (other.color or "").strip().lower()
+    if left_color and right_color and left_color == right_color:
+        score += 0.22
+        reasons.append("matching color")
+
+    left_brand = (item.brand or "").strip().lower()
+    right_brand = (other.brand or "").strip().lower()
+    if left_brand and right_brand and left_brand == right_brand:
+        score += 0.12
+        reasons.append("matching brand")
+
+    style_overlap = _jaccard_similarity(
+        {value.lower() for value in item.style_tags},
+        {value.lower() for value in other.style_tags},
+    )
+    if style_overlap > 0:
+        score += 0.15 * style_overlap
+        reasons.append("style tags overlap")
+
+    season_overlap = _jaccard_similarity(
+        {value.lower() for value in item.season_tags},
+        {value.lower() for value in other.season_tags},
+    )
+    if season_overlap > 0:
+        score += 0.12 * season_overlap
+        reasons.append("season tags overlap")
+
+    left_tokens = _tokenize(item.name) | _tokenize(item.set_identifier) | _tokenize(item.fit_tag)
+    right_tokens = _tokenize(other.name) | _tokenize(other.set_identifier) | _tokenize(other.fit_tag)
+    name_similarity = _jaccard_similarity(left_tokens, right_tokens)
+    if name_similarity > 0:
+        score += 0.17 * name_similarity
+        reasons.append("name/details overlap")
+
+    return min(score, 1.0), reasons
+
+
+def get_duplicate_candidates_for_user(
+    db: Session,
+    user_id: int,
+    *,
+    threshold: float = 0.72,
+    limit: int = 50,
+) -> list[dict]:
+    normalized_threshold = max(0.0, min(threshold, 1.0))
+    normalized_limit = max(1, min(limit, 200))
+    items = get_clothing_items_for_user(
+        db=db,
+        user_id=user_id,
+        include_archived=False,
+    )
+    grouped: dict[str, list[models.ClothingItem]] = {}
+    for item in items:
+        grouped.setdefault(_normalize_category(item.category), []).append(item)
+
+    candidates: list[dict] = []
+    for group_items in grouped.values():
+        for first, second in combinations(group_items, 2):
+            score, reasons = _duplicate_similarity(first, second)
+            if score < normalized_threshold:
+                continue
+            item_id, duplicate_item_id = sorted([first.id, second.id])
+            candidates.append(
+                {
+                    "item_id": item_id,
+                    "duplicate_item_id": duplicate_item_id,
+                    "similarity_score": round(score, 3),
+                    "reasons": reasons,
+                }
+            )
+
+    candidates.sort(
+        key=lambda candidate: (
+            candidate["similarity_score"],
+            -candidate["item_id"],
+            -candidate["duplicate_item_id"],
+        ),
+        reverse=True,
+    )
+    return candidates[:normalized_limit]
+
+
+def get_duplicate_candidates_for_item(
+    db: Session,
+    user_id: int,
+    item_id: int,
+    *,
+    threshold: float = 0.72,
+    limit: int = 20,
+) -> list[dict]:
+    normalized_threshold = max(0.0, min(threshold, 1.0))
+    normalized_limit = max(1, min(limit, 100))
+    target_item = db.query(models.ClothingItem).filter(
+        models.ClothingItem.owner_id == user_id,
+        models.ClothingItem.id == item_id,
+        models.ClothingItem.is_archived.is_(False),
+    ).first()
+    if not target_item:
+        return []
+
+    peers = db.query(models.ClothingItem).filter(
+        models.ClothingItem.owner_id == user_id,
+        models.ClothingItem.id != item_id,
+        models.ClothingItem.is_archived.is_(False),
+    ).all()
+
+    candidates: list[dict] = []
+    for peer in peers:
+        score, reasons = _duplicate_similarity(target_item, peer)
+        if score < normalized_threshold:
+            continue
+        candidates.append(
+            {
+                "item_id": target_item.id,
+                "duplicate_item_id": peer.id,
+                "similarity_score": round(score, 3),
+                "reasons": reasons,
+            }
+        )
+    candidates.sort(
+        key=lambda candidate: (
+            candidate["similarity_score"],
+            -candidate["duplicate_item_id"],
+        ),
+        reverse=True,
+    )
+    return candidates[:normalized_limit]
 
 
 def _fit_penalty(item: models.ClothingItem, body_type: Optional[str]) -> int:

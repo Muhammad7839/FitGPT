@@ -331,3 +331,78 @@ def test_multi_file_upload_returns_success_and_failure_per_file(client):
     assert results[1]["status"] == "failed"
     assert "Only JPEG, PNG, and WEBP images are allowed" in results[1]["error"]
     cleanup_uploaded_file(results[0]["image_url"])
+
+
+def test_duplicate_detection_returns_expected_candidates(client):
+    token = register_and_login(client, "duplicates@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    first_payload = sample_item_payload() | {
+        "name": "Black Tee",
+        "category": "Top",
+        "clothing_type": "t-shirt",
+        "color": "Black",
+        "brand": "Uniqlo",
+        "style_tags": ["casual"],
+    }
+    second_payload = sample_item_payload() | {
+        "name": "Black T Shirt",
+        "category": "Top",
+        "clothing_type": "t-shirt",
+        "color": "Black",
+        "brand": "Uniqlo",
+        "style_tags": ["casual"],
+    }
+    third_payload = sample_item_payload() | {
+        "name": "Blue Hoodie",
+        "category": "Outerwear",
+        "clothing_type": "hoodie",
+        "color": "Blue",
+        "brand": "Nike",
+    }
+
+    first = client.post("/wardrobe/items", json=first_payload, headers=auth)
+    second = client.post("/wardrobe/items", json=second_payload, headers=auth)
+    third = client.post("/wardrobe/items", json=third_payload, headers=auth)
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert third.status_code == 200
+
+    first_id = first.json()["id"]
+    second_id = second.json()["id"]
+
+    scan = client.get("/wardrobe/duplicates", headers=auth, params={"threshold": 0.7, "limit": 10})
+    assert scan.status_code == 200
+    candidates = scan.json()["candidates"]
+    assert any({entry["item_id"], entry["duplicate_item_id"]} == {first_id, second_id} for entry in candidates)
+
+    item_scan = client.get(f"/wardrobe/items/{first_id}/duplicates", headers=auth, params={"threshold": 0.7})
+    assert item_scan.status_code == 200
+    item_candidates = item_scan.json()["candidates"]
+    assert any(entry["duplicate_item_id"] == second_id for entry in item_candidates)
+
+
+def test_duplicate_detection_returns_empty_when_items_are_distinct(client):
+    token = register_and_login(client, "duplicates-empty@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    top = sample_item_payload() | {
+        "name": "Formal White Shirt",
+        "category": "Top",
+        "clothing_type": "shirt",
+        "color": "White",
+        "brand": "Uniqlo",
+    }
+    shoes = sample_item_payload() | {
+        "name": "Trail Running Shoes",
+        "category": "Shoes",
+        "clothing_type": "sneakers",
+        "color": "Green",
+        "brand": "Nike",
+    }
+    assert client.post("/wardrobe/items", json=top, headers=auth).status_code == 200
+    assert client.post("/wardrobe/items", json=shoes, headers=auth).status_code == 200
+
+    scan = client.get("/wardrobe/duplicates", headers=auth, params={"threshold": 0.85})
+    assert scan.status_code == 200
+    assert scan.json()["candidates"] == []
