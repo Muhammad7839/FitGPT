@@ -1420,11 +1420,15 @@ function outfitMetadataSentence(outfit, weatherCategory, seed) {
   const seasons = uniqueNonEmpty(items.flatMap((item) => normalizeTagArray(item?.season_tags))).map(titleCase);
   const accessories = items.filter((item) => itemRole(item) === "accessory");
 
+  const seasonSuffix = seasons.length
+    ? [` The ${seasons[0].toLowerCase()}-season pieces keep it on point.`, ` ${seasons[0]} picks help the outfit feel right for the time of year.`][seed % 2]
+    : "";
+
   if (hasOnePiece) {
     return [
       "The one-piece foundation keeps the outfit simple and intentional.",
       "Using a one-piece item keeps the silhouette clean without extra layers.",
-    ][seed % 2];
+    ][seed % 2] + seasonSuffix;
   }
 
   if ((weatherCategory === "cold" || weatherCategory === "cool") && layerTypes.includes("base") && (layerTypes.includes("mid") || layerTypes.includes("outer"))) {
@@ -1432,25 +1436,25 @@ function outfitMetadataSentence(outfit, weatherCategory, seed) {
       "The layers build from a base piece upward, so the outfit feels realistic for cooler weather.",
       "This combination uses layering in a natural order, which makes it feel practical and polished.",
       "The base-to-outer layering keeps the outfit believable for cooler conditions.",
-    ][seed % 3];
+    ][seed % 3] + seasonSuffix;
   }
 
   if (hasSet) {
     return [
       "The matching set pieces help the outfit feel coordinated without looking forced.",
       "Keeping the set together makes the recommendation look more intentional.",
-    ][seed % 2];
+    ][seed % 2] + seasonSuffix;
   }
 
   if (styles.length) {
     return [
       `${styles[0]} details keep the outfit pointed in one direction.`,
       `The ${styles[0].toLowerCase()} styling keeps the look consistent from piece to piece.`,
-    ][seed % 2];
+    ][seed % 2] + seasonSuffix;
   }
 
   if (seasons.length) {
-    return `${seasons[0]}-friendly pieces help the outfit feel on season.`;
+    return [`${seasons[0]}-friendly pieces help the outfit feel on season.`, `These are ${seasons[0].toLowerCase()}-ready picks that suit the time of year.`][seed % 2];
   }
 
   if (accessories.length > 0 && accessories.length <= 2) {
@@ -1505,7 +1509,17 @@ export function buildExplanation({ answers, outfit, weatherCategory, timeCategor
     ? weatherSentence(weatherCategory, seed)
     : bodyTypeSentence(bodyTypeId, seed);
 
-  return [opener, structureSent, colorSent, closing].filter(Boolean).join(" ").trim();
+  const comfortSet = comfortPreferences(answers);
+  let comfortSent = "";
+  if (comfortSet.has("layered")) {
+    comfortSent = ["The layered approach matches your comfort preference.", "Built with layering in mind, as you prefer."][seed % 2];
+  } else if (comfortSet.has("relaxed")) {
+    comfortSent = ["Relaxed fits keep this comfortable through the day.", "The easy silhouette matches your relaxed preference."][seed % 2];
+  } else if (comfortSet.has("fitted")) {
+    comfortSent = ["The structured fits keep the look sharp, matching your preference.", "Fitted pieces give this a polished edge you prefer."][seed % 2];
+  }
+
+  return [opener, structureSent, colorSent, comfortSent, closing].filter(Boolean).join(" ").trim();
 }
 
 /* ?????? Outfit reuse helpers ??????????????????????????????????????????????????????????????????????????????????????????????????????????????? */
