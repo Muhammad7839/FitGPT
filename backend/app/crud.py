@@ -616,6 +616,114 @@ def get_wardrobe_gap_analysis(db: Session, user_id: int) -> dict:
     }
 
 
+def _build_similarity_key_for_items(items: list[models.ClothingItem]) -> str:
+    components: list[str] = []
+    for item in items:
+        category = _normalize_category(item.category) or "item"
+        clothing_type = (item.clothing_type or "").strip().lower()
+        components.append(f"{category}:{clothing_type}")
+    return "|".join(sorted(components))
+
+
+def record_rejected_outfit(
+    db: Session,
+    *,
+    user_id: int,
+    item_ids: list[int],
+    suggestion_id: Optional[str] = None,
+) -> dict:
+    normalized_item_ids = sorted({int(item_id) for item_id in item_ids})
+    if not normalized_item_ids:
+        return {"created": False, "fingerprint": "", "similarity_key": ""}
+
+    items = db.query(models.ClothingItem).filter(
+        models.ClothingItem.owner_id == user_id,
+        models.ClothingItem.id.in_(normalized_item_ids),
+        models.ClothingItem.is_archived.is_(False),
+    ).all()
+    item_by_id = {item.id: item for item in items}
+    ordered_items = [item_by_id[item_id] for item_id in normalized_item_ids if item_id in item_by_id]
+    fingerprint = (suggestion_id or ",".join(str(item_id) for item_id in normalized_item_ids)).strip()
+    similarity_key = _build_similarity_key_for_items(ordered_items)
+
+    existing = db.query(models.RejectedOutfit).filter(
+        models.RejectedOutfit.owner_id == user_id,
+        models.RejectedOutfit.fingerprint == fingerprint,
+    ).first()
+    if existing:
+        return {
+            "created": False,
+            "fingerprint": existing.fingerprint,
+            "similarity_key": existing.similarity_key,
+        }
+
+    rejected = models.RejectedOutfit(
+        owner_id=user_id,
+        fingerprint=fingerprint,
+        similarity_key=similarity_key,
+        item_ids_csv=",".join(str(item_id) for item_id in normalized_item_ids),
+        rejected_at_timestamp=int(datetime.utcnow().timestamp()),
+    )
+    db.add(rejected)
+    db.commit()
+    db.refresh(rejected)
+    return {
+        "created": True,
+        "fingerprint": rejected.fingerprint,
+        "similarity_key": rejected.similarity_key,
+    }
+
+
+def get_rejected_outfit_filters(db: Session, user_id: int) -> tuple[set[str], set[str]]:
+    rows = db.query(models.RejectedOutfit).filter(
+        models.RejectedOutfit.owner_id == user_id
+    ).all()
+    fingerprints = {row.fingerprint for row in rows if row.fingerprint}
+    similarity_keys = {row.similarity_key for row in rows if row.similarity_key}
+    return fingerprints, similarity_keys
+
+
+def is_rejected_outfit(
+    db: Session,
+    *,
+    user_id: int,
+    items: list[models.ClothingItem],
+    fingerprint: str,
+) -> bool:
+    rejected_fingerprints, rejected_similarity_keys = get_rejected_outfit_filters(db, user_id)
+    if fingerprint in rejected_fingerprints:
+        return True
+    similarity_key = _build_similarity_key_for_items(items)
+    return bool(similarity_key and similarity_key in rejected_similarity_keys)
+
+
+def filter_rejected_candidates_for_user(
+    db: Session,
+    *,
+    user_id: int,
+    candidates: list[deterministic.RecommendationCandidate],
+    item_map: dict[int, models.ClothingItem],
+) -> list[deterministic.RecommendationCandidate]:
+    if not candidates:
+        return []
+    rejected_fingerprints, rejected_similarity_keys = get_rejected_outfit_filters(db, user_id)
+    if not rejected_fingerprints and not rejected_similarity_keys:
+        return candidates
+
+    preferred: list[deterministic.RecommendationCandidate] = []
+    deprioritized: list[deterministic.RecommendationCandidate] = []
+    for candidate in candidates:
+        if candidate.fingerprint in rejected_fingerprints:
+            continue
+        candidate_items = [item_map[item_id] for item_id in candidate.item_ids if item_id in item_map]
+        similarity_key = _build_similarity_key_for_items(candidate_items)
+        if similarity_key and similarity_key in rejected_similarity_keys:
+            deprioritized.append(candidate)
+        else:
+            preferred.append(candidate)
+    return preferred + deprioritized
+
+
 def get_clothing_item_by_id(db: Session, item_id: int):
     return db.query(models.ClothingItem).filter(
         models.ClothingItem.id == item_id
@@ -895,6 +1003,12 @@ def get_recommendation_options_for_user(
         preferred_seasons=[],
         recent_fingerprints=recent_fingerprints,
         max_options=max(normalized_limit, 3),
+    )
+    candidates = filter_rejected_candidates_for_user(
+        db=db,
+        user_id=user.id,
+        candidates=candidates,
+        item_map=item_map,
     )
 
     options: list[dict] = []

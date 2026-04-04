@@ -576,6 +576,26 @@ class WardrobeViewModel(
         }
     }
 
+    fun rejectCurrentRecommendation() {
+        val recommendation = (recommendationState.value as? UiState.Success)?.data.orEmpty()
+        if (recommendation.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                repository.rejectRecommendation(
+                    itemIds = recommendation.map { it.id },
+                    suggestionId = recommendationMeta.value.suggestionId
+                )
+                fetchRecommendations(
+                    manualTemp = latestWeatherSnapshot?.temperatureF,
+                    weatherCategory = latestWeatherSnapshot?.weatherCategory,
+                    weatherCity = weatherCityState.value.trim().takeIf { it.isNotEmpty() }
+                )
+            } catch (_: Exception) {
+                _recommendationState.value = UiState.Error("Failed to submit feedback")
+            }
+        }
+    }
+
     fun getSavedOutfits(): List<SavedOutfit> {
         return _savedOutfitsState.value
     }

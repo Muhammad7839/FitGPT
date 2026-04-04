@@ -386,6 +386,27 @@ class RecommendationOptionsResponse(BaseModel):
     occasion: Optional[str] = None
 
 
+class RejectOutfitRequest(BaseModel):
+    item_ids: list[int] = Field(min_length=1, max_length=12)
+    suggestion_id: Optional[str] = Field(default=None, max_length=128)
+    reason: Optional[str] = Field(default=None, max_length=160)
+
+    @field_validator("suggestion_id", "reason")
+    @classmethod
+    def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        cleaned = value.strip()
+        return cleaned or None
+
+
+class RejectOutfitResponse(BaseModel):
+    detail: str
+    fingerprint: str
+    similarity_key: str
+    created: bool
+
+
 class ChatMessage(BaseModel):
     role: str = Field(min_length=1, max_length=16)
     content: str = Field(min_length=1, max_length=1200)

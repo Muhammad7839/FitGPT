@@ -23,6 +23,7 @@ import com.fitgpt.app.data.remote.dto.PlannedOutfitAssignmentRequestDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.SavedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.AiRecommendationRequestDto
+import com.fitgpt.app.data.remote.dto.RejectOutfitRequestDto
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -254,6 +255,15 @@ class RemoteWardrobeRepository(
             items = response.items.map { item ->
                 item.copy(imageUrl = resolveApiUrl(item.imageUrl))
             }
+        )
+    }
+
+    override suspend fun rejectRecommendation(itemIds: List<Int>, suggestionId: String?) {
+        api.rejectRecommendation(
+            RejectOutfitRequestDto(
+                itemIds = itemIds,
+                suggestionId = suggestionId
+            )
         )
     }
 

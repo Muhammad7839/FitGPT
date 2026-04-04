@@ -27,6 +27,8 @@ import com.fitgpt.app.data.remote.dto.RecommendationOptionsResponseDto
 import com.fitgpt.app.data.remote.dto.AiRecommendationRequestDto
 import com.fitgpt.app.data.remote.dto.AiRecommendationResponseDto
 import com.fitgpt.app.data.remote.dto.TagSuggestionResponseDto
+import com.fitgpt.app.data.remote.dto.RejectOutfitRequestDto
+import com.fitgpt.app.data.remote.dto.RejectOutfitResponseDto
 import com.fitgpt.app.data.remote.dto.RegisterRequest
 import com.fitgpt.app.data.remote.dto.ResetPasswordRequest
 import com.fitgpt.app.data.remote.dto.SavedOutfitCreateRequest
@@ -221,6 +223,11 @@ interface ApiService {
     suspend fun getAiRecommendations(
         @Body payload: AiRecommendationRequestDto
     ): AiRecommendationResponseDto
+
+    @POST("recommendations/reject")
+    suspend fun rejectRecommendation(
+        @Body payload: RejectOutfitRequestDto
+    ): RejectOutfitResponseDto
 
     @POST("ai/chat")
     suspend fun sendChatMessage(

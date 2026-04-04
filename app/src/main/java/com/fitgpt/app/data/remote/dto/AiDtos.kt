@@ -70,3 +70,19 @@ data class AiRecommendationResponseDto(
     @SerializedName("outfit_options")
     val outfitOptions: List<OutfitOptionDto> = emptyList()
 )
+
+data class RejectOutfitRequestDto(
+    @SerializedName("item_ids")
+    val itemIds: List<Int>,
+    @SerializedName("suggestion_id")
+    val suggestionId: String? = null,
+    val reason: String? = null
+)
+
+data class RejectOutfitResponseDto(
+    val detail: String,
+    val fingerprint: String,
+    @SerializedName("similarity_key")
+    val similarityKey: String,
+    val created: Boolean
+)
