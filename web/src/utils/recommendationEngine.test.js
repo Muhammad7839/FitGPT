@@ -1319,3 +1319,248 @@ describe("ranking returns top scoring outfits", () => {
     expect(scores[1]).toBeGreaterThanOrEqual(scores[2]);
   });
 });
+
+/* ── Scoring algorithm quality tests ───────────────────────────────── */
+
+describe("scoreOutfitForDisplay", () => {
+  const defaultCtx = { weatherCategory: "mild", timeCategory: "work hours", answers: {}, bodyTypeId: "rectangle" };
+
+  test("returns a number clamped between 0 and 100", () => {
+    const outfit = [
+      { id: "1", name: "Tee", category: "Tops", color: "blue" },
+      { id: "2", name: "Jeans", category: "Bottoms", color: "black" },
+      { id: "3", name: "Sneakers", category: "Shoes", color: "white" },
+    ];
+    const score = scoreOutfitForDisplay(outfit, defaultCtx);
+    expect(score).toBeGreaterThanOrEqual(0);
+    expect(score).toBeLessThanOrEqual(100);
+  });
+
+  test("empty outfit scores 0", () => {
+    expect(scoreOutfitForDisplay([], defaultCtx)).toBe(0);
+  });
+
+  test("complete outfit (top+bottom+shoes) scores higher than incomplete", () => {
+    const complete = [
+      { id: "1", name: "Tee", category: "Tops", color: "white" },
+      { id: "2", name: "Jeans", category: "Bottoms", color: "black" },
+      { id: "3", name: "Sneakers", category: "Shoes", color: "white" },
+    ];
+    const noShoes = [
+      { id: "1", name: "Tee", category: "Tops", color: "white" },
+      { id: "2", name: "Jeans", category: "Bottoms", color: "black" },
+    ];
+    const noBottom = [
+      { id: "1", name: "Tee", category: "Tops", color: "white" },
+      { id: "3", name: "Sneakers", category: "Shoes", color: "white" },
+    ];
+    const completeScore = scoreOutfitForDisplay(complete, defaultCtx);
+    expect(completeScore).toBeGreaterThan(scoreOutfitForDisplay(noShoes, defaultCtx));
+    expect(completeScore).toBeGreaterThan(scoreOutfitForDisplay(noBottom, defaultCtx));
+  });
+});
+
+describe("scoring factor quality", () => {
+  test("weather-appropriate outfit scores higher than mismatched", () => {
+    const coldCtx = { weatherCategory: "cold", timeCategory: "morning", answers: {}, bodyTypeId: "rectangle" };
+    const winterOutfit = [
+      { id: "1", name: "Turtleneck", category: "Tops", clothing_type: "turtleneck", color: "black", layer_type: "base" },
+      { id: "2", name: "Parka", category: "Outerwear", clothing_type: "parka", color: "navy", layer_type: "outer" },
+      { id: "3", name: "Wool Pants", category: "Bottoms", color: "gray" },
+      { id: "4", name: "Boots", category: "Shoes", color: "brown" },
+    ];
+    const summerOutfit = [
+      { id: "5", name: "Tank Top", category: "Tops", clothing_type: "tank top", color: "white" },
+      { id: "6", name: "Shorts", category: "Bottoms", clothing_type: "shorts", color: "beige" },
+      { id: "7", name: "Sandals", category: "Shoes", clothing_type: "sandals", color: "brown" },
+    ];
+    expect(scoreOutfitForDisplay(winterOutfit, coldCtx)).toBeGreaterThan(scoreOutfitForDisplay(summerOutfit, coldCtx));
+  });
+
+  test("occasion-matched outfit scores higher than unmatched", () => {
+    const workCtx = { weatherCategory: "mild", timeCategory: "work hours", answers: { dressFor: ["work"] }, bodyTypeId: "rectangle" };
+    const workOutfit = [
+      { id: "1", name: "Dress Shirt", category: "Tops", color: "white", occasion_tags: ["work"] },
+      { id: "2", name: "Dress Pants", category: "Bottoms", color: "black", occasion_tags: ["work"] },
+    ];
+    const casualOutfit = [
+      { id: "3", name: "Graphic Tee", category: "Tops", color: "white", occasion_tags: ["casual"] },
+      { id: "4", name: "Jeans", category: "Bottoms", color: "black", occasion_tags: ["casual"] },
+    ];
+    expect(scoreOutfitForDisplay(workOutfit, workCtx)).toBeGreaterThan(scoreOutfitForDisplay(casualOutfit, workCtx));
+  });
+
+  test("color-coordinated outfit scores higher than clashing", () => {
+    const ctx = { weatherCategory: "mild", timeCategory: "morning", answers: {}, bodyTypeId: "rectangle" };
+    const coordinated = [
+      { id: "1", name: "Blue Shirt", category: "Tops", color: "blue" },
+      { id: "2", name: "Orange Pants", category: "Bottoms", color: "orange" },
+    ];
+    const clashing = [
+      { id: "3", name: "Red Shirt", category: "Tops", color: "red" },
+      { id: "4", name: "Yellow Pants", category: "Bottoms", color: "yellow" },
+    ];
+    expect(scoreOutfitForDisplay(coordinated, ctx)).toBeGreaterThan(scoreOutfitForDisplay(clashing, ctx));
+  });
+
+  test("layered cold outfit scores higher than single-layer cold outfit", () => {
+    const coldCtx = { weatherCategory: "cold", timeCategory: "morning", answers: {}, bodyTypeId: "rectangle" };
+    const layered = [
+      { id: "1", name: "Tee", category: "Tops", clothing_type: "t-shirt", color: "white", layer_type: "base" },
+      { id: "2", name: "Sweater", category: "Tops", clothing_type: "sweater", color: "gray", layer_type: "mid" },
+      { id: "3", name: "Pants", category: "Bottoms", color: "navy" },
+    ];
+    const singleLayer = [
+      { id: "4", name: "Tee", category: "Tops", clothing_type: "t-shirt", color: "white" },
+      { id: "5", name: "Pants", category: "Bottoms", color: "navy" },
+    ];
+    expect(scoreOutfitForDisplay(layered, coldCtx)).toBeGreaterThan(scoreOutfitForDisplay(singleLayer, coldCtx));
+  });
+
+  test("set-matched items score higher than unmatched", () => {
+    const ctx = { weatherCategory: "mild", timeCategory: "morning", answers: {}, bodyTypeId: "rectangle" };
+    const withSet = [
+      { id: "1", name: "Suit Jacket", category: "Outerwear", color: "navy", set_id: "navy-suit" },
+      { id: "2", name: "Suit Pants", category: "Bottoms", color: "gray", set_id: "navy-suit" },
+    ];
+    const noSet = [
+      { id: "3", name: "Blazer", category: "Outerwear", color: "navy" },
+      { id: "4", name: "Khakis", category: "Bottoms", color: "gray" },
+    ];
+    expect(scoreOutfitForDisplay(withSet, ctx)).toBeGreaterThan(scoreOutfitForDisplay(noSet, ctx));
+  });
+
+  test("multiple factors stack: matched occasion + good color > mismatched occasion + good color", () => {
+    const workCtx = { weatherCategory: "mild", timeCategory: "work hours", answers: { dressFor: ["work"] }, bodyTypeId: "rectangle" };
+    const fullMatch = [
+      { id: "1", name: "Dress Shirt", category: "Tops", color: "white", occasion_tags: ["work"] },
+      { id: "2", name: "Black Pants", category: "Bottoms", color: "black", occasion_tags: ["work"] },
+    ];
+    const mismatch = [
+      { id: "3", name: "White Tee", category: "Tops", color: "white", occasion_tags: ["athletic"] },
+      { id: "4", name: "Black Joggers", category: "Bottoms", color: "black", occasion_tags: ["athletic"] },
+    ];
+    expect(scoreOutfitForDisplay(fullMatch, workCtx)).toBeGreaterThan(scoreOutfitForDisplay(mismatch, workCtx));
+  });
+});
+
+/* ── Comfort and environmental explanation tests ───────────────────── */
+
+describe("comfort and environmental context in explanations", () => {
+  test("cold weather explanation references warmth or layering", () => {
+    const outfit = [
+      { id: "1", name: "Wool Sweater", category: "Tops", clothing_type: "sweater", color: "gray", layer_type: "mid" },
+      { id: "2", name: "Parka", category: "Outerwear", clothing_type: "parka", color: "black", layer_type: "outer" },
+      { id: "3", name: "Jeans", category: "Bottoms", color: "blue" },
+      { id: "4", name: "Boots", category: "Shoes", color: "brown" },
+    ];
+    const result = buildExplanation({ outfit, answers: {}, weatherCategory: "cold", timeCategory: "morning" });
+    const lower = result.toLowerCase();
+    expect(lower.includes("cold") || lower.includes("warm") || lower.includes("layer") || lower.includes("chill") || lower.includes("bundl")).toBe(true);
+  });
+
+  test("hot weather explanation references heat or lightweight", () => {
+    const outfit = [
+      { id: "1", name: "Tank Top", category: "Tops", clothing_type: "tank top", color: "white" },
+      { id: "2", name: "Shorts", category: "Bottoms", clothing_type: "shorts", color: "beige" },
+      { id: "3", name: "Sandals", category: "Shoes", clothing_type: "sandals", color: "brown" },
+    ];
+    const result = buildExplanation({ outfit, answers: {}, weatherCategory: "hot", timeCategory: "morning" });
+    const lower = result.toLowerCase();
+    expect(lower.includes("heat") || lower.includes("light") || lower.includes("breathab") || lower.includes("cool") || lower.includes("minimal")).toBe(true);
+  });
+
+  test("cool weather explanation mentions layers or crisp weather", () => {
+    const outfit = [
+      { id: "1", name: "Henley", category: "Tops", clothing_type: "henley", color: "navy", layer_type: "base" },
+      { id: "2", name: "Cardigan", category: "Tops", clothing_type: "cardigan", color: "gray", layer_type: "mid" },
+      { id: "3", name: "Chinos", category: "Bottoms", color: "beige" },
+      { id: "4", name: "Boots", category: "Shoes", color: "brown" },
+    ];
+    const result = buildExplanation({ outfit, answers: {}, weatherCategory: "cool", timeCategory: "morning" });
+    const lower = result.toLowerCase();
+    expect(lower.includes("layer") || lower.includes("crisp") || lower.includes("cool") || lower.includes("warmth")).toBe(true);
+  });
+
+  test("mild weather explanation uses body type reasoning instead of weather", () => {
+    const outfit = [
+      { id: "1", name: "Tee", category: "Tops", color: "blue" },
+      { id: "2", name: "Jeans", category: "Bottoms", color: "black" },
+      { id: "3", name: "Sneakers", category: "Shoes", color: "white" },
+    ];
+    const result = buildExplanation({ outfit, answers: { bodyType: "hourglass" }, weatherCategory: "mild", timeCategory: "morning" });
+    const lower = result.toLowerCase();
+    expect(lower.includes("waist") || lower.includes("proportion") || lower.includes("silhouette") || lower.includes("shape") || lower.includes("dimension")).toBe(true);
+  });
+
+  test("explanations differ between cold and hot weather for the same outfit structure", () => {
+    const outfit = [
+      { id: "1", name: "Shirt", category: "Tops", color: "white" },
+      { id: "2", name: "Pants", category: "Bottoms", color: "black" },
+      { id: "3", name: "Shoes", category: "Shoes", color: "brown" },
+    ];
+    const coldExpl = buildExplanation({ outfit, answers: {}, weatherCategory: "cold", timeCategory: "morning" });
+    const hotExpl = buildExplanation({ outfit, answers: {}, weatherCategory: "hot", timeCategory: "morning" });
+    expect(coldExpl).not.toBe(hotExpl);
+  });
+});
+
+describe("layering and metadata in explanations", () => {
+  test("layered outfit explanation describes layer structure", () => {
+    const outfit = [
+      { id: "1", name: "Tee", category: "Tops", clothing_type: "t-shirt", color: "white", layer_type: "base" },
+      { id: "2", name: "Fleece", category: "Tops", clothing_type: "fleece", color: "gray", layer_type: "mid" },
+      { id: "3", name: "Windbreaker", category: "Outerwear", clothing_type: "windbreaker", color: "navy", layer_type: "outer" },
+      { id: "4", name: "Jeans", category: "Bottoms", color: "blue" },
+      { id: "5", name: "Boots", category: "Shoes", color: "brown" },
+    ];
+    const result = buildExplanation({ outfit, answers: {}, weatherCategory: "cool", timeCategory: "morning" });
+    const lower = result.toLowerCase();
+    expect(lower.includes("layer") || lower.includes("base") || lower.includes("outer") || lower.includes("build")).toBe(true);
+  });
+
+  test("one-piece outfit explanation mentions one-piece", () => {
+    const outfit = [
+      { id: "1", name: "Black Dress", category: "Tops", clothing_type: "dress", color: "black", is_one_piece: true },
+      { id: "2", name: "Heels", category: "Shoes", color: "beige" },
+    ];
+    const result = buildExplanation({ outfit, answers: {}, weatherCategory: "mild", timeCategory: "evening" });
+    const lower = result.toLowerCase();
+    expect(lower.includes("one-piece") || lower.includes("one piece") || lower.includes("silhouette") || lower.includes("simple") || lower.includes("foundation")).toBe(true);
+  });
+
+  test("set-matched outfit explanation mentions coordination", () => {
+    const outfit = [
+      { id: "1", name: "Suit Jacket", category: "Outerwear", color: "navy", set_id: "suit" },
+      { id: "2", name: "Suit Pants", category: "Bottoms", color: "navy", set_id: "suit" },
+      { id: "3", name: "Dress Shirt", category: "Tops", color: "white" },
+      { id: "4", name: "Oxfords", category: "Shoes", color: "black" },
+    ];
+    const result = buildExplanation({ outfit, answers: {}, weatherCategory: "mild", timeCategory: "work hours" });
+    const lower = result.toLowerCase();
+    expect(lower.includes("set") || lower.includes("match") || lower.includes("coordin") || lower.includes("intentional")).toBe(true);
+  });
+
+  test("style-tagged outfit explanation mentions style direction", () => {
+    const outfit = [
+      { id: "1", name: "Blazer", category: "Outerwear", color: "navy", style_tags: ["formal"] },
+      { id: "2", name: "Dress Shirt", category: "Tops", color: "white", style_tags: ["formal"] },
+      { id: "3", name: "Trousers", category: "Bottoms", color: "gray" },
+      { id: "4", name: "Oxfords", category: "Shoes", color: "black" },
+    ];
+    const result = buildExplanation({ outfit, answers: { style: ["formal"] }, weatherCategory: "mild", timeCategory: "work hours" });
+    const lower = result.toLowerCase();
+    expect(lower.includes("formal") || lower.includes("style") || lower.includes("detail") || lower.includes("consistent")).toBe(true);
+  });
+
+  test("body type pear explanation references frame or top balance", () => {
+    const outfit = [
+      { id: "1", name: "Structured Top", category: "Tops", color: "white" },
+      { id: "2", name: "Dark Jeans", category: "Bottoms", color: "black" },
+      { id: "3", name: "Shoes", category: "Shoes", color: "brown" },
+    ];
+    const result = buildExplanation({ outfit, answers: { bodyType: "pear" }, weatherCategory: "mild", timeCategory: "morning" });
+    const lower = result.toLowerCase();
+    expect(lower.includes("frame") || lower.includes("top") || lower.includes("balanc") || lower.includes("definition") || lower.includes("streamlin")).toBe(true);
+  });
+});
