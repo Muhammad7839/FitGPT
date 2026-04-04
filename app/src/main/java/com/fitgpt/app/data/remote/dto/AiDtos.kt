@@ -109,3 +109,18 @@ data class RejectOutfitResponseDto(
     val similarityKey: String,
     val created: Boolean
 )
+
+data class RecommendationFeedbackRequestDto(
+    @SerializedName("suggestion_id")
+    val suggestionId: String,
+    val signal: String,
+    @SerializedName("item_ids")
+    val itemIds: List<Int>? = null
+)
+
+data class RecommendationFeedbackResponseDto(
+    val detail: String,
+    @SerializedName("suggestion_id")
+    val suggestionId: String,
+    val signal: String
+)

@@ -137,6 +137,15 @@ fun RecommendationScreen(
         }
     }
 
+    fun submitFeedbackAndRefresh(signal: String) {
+        viewModel.submitRecommendationFeedback(signal)
+        applyContextRequest(
+            city = weatherCity.nullIfBlank(),
+            lat = null,
+            lon = null
+        )
+    }
+
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -576,6 +585,44 @@ fun RecommendationScreen(
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
+
+                    if (recommendedItems.isNotEmpty() && !recommendationMeta.suggestionId.isNullOrBlank()) {
+                        WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Quick feedback",
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = { submitFeedbackAndRefresh("like") },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Like")
+                                    }
+                                    OutlinedButton(
+                                        onClick = { submitFeedbackAndRefresh("dislike") },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Not for me")
+                                    }
+                                    OutlinedButton(
+                                        onClick = { submitFeedbackAndRefresh("reject") },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Hide")
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
 
                     Button(
                         onClick = {
