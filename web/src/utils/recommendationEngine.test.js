@@ -20,6 +20,8 @@ import {
   buildExplanation,
   bodyTypeLabelFromId,
   layerWarmth,
+  analyzeColorRelationship,
+  analyzeOutfitColors,
 } from "./recommendationEngine";
 
 describe("titleCase", () => {
@@ -297,14 +299,45 @@ describe("makeRecentSets", () => {
 });
 
 describe("buildExplanation", () => {
-  test("returns a non-empty string", () => {
+  test("returns a non-empty string for a valid outfit", () => {
     const outfit = [
       { id: "1", name: "Shirt", category: "Tops", color: "blue", fit_tag: "regular" },
       { id: "2", name: "Pants", category: "Bottoms", color: "black", fit_tag: "regular" },
     ];
-    const result = buildExplanation(outfit, "mild", "morning", "rectangle");
+    const result = buildExplanation({ outfit, weatherCategory: "mild", timeCategory: "morning", answers: { bodyType: "rectangle" } });
     expect(typeof result).toBe("string");
     expect(result.length).toBeGreaterThan(0);
+  });
+
+  test("includes color reasoning that references actual outfit colors", () => {
+    const outfit = [
+      { id: "1", name: "Navy Blazer", category: "Outerwear", color: "navy" },
+      { id: "2", name: "Red Shirt", category: "Tops", color: "red" },
+      { id: "3", name: "Black Pants", category: "Bottoms", color: "black" },
+    ];
+    const result = buildExplanation({ outfit, weatherCategory: "cool", timeCategory: "morning", answers: {} });
+    const lower = result.toLowerCase();
+    const mentionsColor = lower.includes("navy") || lower.includes("red") || lower.includes("black") || lower.includes("neutral") || lower.includes("complement") || lower.includes("contrast");
+    expect(mentionsColor).toBe(true);
+  });
+
+  test("returns fallback when outfit is empty", () => {
+    const result = buildExplanation({ outfit: [], answers: {} });
+    expect(result).toContain("onboarding");
+  });
+
+  test("explanation varies between different color combos", () => {
+    const outfitA = [
+      { id: "1", name: "Tee", category: "Tops", color: "blue" },
+      { id: "2", name: "Shorts", category: "Bottoms", color: "orange" },
+    ];
+    const outfitB = [
+      { id: "3", name: "Tee", category: "Tops", color: "black" },
+      { id: "4", name: "Shorts", category: "Bottoms", color: "white" },
+    ];
+    const resultA = buildExplanation({ outfit: outfitA, answers: {} });
+    const resultB = buildExplanation({ outfit: outfitB, answers: {} });
+    expect(resultA).not.toBe(resultB);
   });
 });
 
@@ -746,5 +779,239 @@ describe("one-piece with sets", () => {
         expect(outfit.some((i) => i.id === "b1")).toBe(false);
       }
     }
+  });
+});
+
+/* ── Color relationship analysis tests ─────────────────────────────── */
+
+describe("analyzeColorRelationship", () => {
+  test("complementary: blue and orange", () => {
+    const rel = analyzeColorRelationship("blue", "orange");
+    expect(rel.type).toBe("complementary");
+    expect(rel.score).toBe(5);
+    expect(rel.nameA).toBe("blue");
+    expect(rel.nameB).toBe("orange");
+  });
+
+  test("analogous: blue and teal", () => {
+    const rel = analyzeColorRelationship("blue", "teal");
+    expect(rel.type).toBe("analogous");
+    expect(rel.score).toBe(4);
+  });
+
+  test("triadic: red and blue", () => {
+    const rel = analyzeColorRelationship("red", "blue");
+    expect(rel.type).toBe("triadic");
+    expect(rel.score).toBe(3);
+  });
+
+  test("neutral-anchor: black and red", () => {
+    const rel = analyzeColorRelationship("black", "red");
+    expect(rel.type).toBe("neutral-anchor");
+    expect(rel.score).toBe(4);
+  });
+
+  test("neutral-anchor: white and blue (light neutral scores lower)", () => {
+    const rel = analyzeColorRelationship("white", "blue");
+    expect(rel.type).toBe("neutral-anchor");
+    expect(rel.score).toBe(3);
+  });
+
+  test("neutral-pair: black and white", () => {
+    const rel = analyzeColorRelationship("black", "white");
+    expect(rel.type).toBe("neutral-pair");
+    expect(rel.score).toBe(4);
+  });
+
+  test("monochrome: same color", () => {
+    const rel = analyzeColorRelationship("navy", "navy");
+    expect(rel.type).toBe("monochrome");
+  });
+
+  test("analogous: very close hues (red and coral)", () => {
+    const rel = analyzeColorRelationship("red", "coral");
+    expect(rel.type).toBe("analogous");
+    expect(rel.score).toBe(4);
+  });
+
+  test("clash: red and yellow", () => {
+    const rel = analyzeColorRelationship("red", "yellow");
+    expect(rel.type).toBe("clash");
+    expect(rel.score).toBe(1);
+  });
+
+  test("unknown: empty input", () => {
+    const rel = analyzeColorRelationship("", "blue");
+    expect(rel.type).toBe("unknown");
+  });
+
+  test("handles normalized aliases", () => {
+    const rel = analyzeColorRelationship("navy blue", "orange");
+    expect(rel.nameA).toBe("navy");
+    expect(rel.type).toBe("complementary");
+  });
+});
+
+describe("analyzeOutfitColors", () => {
+  test("identifies complementary dominant type", () => {
+    const outfit = [
+      { color: "blue" },
+      { color: "orange" },
+      { color: "black" },
+    ];
+    const result = analyzeOutfitColors(outfit);
+    expect(result.dominantType).toBe("neutral-anchor");
+    const hasComplementary = result.relationships.some((r) => r.type === "complementary");
+    expect(hasComplementary).toBe(true);
+  });
+
+  test("counts neutrals and chromatics correctly", () => {
+    const outfit = [
+      { color: "black" },
+      { color: "white" },
+      { color: "red" },
+    ];
+    const result = analyzeOutfitColors(outfit);
+    expect(result.neutralCount).toBe(2);
+    expect(result.chromaticCount).toBe(1);
+    expect(result.isBalanced).toBe(true);
+  });
+
+  test("all-neutral outfit is not balanced", () => {
+    const outfit = [
+      { color: "black" },
+      { color: "white" },
+      { color: "gray" },
+    ];
+    const result = analyzeOutfitColors(outfit);
+    expect(result.chromaticCount).toBe(0);
+    expect(result.isBalanced).toBe(false);
+    expect(result.dominantType).toBe("neutral-pair");
+  });
+
+  test("deduplicates colors", () => {
+    const outfit = [
+      { color: "blue" },
+      { color: "blue" },
+      { color: "red" },
+    ];
+    const result = analyzeOutfitColors(outfit);
+    expect(result.uniqueColors).toEqual(["blue", "red"]);
+    expect(result.relationships).toHaveLength(1);
+  });
+
+  test("handles multi-color items", () => {
+    const outfit = [
+      { color: "blue, white" },
+      { color: "red" },
+    ];
+    const result = analyzeOutfitColors(outfit);
+    expect(result.uniqueColors).toContain("blue");
+    expect(result.uniqueColors).toContain("white");
+    expect(result.uniqueColors).toContain("red");
+    expect(result.relationships.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test("returns empty analysis for empty outfit", () => {
+    const result = analyzeOutfitColors([]);
+    expect(result.relationships).toHaveLength(0);
+    expect(result.uniqueColors).toHaveLength(0);
+    expect(result.dominantType).toBe("mixed");
+  });
+
+  test("harmonyScore reflects relationship quality", () => {
+    const coordinated = analyzeOutfitColors([
+      { color: "blue" },
+      { color: "orange" },
+    ]);
+    const clashing = analyzeOutfitColors([
+      { color: "green" },
+      { color: "orange" },
+    ]);
+    expect(coordinated.harmonyScore).toBeGreaterThan(clashing.harmonyScore);
+  });
+});
+
+/* ── Color explanation accuracy tests ──────────────────────────────── */
+
+describe("color explanation accuracy", () => {
+  test("complementary outfit explanation mentions complementary relationship", () => {
+    const outfit = [
+      { id: "1", name: "Blue Shirt", category: "Tops", color: "blue" },
+      { id: "2", name: "Orange Pants", category: "Bottoms", color: "orange" },
+      { id: "3", name: "White Shoes", category: "Shoes", color: "white" },
+    ];
+    const result = buildExplanation({ outfit, answers: {}, weatherCategory: "mild", timeCategory: "morning" });
+    const lower = result.toLowerCase();
+    expect(lower.includes("complementary") || lower.includes("across the wheel") || lower.includes("opposite")).toBe(true);
+  });
+
+  test("analogous outfit explanation mentions tonal closeness", () => {
+    const outfit = [
+      { id: "1", name: "Blue Shirt", category: "Tops", color: "blue" },
+      { id: "2", name: "Teal Pants", category: "Bottoms", color: "teal" },
+      { id: "3", name: "Navy Shoes", category: "Shoes", color: "navy" },
+    ];
+    const result = buildExplanation({ outfit, answers: {}, weatherCategory: "mild", timeCategory: "morning" });
+    const lower = result.toLowerCase();
+    expect(lower.includes("analogous") || lower.includes("close") || lower.includes("tonal") || lower.includes("blend") || lower.includes("cohesive")).toBe(true);
+  });
+
+  test("neutral-only outfit explanation reflects neutral palette", () => {
+    const outfit = [
+      { id: "1", name: "Black Blazer", category: "Outerwear", color: "black" },
+      { id: "2", name: "White Shirt", category: "Tops", color: "white" },
+      { id: "3", name: "Gray Pants", category: "Bottoms", color: "gray" },
+    ];
+    const result = buildExplanation({ outfit, answers: {}, weatherCategory: "mild", timeCategory: "morning" });
+    const lower = result.toLowerCase();
+    expect(lower.includes("neutral") || lower.includes("classic") || lower.includes("timeless") || lower.includes("texture") || lower.includes("versatile") || lower.includes("clean")).toBe(true);
+  });
+
+  test("neutral-anchor explanation identifies the grounding neutral", () => {
+    const outfit = [
+      { id: "1", name: "Red Shirt", category: "Tops", color: "red" },
+      { id: "2", name: "Black Pants", category: "Bottoms", color: "black" },
+    ];
+    const result = buildExplanation({ outfit, answers: {}, weatherCategory: "mild", timeCategory: "morning" });
+    const lower = result.toLowerCase();
+    const mentionsRole = lower.includes("ground") || lower.includes("pop") || lower.includes("anchor")
+      || lower.includes("polish") || lower.includes("balance") || lower.includes("talking");
+    expect(mentionsRole).toBe(true);
+  });
+});
+
+describe("explanation template rotation", () => {
+  test("different outfit items produce different explanations", () => {
+    const base = { answers: {}, weatherCategory: "mild", timeCategory: "morning" };
+    const results = new Set();
+    for (let i = 0; i < 5; i++) {
+      const outfit = [
+        { id: `t${i}`, name: `Shirt ${i}`, category: "Tops", color: "blue" },
+        { id: `b${i}`, name: `Pants ${i}`, category: "Bottoms", color: "orange" },
+        { id: `s${i}`, name: `Shoes ${i}`, category: "Shoes", color: "black" },
+      ];
+      results.add(buildExplanation({ ...base, outfit }));
+    }
+    expect(results.size).toBeGreaterThan(1);
+  });
+
+  test("generated outfits receive distinct explanations", () => {
+    const wardrobe = [
+      { id: "t1", name: "Blue Tee", category: "tops", clothing_type: "t-shirt", color: "blue", is_active: true },
+      { id: "t2", name: "Red Polo", category: "tops", clothing_type: "polo", color: "red", is_active: true },
+      { id: "t3", name: "Green Shirt", category: "tops", clothing_type: "dress shirt", color: "green", is_active: true },
+      { id: "b1", name: "Black Jeans", category: "bottoms", color: "black", is_active: true },
+      { id: "b2", name: "Navy Chinos", category: "bottoms", color: "navy", is_active: true },
+      { id: "b3", name: "Beige Khakis", category: "bottoms", color: "beige", is_active: true },
+      { id: "s1", name: "White Sneakers", category: "shoes", color: "white", is_active: true },
+      { id: "s2", name: "Brown Boots", category: "shoes", color: "brown", is_active: true },
+    ];
+    const outfits = generateThreeOutfits(wardrobe, 99, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    const explanations = outfits.map((outfit) =>
+      buildExplanation({ outfit, answers: {}, weatherCategory: "mild", timeCategory: "morning" })
+    );
+    const unique = new Set(explanations);
+    expect(unique.size).toBeGreaterThanOrEqual(2);
   });
 });
