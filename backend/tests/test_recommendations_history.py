@@ -1,5 +1,6 @@
 from conftest import register_and_login
 from app.weather import WeatherLookupError
+from datetime import datetime
 
 
 def item(category: str, color: str):
@@ -319,6 +320,84 @@ def test_outfit_history_rejects_invalid_item_ids(client):
         json={"item_ids": [-1], "worn_at_timestamp": 1730000000},
     )
     assert negative.status_code == 422
+
+
+def test_outfit_history_supports_date_range_update_and_delete(client):
+    token = register_and_login(client, "history-range@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
+    bottom = client.post("/wardrobe/items", json=item("Bottom", "Blue"), headers=auth).json()
+    shoes = client.post("/wardrobe/items", json=item("Shoes", "White"), headers=auth).json()
+
+    early_timestamp = int(datetime(2026, 2, 10, 12, 0).timestamp() * 1000)
+    later_timestamp = int(datetime(2026, 2, 25, 12, 0).timestamp() * 1000)
+
+    create_early = client.post(
+        "/outfits/history",
+        headers=auth,
+        json={"item_ids": [top["id"], bottom["id"]], "worn_at_timestamp": early_timestamp},
+    )
+    assert create_early.status_code == 200
+
+    create_later = client.post(
+        "/outfits/history",
+        headers=auth,
+        json={"item_ids": [top["id"], shoes["id"]], "worn_at_timestamp": later_timestamp},
+    )
+    assert create_later.status_code == 200
+
+    ranged = client.get(
+        "/outfits/history/range",
+        headers=auth,
+        params={"start_date": "2026-02-20", "end_date": "2026-02-28"},
+    )
+    assert ranged.status_code == 200
+    ranged_body = ranged.json()["history"]
+    assert len(ranged_body) == 1
+    history_id = ranged_body[0]["id"]
+    assert ranged_body[0]["item_ids"] == [top["id"], shoes["id"]]
+
+    updated_timestamp = later_timestamp + (60 * 60 * 1000)
+    updated = client.put(
+        f"/outfits/history/{history_id}",
+        headers=auth,
+        json={
+            "item_ids": [top["id"], bottom["id"], shoes["id"]],
+            "worn_at_timestamp": updated_timestamp,
+        },
+    )
+    assert updated.status_code == 200
+    updated_body = updated.json()
+    assert updated_body["item_ids"] == [top["id"], bottom["id"], shoes["id"]]
+    assert updated_body["worn_at_timestamp"] == updated_timestamp
+
+    deleted = client.delete(f"/outfits/history/{history_id}", headers=auth)
+    assert deleted.status_code == 200
+    assert deleted.json()["detail"] == "Outfit history entry deleted"
+
+    final_ranged = client.get(
+        "/outfits/history/range",
+        headers=auth,
+        params={"start_date": "2026-02-01", "end_date": "2026-02-28"},
+    )
+    assert final_ranged.status_code == 200
+    final_entries = final_ranged.json()["history"]
+    assert len(final_entries) == 1
+    assert final_entries[0]["item_ids"] == [top["id"], bottom["id"]]
+
+
+def test_outfit_history_range_rejects_invalid_dates(client):
+    token = register_and_login(client, "history-range-invalid@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    response = client.get(
+        "/outfits/history/range",
+        headers=auth,
+        params={"start_date": "2026-03-10", "end_date": "2026-03-01"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "end_date must be on or after start_date"
 
 
 def test_planned_outfit_requires_valid_date_format(client):

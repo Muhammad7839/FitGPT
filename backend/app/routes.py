@@ -1464,6 +1464,69 @@ def list_outfit_history(
     return {"history": _serialize_history_entries(history_entries)}
 
 
+@router.get("/outfits/history/range", response_model=schemas.OutfitHistoryListResponse)
+def list_outfit_history_in_range(
+    start_date: str,
+    end_date: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    try:
+        start_dt = datetime.strptime(start_date.strip(), "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date.strip(), "%Y-%m-%d")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="start_date/end_date must be YYYY-MM-DD") from exc
+    if end_dt < start_dt:
+        raise HTTPException(status_code=400, detail="end_date must be on or after start_date")
+
+    start_timestamp = int(start_dt.timestamp())
+    end_timestamp = int((end_dt + timedelta(days=1)).timestamp()) - 1
+    history_entries = crud.get_outfit_history_for_user_in_range(
+        db,
+        current_user.id,
+        start_timestamp,
+        end_timestamp,
+    )
+    return {"history": _serialize_history_entries(history_entries)}
+
+
+@router.put("/outfits/history/{history_id}", response_model=schemas.OutfitHistoryEntry)
+def update_outfit_history_entry(
+    history_id: int,
+    payload: schemas.OutfitHistoryUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if payload.item_ids is not None:
+        _ensure_owned_items(db, current_user.id, payload.item_ids)
+    updated = crud.update_outfit_history_entry(
+        db,
+        user_id=current_user.id,
+        history_id=history_id,
+        item_ids=payload.item_ids,
+        worn_at_timestamp=payload.worn_at_timestamp,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="History entry not found")
+    return _serialize_history_entries([updated])[0]
+
+
+@router.delete("/outfits/history/{history_id}", response_model=schemas.OutfitHistoryResponse)
+def delete_outfit_history_entry(
+    history_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    deleted = crud.delete_outfit_history_entry(
+        db,
+        user_id=current_user.id,
+        history_id=history_id,
+    )
+    if not deleted:
+        raise HTTPException(status_code=404, detail="History entry not found")
+    return {"detail": "Outfit history entry deleted"}
+
+
 @router.delete("/outfits/history", response_model=schemas.OutfitHistoryResponse)
 def clear_outfit_history(
     db: Session = Depends(get_db),

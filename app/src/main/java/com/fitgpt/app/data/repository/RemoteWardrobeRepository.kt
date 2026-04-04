@@ -21,6 +21,7 @@ import com.fitgpt.app.data.remote.toDomain
 import com.fitgpt.app.data.remote.dto.BulkCreateClothingItemsRequestDto
 import com.fitgpt.app.data.remote.dto.FavoriteToggleRequestDto
 import com.fitgpt.app.data.remote.dto.OutfitHistoryRequest
+import com.fitgpt.app.data.remote.dto.OutfitHistoryUpdateRequestDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitAssignmentRequestDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.PromptFeedbackEventRequestDto
@@ -315,6 +316,31 @@ class RemoteWardrobeRepository(
                 wornAtTimestamp = entry.wornAtTimestamp
             )
         }
+    }
+
+    override suspend fun getOutfitHistoryInRange(startDate: String, endDate: String): List<OutfitHistoryEntry> {
+        return api.getOutfitHistoryInRange(startDate = startDate, endDate = endDate).history.map { entry ->
+            OutfitHistoryEntry(
+                id = entry.id.toLong(),
+                items = mapItemIds(entry.itemIds),
+                wornAtTimestamp = entry.wornAtTimestamp
+            )
+        }
+    }
+
+    override suspend fun updateOutfitHistoryEntry(historyId: Long, itemIds: List<Int>?, wornAtTimestamp: Long?) {
+        val updated = api.updateOutfitHistoryEntry(
+            historyId = historyId,
+            payload = OutfitHistoryUpdateRequestDto(
+                itemIds = itemIds,
+                wornAtTimestamp = wornAtTimestamp
+            )
+        )
+        cachedItemsById = cachedItemsById + mapItemIds(updated.itemIds).associateBy { it.id }
+    }
+
+    override suspend fun deleteOutfitHistoryEntry(historyId: Long) {
+        api.deleteOutfitHistoryEntry(historyId)
     }
 
     override suspend fun clearOutfitHistory() {

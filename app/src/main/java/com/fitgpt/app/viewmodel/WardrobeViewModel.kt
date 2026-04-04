@@ -780,6 +780,56 @@ class WardrobeViewModel(
         }
     }
 
+    fun refreshHistoryInRange(startDate: String, endDate: String) {
+        viewModelScope.launch {
+            try {
+                _historyState.value = repository.getOutfitHistoryInRange(startDate, endDate)
+            } catch (_: Exception) {
+                _historyState.value = emptyList()
+            }
+        }
+    }
+
+    fun updateHistoryEntry(
+        historyId: Long,
+        itemIds: List<Int>? = null,
+        wornAtTimestamp: Long? = null,
+        startDate: String? = null,
+        endDate: String? = null
+    ) {
+        viewModelScope.launch {
+            try {
+                repository.updateOutfitHistoryEntry(historyId, itemIds, wornAtTimestamp)
+                if (!startDate.isNullOrBlank() && !endDate.isNullOrBlank()) {
+                    refreshHistoryInRange(startDate, endDate)
+                } else {
+                    refreshHistory()
+                }
+            } catch (_: Exception) {
+                _wardrobeState.value = UiState.Error("Failed to update history entry")
+            }
+        }
+    }
+
+    fun deleteHistoryEntry(
+        historyId: Long,
+        startDate: String? = null,
+        endDate: String? = null
+    ) {
+        viewModelScope.launch {
+            try {
+                repository.deleteOutfitHistoryEntry(historyId)
+                if (!startDate.isNullOrBlank() && !endDate.isNullOrBlank()) {
+                    refreshHistoryInRange(startDate, endDate)
+                } else {
+                    refreshHistory()
+                }
+            } catch (_: Exception) {
+                _wardrobeState.value = UiState.Error("Failed to delete history entry")
+            }
+        }
+    }
+
     fun refreshSavedOutfits() {
         viewModelScope.launch {
             try {

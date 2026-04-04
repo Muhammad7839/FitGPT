@@ -146,6 +146,13 @@ data class OutfitHistoryRequest(
     val wornAtTimestamp: Long
 )
 
+data class OutfitHistoryUpdateRequestDto(
+    @SerializedName("item_ids")
+    val itemIds: List<Int>? = null,
+    @SerializedName("worn_at_timestamp")
+    val wornAtTimestamp: Long? = null
+)
+
 data class OutfitHistoryEntryDto(
     val id: Int,
     @SerializedName("item_ids")
