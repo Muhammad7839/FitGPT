@@ -1015,3 +1015,153 @@ describe("explanation template rotation", () => {
     expect(unique.size).toBeGreaterThanOrEqual(2);
   });
 });
+
+/* ── Occasion-based recommendation tests ───────────────────────────── */
+
+describe("occasion scoring in outfit generation", () => {
+  const baseWardrobe = [
+    { id: "t1", name: "Dress Shirt", category: "tops", clothing_type: "dress shirt", color: "white", occasion_tags: "work,formal", is_active: true },
+    { id: "t2", name: "Tank Top", category: "tops", clothing_type: "tank top", color: "red", occasion_tags: "casual,athletic", is_active: true },
+    { id: "t3", name: "Polo Shirt", category: "tops", clothing_type: "polo", color: "navy", occasion_tags: "casual,work", is_active: true },
+    { id: "b1", name: "Dress Trousers", category: "bottoms", color: "black", occasion_tags: "work,formal", is_active: true },
+    { id: "b2", name: "Gym Shorts", category: "bottoms", clothing_type: "athletic shorts", color: "gray", occasion_tags: "athletic", is_active: true },
+    { id: "b3", name: "Jeans", category: "bottoms", color: "blue", occasion_tags: "casual,social", is_active: true },
+    { id: "s1", name: "Dress Shoes", category: "shoes", clothing_type: "dress shoes", color: "black", occasion_tags: "work,formal", is_active: true },
+    { id: "s2", name: "Sneakers", category: "shoes", color: "white", occasion_tags: "casual,athletic", is_active: true },
+    { id: "a1", name: "Watch", category: "accessories", clothing_type: "watch", color: "silver", is_active: true },
+    { id: "a2", name: "Belt", category: "accessories", clothing_type: "belt", color: "black", occasion_tags: "work,formal", is_active: true },
+  ];
+
+  test("work occasion favors work-tagged items", () => {
+    const answers = { dressFor: ["work"] };
+    const outfits = generateThreeOutfits(baseWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "work hours", answers);
+    expect(outfits.length).toBe(3);
+
+    const allItemIds = outfits.flat().map((item) => item.id);
+    const workItemCount = allItemIds.filter((id) => ["t1", "t3", "b1", "s1", "a2"].includes(id)).length;
+    const athleticItemCount = allItemIds.filter((id) => ["t2", "b2"].includes(id)).length;
+    expect(workItemCount).toBeGreaterThan(athleticItemCount);
+  });
+
+  test("athletic occasion favors athletic-tagged items", () => {
+    const answers = { dressFor: ["athletic"] };
+    const outfits = generateThreeOutfits(baseWardrobe, 42, "rectangle", new Set(), new Map(), "warm", "morning", answers);
+    expect(outfits.length).toBe(3);
+
+    const allItemIds = outfits.flat().map((item) => item.id);
+    const athleticCount = allItemIds.filter((id) => ["t2", "b2", "s2"].includes(id)).length;
+    expect(athleticCount).toBeGreaterThanOrEqual(1);
+  });
+
+  test("formal occasion avoids athletic items", () => {
+    const answers = { dressFor: ["formal"] };
+    const outfits = generateThreeOutfits(baseWardrobe, 42, "rectangle", new Set(), new Map(), "mild", "evening", answers);
+
+    for (const outfit of outfits) {
+      const ids = outfit.map((item) => item.id);
+      const hasGymShorts = ids.includes("b2");
+      const hasTankTop = ids.includes("t2");
+      expect(hasGymShorts && hasTankTop).toBe(false);
+    }
+  });
+
+  test("casual occasion includes casual-tagged items", () => {
+    const answers = { dressFor: ["casual"] };
+    const outfits = generateThreeOutfits(baseWardrobe, 77, "rectangle", new Set(), new Map(), "mild", "morning", answers);
+    expect(outfits.length).toBe(3);
+
+    const allItemIds = outfits.flat().map((item) => item.id);
+    const casualCount = allItemIds.filter((id) => ["t2", "t3", "b3", "s2"].includes(id)).length;
+    expect(casualCount).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("occasion conflict rules", () => {
+  test("blazer never pairs with athletic shorts", () => {
+    const wardrobe = [
+      { id: "t1", name: "White Tee", category: "tops", clothing_type: "t-shirt", color: "white", is_active: true },
+      { id: "b1", name: "Gym Shorts", category: "bottoms", clothing_type: "athletic shorts", color: "gray", is_active: true },
+      { id: "b2", name: "Chinos", category: "bottoms", color: "beige", is_active: true },
+      { id: "o1", name: "Navy Blazer", category: "outerwear", clothing_type: "blazer", color: "navy", is_active: true },
+      { id: "s1", name: "Sneakers", category: "shoes", color: "white", is_active: true },
+    ];
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "cool", "work hours", null);
+
+    for (const outfit of outfits) {
+      const ids = outfit.map((item) => item.id);
+      const hasBlazer = ids.includes("o1");
+      const hasGymShorts = ids.includes("b1");
+      expect(hasBlazer && hasGymShorts).toBe(false);
+    }
+  });
+
+  test("dress shoes never pair with athletic shorts", () => {
+    const wardrobe = [
+      { id: "t1", name: "Polo", category: "tops", clothing_type: "polo", color: "blue", is_active: true },
+      { id: "b1", name: "Running Shorts", category: "bottoms", clothing_type: "running shorts", color: "black", is_active: true },
+      { id: "b2", name: "Trousers", category: "bottoms", color: "gray", is_active: true },
+      { id: "s1", name: "Oxfords", category: "shoes", clothing_type: "dress shoes", color: "brown", is_active: true },
+      { id: "s2", name: "Sneakers", category: "shoes", color: "white", is_active: true },
+    ];
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "warm", "morning", null);
+
+    for (const outfit of outfits) {
+      const ids = outfit.map((item) => item.id);
+      const hasDressShoes = ids.includes("s1");
+      const hasRunningShorts = ids.includes("b1");
+      expect(hasDressShoes && hasRunningShorts).toBe(false);
+    }
+  });
+
+  test("athletic occasion excludes jewelry and belt accessories", () => {
+    const wardrobe = [
+      { id: "t1", name: "Tank Top", category: "tops", clothing_type: "tank top", color: "black", is_active: true },
+      { id: "b1", name: "Gym Shorts", category: "bottoms", clothing_type: "athletic shorts", color: "gray", is_active: true },
+      { id: "s1", name: "Running Shoes", category: "shoes", color: "white", is_active: true },
+      { id: "a1", name: "Gold Necklace", category: "accessories", clothing_type: "jewelry", color: "gold", is_active: true },
+      { id: "a2", name: "Leather Belt", category: "accessories", clothing_type: "belt", color: "brown", is_active: true },
+      { id: "a3", name: "Sports Watch", category: "accessories", clothing_type: "watch", color: "black", is_active: true },
+    ];
+    const answers = { dressFor: ["athletic"] };
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "warm", "morning", answers);
+
+    for (const outfit of outfits) {
+      const ids = outfit.map((item) => item.id);
+      expect(ids.includes("a1")).toBe(false);
+      expect(ids.includes("a2")).toBe(false);
+    }
+  });
+});
+
+describe("occasion with style interaction", () => {
+  test("style and occasion together produce coherent outfits", () => {
+    const wardrobe = [
+      { id: "t1", name: "Blazer Tee", category: "tops", clothing_type: "t-shirt", color: "white", style_tags: "smart casual", occasion_tags: "work", is_active: true },
+      { id: "t2", name: "Hoodie", category: "tops", clothing_type: "hoodie", color: "gray", style_tags: "relaxed", occasion_tags: "casual", is_active: true },
+      { id: "b1", name: "Chinos", category: "bottoms", color: "navy", style_tags: "smart casual", occasion_tags: "work", is_active: true },
+      { id: "b2", name: "Sweatpants", category: "bottoms", color: "gray", style_tags: "relaxed", occasion_tags: "casual", is_active: true },
+      { id: "s1", name: "Loafers", category: "shoes", color: "brown", style_tags: "smart casual", occasion_tags: "work", is_active: true },
+      { id: "s2", name: "Slides", category: "shoes", color: "black", style_tags: "relaxed", occasion_tags: "casual", is_active: true },
+    ];
+    const answers = { dressFor: ["work"], style: ["smart casual"] };
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "work hours", answers);
+
+    const allItemIds = outfits.flat().map((item) => item.id);
+    const workItems = allItemIds.filter((id) => ["t1", "b1", "s1"].includes(id)).length;
+    const casualItems = allItemIds.filter((id) => ["t2", "b2", "s2"].includes(id)).length;
+    expect(workItems).toBeGreaterThan(casualItems);
+  });
+
+  test("no occasion selected still generates valid outfits", () => {
+    const wardrobe = [
+      { id: "t1", name: "Tee", category: "tops", color: "blue", is_active: true },
+      { id: "b1", name: "Jeans", category: "bottoms", color: "black", is_active: true },
+      { id: "s1", name: "Sneakers", category: "shoes", color: "white", is_active: true },
+    ];
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
+    expect(outfits.length).toBe(3);
+    for (const outfit of outfits) {
+      expect(outfit.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+});
