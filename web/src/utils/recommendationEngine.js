@@ -611,6 +611,30 @@ function clothingTypeBias(item, weatherCat) {
   return profile.coolness + profile.warm;
 }
 
+function comfortPreferences(answers) {
+  const raw = Array.isArray(answers?.comfort) ? answers.comfort : [];
+  return new Set(raw.map((v) => (v || "").toString().trim().toLowerCase()).filter(Boolean));
+}
+
+function comfortFitScore(fitTag, comfortSet) {
+  const fit = normalizeDashboardFit(fitTag);
+  if (fit === "unspecified" || fit === "regular") return 0;
+
+  let score = 0;
+  if (comfortSet.has("relaxed")) {
+    if (fit === "relaxed" || fit === "oversized") score += 6;
+    else if (fit === "tight" || fit === "fitted") score -= 3;
+  }
+  if (comfortSet.has("fitted")) {
+    if (fit === "fitted" || fit === "tight") score += 6;
+    else if (fit === "oversized") score -= 3;
+  }
+  if (comfortSet.has("stretchy")) {
+    if (fit === "relaxed" || fit === "regular") score += 3;
+  }
+  return score;
+}
+
 function metadataScore(item, context) {
   const { answers, weatherCat, bodyTypeId, recentItemCounts, timeCat, outfitSoFar, selectedSeason } = context;
   const id = (item?.id ?? "").toString().trim();
@@ -645,6 +669,13 @@ function metadataScore(item, context) {
   score += clothingTypeBias(item, weatherCat);
   score -= fitPenalty(item?.fit_tag, bodyTypeId, item?.category);
   score -= recentPenalty;
+
+  /* ── Comfort preference scoring ──────────────────────────────────── */
+  const comfortSet = comfortPreferences(answers);
+  if (comfortSet.size) {
+    score += comfortFitScore(item?.fit_tag, comfortSet);
+    if (comfortSet.has("layered") && item?.layer_type) score += 4;
+  }
 
   if (Array.isArray(outfitSoFar) && outfitSoFar.length) {
     const colorScore = outfitSoFar.reduce((total, existing) => total + pairScore(existing?.color, item?.color), 0) / outfitSoFar.length;
@@ -1057,6 +1088,18 @@ function scoreOutfitCandidate(outfit, context) {
 
   /* Warmth budget scoring */
   score += warmthScore(outfit, wCat);
+
+  /* ── Comfort preference outfit-level bonus ─────────────────────── */
+  const comfortSet = comfortPreferences(context.answers);
+  if (comfortSet.has("layered") && layers.size >= 2) score += 8;
+  if (comfortSet.has("relaxed")) {
+    const relaxedCount = outfit.filter((item) => { const f = normalizeDashboardFit(item?.fit_tag); return f === "relaxed" || f === "oversized"; }).length;
+    if (relaxedCount >= 2) score += 6;
+  }
+  if (comfortSet.has("fitted")) {
+    const fittedCount = outfit.filter((item) => { const f = normalizeDashboardFit(item?.fit_tag); return f === "fitted" || f === "tight"; }).length;
+    if (fittedCount >= 2) score += 6;
+  }
 
   for (const item of outfit) {
     score += metadataScore(item, { ...context, outfitSoFar: outfit.filter((entry) => entry?.id !== item?.id) });
