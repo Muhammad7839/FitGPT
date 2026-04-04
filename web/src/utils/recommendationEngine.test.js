@@ -1672,3 +1672,127 @@ describe("comfort preference scoring quality", () => {
     expect(scoreOutfitForDisplay(relaxedOutfit, relaxedCtx)).toBeGreaterThan(scoreOutfitForDisplay(relaxedOutfit, fittedCtx));
   });
 });
+
+/* ── Explanation transparency tests ────────────────────────────────── */
+
+describe("explanation references recommendation factors", () => {
+  test("occasion appears in explanation when dressFor is set", () => {
+    const outfit = [
+      { id: "1", name: "Tee", category: "Tops", color: "white" },
+      { id: "2", name: "Jeans", category: "Bottoms", color: "blue" },
+    ];
+    const result = buildExplanation({ outfit, answers: { dressFor: ["work"] }, weatherCategory: "mild", timeCategory: "morning" });
+    expect(result.toLowerCase()).toContain("work");
+  });
+
+  test("style appears in explanation when style is set", () => {
+    const outfit = [
+      { id: "1", name: "Blazer", category: "Outerwear", color: "navy" },
+      { id: "2", name: "Shirt", category: "Tops", color: "white" },
+    ];
+    const result = buildExplanation({ outfit, answers: { style: ["formal"] }, weatherCategory: "mild", timeCategory: "work hours" });
+    expect(result.toLowerCase()).toContain("formal");
+  });
+
+  test("time of day appears when weather is mild", () => {
+    const outfit = [
+      { id: "1", name: "Tee", category: "Tops", color: "blue" },
+      { id: "2", name: "Shorts", category: "Bottoms", color: "black" },
+    ];
+    const result = buildExplanation({ outfit, answers: { dressFor: ["casual"] }, weatherCategory: "mild", timeCategory: "evening" });
+    expect(result.toLowerCase()).toContain("tonight");
+  });
+
+  test("season-tagged items get season mentioned in explanation", () => {
+    const outfit = [
+      { id: "1", name: "Linen Shirt", category: "Tops", color: "white", season_tags: ["summer"] },
+      { id: "2", name: "Light Shorts", category: "Bottoms", color: "beige", season_tags: ["summer"] },
+      { id: "3", name: "Sandals", category: "Shoes", color: "brown" },
+    ];
+    const result = buildExplanation({ outfit, answers: {}, weatherCategory: "mild", timeCategory: "morning" });
+    const lower = result.toLowerCase();
+    expect(lower.includes("summer") || lower.includes("season") || lower.includes("year")).toBe(true);
+  });
+
+  test("comfort preference is acknowledged in explanation", () => {
+    const outfit = [
+      { id: "1", name: "Oversized Hoodie", category: "Tops", color: "gray", fit_tag: "oversized" },
+      { id: "2", name: "Joggers", category: "Bottoms", color: "black", fit_tag: "relaxed" },
+      { id: "3", name: "Sneakers", category: "Shoes", color: "white" },
+    ];
+    const result = buildExplanation({ outfit, answers: { comfort: ["Relaxed"] }, weatherCategory: "mild", timeCategory: "morning" });
+    const lower = result.toLowerCase();
+    expect(lower.includes("relaxed") || lower.includes("comfort") || lower.includes("easy")).toBe(true);
+  });
+
+  test("layered comfort preference acknowledged in explanation", () => {
+    const outfit = [
+      { id: "1", name: "Tee", category: "Tops", color: "white", layer_type: "base" },
+      { id: "2", name: "Cardigan", category: "Outerwear", color: "gray", layer_type: "mid" },
+      { id: "3", name: "Jeans", category: "Bottoms", color: "blue" },
+    ];
+    const result = buildExplanation({ outfit, answers: { comfort: ["Layered"] }, weatherCategory: "mild", timeCategory: "morning" });
+    const lower = result.toLowerCase();
+    expect(lower.includes("layer") || lower.includes("comfort") || lower.includes("prefer")).toBe(true);
+  });
+
+  test("fitted comfort preference acknowledged in explanation", () => {
+    const outfit = [
+      { id: "1", name: "Slim Shirt", category: "Tops", color: "navy", fit_tag: "slim" },
+      { id: "2", name: "Tailored Pants", category: "Bottoms", color: "gray", fit_tag: "tailored" },
+    ];
+    const result = buildExplanation({ outfit, answers: { comfort: ["Fitted"] }, weatherCategory: "mild", timeCategory: "morning" });
+    const lower = result.toLowerCase();
+    expect(lower.includes("fitted") || lower.includes("structured") || lower.includes("sharp") || lower.includes("polish") || lower.includes("prefer")).toBe(true);
+  });
+});
+
+describe("multi-factor explanation coherence", () => {
+  test("occasion + style + weather all appear in one explanation", () => {
+    const outfit = [
+      { id: "1", name: "Wool Blazer", category: "Outerwear", color: "navy", layer_type: "outer" },
+      { id: "2", name: "Dress Shirt", category: "Tops", color: "white", layer_type: "base" },
+      { id: "3", name: "Trousers", category: "Bottoms", color: "gray" },
+      { id: "4", name: "Oxfords", category: "Shoes", color: "black" },
+    ];
+    const result = buildExplanation({ outfit, answers: { dressFor: ["work"], style: ["formal"] }, weatherCategory: "cold", timeCategory: "work hours" });
+    const lower = result.toLowerCase();
+    const hasOccasionOrStyle = lower.includes("work") || lower.includes("formal");
+    const hasWeather = lower.includes("cold") || lower.includes("warm") || lower.includes("layer") || lower.includes("chill");
+    const hasColor = lower.includes("navy") || lower.includes("white") || lower.includes("neutral") || lower.includes("ground") || lower.includes("palette");
+    expect(hasOccasionOrStyle).toBe(true);
+    expect(hasWeather).toBe(true);
+    expect(hasColor).toBe(true);
+  });
+
+  test("explanation with rich metadata is longer than minimal metadata", () => {
+    const richOutfit = [
+      { id: "1", name: "Blazer", category: "Outerwear", color: "navy", style_tags: ["formal"], season_tags: ["fall"], layer_type: "outer", set_id: "suit" },
+      { id: "2", name: "Dress Shirt", category: "Tops", color: "white", style_tags: ["formal"], layer_type: "base" },
+      { id: "3", name: "Suit Pants", category: "Bottoms", color: "navy", set_id: "suit" },
+      { id: "4", name: "Oxfords", category: "Shoes", color: "black" },
+    ];
+    const minimalOutfit = [
+      { id: "5", name: "Tee", category: "Tops", color: "blue" },
+      { id: "6", name: "Jeans", category: "Bottoms", color: "black" },
+    ];
+    const richResult = buildExplanation({ outfit: richOutfit, answers: { dressFor: ["work"], style: ["formal"], comfort: ["Fitted"] }, weatherCategory: "cool", timeCategory: "work hours" });
+    const minimalResult = buildExplanation({ outfit: minimalOutfit, answers: {}, weatherCategory: "mild", timeCategory: "morning" });
+    expect(richResult.length).toBeGreaterThan(minimalResult.length);
+  });
+
+  test("season is appended to layering description when both present", () => {
+    const outfit = [
+      { id: "1", name: "Wool Tee", category: "Tops", color: "gray", layer_type: "base", season_tags: ["winter"] },
+      { id: "2", name: "Fleece", category: "Tops", color: "navy", layer_type: "mid", season_tags: ["winter"] },
+      { id: "3", name: "Parka", category: "Outerwear", color: "black", layer_type: "outer" },
+      { id: "4", name: "Jeans", category: "Bottoms", color: "blue" },
+    ];
+    const result = buildExplanation({ outfit, answers: {}, weatherCategory: "cold", timeCategory: "morning" });
+    const lower = result.toLowerCase();
+    const hasLayer = lower.includes("layer") || lower.includes("base") || lower.includes("build");
+    const hasSeason = lower.includes("winter") || lower.includes("season") || lower.includes("year");
+    expect(hasLayer).toBe(true);
+    expect(hasSeason).toBe(true);
+  });
+});
