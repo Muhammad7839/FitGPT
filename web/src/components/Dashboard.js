@@ -20,6 +20,7 @@ import {
   timeCategoryFromDate,
   generateThreeOutfits, idsSignature, makeRecentSets,
   buildExplanation, buildOutfitFromIds, scoreOutfitForDisplay,
+  analyzeOutfitColors, colorInfo,
 } from "../utils/recommendationEngine";
 
 const DEFAULT_BODY_TYPE = "rectangle";
@@ -72,13 +73,7 @@ function clearReuseOutfit() {
   sessionStorage.removeItem(REUSE_OUTFIT_KEY);
 }
 
-function splitColorNames(color) {
-  return (color || "").toString().split(",").map((part) => part.trim()).filter(Boolean);
-}
 
-function uniqueStrings(values) {
-  return [...new Set((Array.isArray(values) ? values : []).map((value) => (value || "").toString().trim()).filter(Boolean))];
-}
 
 function summarizeExplanation(text) {
   const cleaned = (text || "").toString().trim();
@@ -102,10 +97,56 @@ function outfitRoleLabel(item) {
 }
 
 function buildColorReason(outfit) {
-  const colors = uniqueStrings((Array.isArray(outfit) ? outfit : []).flatMap((item) => splitColorNames(item?.color)));
-  if (colors.length >= 3) return `The palette stays interesting by balancing ${colors.slice(0, 3).join(", ")} without letting any one piece overpower the outfit.`;
-  if (colors.length === 2) return `${colors[0]} and ${colors[1]} create a clear visual relationship, which helps the outfit feel intentional instead of random.`;
-  if (colors.length === 1) return `${colors[0]} acts like the anchor color, which keeps the outfit cohesive.`;
+  const items = Array.isArray(outfit) ? outfit : [];
+  if (!items.length) return "The color choices stay simple, which makes the outfit easier to wear and style.";
+
+  const analysis = analyzeOutfitColors(items);
+  const { isBalanced, relationships, uniqueColors } = analysis;
+  const names = uniqueColors.slice(0, 4).map(titleCase);
+
+  if (!relationships.length) {
+    if (names.length === 1) return `${names[0]} acts like the anchor color, which keeps the outfit cohesive.`;
+    return "The color choices stay simple, which makes the outfit easier to wear and style.";
+  }
+
+  const featured = relationships.find((r) => r.type === "complementary")
+    || relationships.find((r) => r.type === "analogous")
+    || relationships.find((r) => r.type === "triadic")
+    || relationships.find((r) => r.type === "neutral-anchor")
+    || relationships.find((r) => r.type === "neutral-pair")
+    || relationships[0];
+
+  const a = titleCase(featured.nameA);
+  const b = titleCase(featured.nameB);
+
+  if (featured.type === "complementary") {
+    return `${a} and ${b} are complementary colors — they sit across the color wheel, which creates a bold but intentional contrast that makes both colors pop.`;
+  }
+  if (featured.type === "analogous") {
+    return `${a} and ${b} are analogous — close neighbors on the color wheel. This creates a smooth tonal flow that feels cohesive without being monotone.`;
+  }
+  if (featured.type === "triadic") {
+    return `${a} and ${b} create a triadic contrast — spread across the wheel with enough distance to feel vibrant, but still coordinated.`;
+  }
+  if (featured.type === "neutral-anchor") {
+    const aInfo = colorInfo(featured.nameA);
+    const neutralName = aInfo.neutral ? a : b;
+    const chromaticName = aInfo.neutral ? b : a;
+    if (isBalanced) return `${neutralName} anchors the palette while ${chromaticName} provides the visual interest — this neutral-plus-accent balance is one of the most reliable ways to build a cohesive outfit.`;
+    return `${chromaticName} draws the eye while ${neutralName} keeps the rest of the outfit grounded, so nothing competes for attention.`;
+  }
+  if (featured.type === "neutral-pair") {
+    return `The palette stays in neutral territory with ${names.join(" and ")}, which keeps the outfit versatile and lets texture and silhouette define the look instead of color.`;
+  }
+  if (featured.type === "monochrome") {
+    return `Staying in the ${a} family creates a monochrome effect — the tonal consistency makes the outfit feel streamlined and intentional.`;
+  }
+  if (featured.type === "clash") {
+    return `${a} and ${b} are an unexpected combination — the tension between them adds personality, and the rest of the outfit keeps it from feeling random.`;
+  }
+
+  if (names.length >= 3) return `The palette stays interesting by balancing ${names.slice(0, 3).join(", ")} without letting any one piece overpower the outfit.`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} create a clear visual relationship, which helps the outfit feel intentional instead of random.`;
   return "The color choices stay simple, which makes the outfit easier to wear and style.";
 }
 

@@ -191,6 +191,79 @@ export function pairScore(aColor, bColor) {
   return count > 0 ? total / count : 2;
 }
 
+/* ── Color relationship analysis ───────────────────────────────────── */
+
+export function analyzeColorRelationship(colorA, colorB) {
+  const a = colorInfo(colorA);
+  const b = colorInfo(colorB);
+
+  if (!a.name || !b.name) return { type: "unknown", score: 0, nameA: a.name, nameB: b.name };
+  if (a.name === b.name) return { type: "monochrome", score: 2, nameA: a.name, nameB: b.name };
+
+  if (a.neutral && b.neutral) return { type: "neutral-pair", score: 4, nameA: a.name, nameB: b.name };
+
+  if (a.neutral || b.neutral) {
+    const darkNeutrals = new Set(["black", "navy", "brown", "gray", "grey", "denim"]);
+    const neutral = a.neutral ? a.name : b.name;
+    const score = darkNeutrals.has(neutral) ? 4 : 3;
+    return { type: "neutral-anchor", score, nameA: a.name, nameB: b.name };
+  }
+
+  if (a.hue < 0 || b.hue < 0) return { type: "unknown", score: 2, nameA: a.name, nameB: b.name };
+
+  const diff = hueDiff(a.hue, b.hue);
+  if (diff <= 15) return { type: "monochrome", score: 4, nameA: a.name, nameB: b.name };
+  if (diff <= 45) return { type: "analogous", score: 4, nameA: a.name, nameB: b.name };
+  if (diff >= 150 && diff <= 210) return { type: "complementary", score: 5, nameA: a.name, nameB: b.name };
+  if (diff >= 100 && diff <= 149) return { type: "triadic", score: 3, nameA: a.name, nameB: b.name };
+  if (diff >= 50 && diff < 100) return { type: "clash", score: 1, nameA: a.name, nameB: b.name };
+  return { type: "contrast", score: 2, nameA: a.name, nameB: b.name };
+}
+
+export function analyzeOutfitColors(outfit) {
+  const items = Array.isArray(outfit) ? outfit : [];
+  const allColors = items.flatMap((x) => {
+    const parts = splitColors(x?.color || "");
+    return parts.length ? parts : [x?.color];
+  }).filter(Boolean);
+
+  const unique = [];
+  const seen = new Set();
+  for (const raw of allColors) {
+    const n = normalizeColorName(raw);
+    if (n && !seen.has(n)) { seen.add(n); unique.push(n); }
+  }
+
+  const infos = unique.map(colorInfo);
+  const neutralCount = infos.filter((i) => i.neutral).length;
+  const chromaticCount = infos.filter((i) => !i.neutral && i.hue >= 0).length;
+
+  const relationships = [];
+  for (let i = 0; i < unique.length; i++) {
+    for (let j = i + 1; j < unique.length; j++) {
+      relationships.push(analyzeColorRelationship(unique[i], unique[j]));
+    }
+  }
+
+  const typeCounts = {};
+  for (const rel of relationships) {
+    if (rel.type !== "unknown") typeCounts[rel.type] = (typeCounts[rel.type] || 0) + 1;
+  }
+
+  let dominantType = "mixed";
+  let maxCount = 0;
+  for (const [type, count] of Object.entries(typeCounts)) {
+    if (count > maxCount) { maxCount = count; dominantType = type; }
+  }
+
+  const isBalanced = neutralCount >= 1 && chromaticCount >= 1;
+  const harmonyScore = relationships.length
+    ? relationships.reduce((sum, r) => sum + r.score, 0) / relationships.length
+    : 0;
+
+  return { relationships, dominantType, typeCounts, neutralCount, chromaticCount, isBalanced, harmonyScore, uniqueColors: unique };
+}
+
 
 
 export function mulberry32(seed) {
@@ -1139,58 +1212,100 @@ function explanationHash(str) {
 }
 
 function describeColorHarmony(colors, seed) {
-  if (colors.length < 2) {
-    if (colors.length === 1) return `${titleCase(colors[0])} anchors the look.`;
-    return "";
-  }
-
-  const entries = colors.slice(0, 3).map((c) => ({ display: titleCase(c), info: colorInfo(c) }));
-  const names = entries.map((e) => e.display);
-  const neutralEntries = entries.filter((e) => e.info.neutral);
-  const chromaticEntries = entries.filter((e) => !e.info.neutral && e.info.hue >= 0);
-  const allNeutral = entries.every((e) => e.info.neutral);
-
-  if (allNeutral) {
-    const listStr = names.length > 2
-      ? `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`
-      : names.join(" and ");
+  if (!colors.length) return "";
+  if (colors.length === 1) {
     return [
-      `${listStr} — a timeless neutral combo.`,
-      `Classic palette with ${names.join(", ")}.`,
-      `A ${names.join(", ")} base keeps things clean and versatile.`,
+      `${titleCase(colors[0])} anchors the look.`,
+      `${titleCase(colors[0])} keeps the palette focused.`,
+      `A ${titleCase(colors[0])}-driven palette keeps things clean.`,
     ][seed % 3];
   }
 
-  if (chromaticEntries.length >= 2) {
-    const [a, b] = chromaticEntries;
-    const diff = hueDiff(a.info.hue, b.info.hue);
+  const analysis = analyzeOutfitColors(colors.map((c) => ({ color: c })));
+  const names = analysis.uniqueColors.slice(0, 4).map(titleCase);
+  const { isBalanced, relationships } = analysis;
 
-    if (diff >= 150 && diff <= 210) {
-      return `${a.display} and ${b.display} are complementary — bold but balanced.`;
-    }
-    if (diff <= 40) {
-      return `${a.display} and ${b.display} sit close on the color wheel, so they blend naturally.`;
-    }
-    if (diff >= 100 && diff <= 149) {
-      return `${a.display} and ${b.display} create a vibrant contrast that still feels intentional.`;
-    }
-    return `${a.display} and ${b.display} add energy with their contrast.`;
+  const featured = relationships.find((r) => r.type === "complementary")
+    || relationships.find((r) => r.type === "analogous")
+    || relationships.find((r) => r.type === "triadic")
+    || relationships.find((r) => r.type === "neutral-anchor")
+    || relationships.find((r) => r.type === "neutral-pair")
+    || relationships.find((r) => r.type === "monochrome")
+    || relationships[0];
+
+  if (!featured) return `The ${names.join(", ")} palette ties everything together.`;
+
+  const a = titleCase(featured.nameA);
+  const b = titleCase(featured.nameB);
+
+  if (featured.type === "complementary") {
+    const templates = [
+      `${a} and ${b} are complementary — bold but balanced.`,
+      `${a} opposite ${b} on the color wheel gives the outfit energy without competing.`,
+      `The ${a}/${b} pairing is a complementary contrast — they strengthen each other.`,
+      `${a} and ${b} sit across the wheel, which is why they feel deliberate together.`,
+    ];
+    let text = templates[seed % templates.length];
+    if (isBalanced) text += [" The neutrals ground the intensity.", " Neutral pieces keep the contrast from overwhelming."][seed % 2];
+    return text;
   }
 
-  if (neutralEntries.length && chromaticEntries.length === 1) {
-    const nNames = neutralEntries.map((e) => e.display);
-    const cName = chromaticEntries[0].display;
-    if (nNames.length > 1) {
-      return [
-        `${cName} stands out against the ${nNames.join(" and ")} foundation.`,
-        `${nNames.join(" and ")} anchor the look while ${cName} adds interest.`,
-        `${cName} with ${nNames.join(" and ")} — clean and intentional.`,
-      ][seed % 3];
-    }
+  if (featured.type === "analogous") {
     return [
-      `${nNames[0]} grounds the ${cName} well.`,
-      `${cName} pops against the ${nNames[0]} base.`,
-      `${cName} with ${nNames[0]} keeps things polished.`,
+      `${a} and ${b} sit close on the color wheel, so they blend naturally.`,
+      `${a} next to ${b} creates a tonal flow that feels effortless.`,
+      `The ${a}-to-${b} range keeps the palette cohesive without being monotone.`,
+      `${a} and ${b} are analogous — close enough to harmonize, different enough to add depth.`,
+    ][seed % 4];
+  }
+
+  if (featured.type === "triadic") {
+    return [
+      `${a} and ${b} create a vibrant contrast that still feels intentional.`,
+      `The spread between ${a} and ${b} keeps the palette lively without clashing.`,
+      `${a} paired with ${b} — different enough to be interesting, coordinated enough to work.`,
+    ][seed % 3];
+  }
+
+  if (featured.type === "neutral-anchor") {
+    const aInfo = colorInfo(featured.nameA);
+    const neutralName = aInfo.neutral ? a : b;
+    const chromaticName = aInfo.neutral ? b : a;
+    return [
+      `${neutralName} grounds the ${chromaticName} well.`,
+      `${chromaticName} pops against the ${neutralName} base.`,
+      `${chromaticName} with ${neutralName} keeps things polished.`,
+      `${neutralName} lets ${chromaticName} do the talking without competing.`,
+      `${chromaticName} stands out against ${neutralName} — the balance feels right.`,
+    ][seed % 5];
+  }
+
+  if (featured.type === "neutral-pair") {
+    const allNeutralNames = analysis.uniqueColors.filter((c) => colorInfo(c).neutral).map(titleCase);
+    const listStr = allNeutralNames.length > 2
+      ? `${allNeutralNames.slice(0, -1).join(", ")}, and ${allNeutralNames[allNeutralNames.length - 1]}`
+      : allNeutralNames.join(" and ");
+    return [
+      `${listStr} — a timeless neutral combo.`,
+      `Classic palette with ${allNeutralNames.join(", ")}.`,
+      `A ${allNeutralNames.join(", ")} base keeps things clean and versatile.`,
+      `The all-neutral palette lets texture and silhouette do the work.`,
+    ][seed % 4];
+  }
+
+  if (featured.type === "monochrome") {
+    return [
+      `The monochrome ${a} palette keeps the outfit streamlined.`,
+      `Staying in the ${a} family creates a clean, unified look.`,
+      `Tonal ${a} dressing — simple and intentional.`,
+    ][seed % 3];
+  }
+
+  if (featured.type === "clash") {
+    return [
+      `${a} and ${b} are an unexpected pairing — the contrast keeps things interesting.`,
+      `${a} with ${b} pushes the palette, but the outfit structure holds it together.`,
+      `The ${a}/${b} tension adds personality to the outfit.`,
     ][seed % 3];
   }
 
