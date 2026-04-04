@@ -1290,6 +1290,82 @@ def get_underused_clothing_alerts(
     }
 
 
+def generate_trip_packing_list(
+    db: Session,
+    *,
+    user_id: int,
+    destination_city: str,
+    start_date: str,
+    trip_days: int,
+    forecast_days: list[dict],
+) -> dict:
+    normalized_days = max(1, min(trip_days, 30))
+    wardrobe_items = get_clothing_items_for_user(
+        db=db,
+        user_id=user_id,
+        include_archived=False,
+    )
+
+    by_category: dict[str, list[models.ClothingItem]] = {
+        "top": [],
+        "bottom": [],
+        "shoes": [],
+        "outerwear": [],
+        "accessory": [],
+    }
+    for item in wardrobe_items:
+        key = _normalize_category(item.category)
+        if key in by_category:
+            by_category[key].append(item)
+
+    weather_categories = {str(day.get("weather_category", "")).strip().lower() for day in forecast_days}
+    weather_descriptions = " ".join(str(day.get("description", "")).lower() for day in forecast_days)
+    needs_outerwear = (
+        bool(weather_categories.intersection({"cold", "cool"}))
+        or "rain" in weather_descriptions
+        or "snow" in weather_descriptions
+    )
+    recommended_quantities = {
+        "top": normalized_days,
+        "bottom": max(2, (normalized_days + 1) // 2),
+        "shoes": 1 if normalized_days <= 4 else 2,
+        "outerwear": 1 if needs_outerwear else 0,
+        "accessory": 1 if normalized_days >= 3 else 0,
+    }
+
+    items: list[dict] = []
+    for category, quantity in recommended_quantities.items():
+        if quantity <= 0:
+            continue
+        available = by_category.get(category, [])
+        selected = available[:quantity]
+        missing_quantity = max(0, quantity - len(selected))
+        items.append(
+            {
+                "category": category,
+                "recommended_quantity": quantity,
+                "selected_item_ids": [item.id for item in selected],
+                "selected_item_names": [item.name or f"Item {item.id}" for item in selected],
+                "missing_quantity": missing_quantity,
+            }
+        )
+
+    summary_parts = [
+        f"{day.get('date')}: {day.get('weather_category')} {day.get('description')}"
+        for day in forecast_days[:3]
+    ]
+    weather_summary = "; ".join(summary_parts) if summary_parts else "Forecast unavailable"
+    return {
+        "destination_city": destination_city,
+        "start_date": start_date,
+        "trip_days": normalized_days,
+        "weather_summary": weather_summary,
+        "items": items,
+        "generated_at_timestamp": int(datetime.utcnow().timestamp()),
+        "insufficient_data": len(wardrobe_items) < 3,
+    }
+
+
 def save_outfit_history(
     db: Session,
     user_id: int,

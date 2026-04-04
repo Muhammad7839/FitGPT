@@ -26,7 +26,7 @@ from app.config import EXPOSE_RESET_TOKEN_IN_RESPONSE, MAX_UPLOAD_IMAGE_BYTES
 from app.database.database import get_db
 from app.google_oauth import GoogleTokenValidationError, verify_google_id_token
 from app.recommendation_explanations import RecommendationContext, build_recommendation_explanation
-from app.weather import WeatherLookupError, fetch_current_weather, map_temperature_to_category
+from app.weather import WeatherLookupError, fetch_current_weather, fetch_forecast_weather, map_temperature_to_category
 
 logger = logging.getLogger(__name__)
 
@@ -1388,6 +1388,51 @@ def get_ai_recommendations_compat(
         "fallback_used": result.fallback_used,
         "warning": result.warning,
     }
+
+
+@router.post("/plans/packing-list", response_model=schemas.TripPackingResponse)
+def generate_trip_packing_list(
+    payload: schemas.TripPackingRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    forecast_days: list[dict] = []
+    try:
+        forecast = fetch_forecast_weather(
+            city=payload.destination_city,
+            days=min(payload.trip_days, 5),
+        )
+        forecast_days = [
+            {
+                "date": day.date,
+                "weather_category": day.weather_category,
+                "description": day.description,
+            }
+            for day in forecast
+        ]
+    except WeatherLookupError as exc:
+        logger.warning("Packing list forecast lookup failed city=%s error=%s", payload.destination_city, exc)
+        try:
+            current_weather = fetch_current_weather(city=payload.destination_city)
+            forecast_days = [
+                {
+                    "date": payload.start_date,
+                    "weather_category": current_weather.weather_category,
+                    "description": current_weather.description,
+                }
+            ]
+        except WeatherLookupError:
+            forecast_days = []
+
+    result = crud.generate_trip_packing_list(
+        db,
+        user_id=current_user.id,
+        destination_city=payload.destination_city,
+        start_date=payload.start_date,
+        trip_days=payload.trip_days,
+        forecast_days=forecast_days,
+    )
+    return result
 
 
 # =============================

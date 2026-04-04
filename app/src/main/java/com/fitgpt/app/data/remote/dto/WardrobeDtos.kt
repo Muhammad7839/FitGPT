@@ -219,6 +219,43 @@ data class PlannedOutfitAssignmentResponseDto(
     val outfits: List<PlannedOutfitEntryDto>
 )
 
+data class TripPackingRequestDto(
+    @SerializedName("destination_city")
+    val destinationCity: String,
+    @SerializedName("start_date")
+    val startDate: String,
+    @SerializedName("trip_days")
+    val tripDays: Int
+)
+
+data class TripPackingItemDto(
+    val category: String,
+    @SerializedName("recommended_quantity")
+    val recommendedQuantity: Int,
+    @SerializedName("selected_item_ids")
+    val selectedItemIds: List<Int>,
+    @SerializedName("selected_item_names")
+    val selectedItemNames: List<String>,
+    @SerializedName("missing_quantity")
+    val missingQuantity: Int
+)
+
+data class TripPackingResponseDto(
+    @SerializedName("destination_city")
+    val destinationCity: String,
+    @SerializedName("start_date")
+    val startDate: String,
+    @SerializedName("trip_days")
+    val tripDays: Int,
+    @SerializedName("weather_summary")
+    val weatherSummary: String,
+    val items: List<TripPackingItemDto>,
+    @SerializedName("generated_at_timestamp")
+    val generatedAtTimestamp: Long,
+    @SerializedName("insufficient_data")
+    val insufficientData: Boolean
+)
+
 data class ImageUploadResponseDto(
     @SerializedName("image_url")
     val imageUrl: String

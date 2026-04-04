@@ -13,6 +13,7 @@ import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
 import com.fitgpt.app.data.model.TagSuggestion
 import com.fitgpt.app.data.model.UnderusedAlertsResult
+import com.fitgpt.app.data.model.TripPackingResult
 import com.fitgpt.app.data.model.UploadResult
 import com.fitgpt.app.data.model.WardrobeGapAnalysis
 import com.fitgpt.app.data.model.WeatherSnapshot
@@ -111,6 +112,9 @@ class WardrobeViewModel(
 
     private val _plannedState = MutableStateFlow<List<PlannedOutfit>>(emptyList())
     val plannedState: StateFlow<List<PlannedOutfit>> = _plannedState
+    private val _tripPackingState =
+        MutableStateFlow<UiState<TripPackingResult?>>(UiState.Success(null))
+    val tripPackingState: StateFlow<UiState<TripPackingResult?>> = _tripPackingState
 
     private val _savedOutfitsState = MutableStateFlow<List<SavedOutfit>>(emptyList())
     val savedOutfitsState: StateFlow<List<SavedOutfit>> = _savedOutfitsState
@@ -718,6 +722,22 @@ class WardrobeViewModel(
                 refreshPlannedOutfits()
             } catch (_: Exception) {
                 _wardrobeState.value = UiState.Error("Failed to assign outfit plan")
+            }
+        }
+    }
+
+    fun generateTripPackingList(destinationCity: String, startDate: String, tripDays: Int) {
+        _tripPackingState.value = UiState.Loading
+        viewModelScope.launch {
+            try {
+                val result = repository.generateTripPackingList(
+                    destinationCity = destinationCity,
+                    startDate = startDate,
+                    tripDays = tripDays
+                )
+                _tripPackingState.value = UiState.Success(result)
+            } catch (_: Exception) {
+                _tripPackingState.value = UiState.Error("Failed to generate packing list")
             }
         }
     }

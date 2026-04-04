@@ -8,6 +8,7 @@ import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
 import com.fitgpt.app.data.model.TagSuggestion
 import com.fitgpt.app.data.model.UnderusedAlertsResult
+import com.fitgpt.app.data.model.TripPackingResult
 import com.fitgpt.app.data.model.UploadResult
 import com.fitgpt.app.data.model.WardrobeGapAnalysis
 import com.fitgpt.app.data.model.WeatherSnapshot
@@ -100,6 +101,11 @@ interface WardrobeRepository {
         occasion: String?,
         replaceExisting: Boolean
     )
+    suspend fun generateTripPackingList(
+        destinationCity: String,
+        startDate: String,
+        tripDays: Int
+    ): TripPackingResult
     suspend fun getPlannedOutfits(): List<PlannedOutfit>
     suspend fun removePlannedOutfit(outfitId: Long)
 }

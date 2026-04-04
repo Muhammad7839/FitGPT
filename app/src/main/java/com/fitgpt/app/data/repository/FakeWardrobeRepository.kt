@@ -9,6 +9,8 @@ import com.fitgpt.app.data.model.SavedOutfit
 import com.fitgpt.app.data.model.TagSuggestion
 import com.fitgpt.app.data.model.UnderusedAlert
 import com.fitgpt.app.data.model.UnderusedAlertsResult
+import com.fitgpt.app.data.model.TripPackingItem
+import com.fitgpt.app.data.model.TripPackingResult
 import com.fitgpt.app.data.model.UploadResult
 import com.fitgpt.app.data.model.WardrobeGapAnalysis
 import com.fitgpt.app.data.model.WardrobeGapSuggestion
@@ -448,6 +450,58 @@ class FakeWardrobeRepository : WardrobeRepository {
                 )
             )
         }
+    }
+
+    override suspend fun generateTripPackingList(
+        destinationCity: String,
+        startDate: String,
+        tripDays: Int
+    ): TripPackingResult {
+        val normalizedDays = tripDays.coerceIn(1, 30)
+        val activeItems = wardrobeItems.filter { !it.isArchived }
+        val tops = activeItems.filter { it.category.equals("Top", true) }
+        val bottoms = activeItems.filter { it.category.equals("Bottom", true) }
+        val shoes = activeItems.filter { it.category.equals("Shoes", true) }
+        val outerwear = activeItems.filter { it.category.equals("Outerwear", true) }
+        val items = listOf(
+            TripPackingItem(
+                category = "top",
+                recommendedQuantity = normalizedDays,
+                selectedItemIds = tops.take(normalizedDays).map { it.id },
+                selectedItemNames = tops.take(normalizedDays).map { it.name ?: "Item ${it.id}" },
+                missingQuantity = (normalizedDays - tops.size).coerceAtLeast(0)
+            ),
+            TripPackingItem(
+                category = "bottom",
+                recommendedQuantity = maxOf(2, (normalizedDays + 1) / 2),
+                selectedItemIds = bottoms.take(maxOf(2, (normalizedDays + 1) / 2)).map { it.id },
+                selectedItemNames = bottoms.take(maxOf(2, (normalizedDays + 1) / 2)).map { it.name ?: "Item ${it.id}" },
+                missingQuantity = (maxOf(2, (normalizedDays + 1) / 2) - bottoms.size).coerceAtLeast(0)
+            ),
+            TripPackingItem(
+                category = "shoes",
+                recommendedQuantity = if (normalizedDays > 4) 2 else 1,
+                selectedItemIds = shoes.take(if (normalizedDays > 4) 2 else 1).map { it.id },
+                selectedItemNames = shoes.take(if (normalizedDays > 4) 2 else 1).map { it.name ?: "Item ${it.id}" },
+                missingQuantity = ((if (normalizedDays > 4) 2 else 1) - shoes.size).coerceAtLeast(0)
+            ),
+            TripPackingItem(
+                category = "outerwear",
+                recommendedQuantity = 1,
+                selectedItemIds = outerwear.take(1).map { it.id },
+                selectedItemNames = outerwear.take(1).map { it.name ?: "Item ${it.id}" },
+                missingQuantity = (1 - outerwear.size).coerceAtLeast(0)
+            )
+        )
+        return TripPackingResult(
+            destinationCity = destinationCity,
+            startDate = startDate,
+            tripDays = normalizedDays,
+            weatherSummary = "Forecast unavailable (fake repository).",
+            items = items,
+            generatedAtTimestamp = System.currentTimeMillis(),
+            insufficientData = activeItems.size < 3
+        )
     }
 
     override suspend fun getPlannedOutfits(): List<PlannedOutfit> {
