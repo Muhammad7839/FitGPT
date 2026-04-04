@@ -1055,6 +1055,81 @@ def _feedback_adjustment_for_candidate(
     return round(adjustment, 3)
 
 
+_FEEDBACK_SCORE_DELTA = {
+    "like": 0.35,
+    "dislike": -0.45,
+    "reject": -1.5,
+}
+
+
+def recommendation_feedback_delta(signal: Optional[str]) -> float:
+    return _FEEDBACK_SCORE_DELTA.get((signal or "").strip().lower(), 0.0)
+
+
+def get_recommendation_feedback_signals_for_user(db: Session, user_id: int) -> dict[str, str]:
+    entries = db.query(models.RecommendationFeedback).filter(
+        models.RecommendationFeedback.owner_id == user_id
+    ).all()
+    return {
+        entry.suggestion_id: entry.signal
+        for entry in entries
+        if entry.suggestion_id and entry.signal
+    }
+
+
+def rank_candidates_with_feedback(
+    candidates: list[deterministic.RecommendationCandidate],
+    feedback_signals: dict[str, str],
+) -> list[deterministic.RecommendationCandidate]:
+    def sort_key(candidate: deterministic.RecommendationCandidate):
+        signal = feedback_signals.get(candidate.fingerprint)
+        reject_flag = 1 if signal == "reject" else 0
+        adjusted_score = candidate.score + recommendation_feedback_delta(signal)
+        return (reject_flag, adjusted_score, candidate.score)
+
+    ranked = sorted(candidates, key=sort_key, reverse=True)
+
+    # Keep rejected outfits at the tail when non-rejected options exist.
+    preferred = [candidate for candidate in ranked if feedback_signals.get(candidate.fingerprint) != "reject"]
+    rejected = [candidate for candidate in ranked if feedback_signals.get(candidate.fingerprint) == "reject"]
+    return preferred + rejected
+
+
+def upsert_recommendation_feedback(
+    db: Session,
+    *,
+    user_id: int,
+    suggestion_id: str,
+    signal: str,
+    item_ids: Optional[list[int]],
+) -> tuple[models.RecommendationFeedback, bool]:
+    timestamp = int(datetime.utcnow().timestamp())
+    entry = db.query(models.RecommendationFeedback).filter(
+        models.RecommendationFeedback.owner_id == user_id,
+        models.RecommendationFeedback.suggestion_id == suggestion_id,
+    ).first()
+    created = False
+    if entry is None:
+        created = True
+        entry = models.RecommendationFeedback(
+            owner_id=user_id,
+            suggestion_id=suggestion_id,
+            signal=signal,
+            item_ids_csv=",".join(str(item_id) for item_id in (item_ids or [])) or None,
+            created_at_timestamp=timestamp,
+            updated_at_timestamp=timestamp,
+        )
+    else:
+        entry.signal = signal
+        if item_ids is not None:
+            entry.item_ids_csv = ",".join(str(item_id) for item_id in item_ids) or None
+        entry.updated_at_timestamp = timestamp
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return entry, created
+
+
 def get_recommendation_options_for_user(
     db: Session,
     user: models.User,
@@ -1069,12 +1144,13 @@ def get_recommendation_options_for_user(
     all_items = get_clothing_items_for_user(db, user.id)
     item_map = {item.id: item for item in all_items}
     recent_fingerprints = set(history.get_recent_fingerprints(db, user.id))
-    feedback_signals = _build_feedback_signals(
+    implicit_feedback_signals = _build_feedback_signals(
         db,
         user_id=user.id,
         items=all_items,
     )
     effective_preferred_seasons = resolve_preferred_seasons(preferred_seasons)
+    explicit_feedback_signals = get_recommendation_feedback_signals_for_user(db, user.id)
 
     raw_candidates = deterministic.recommend_many(
         items=all_items,
@@ -1098,10 +1174,11 @@ def get_recommendation_options_for_user(
         candidates,
         key=lambda candidate: candidate.score + _feedback_adjustment_for_candidate(
             candidate,
-            feedback_signals=feedback_signals,
+            feedback_signals=implicit_feedback_signals,
         ),
         reverse=True,
     )
+    candidates = rank_candidates_with_feedback(candidates, explicit_feedback_signals)
 
     options: list[dict] = []
     seen_fingerprints: set[str] = set()
@@ -1114,8 +1191,10 @@ def get_recommendation_options_for_user(
         seen_fingerprints.add(candidate.fingerprint)
         adjusted_score = candidate.score + _feedback_adjustment_for_candidate(
             candidate,
-            feedback_signals=feedback_signals,
+            feedback_signals=implicit_feedback_signals,
         )
+        signal = explicit_feedback_signals.get(candidate.fingerprint)
+        adjusted_score += recommendation_feedback_delta(signal)
         options.append(
             {
                 "items": outfit_items,

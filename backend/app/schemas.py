@@ -572,6 +572,45 @@ class AiRecommendationResponse(BaseModel):
     prompt_feedback: Optional[FeedbackPromptMetadata] = None
 
 
+class RecommendationFeedbackCreate(BaseModel):
+    suggestion_id: str = Field(min_length=3, max_length=256)
+    signal: str = Field(min_length=4, max_length=16)
+    item_ids: Optional[list[int]] = Field(default=None, min_length=1, max_length=32)
+
+    @field_validator("suggestion_id")
+    @classmethod
+    def normalize_suggestion_id(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("suggestion_id cannot be blank")
+        return cleaned
+
+    @field_validator("signal")
+    @classmethod
+    def normalize_signal(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"like", "dislike", "reject"}:
+            raise ValueError("signal must be like/dislike/reject")
+        return normalized
+
+    @field_validator("item_ids")
+    @classmethod
+    def validate_optional_item_ids(cls, value: Optional[list[int]]) -> Optional[list[int]]:
+        if value is None:
+            return value
+        if len(set(value)) != len(value):
+            raise ValueError("item_ids must be unique")
+        if any(item_id <= 0 for item_id in value):
+            raise ValueError("item_ids must contain positive integers")
+        return value
+
+
+class RecommendationFeedbackResponse(BaseModel):
+    detail: str
+    suggestion_id: str
+    signal: str
+
+
 class DashboardContextWeather(BaseModel):
     city: str
     temperature_f: int

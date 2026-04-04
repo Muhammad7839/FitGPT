@@ -25,9 +25,10 @@ import com.fitgpt.app.data.remote.dto.OutfitHistoryUpdateRequestDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitAssignmentRequestDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.PromptFeedbackEventRequestDto
+import com.fitgpt.app.data.remote.dto.RecommendationFeedbackRequestDto
+import com.fitgpt.app.data.remote.dto.RejectOutfitRequestDto
 import com.fitgpt.app.data.remote.dto.SavedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.AiRecommendationRequestDto
-import com.fitgpt.app.data.remote.dto.RejectOutfitRequestDto
 import com.fitgpt.app.data.remote.dto.TripPackingRequestDto
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -284,6 +285,20 @@ class RemoteWardrobeRepository(
             PromptFeedbackEventRequestDto(
                 eventType = eventType,
                 suggestionId = suggestionId
+            )
+        )
+    }
+
+    override suspend fun submitRecommendationFeedback(
+        suggestionId: String,
+        signal: String,
+        itemIds: List<Int>?
+    ) {
+        api.submitRecommendationFeedback(
+            RecommendationFeedbackRequestDto(
+                suggestionId = suggestionId,
+                signal = signal,
+                itemIds = itemIds
             )
         )
     }

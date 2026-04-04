@@ -1213,6 +1213,35 @@ def record_feedback_prompt_event(
     return {"detail": "Feedback prompt event recorded"}
 
 
+@router.post("/recommendations/feedback", response_model=schemas.RecommendationFeedbackResponse)
+def submit_recommendation_feedback(
+    payload: schemas.RecommendationFeedbackCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if payload.item_ids:
+        _ensure_owned_items(db, current_user.id, payload.item_ids)
+    feedback, created = crud.upsert_recommendation_feedback(
+        db,
+        user_id=current_user.id,
+        suggestion_id=payload.suggestion_id,
+        signal=payload.signal,
+        item_ids=payload.item_ids,
+    )
+    logger.info(
+        "recommendation feedback saved user_id=%s suggestion_id=%s signal=%s created=%s",
+        current_user.id,
+        payload.suggestion_id,
+        payload.signal,
+        created,
+    )
+    return {
+        "detail": "Feedback recorded",
+        "suggestion_id": feedback.suggestion_id,
+        "signal": feedback.signal,
+    }
+
+
 @router.post("/ai/chat", response_model=schemas.ChatResponse)
 def chat_with_ai(
     payload: schemas.ChatRequest,

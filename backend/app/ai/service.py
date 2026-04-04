@@ -112,6 +112,7 @@ class AiService:
         recent_fingerprints = set(history.get_recent_fingerprints(db, user.id))
         item_map = {item.id: item for item in all_items}
         effective_preferred_seasons = crud.resolve_preferred_seasons(context.preferred_seasons)
+        feedback_signals = crud.get_recommendation_feedback_signals_for_user(db, user.id)
 
         deterministic_options = deterministic.recommend_many(
             items=all_items,
@@ -140,10 +141,11 @@ class AiService:
                 occasion=context.occasion,
                 exclude=context.exclude,
                 style_preference=context.style_preference,
-                preferred_seasons=context.preferred_seasons,
+                preferred_seasons=effective_preferred_seasons,
                 recent_fingerprints=recent_fingerprints,
                 max_options=1,
             )
+        deterministic_options = crud.rank_candidates_with_feedback(deterministic_options, feedback_signals)
         deterministic_pick = deterministic_options[0]
 
         deterministic_items = [item_map[item_id] for item_id in deterministic_pick.item_ids if item_id in item_map]
@@ -245,6 +247,28 @@ class AiService:
                     outfit_options=deterministic_options,
                 )
 
+            ai_feedback_signal = feedback_signals.get(ai_fingerprint)
+            if ai_feedback_signal in {"dislike", "reject"}:
+                logger.info(
+                    "request_id=%s ai_recommendation_feedback_filter fingerprint=%s signal=%s",
+                    context.request_id,
+                    ai_fingerprint,
+                    ai_feedback_signal,
+                )
+                history.save_fingerprint(db, user.id, deterministic_pick.fingerprint)
+                return RecommendationResult(
+                    items=deterministic_items,
+                    explanation=deterministic_pick.explanation,
+                    outfit_score=deterministic_pick.score,
+                    source="fallback",
+                    fallback_used=True,
+                    warning="feedback_filter_applied",
+                    weather_category=deterministic_pick.weather_category,
+                    item_explanations=deterministic_pick.item_explanations,
+                    suggestion_id=deterministic_pick.fingerprint,
+                    outfit_options=deterministic_options,
+                )
+
             history.save_fingerprint(db, user.id, ai_fingerprint)
             item_explanations = {
                 item_id: explanation
@@ -271,7 +295,7 @@ class AiService:
             return RecommendationResult(
                 items=ai_items,
                 explanation=parsed.explanation,
-                outfit_score=ai_candidate.score,
+                outfit_score=ai_candidate.score + crud.recommendation_feedback_delta(ai_feedback_signal),
                 source="ai",
                 fallback_used=False,
                 warning=None,

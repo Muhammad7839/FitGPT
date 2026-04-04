@@ -3,7 +3,7 @@
 import json
 from typing import Optional
 
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.database.database import Base
@@ -233,3 +233,20 @@ class FeedbackPromptEvent(Base):
     event_type = Column(String, nullable=False, index=True)
     suggestion_id = Column(String, nullable=True, index=True)
     event_timestamp = Column(Integer, nullable=False, index=True)
+
+
+class RecommendationFeedback(Base):
+    """Stores explicit recommendation feedback signals per user and suggestion fingerprint."""
+
+    __tablename__ = "recommendation_feedback"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "suggestion_id", name="uq_recommendation_feedback_owner_suggestion"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    suggestion_id = Column(String, nullable=False, index=True)
+    signal = Column(String, nullable=False)
+    item_ids_csv = Column(String, nullable=True)
+    created_at_timestamp = Column(Integer, nullable=False)
+    updated_at_timestamp = Column(Integer, nullable=False)

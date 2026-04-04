@@ -487,6 +487,28 @@ class WardrobeViewModel(
         Log.i(weatherLogTag, "permission needed for weather")
     }
 
+    fun submitRecommendationFeedback(signal: String) {
+        val normalizedSignal = signal.trim().lowercase()
+        if (normalizedSignal !in setOf("like", "dislike", "reject")) return
+        val suggestionId = _recommendationMeta.value.suggestionId ?: return
+        val itemIds = (recommendationState.value as? UiState.Success<List<ClothingItem>>)
+            ?.data
+            ?.map { it.id }
+            ?.takeIf { it.isNotEmpty() }
+
+        viewModelScope.launch {
+            try {
+                repository.submitRecommendationFeedback(
+                    suggestionId = suggestionId,
+                    signal = normalizedSignal,
+                    itemIds = itemIds
+                )
+            } catch (exception: Exception) {
+                Log.w(recommendationLogTag, "failed to submit recommendation feedback", exception)
+            }
+        }
+    }
+
     fun selectRecommendationOption(index: Int) {
         val options = _recommendationOptionsState.value
         if (index !in options.indices) return

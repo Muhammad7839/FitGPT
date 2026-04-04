@@ -84,6 +84,12 @@ interface WardrobeRepository {
     ): AiRecommendationResult
     suspend fun rejectRecommendation(itemIds: List<Int>, suggestionId: String? = null)
     suspend fun recordPromptFeedbackEvent(eventType: String, suggestionId: String? = null)
+
+    suspend fun submitRecommendationFeedback(
+        suggestionId: String,
+        signal: String,
+        itemIds: List<Int>? = null
+    )
     suspend fun getCurrentWeather(city: String? = null, lat: Double? = null, lon: Double? = null): WeatherSnapshot
     suspend fun markOutfitAsWorn(items: List<ClothingItem>, wornAtTimestamp: Long)
 

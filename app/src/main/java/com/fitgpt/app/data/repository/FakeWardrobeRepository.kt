@@ -331,6 +331,14 @@ class FakeWardrobeRepository : WardrobeRepository {
         // No-op in fake repository.
     }
 
+    override suspend fun submitRecommendationFeedback(
+        suggestionId: String,
+        signal: String,
+        itemIds: List<Int>?
+    ) {
+        // No-op in fake repository; recommendation feedback behavior is verified through backend tests.
+    }
+
     override suspend fun getRecommendationOptions(
         manualTemp: Int?,
         timeContext: String?,

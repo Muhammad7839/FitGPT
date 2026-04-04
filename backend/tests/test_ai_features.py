@@ -29,6 +29,11 @@ def _create_item(client, auth, *, category: str, color: str, name: str, clothing
     return response.json()
 
 
+def _outfit_signature(outfit: dict) -> str:
+    item_ids = sorted(entry["id"] for entry in outfit["items"])
+    return ",".join(str(item_id) for item_id in item_ids)
+
+
 def test_ai_chat_allows_guest_context(client, monkeypatch):
     class FakeProvider:
         is_available = False
@@ -345,3 +350,76 @@ def test_ai_recommendations_repeat_prevention_avoids_same_fingerprint(client, mo
     assert first_body["source"] == "fallback"
     assert second_body["source"] == "fallback"
     assert first_body["suggestion_id"] != second_body["suggestion_id"]
+
+
+def test_recommendation_feedback_endpoint_upserts_signal(client):
+    token = register_and_login(client, "feedback-upsert@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    first = client.post(
+        "/recommendations/feedback",
+        headers=auth,
+        json={"suggestion_id": "1,2,3", "signal": "like"},
+    )
+    assert first.status_code == 200
+    assert first.json()["signal"] == "like"
+
+    second = client.post(
+        "/recommendations/feedback",
+        headers=auth,
+        json={"suggestion_id": "1,2,3", "signal": "reject"},
+    )
+    assert second.status_code == 200
+    second_body = second.json()
+    assert second_body["signal"] == "reject"
+    assert second_body["suggestion_id"] == "1,2,3"
+
+
+def test_recommendation_feedback_influences_option_ranking(client, monkeypatch):
+    token = register_and_login(client, "feedback-ranking@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
+    _create_item(client, auth, category="Top", color="White", name="White Tee", clothing_type="tee")
+    _create_item(client, auth, category="Bottom", color="Blue", name="Blue Jeans", clothing_type="jeans")
+    _create_item(client, auth, category="Shoes", color="White", name="White Sneakers", clothing_type="sneakers")
+    _create_item(client, auth, category="Shoes", color="Black", name="Black Sneakers", clothing_type="sneakers")
+
+    class FakeProvider:
+        is_available = False
+
+    monkeypatch.setattr("app.routes.ai_service.provider_client", FakeProvider())
+
+    initial = client.get(
+        "/recommendations/options",
+        headers=auth,
+        params={"weather_category": "mild", "limit": 3},
+    )
+    assert initial.status_code == 200
+    initial_outfits = initial.json()["outfits"]
+    assert len(initial_outfits) >= 2
+    initial_signature = _outfit_signature(initial_outfits[0])
+    initial_item_ids = [entry["id"] for entry in initial_outfits[0]["items"]]
+
+    feedback = client.post(
+        "/recommendations/feedback",
+        headers=auth,
+        json={
+            "suggestion_id": initial_signature,
+            "signal": "reject",
+            "item_ids": initial_item_ids,
+        },
+    )
+    assert feedback.status_code == 200
+    assert feedback.json()["signal"] == "reject"
+
+    reranked = client.get(
+        "/recommendations/options",
+        headers=auth,
+        params={"weather_category": "mild", "limit": 3},
+    )
+    assert reranked.status_code == 200
+    reranked_outfits = reranked.json()["outfits"]
+    assert len(reranked_outfits) >= 1
+    reranked_signature = _outfit_signature(reranked_outfits[0])
+    assert reranked_signature != initial_signature
