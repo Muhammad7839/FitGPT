@@ -83,6 +83,46 @@ def _serialize_planned_outfits(planned_outfits: list[models.PlannedOutfit]) -> l
     ]
 
 
+def _build_tag_suggestion_payload(
+    *,
+    item: Optional[models.ClothingItem] = None,
+    suggestions: Optional[dict] = None,
+) -> dict:
+    source = suggestions or {}
+    if item is not None:
+        source = {
+            "generated": source.get("generated")
+            if "generated" in source
+            else any(
+                [
+                    bool(item.suggested_clothing_type),
+                    bool(item.suggested_fit_tag),
+                    bool(item.suggested_colors),
+                    bool(item.suggested_season_tags),
+                    bool(item.suggested_style_tags),
+                    bool(item.suggested_occasion_tags),
+                ]
+            ),
+            "suggested_clothing_type": source.get("suggested_clothing_type", item.suggested_clothing_type),
+            "suggested_fit_tag": source.get("suggested_fit_tag", item.suggested_fit_tag),
+            "suggested_colors": source.get("suggested_colors", item.suggested_colors),
+            "suggested_season_tags": source.get("suggested_season_tags", item.suggested_season_tags),
+            "suggested_style_tags": source.get("suggested_style_tags", item.suggested_style_tags),
+            "suggested_occasion_tags": source.get("suggested_occasion_tags", item.suggested_occasion_tags),
+        }
+
+    return {
+        "item_id": item.id if item else source.get("item_id"),
+        "generated": bool(source.get("generated")),
+        "suggested_clothing_type": source.get("suggested_clothing_type"),
+        "suggested_fit_tag": source.get("suggested_fit_tag"),
+        "suggested_colors": source.get("suggested_colors", []),
+        "suggested_season_tags": source.get("suggested_season_tags", []),
+        "suggested_style_tags": source.get("suggested_style_tags", []),
+        "suggested_occasion_tags": source.get("suggested_occasion_tags", []),
+    }
+
+
 def _legacy_signature_from_item_ids(item_ids: list[int]) -> str:
     normalized = sorted(str(item_id).strip() for item_id in item_ids if str(item_id).strip())
     return "|".join(normalized)
@@ -721,6 +761,78 @@ def get_favorite_items(
     current_user: models.User = Depends(get_current_user),
 ):
     return crud.get_favorite_items_for_user(db, current_user.id)
+
+
+@router.post("/wardrobe/tags/suggest", response_model=schemas.TagSuggestionsResponse)
+def suggest_wardrobe_tags(
+    payload: schemas.ClothingItemCreate,
+    current_user: models.User = Depends(get_current_user),
+):
+    _ = current_user
+    suggestions = crud.build_tag_suggestions(
+        name=payload.name,
+        category=payload.category,
+        clothing_type=payload.clothing_type,
+        fit_tag=payload.fit_tag,
+        color=payload.color,
+        colors=payload.colors,
+        season=payload.season,
+    )
+    return _build_tag_suggestion_payload(suggestions=suggestions)
+
+
+@router.get("/wardrobe/items/{item_id}/tag-suggestions", response_model=schemas.TagSuggestionsResponse)
+def get_wardrobe_item_tag_suggestions(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    db_item = crud.get_clothing_item_by_id(db, item_id)
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if db_item.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this item")
+
+    if not any(
+        [
+            db_item.suggested_clothing_type,
+            db_item.suggested_fit_tag,
+            db_item.suggested_colors,
+            db_item.suggested_season_tags,
+            db_item.suggested_style_tags,
+            db_item.suggested_occasion_tags,
+        ]
+    ):
+        suggestions = crud.regenerate_item_tag_suggestions(db, db_item)
+        return _build_tag_suggestion_payload(item=db_item, suggestions=suggestions)
+    return _build_tag_suggestion_payload(item=db_item)
+
+
+@router.post("/wardrobe/items/{item_id}/tag-suggestions/apply", response_model=schemas.ClothingItemResponse)
+def apply_wardrobe_item_tag_suggestions(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    db_item = crud.get_clothing_item_by_id(db, item_id)
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if db_item.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this item")
+    if not any(
+        [
+            db_item.suggested_clothing_type,
+            db_item.suggested_fit_tag,
+            db_item.suggested_colors,
+            db_item.suggested_season_tags,
+            db_item.suggested_style_tags,
+            db_item.suggested_occasion_tags,
+        ]
+    ):
+        crud.regenerate_item_tag_suggestions(db, db_item)
+    updated = crud.apply_suggested_tags(db, db_item)
+    logger.info("Applied suggested tags user_id=%s item_id=%s", current_user.id, item_id)
+    return updated
 
 
 @router.post("/wardrobe/items/image", response_model=schemas.ImageUploadResponse)

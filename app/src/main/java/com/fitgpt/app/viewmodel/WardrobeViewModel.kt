@@ -11,6 +11,7 @@ import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
+import com.fitgpt.app.data.model.TagSuggestion
 import com.fitgpt.app.data.model.UploadResult
 import com.fitgpt.app.data.model.WeatherSnapshot
 import com.fitgpt.app.data.repository.UploadImagePayload
@@ -123,6 +124,8 @@ class WardrobeViewModel(
 
     private val _bulkItemSaveState = MutableStateFlow<UiState<Int?>>(UiState.Success(null))
     val bulkItemSaveState: StateFlow<UiState<Int?>> = _bulkItemSaveState
+    private val _tagSuggestionState = MutableStateFlow<UiState<TagSuggestion?>>(UiState.Success(null))
+    val tagSuggestionState: StateFlow<UiState<TagSuggestion?>> = _tagSuggestionState
 
     private val _weatherState = MutableStateFlow<UiState<WeatherSnapshot?>>(UiState.Success(null))
     val weatherState: StateFlow<UiState<WeatherSnapshot?>> = _weatherState
@@ -226,6 +229,22 @@ class WardrobeViewModel(
 
     fun clearBulkItemSaveState() {
         _bulkItemSaveState.value = UiState.Success(null)
+    }
+
+    fun suggestTagsForDraft(item: ClothingItem) {
+        _tagSuggestionState.value = UiState.Loading
+        viewModelScope.launch {
+            try {
+                val suggestion = repository.suggestTags(item)
+                _tagSuggestionState.value = UiState.Success(suggestion)
+            } catch (_: Exception) {
+                _tagSuggestionState.value = UiState.Error("Failed to suggest tags")
+            }
+        }
+    }
+
+    fun clearTagSuggestionState() {
+        _tagSuggestionState.value = UiState.Success(null)
     }
 
     fun uploadImage(

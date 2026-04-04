@@ -213,6 +213,12 @@ class ClothingItemResponse(BaseModel):
     season_tags: list[str] = Field(default_factory=list)
     style_tags: list[str] = Field(default_factory=list)
     occasion_tags: list[str] = Field(default_factory=list)
+    suggested_clothing_type: Optional[str] = None
+    suggested_fit_tag: Optional[str] = None
+    suggested_colors: list[str] = Field(default_factory=list)
+    suggested_season_tags: list[str] = Field(default_factory=list)
+    suggested_style_tags: list[str] = Field(default_factory=list)
+    suggested_occasion_tags: list[str] = Field(default_factory=list)
     accessory_type: Optional[str] = None
     comfort_level: int
     image_url: Optional[str] = None
@@ -331,6 +337,17 @@ class ImageBatchUploadEntry(BaseModel):
 
 class ImageBatchUploadResponse(BaseModel):
     results: list[ImageBatchUploadEntry]
+
+
+class TagSuggestionsResponse(BaseModel):
+    item_id: Optional[int] = None
+    generated: bool
+    suggested_clothing_type: Optional[str] = None
+    suggested_fit_tag: Optional[str] = None
+    suggested_colors: list[str] = Field(default_factory=list)
+    suggested_season_tags: list[str] = Field(default_factory=list)
+    suggested_style_tags: list[str] = Field(default_factory=list)
+    suggested_occasion_tags: list[str] = Field(default_factory=list)
 
 
 class RecommendationResponse(BaseModel):

@@ -55,6 +55,12 @@ class ClothingItem(Base):
     season_tags_json = Column(String, nullable=False, default="[]")
     style_tags_json = Column(String, nullable=False, default="[]")
     occasion_tags_json = Column(String, nullable=False, default="[]")
+    suggested_clothing_type = Column(String, nullable=True)
+    suggested_fit_tag = Column(String, nullable=True)
+    suggested_colors_json = Column(String, nullable=False, default="[]")
+    suggested_season_tags_json = Column(String, nullable=False, default="[]")
+    suggested_style_tags_json = Column(String, nullable=False, default="[]")
+    suggested_occasion_tags_json = Column(String, nullable=False, default="[]")
     accessory_type = Column(String, nullable=True)
     comfort_level = Column(Integer, nullable=False, default=3)
     image_url = Column(String, nullable=True)
@@ -130,6 +136,38 @@ class ClothingItem(Base):
     @occasion_tags.setter
     def occasion_tags(self, values: list[str]) -> None:
         self.occasion_tags_json = self._encode_json_list(values)
+
+    @property
+    def suggested_colors(self) -> list[str]:
+        return self._decode_json_list(self.suggested_colors_json)
+
+    @suggested_colors.setter
+    def suggested_colors(self, values: list[str]) -> None:
+        self.suggested_colors_json = self._encode_json_list(values)
+
+    @property
+    def suggested_season_tags(self) -> list[str]:
+        return self._decode_json_list(self.suggested_season_tags_json)
+
+    @suggested_season_tags.setter
+    def suggested_season_tags(self, values: list[str]) -> None:
+        self.suggested_season_tags_json = self._encode_json_list(values)
+
+    @property
+    def suggested_style_tags(self) -> list[str]:
+        return self._decode_json_list(self.suggested_style_tags_json)
+
+    @suggested_style_tags.setter
+    def suggested_style_tags(self, values: list[str]) -> None:
+        self.suggested_style_tags_json = self._encode_json_list(values)
+
+    @property
+    def suggested_occasion_tags(self) -> list[str]:
+        return self._decode_json_list(self.suggested_occasion_tags_json)
+
+    @suggested_occasion_tags.setter
+    def suggested_occasion_tags(self, values: list[str]) -> None:
+        self.suggested_occasion_tags_json = self._encode_json_list(values)
 
 
 class OutfitHistory(Base):
