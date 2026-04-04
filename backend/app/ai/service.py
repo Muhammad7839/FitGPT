@@ -111,6 +111,7 @@ class AiService:
         all_items = crud.get_clothing_items_for_user(db, user.id, include_archived=False)
         recent_fingerprints = set(history.get_recent_fingerprints(db, user.id))
         item_map = {item.id: item for item in all_items}
+        effective_preferred_seasons = crud.resolve_preferred_seasons(context.preferred_seasons)
 
         deterministic_options = deterministic.recommend_many(
             items=all_items,
@@ -120,7 +121,7 @@ class AiService:
             occasion=context.occasion,
             exclude=context.exclude,
             style_preference=context.style_preference,
-            preferred_seasons=context.preferred_seasons,
+            preferred_seasons=effective_preferred_seasons,
             recent_fingerprints=recent_fingerprints,
             max_options=5,
         )
@@ -182,7 +183,7 @@ class AiService:
             occasion=context.occasion,
             exclude=context.exclude,
             style_preference=context.style_preference,
-            preferred_seasons=context.preferred_seasons,
+            preferred_seasons=effective_preferred_seasons,
         )
         provider_messages = [
             ProviderMessage(
@@ -256,7 +257,7 @@ class AiService:
                 weather_category=deterministic_pick.weather_category,
                 occasion=context.occasion,
                 style_preference=context.style_preference,
-                preferred_seasons=context.preferred_seasons,
+                preferred_seasons=effective_preferred_seasons,
             )
             combined_options: list[deterministic.RecommendationCandidate] = [ai_candidate]
             seen = {ai_candidate.fingerprint}
