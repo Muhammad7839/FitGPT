@@ -29,20 +29,47 @@ def _create_item(client, auth, *, category: str, color: str, name: str, clothing
     return response.json()
 
 
-def test_ai_chat_requires_auth(client):
+def test_ai_chat_allows_guest_context(client, monkeypatch):
+    class FakeProvider:
+        is_available = False
+
+    monkeypatch.setattr("app.routes.ai_service.provider_client", FakeProvider())
     response = client.post(
         "/ai/chat",
         json={"messages": [{"role": "user", "content": "help me pick an outfit"}]},
     )
-    assert response.status_code == 401
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "fallback"
+    assert body["fallback_used"] is True
 
 
-def test_chat_alias_requires_auth(client):
+def test_chat_alias_allows_guest_context(client, monkeypatch):
+    class FakeProvider:
+        is_available = False
+
+    monkeypatch.setattr("app.routes.ai_service.provider_client", FakeProvider())
     response = client.post(
         "/chat",
         json={"messages": [{"role": "user", "content": "help me pick an outfit"}]},
     )
-    assert response.status_code == 401
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "fallback"
+    assert body["fallback_used"] is True
+
+
+def test_ai_chat_rejects_empty_messages(client):
+    response = client.post("/ai/chat", json={"messages": []})
+    assert response.status_code == 422
+
+
+def test_ai_chat_rejects_blank_content(client):
+    response = client.post(
+        "/ai/chat",
+        json={"messages": [{"role": "user", "content": "   "}]},
+    )
+    assert response.status_code == 422
 
 
 def test_ai_chat_success(client, monkeypatch):
