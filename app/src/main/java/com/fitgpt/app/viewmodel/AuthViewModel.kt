@@ -11,6 +11,7 @@ import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -47,7 +48,8 @@ class AuthViewModel(
     val lastResetToken: StateFlow<String?> = _lastResetToken
 
     fun login(email: String, password: String) {
-        if (email.isBlank() || password.isBlank()) {
+        val normalizedEmail = normalizeEmail(email)
+        if (normalizedEmail.isBlank() || password.isBlank()) {
             _loginState.value = AuthState.Error("Email and password are required")
             return
         }
@@ -55,7 +57,7 @@ class AuthViewModel(
         _loginState.value = AuthState.Loading
         viewModelScope.launch {
             try {
-                val token = repository.login(email = email, password = password)
+                val token = repository.login(email = normalizedEmail, password = password)
                 tokenStore.saveToken(token)
                 _loginState.value = AuthState.Success
             } catch (e: HttpException) {
@@ -92,7 +94,8 @@ class AuthViewModel(
     }
 
     fun register(email: String, password: String, confirmPassword: String) {
-        if (email.isBlank() || password.isBlank()) {
+        val normalizedEmail = normalizeEmail(email)
+        if (normalizedEmail.isBlank() || password.isBlank()) {
             _registerState.value = AuthState.Error("Email and password are required")
             return
         }
@@ -108,8 +111,8 @@ class AuthViewModel(
         _registerState.value = AuthState.Loading
         viewModelScope.launch {
             try {
-                repository.register(email = email, password = password)
-                val token = repository.login(email = email, password = password)
+                repository.register(email = normalizedEmail, password = password)
+                val token = repository.login(email = normalizedEmail, password = password)
                 tokenStore.saveToken(token)
                 _registerState.value = AuthState.Success
             } catch (e: HttpException) {
@@ -125,7 +128,8 @@ class AuthViewModel(
     }
 
     fun forgotPassword(email: String) {
-        if (email.isBlank()) {
+        val normalizedEmail = normalizeEmail(email)
+        if (normalizedEmail.isBlank()) {
             _forgotPasswordState.value = AuthState.Error("Email is required")
             return
         }
@@ -133,7 +137,7 @@ class AuthViewModel(
         _forgotPasswordState.value = AuthState.Loading
         viewModelScope.launch {
             try {
-                val (_, resetToken) = repository.forgotPassword(email)
+                val (_, resetToken) = repository.forgotPassword(normalizedEmail)
                 _lastResetToken.value = resetToken
                 _forgotPasswordState.value = AuthState.Success
             } catch (e: HttpException) {
@@ -179,5 +183,9 @@ class AuthViewModel(
             is IOException -> "Network I/O error during $action"
             else -> "Unexpected network error during $action"
         }
+    }
+
+    private fun normalizeEmail(email: String): String {
+        return email.trim().lowercase(Locale.ROOT)
     }
 }

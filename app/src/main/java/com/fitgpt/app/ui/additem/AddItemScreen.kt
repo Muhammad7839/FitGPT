@@ -42,6 +42,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -65,6 +66,9 @@ import com.fitgpt.app.viewmodel.ImageUploadTarget
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val UPLOAD_LOG_TAG = "FitGPTUpload"
 private const val AUTO_FILL_UNKNOWN = "Unknown"
@@ -122,6 +126,7 @@ fun AddItemScreen(
     var needsCategoryConfirmation by remember { mutableStateOf(false) }
     var categorySuggestionNotice by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val uiScope = rememberCoroutineScope()
 
     val context = LocalContext.current
     val imageUploadState by viewModel.addItemImageUploadState.collectAsState()
@@ -321,45 +326,31 @@ fun AddItemScreen(
             return@rememberLauncherForActivityResult
         }
 
-        val hints = mutableMapOf<String, ImageAutoFillHint>()
         selectedPhotoPayload = null
-        val payloads = uris.mapIndexedNotNull { index, uri ->
-            val bytes = readBytes(context, uri) ?: return@mapIndexedNotNull null
-            if (!isImagePayloadAllowed(bytes.size)) {
-                Log.w(UPLOAD_LOG_TAG, "batch image rejected size=${bytes.size}")
-                return@mapIndexedNotNull null
+        batchAutoCreateMessage = "Preparing selected photos..."
+        uiScope.launch {
+            val prepared = withContext(Dispatchers.IO) {
+                prepareBatchUploadSelection(context, uris)
             }
-            val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-            val extension = when (mimeType) {
-                "image/png" -> ".png"
-                "image/webp" -> ".webp"
-                else -> ".jpg"
+            batchAutoFillHints = prepared.hints
+            Log.i(
+                UPLOAD_LOG_TAG,
+                "batch upload selected count=${prepared.payloads.size} oversized=${prepared.oversizedCount} unreadable=${prepared.unreadableCount}"
+            )
+            if (prepared.payloads.isEmpty()) {
+                photoFlowState = PhotoFlowState.ERROR
+                batchAutoCreateMessage = when {
+                    prepared.oversizedCount > 0 && prepared.unreadableCount == 0 ->
+                        "All selected images were too large (max ${MAX_LOCAL_IMAGE_BYTES / (1024 * 1024)}MB)."
+                    prepared.unreadableCount > 0 && prepared.oversizedCount == 0 ->
+                        "Could not read the selected images."
+                    else -> "No valid images were selected."
+                }
+                return@launch
             }
-            val fileName = "batch_${System.currentTimeMillis()}_${index}$extension"
-            val sourceName = resolveDisplayName(context, uri) ?: fileName
-            val inferredFromName = inferFromFileName(sourceName)
-            hints[fileName] = ImageAutoFillHint(
-                category = inferredFromName.category,
-                clothingType = inferredFromName.clothingType,
-                color = inferDominantColorName(bytes),
-                fitTag = inferredFromName.fitTag,
-                season = inferredFromName.season,
-                comfortLevel = inferredFromName.comfortLevel
-            )
-            UploadImagePayload(
-                bytes = bytes,
-                fileName = fileName,
-                mimeType = mimeType
-            )
+            batchAutoCreateMessage = buildBatchPreparationMessage(prepared)
+            viewModel.uploadImagesBatch(prepared.payloads)
         }
-        batchAutoFillHints = hints
-        Log.i(UPLOAD_LOG_TAG, "batch upload selected count=${payloads.size}")
-        if (payloads.isEmpty()) {
-            photoFlowState = PhotoFlowState.ERROR
-            batchAutoCreateMessage = "No valid images were selected."
-            return@rememberLauncherForActivityResult
-        }
-        viewModel.uploadImagesBatch(payloads)
     }
 
     LaunchedEffect(imageUploadState) {
@@ -929,6 +920,80 @@ fun AddItemScreen(
 
 private fun readBytes(context: Context, uri: Uri): ByteArray? {
     return context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+}
+
+private data class PreparedBatchUploadSelection(
+    val payloads: List<UploadImagePayload>,
+    val hints: Map<String, ImageAutoFillHint>,
+    val oversizedCount: Int,
+    val unreadableCount: Int
+)
+
+private fun prepareBatchUploadSelection(
+    context: Context,
+    uris: List<Uri>
+): PreparedBatchUploadSelection {
+    val hints = mutableMapOf<String, ImageAutoFillHint>()
+    val payloads = mutableListOf<UploadImagePayload>()
+    var oversizedCount = 0
+    var unreadableCount = 0
+
+    uris.forEachIndexed { index, uri ->
+        val bytes = readBytes(context, uri)
+        if (bytes == null) {
+            unreadableCount += 1
+            return@forEachIndexed
+        }
+        if (!isImagePayloadAllowed(bytes.size)) {
+            oversizedCount += 1
+            Log.w(UPLOAD_LOG_TAG, "batch image rejected size=${bytes.size}")
+            return@forEachIndexed
+        }
+        val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+        val extension = when (mimeType) {
+            "image/png" -> ".png"
+            "image/webp" -> ".webp"
+            else -> ".jpg"
+        }
+        val fileName = "batch_${System.currentTimeMillis()}_${index}$extension"
+        val sourceName = resolveDisplayName(context, uri) ?: fileName
+        val inferredFromName = inferFromFileName(sourceName)
+        hints[fileName] = ImageAutoFillHint(
+            category = inferredFromName.category,
+            clothingType = inferredFromName.clothingType,
+            color = inferDominantColorName(bytes),
+            fitTag = inferredFromName.fitTag,
+            season = inferredFromName.season,
+            comfortLevel = inferredFromName.comfortLevel
+        )
+        payloads += UploadImagePayload(
+            bytes = bytes,
+            fileName = fileName,
+            mimeType = mimeType
+        )
+    }
+
+    return PreparedBatchUploadSelection(
+        payloads = payloads,
+        hints = hints,
+        oversizedCount = oversizedCount,
+        unreadableCount = unreadableCount
+    )
+}
+
+private fun buildBatchPreparationMessage(prepared: PreparedBatchUploadSelection): String? {
+    val notes = mutableListOf<String>()
+    if (prepared.oversizedCount > 0) {
+        notes += "Skipped ${prepared.oversizedCount} oversized image(s)."
+    }
+    if (prepared.unreadableCount > 0) {
+        notes += "Skipped ${prepared.unreadableCount} unreadable image(s)."
+    }
+    if (notes.isEmpty()) {
+        return null
+    }
+    notes += "Uploading ${prepared.payloads.size} image(s)..."
+    return notes.joinToString(" ")
 }
 
 private fun resolveDisplayName(context: Context, uri: Uri): String? {

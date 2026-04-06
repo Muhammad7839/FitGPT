@@ -72,7 +72,9 @@ class ProfileViewModel(
                 _avatarUploadState.value = UiState.Success(avatarUrl)
                 refresh()
             } catch (e: Exception) {
-                _avatarUploadState.value = UiState.Error("Failed to upload avatar")
+                _avatarUploadState.value = UiState.Error(
+                    resolveUploadError(e, "Failed to upload avatar")
+                )
             }
         }
     }

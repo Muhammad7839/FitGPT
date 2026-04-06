@@ -4,7 +4,7 @@ from conftest import register_and_login
 from app.weather import ForecastSnapshot, WeatherLookupError
 
 
-def _item_payload(name: str, category: str) -> dict:
+def _item_payload(name: str, category: str, *, is_available: bool = True) -> dict:
     return {
         "name": name,
         "category": category,
@@ -15,7 +15,7 @@ def _item_payload(name: str, category: str) -> dict:
         "comfort_level": 4,
         "image_url": None,
         "brand": "FitGPT",
-        "is_available": True,
+        "is_available": is_available,
         "is_favorite": False,
         "is_archived": False,
         "last_worn_timestamp": None,
@@ -122,3 +122,45 @@ def test_packing_list_handles_forecast_failure_and_sparse_data(client, monkeypat
     body = response.json()
     assert body["insufficient_data"] is True
     assert body["weather_summary"] == "Forecast unavailable"
+
+
+def test_packing_list_skips_unavailable_items(client, monkeypatch):
+    token = register_and_login(client, "packing-availability@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    for name, category, is_available in [
+        ("Top Ready", "Top", True),
+        ("Bottom Ready", "Bottom", True),
+        ("Shoes Ready", "Shoes", True),
+        ("Top In Laundry", "Top", False),
+    ]:
+        response = client.post(
+            "/wardrobe/items",
+            json=_item_payload(name, category, is_available=is_available),
+            headers=auth,
+        )
+        assert response.status_code == 200
+
+    monkeypatch.setattr(
+        "app.routes.fetch_forecast_weather",
+        lambda **_: [
+            ForecastSnapshot(
+                date="2026-07-01",
+                temperature_f=84,
+                weather_category="hot",
+                condition="Clear",
+                description="clear sky",
+            )
+        ],
+    )
+
+    response = client.post(
+        "/plans/packing-list",
+        headers=auth,
+        json={"destination_city": "Miami", "start_date": "2026-07-01", "trip_days": 1},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    top_item = next(item for item in body["items"] if item["category"] == "top")
+    assert top_item["selected_item_names"] == ["Top Ready"]
+    assert top_item["missing_quantity"] == 0

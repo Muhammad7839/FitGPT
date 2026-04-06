@@ -9,7 +9,7 @@ from typing import Optional
 from urllib.parse import quote_plus
 
 from passlib.context import CryptContext
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -57,10 +57,14 @@ def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
 def create_user(db: Session, user: schemas.UserCreate):
     hashed_password = hash_password(user.password)
     db_user = models.User(
-        email=user.email,
+        email=normalize_email(user.email),
         hashed_password=hashed_password
     )
     _apply_default_preferences(db_user)
@@ -71,7 +75,8 @@ def create_user(db: Session, user: schemas.UserCreate):
 
 
 def get_or_create_google_user(db: Session, email: str, full_name: Optional[str]):
-    existing_user = get_user_by_email(db, email)
+    normalized_email = normalize_email(email)
+    existing_user = get_user_by_email(db, normalized_email)
     if existing_user:
         if full_name and not existing_user.full_name:
             existing_user.full_name = full_name
@@ -81,7 +86,7 @@ def get_or_create_google_user(db: Session, email: str, full_name: Optional[str])
 
     generated_password = uuid.uuid4().hex
     db_user = models.User(
-        email=email,
+        email=normalized_email,
         full_name=full_name,
         hashed_password=hash_password(generated_password),
     )
@@ -97,8 +102,11 @@ def get_or_create_google_user(db: Session, email: str, full_name: Optional[str])
 
 
 def get_user_by_email(db: Session, email: str):
+    normalized_email = normalize_email(email)
     return db.query(models.User).filter(
-        models.User.email == email
+        func.lower(models.User.email) == normalized_email
+    ).order_by(
+        models.User.id.asc()
     ).first()
 
 
@@ -653,6 +661,90 @@ def _build_similarity_key_for_items(items: list[models.ClothingItem]) -> str:
         clothing_type = (item.clothing_type or "").strip().lower()
         components.append(f"{category}:{clothing_type}")
     return "|".join(sorted(components))
+
+
+def _jaccard_similarity(left: set[str], right: set[str]) -> float:
+    if not left and not right:
+        return 0.0
+    intersection = len(left.intersection(right))
+    union = len(left.union(right))
+    if union == 0:
+        return 0.0
+    return intersection / union
+
+
+def _candidate_similarity(
+    left: deterministic.RecommendationCandidate,
+    right: deterministic.RecommendationCandidate,
+    item_map: dict[int, models.ClothingItem],
+) -> float:
+    left_ids = {str(item_id) for item_id in left.item_ids}
+    right_ids = {str(item_id) for item_id in right.item_ids}
+    item_overlap = _jaccard_similarity(left_ids, right_ids)
+
+    left_items = [item_map[item_id] for item_id in left.item_ids if item_id in item_map]
+    right_items = [item_map[item_id] for item_id in right.item_ids if item_id in item_map]
+    left_structure = {
+        component
+        for component in _build_similarity_key_for_items(left_items).split("|")
+        if component
+    }
+    right_structure = {
+        component
+        for component in _build_similarity_key_for_items(right_items).split("|")
+        if component
+    }
+    structure_overlap = _jaccard_similarity(left_structure, right_structure)
+    return max(item_overlap, structure_overlap)
+
+
+def _candidate_core_item_ids(
+    candidate: deterministic.RecommendationCandidate,
+    item_map: dict[int, models.ClothingItem],
+) -> set[int]:
+    core_ids: set[int] = set()
+    for item_id in candidate.item_ids:
+        item = item_map.get(item_id)
+        if item is None:
+            continue
+        if _normalize_category(item.category) == "accessory" or (item.accessory_type or "").strip():
+            continue
+        core_ids.add(item_id)
+    return core_ids
+
+
+def _select_diverse_candidates(
+    candidates: list[deterministic.RecommendationCandidate],
+    *,
+    item_map: dict[int, models.ClothingItem],
+    limit: int,
+) -> list[deterministic.RecommendationCandidate]:
+    if len(candidates) <= 1:
+        return candidates[:limit]
+
+    selected: list[deterministic.RecommendationCandidate] = []
+    used_core_ids: set[int] = set()
+    remaining = list(candidates)
+    while remaining and len(selected) < limit:
+        if not selected:
+            first = remaining.pop(0)
+            selected.append(first)
+            used_core_ids.update(_candidate_core_item_ids(first, item_map))
+            continue
+
+        ranked_remaining = sorted(
+            enumerate(remaining),
+            key=lambda pair: (
+                len(_candidate_core_item_ids(pair[1], item_map) - used_core_ids),
+                -max(_candidate_similarity(pair[1], chosen, item_map) for chosen in selected),
+                pair[1].score,
+            ),
+            reverse=True,
+        )
+        next_index, next_candidate = ranked_remaining[0]
+        selected.append(remaining.pop(next_index))
+        used_core_ids.update(_candidate_core_item_ids(next_candidate, item_map))
+    return selected
 
 
 def record_rejected_outfit(
@@ -1404,7 +1496,7 @@ def get_recommendation_options_for_user(
         style_preference=user.lifestyle,
         preferred_seasons=effective_preferred_seasons,
         recent_fingerprints=recent_fingerprints,
-        max_options=max(normalized_limit, 3),
+        max_options=max(normalized_limit * 5, 8),
     )
     candidates = filter_rejected_candidates_for_user(
         db=db,
@@ -1425,6 +1517,11 @@ def get_recommendation_options_for_user(
         reverse=True,
     )
     candidates = rank_candidates_with_feedback(candidates, explicit_feedback_signals)
+    candidates = _select_diverse_candidates(
+        candidates,
+        item_map=item_map,
+        limit=normalized_limit,
+    )
 
     options: list[dict] = []
     seen_fingerprints: set[str] = set()
@@ -1657,11 +1754,15 @@ def generate_trip_packing_list(
     forecast_days: list[dict],
 ) -> dict:
     normalized_days = max(1, min(trip_days, 30))
-    wardrobe_items = get_clothing_items_for_user(
-        db=db,
-        user_id=user_id,
-        include_archived=False,
-    )
+    wardrobe_items = [
+        item
+        for item in get_clothing_items_for_user(
+            db=db,
+            user_id=user_id,
+            include_archived=False,
+        )
+        if item.is_available
+    ]
 
     by_category: dict[str, list[models.ClothingItem]] = {
         "top": [],
