@@ -254,7 +254,7 @@ class WardrobeViewModel(
                 refreshWardrobe()
             } catch (exception: Exception) {
                 Log.e(recommendationLogTag, "add item with photo failed", exception)
-                _itemSaveState.value = UiState.Error("Failed to save item")
+                _itemSaveState.value = UiState.Error(resolveUploadError(exception, "Failed to save item"))
             }
         }
     }
@@ -308,8 +308,8 @@ class WardrobeViewModel(
             try {
                 val url = repository.uploadImage(bytes, fileName, mimeType)
                 setImageUploadState(target, UiState.Success(url))
-            } catch (_: Exception) {
-                setImageUploadState(target, UiState.Error("Failed to upload image"))
+            } catch (exception: Exception) {
+                setImageUploadState(target, UiState.Error(resolveUploadError(exception, "Failed to upload image")))
             }
         }
     }
@@ -324,8 +324,10 @@ class WardrobeViewModel(
             try {
                 val result = repository.uploadImagesBatch(payloads)
                 _batchImageUploadState.value = UiState.Success(result)
-            } catch (_: Exception) {
-                _batchImageUploadState.value = UiState.Error("Failed to upload images")
+            } catch (exception: Exception) {
+                _batchImageUploadState.value = UiState.Error(
+                    resolveUploadError(exception, "Failed to upload images")
+                )
             }
         }
     }

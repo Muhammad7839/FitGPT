@@ -188,6 +188,39 @@ def test_recommendations_options_return_ranked_unique_outfits(client):
     assert outfits[0]["outfit_score"] >= outfits[-1]["outfit_score"]
 
 
+def test_recommendation_options_prefer_diverse_core_items_when_variety_exists(client):
+    token = register_and_login(client, "card-diversity@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    _create(client, auth, _item_payload(name="Black Tee", category="Top", clothing_type="t-shirt", color="Black"))
+    _create(client, auth, _item_payload(name="White Oxford", category="Top", clothing_type="shirt", color="White"))
+    _create(client, auth, _item_payload(name="Blue Polo", category="Top", clothing_type="polo", color="Blue"))
+    _create(client, auth, _item_payload(name="Blue Jeans", category="Bottom", clothing_type="jeans", color="Blue"))
+    _create(client, auth, _item_payload(name="Khaki Chino", category="Bottom", clothing_type="chino", color="Khaki"))
+    _create(client, auth, _item_payload(name="Gray Trouser", category="Bottom", clothing_type="pants", color="Gray"))
+    _create(client, auth, _item_payload(name="White Sneaker", category="Shoes", clothing_type="sneakers", color="White"))
+    _create(client, auth, _item_payload(name="Brown Loafer", category="Shoes", clothing_type="loafer", color="Brown"))
+    _create(client, auth, _item_payload(name="Black Boot", category="Shoes", clothing_type="boots", color="Black"))
+
+    response = client.get("/recommendations/options", headers=auth, params={"weather_category": "mild", "limit": 3})
+    assert response.status_code == 200
+    outfits = response.json()["outfits"]
+    assert len(outfits) == 3
+
+    top_ids = set()
+    bottom_ids = set()
+    shoe_ids = set()
+    for outfit in outfits:
+        categorized = {item["category"].lower(): item["id"] for item in outfit["items"]}
+        top_ids.add(categorized["top"])
+        bottom_ids.add(categorized["bottom"])
+        shoe_ids.add(categorized["shoes"])
+
+    assert len(top_ids) >= 2
+    assert len(bottom_ids) >= 2
+    assert len(shoe_ids) >= 2
+
+
 def test_cold_recommendation_structure_requires_outerwear_and_caps_accessories(client):
     token = register_and_login(client, "card-cold-structure@example.com", "password123")
     auth = {"Authorization": f"Bearer {token}"}

@@ -146,6 +146,11 @@ class AiService:
                 max_options=1,
             )
         deterministic_options = crud.rank_candidates_with_feedback(deterministic_options, feedback_signals)
+        deterministic_options = crud._select_diverse_candidates(
+            deterministic_options,
+            item_map=item_map,
+            limit=5,
+        )
         deterministic_pick = deterministic_options[0]
 
         deterministic_items = [item_map[item_id] for item_id in deterministic_pick.item_ids if item_id in item_map]
@@ -290,8 +295,11 @@ class AiService:
                     continue
                 combined_options.append(option)
                 seen.add(option.fingerprint)
-                if len(combined_options) >= 5:
-                    break
+            combined_options = crud._select_diverse_candidates(
+                combined_options,
+                item_map=item_map,
+                limit=5,
+            )
             return RecommendationResult(
                 items=ai_items,
                 explanation=parsed.explanation,

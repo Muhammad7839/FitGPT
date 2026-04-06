@@ -54,6 +54,22 @@ def test_register_returns_400_when_uniqueness_conflict_happens_at_commit(client,
     assert response.json()["detail"] == "Email already registered"
 
 
+def test_register_rejects_duplicate_email_case_insensitively(client):
+    first = client.post(
+        "/register",
+        json={"email": "MixedCase@Example.com", "password": "password123"},
+    )
+    assert first.status_code == 200
+    assert first.json()["email"] == "mixedcase@example.com"
+
+    second = client.post(
+        "/register",
+        json={"email": "mixedcase@example.com", "password": "password123"},
+    )
+    assert second.status_code == 400
+    assert second.json()["detail"] == "Email already registered"
+
+
 def test_login_fails_with_wrong_password(client):
     register_and_login(client, "user2@example.com", "password123")
     bad_login = client.post(
@@ -62,6 +78,49 @@ def test_login_fails_with_wrong_password(client):
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     assert bad_login.status_code == 401
+
+
+def test_login_is_case_insensitive_and_preserves_wardrobe_after_relogin(client):
+    register = client.post(
+        "/register",
+        json={"email": "WardrobeUser@Example.com", "password": "password123"},
+    )
+    assert register.status_code == 200
+
+    first_login = client.post(
+        "/login",
+        data={"username": "wardrobeuser@example.com", "password": "password123"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert first_login.status_code == 200
+    auth = {"Authorization": f"Bearer {first_login.json()['access_token']}"}
+
+    create = client.post(
+        "/wardrobe/items",
+        headers=auth,
+        json={
+            "name": "Persistent Tee",
+            "category": "Top",
+            "clothing_type": "t-shirt",
+            "color": "Black",
+            "season": "All",
+            "comfort_level": 3,
+        },
+    )
+    assert create.status_code == 200
+
+    relogin = client.post(
+        "/login",
+        data={"username": "WARDROBEUSER@example.com", "password": "password123"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert relogin.status_code == 200
+    relogin_auth = {"Authorization": f"Bearer {relogin.json()['access_token']}"}
+
+    wardrobe = client.get("/wardrobe/items", headers=relogin_auth)
+    assert wardrobe.status_code == 200
+    names = [item["name"] for item in wardrobe.json()]
+    assert "Persistent Tee" in names
 
 
 def test_get_me_and_update_profile(client):

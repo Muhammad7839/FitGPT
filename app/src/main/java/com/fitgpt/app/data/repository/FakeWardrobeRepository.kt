@@ -494,7 +494,7 @@ class FakeWardrobeRepository : WardrobeRepository {
         tripDays: Int
     ): TripPackingResult {
         val normalizedDays = tripDays.coerceIn(1, 30)
-        val activeItems = wardrobeItems.filter { !it.isArchived }
+        val activeItems = wardrobeItems.filter { !it.isArchived && it.isAvailable }
         val tops = activeItems.filter { it.category.equals("Top", true) }
         val bottoms = activeItems.filter { it.category.equals("Bottom", true) }
         val shoes = activeItems.filter { it.category.equals("Shoes", true) }
