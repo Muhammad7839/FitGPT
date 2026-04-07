@@ -37,6 +37,7 @@ export const CHAT_HISTORY_KEY = "fitgpt_chat_history_v1";
 export const REJECTED_OUTFITS_KEY = "fitgpt_rejected_outfits_v1";
 export const DISMISSED_DUPLICATES_KEY = "fitgpt_dismissed_duplicates_v1";
 export const RECOMMENDATION_FEEDBACK_KEY = "fitgpt_recommendation_feedback_v1";
+export const FEEDBACK_PROMPT_STATE_KEY = "fitgpt_feedback_prompt_state_v1";
 
 // Custom events
 export const EVT_WARDROBE_CHANGED = "fitgpt:guest-wardrobe-changed";
