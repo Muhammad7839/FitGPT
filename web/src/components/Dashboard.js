@@ -20,7 +20,7 @@ import {
   timeCategoryFromDate,
   generateThreeOutfits, idsSignature, makeRecentSets,
   buildExplanation, buildOutfitFromIds, scoreOutfitForDisplay,
-  analyzeOutfitColors, colorInfo, buildFeedbackProfile,
+  analyzeOutfitColors, colorInfo, buildPersonalizationProfile,
 } from "../utils/recommendationEngine";
 
 const DEFAULT_BODY_TYPE = "rectangle";
@@ -346,7 +346,25 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [showRefineControls, setShowRefineControls] = useState(false);
 
   const [rejectedOutfits] = useState(() => loadRejectedOutfits(user));
-  const [feedbackProfile, setFeedbackProfile] = useState(() => buildFeedbackProfile(loadRecommendationFeedback(user)));
+  const [feedbackProfile, setFeedbackProfile] = useState(null);
+
+  /* Build personalization profile from all signals once history + saved are loaded */
+  useEffect(() => {
+    let alive = true;
+    async function loadProfile() {
+      const [histRes, savedRes] = await Promise.all([
+        outfitHistoryApi.listHistory(user).catch(() => ({ history: [] })),
+        savedOutfitsApi.listSaved(user).catch(() => ({ saved_outfits: [] })),
+      ]);
+      if (!alive) return;
+      const feedback = loadRecommendationFeedback(user);
+      const history = Array.isArray(histRes?.history) ? histRes.history : [];
+      const saved = Array.isArray(savedRes?.saved_outfits) ? savedRes.saved_outfits : [];
+      setFeedbackProfile(buildPersonalizationProfile(feedback, history, saved, wardrobe));
+    }
+    loadProfile();
+    return () => { alive = false; };
+  }, [user, wardrobe]);
 
   const [aiOutfits, setAiOutfits] = useState(null);
   const [aiExplanations, setAiExplanations] = useState([]);
@@ -925,7 +943,16 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     if (type === "dislike") {
       saveRejectedOutfit(outfit, user);
     }
-    setFeedbackProfile(buildFeedbackProfile(loadRecommendationFeedback(user)));
+    /* Rebuild personalization profile from all signals */
+    Promise.all([
+      outfitHistoryApi.listHistory(user).catch(() => ({ history: [] })),
+      savedOutfitsApi.listSaved(user).catch(() => ({ saved_outfits: [] })),
+    ]).then(([histRes, savedRes]) => {
+      const feedback = loadRecommendationFeedback(user);
+      const history = Array.isArray(histRes?.history) ? histRes.history : [];
+      const saved = Array.isArray(savedRes?.saved_outfits) ? savedRes.saved_outfits : [];
+      setFeedbackProfile(buildPersonalizationProfile(feedback, history, saved, wardrobe));
+    });
     setSaveMsg(type === "like" ? "Got it — more like this!" : "Noted — fewer like this.");
     window.setTimeout(() => setSaveMsg(""), 2000);
   }
@@ -991,6 +1018,16 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           </div>
         </div>
         <div className="dashHeroRight">
+          {feedbackProfile && feedbackProfile.personalizationLevel > 0 && (
+            <div className="dashPersonalization" title={`Personalization: ${feedbackProfile.personalizationLevel}%`}>
+              <div className="dashPersonalizationBar">
+                <div className="dashPersonalizationFill" style={{ width: `${feedbackProfile.personalizationLevel}%` }} />
+              </div>
+              <span className="dashPersonalizationLabel">
+                {feedbackProfile.personalizationLevel >= 70 ? "Tuned to you" : feedbackProfile.personalizationLevel >= 35 ? "Learning" : "Getting started"}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

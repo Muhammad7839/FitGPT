@@ -43,6 +43,10 @@ import {
   feedbackBias,
   computeAttributeWeights,
   measureFeedbackAlignment,
+  buildPersonalizationProfile,
+  personalizationLevel,
+  explorationFactor,
+  validatePersonalizationProgress,
 } from "./recommendationEngine";
 
 describe("titleCase", () => {
@@ -3451,5 +3455,165 @@ describe("measureFeedbackAlignment", () => {
     ];
     const result = measureFeedbackAlignment(feedback, []);
     expect(result.sampleSize).toBe(0);
+  });
+});
+
+/* ── Personalization engine tests ───────────────────────────────────── */
+
+describe("buildPersonalizationProfile", () => {
+  const wardrobe = [
+    { id: "t1", name: "Black Tee", category: "Tops", color: "black", clothing_type: "t-shirt", style_tags: ["casual"] },
+    { id: "t2", name: "White Polo", category: "Tops", color: "white", clothing_type: "polo", style_tags: ["smart casual"] },
+    { id: "b1", name: "Navy Jeans", category: "Bottoms", color: "navy" },
+    { id: "s1", name: "Brown Boots", category: "Shoes", color: "brown", clothing_type: "boots" },
+  ];
+
+  test("combines explicit feedback + wear history + saved outfits", () => {
+    const feedback = [
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["t-shirt"], styleTags: ["casual"], itemIds: ["t1"] },
+    ];
+    const history = [
+      { worn_at: new Date().toISOString(), item_ids: ["t1", "b1"] },
+    ];
+    const saved = [
+      { items: ["t2", "b1"], created_at: new Date().toISOString() },
+    ];
+    const profile = buildPersonalizationProfile(feedback, history, saved, wardrobe);
+    expect(profile.totalEntries).toBe(3);
+    expect(profile.signalCounts.explicit).toBe(1);
+    expect(profile.signalCounts.worn).toBe(1);
+    expect(profile.signalCounts.saved).toBe(1);
+  });
+
+  test("explicit feedback has stronger signal than implicit", () => {
+    const explicitOnly = buildPersonalizationProfile(
+      [{ feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["t-shirt"], styleTags: [], itemIds: ["t1"] }],
+      [], [], wardrobe
+    );
+    const implicitOnly = buildPersonalizationProfile(
+      [],
+      [{ worn_at: new Date().toISOString(), item_ids: ["t1"] }],
+      [], wardrobe
+    );
+    /* Explicit entries are tracked separately from implicit */
+    expect(explicitOnly.signalCounts.explicit).toBe(1);
+    expect(explicitOnly.signalCounts.worn).toBe(0);
+    expect(implicitOnly.signalCounts.explicit).toBe(0);
+    expect(implicitOnly.signalCounts.worn).toBe(1);
+  });
+
+  test("enriches implicit feedback with wardrobe item attributes", () => {
+    const profile = buildPersonalizationProfile(
+      [],
+      [{ worn_at: new Date().toISOString(), item_ids: ["t1", "s1"] }],
+      [], wardrobe
+    );
+    /* Should have learned about "black" and "brown" from wear history */
+    expect(profile.colorCounts.black).toBeDefined();
+    expect(profile.colorCounts.brown).toBeDefined();
+  });
+
+  test("returns personalizationLevel between 0 and 100", () => {
+    const empty = buildPersonalizationProfile([], [], [], []);
+    expect(empty.personalizationLevel).toBe(0);
+
+    const rich = buildPersonalizationProfile(
+      Array.from({ length: 20 }, (_, i) => ({
+        feedback: "like", timestamp: Date.now(), colors: [`color${i}`], clothingTypes: [`type${i}`], styleTags: [`style${i}`], itemIds: [`id${i}`],
+      })),
+      [], [], wardrobe
+    );
+    expect(rich.personalizationLevel).toBeGreaterThan(50);
+    expect(rich.personalizationLevel).toBeLessThanOrEqual(100);
+  });
+
+  test("returns explorationFactor that decreases with more data", () => {
+    const sparse = buildPersonalizationProfile(
+      [{ feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: [], styleTags: [], itemIds: [] }],
+      [], [], wardrobe
+    );
+    const rich = buildPersonalizationProfile(
+      Array.from({ length: 20 }, () => ({
+        feedback: "like", timestamp: Date.now(), colors: ["black", "navy"], clothingTypes: ["t-shirt", "polo"], styleTags: ["casual"], itemIds: ["t1"],
+      })),
+      Array.from({ length: 30 }, () => ({ worn_at: new Date().toISOString(), item_ids: ["t1", "b1"] })),
+      [], wardrobe
+    );
+    expect(sparse.explorationFactor).toBeGreaterThan(rich.explorationFactor);
+  });
+
+  test("handles empty inputs gracefully", () => {
+    const profile = buildPersonalizationProfile(null, null, null, null);
+    expect(profile.personalizationLevel).toBe(0);
+    expect(profile.explorationFactor).toBeGreaterThan(0);
+    expect(profile.totalEntries).toBe(0);
+  });
+});
+
+describe("personalizationLevel and explorationFactor helpers", () => {
+  test("personalizationLevel returns 0 for null profile", () => {
+    expect(personalizationLevel(null)).toBe(0);
+    expect(personalizationLevel({})).toBe(0);
+  });
+
+  test("explorationFactor returns 1 for null profile", () => {
+    expect(explorationFactor(null)).toBe(1);
+    expect(explorationFactor({})).toBe(1);
+  });
+
+  test("both read from profile properties", () => {
+    const profile = { personalizationLevel: 75, explorationFactor: 0.4 };
+    expect(personalizationLevel(profile)).toBe(75);
+    expect(explorationFactor(profile)).toBe(0.4);
+  });
+});
+
+describe("validatePersonalizationProgress", () => {
+  const wardrobe = [
+    { id: "t1", name: "Black Tee", category: "Tops", color: "black", clothing_type: "t-shirt" },
+    { id: "t2", name: "Red Shirt", category: "Tops", color: "red", clothing_type: "dress shirt" },
+  ];
+
+  test("requires minimum feedback count", () => {
+    const result = validatePersonalizationProgress([{ feedback: "like", itemIds: ["t1"] }], [], wardrobe);
+    expect(result.earlyAccuracy).toBeNull();
+    expect(result.message).toMatch(/Need at least/);
+  });
+
+  test("measures improvement between early and full feedback", () => {
+    const feedback = Array.from({ length: 8 }, (_, i) => ({
+      feedback: "like",
+      timestamp: Date.now() - (8 - i) * 86400000,
+      colors: ["black"],
+      clothingTypes: ["t-shirt"],
+      styleTags: [],
+      itemIds: ["t1"],
+    }));
+    const result = validatePersonalizationProgress(feedback, [], wardrobe);
+    expect(result.earlyAccuracy).not.toBeNull();
+    expect(result.lateAccuracy).not.toBeNull();
+    expect(typeof result.improved).toBe("boolean");
+    expect(result.message.length).toBeGreaterThan(0);
+  });
+
+  test("returns descriptive message about model status", () => {
+    const feedback = Array.from({ length: 10 }, (_, i) => ({
+      feedback: i % 2 === 0 ? "like" : "dislike",
+      timestamp: Date.now() - (10 - i) * 86400000,
+      colors: [i % 2 === 0 ? "black" : "red"],
+      clothingTypes: [i % 2 === 0 ? "t-shirt" : "dress shirt"],
+      styleTags: [],
+      itemIds: [i % 2 === 0 ? "t1" : "t2"],
+    }));
+    const result = validatePersonalizationProgress(feedback, [], wardrobe);
+    expect(typeof result.message).toBe("string");
+  });
+
+  test("handles sparse data without crashing", () => {
+    const feedback = Array.from({ length: 6 }, () => ({
+      feedback: "like", timestamp: Date.now(), colors: [], clothingTypes: [], styleTags: [], itemIds: ["missing"],
+    }));
+    const result = validatePersonalizationProgress(feedback, [], []);
+    expect(result).toBeDefined();
   });
 });

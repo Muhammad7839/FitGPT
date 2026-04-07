@@ -1370,6 +1370,16 @@ export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactS
     }
     score -= variant;
 
+    /* Exploration noise: when personalization is low, add randomness to
+       diversify recommendations. As the model learns, noise shrinks.
+       Only applies when a feedback profile exists (skip for cold-start). */
+    if (context.feedbackProfile && context.feedbackProfile.totalEntries > 0) {
+      const expFactor = context.feedbackProfile.explorationFactor ?? 1;
+      if (expFactor > 0.15) {
+        score += (rng() - 0.5) * expFactor * 16;
+      }
+    }
+
     seenSigs.add(sig);
     candidates.push({ outfit: mapped, score, sig });
   }
@@ -2627,6 +2637,150 @@ export function measureFeedbackAlignment(feedbackList, wardrobeItems, context) {
     sampleSize: total,
     message: accuracy === null ? "No matchable feedback." : accuracy >= 70 ? "Model is well-aligned with your preferences." : "Model is still learning your preferences.",
   };
+}
+
+/* ── Personalization engine ────────────────────────────────────────── */
+
+const SIGNAL_WEIGHT_EXPLICIT = 3;
+const SIGNAL_WEIGHT_WORN = 2;
+const SIGNAL_WEIGHT_SAVED = 1.5;
+
+function historyToImplicitFeedback(historyList) {
+  return (Array.isArray(historyList) ? historyList : []).map((entry) => {
+    const ids = Array.isArray(entry?.item_ids) ? entry.item_ids : [];
+    return {
+      feedback: "like",
+      timestamp: new Date(entry?.worn_at).getTime() || Date.now(),
+      itemIds: ids.map((id) => (id ?? "").toString()).filter(Boolean),
+      colors: [],
+      clothingTypes: [],
+      styleTags: [],
+      _signalWeight: SIGNAL_WEIGHT_WORN,
+    };
+  });
+}
+
+function savedToImplicitFeedback(savedList) {
+  return (Array.isArray(savedList) ? savedList : []).map((entry) => {
+    const ids = Array.isArray(entry?.item_ids || entry?.items) ? (entry.item_ids || entry.items) : [];
+    return {
+      feedback: "like",
+      timestamp: new Date(entry?.created_at).getTime() || Date.now(),
+      itemIds: ids.map((id) => (id ?? "").toString()).filter(Boolean),
+      colors: [],
+      clothingTypes: [],
+      styleTags: [],
+      _signalWeight: SIGNAL_WEIGHT_SAVED,
+    };
+  });
+}
+
+function enrichImplicitFeedback(entries, wardrobeItems) {
+  const byId = new Map();
+  for (const item of Array.isArray(wardrobeItems) ? wardrobeItems : []) {
+    const id = (item?.id ?? "").toString();
+    if (id) byId.set(id, item);
+  }
+  for (const entry of entries) {
+    if (entry.colors.length || entry.clothingTypes.length) continue;
+    const colors = new Set();
+    const types = new Set();
+    const styles = new Set();
+    for (const id of entry.itemIds) {
+      const item = byId.get(id);
+      if (!item) continue;
+      const c = (item.color || "").toLowerCase();
+      if (c) colors.add(c);
+      const t = (item.clothing_type || item.type || "").toLowerCase();
+      if (t) types.add(t);
+      for (const s of Array.isArray(item.style_tags) ? item.style_tags : []) {
+        const sv = (s || "").toLowerCase();
+        if (sv) styles.add(sv);
+      }
+    }
+    entry.colors = [...colors];
+    entry.clothingTypes = [...types];
+    entry.styleTags = [...styles];
+  }
+  return entries;
+}
+
+export function buildPersonalizationProfile(feedbackList, historyList, savedList, wardrobeItems) {
+  const explicit = (Array.isArray(feedbackList) ? feedbackList : []).map((e) => ({ ...e, _signalWeight: SIGNAL_WEIGHT_EXPLICIT }));
+  const worn = enrichImplicitFeedback(historyToImplicitFeedback(historyList), wardrobeItems);
+  const saved = enrichImplicitFeedback(savedToImplicitFeedback(savedList), wardrobeItems);
+
+  /* Merge all signals — explicit feedback always takes precedence via ordering */
+  const unified = [...explicit, ...worn, ...saved];
+
+  /* Build the core profile using the existing adaptive system */
+  const profile = buildFeedbackProfile(unified);
+
+  /* Compute personalization level (0-100) based on data volume + diversity */
+  const explicitCount = explicit.length;
+  const implicitCount = worn.length + saved.length;
+  const totalSignals = explicitCount * SIGNAL_WEIGHT_EXPLICIT + implicitCount;
+  const dataScore = Math.min(50, totalSignals * 2);
+  const diversityKeys = new Set([
+    ...Object.keys(profile.colorCounts),
+    ...Object.keys(profile.typeCounts),
+    ...Object.keys(profile.styleCounts),
+  ]);
+  const diversityScore = Math.min(50, diversityKeys.size * 5);
+  const level = Math.min(100, Math.round(dataScore + diversityScore));
+
+  /* Exploration factor: high early (lots of randomness), low later (trust the model) */
+  const exploration = Math.max(0.1, 1 - (level / 125));
+
+  return {
+    ...profile,
+    personalizationLevel: level,
+    explorationFactor: Math.round(exploration * 100) / 100,
+    signalCounts: { explicit: explicitCount, worn: worn.length, saved: saved.length },
+  };
+}
+
+export function personalizationLevel(profile) {
+  return profile?.personalizationLevel ?? 0;
+}
+
+export function explorationFactor(profile) {
+  return profile?.explorationFactor ?? 1;
+}
+
+export function validatePersonalizationProgress(feedbackList, historyList, wardrobeItems) {
+  const allFeedback = Array.isArray(feedbackList) ? feedbackList : [];
+  const items = Array.isArray(wardrobeItems) ? wardrobeItems : [];
+
+  if (allFeedback.length < 6) {
+    return { earlyAccuracy: null, lateAccuracy: null, improved: null, message: "Need at least 6 feedback entries to measure progress." };
+  }
+
+  /* Split feedback into early half and full set */
+  const sorted = [...allFeedback].sort((a, b) => (a?.timestamp || 0) - (b?.timestamp || 0));
+  const midpoint = Math.floor(sorted.length / 2);
+  const earlyHalf = sorted.slice(0, midpoint);
+  const fullSet = sorted;
+
+  const earlyResult = measureFeedbackAlignment(earlyHalf, items);
+  const fullResult = measureFeedbackAlignment(fullSet, items);
+
+  const earlyAcc = earlyResult.accuracy;
+  const lateAcc = fullResult.accuracy;
+  const improved = earlyAcc !== null && lateAcc !== null ? lateAcc >= earlyAcc : null;
+
+  let message;
+  if (earlyAcc === null || lateAcc === null) {
+    message = "Not enough matchable feedback to compare.";
+  } else if (lateAcc > earlyAcc + 5) {
+    message = "Recommendations are improving as you provide more feedback.";
+  } else if (lateAcc >= earlyAcc) {
+    message = "Recommendation quality is stable.";
+  } else {
+    message = "Your preferences may be shifting — the model is adapting.";
+  }
+
+  return { earlyAccuracy: earlyAcc, lateAccuracy: lateAcc, improved, message };
 }
 
 /* ── Wardrobe gap detection ─────────────────────────────────────────── */

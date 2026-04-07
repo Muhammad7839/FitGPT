@@ -1866,6 +1866,34 @@ a {
   flex-shrink: 0;
 }
 
+.dashPersonalization {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dashPersonalizationBar {
+  width: 48px;
+  height: 5px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.dashPersonalizationFill {
+  height: 100%;
+  background: rgba(139, 30, 30, 0.5);
+  border-radius: 3px;
+  transition: width 400ms ease;
+}
+.dashPersonalizationLabel {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: rgba(17, 24, 39, 0.38);
+  white-space: nowrap;
+}
+[data-theme="dark"] .dashPersonalizationBar { background: rgba(255, 255, 255, 0.08); }
+[data-theme="dark"] .dashPersonalizationFill { background: rgba(200, 80, 80, 0.55); }
+[data-theme="dark"] .dashPersonalizationLabel { color: rgba(232, 230, 227, 0.35); }
+
 @media (max-width: 600px) {
   .dashHeroBar {
     flex-direction: column;
