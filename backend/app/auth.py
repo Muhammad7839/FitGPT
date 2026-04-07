@@ -1,46 +1,71 @@
-import os
+"""Authentication utilities: password hashing, JWT creation, and user resolution."""
+
 from datetime import datetime, timedelta
 from typing import Optional
 
 from passlib.context import CryptContext
 from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
-from google.oauth2 import id_token as google_id_token
-from google.auth.transport import requests as google_requests
-
+from app.config import SECRET_KEY, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 from app.database.database import get_db
 from app import models
 
-# =============================
-# Password Hashing
-# =============================
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
 def hash_password(password: str) -> str:
+    """Hash a plaintext password using bcrypt."""
     return pwd_context.hash(password)
 
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Validate a plaintext password against a stored hash."""
     return pwd_context.verify(plain_password, hashed_password)
 
 
-# =============================
-# JWT Configuration
-# =============================
-
-SECRET_KEY = os.environ.get("SECRET_KEY", "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_KEY")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
-
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+def _credentials_exception() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid authentication credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+def _extract_bearer_token(authorization: str) -> Optional[str]:
+    value = authorization.strip()
+    if not value:
+        return None
+
+    parts = value.split(" ", 1)
+    if len(parts) != 2:
+        return None
+
+    scheme, token = parts[0].strip(), parts[1].strip()
+    if scheme.lower() != "bearer" or not token:
+        return None
+
+    return token
+
+
+def get_bearer_token(
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+) -> str:
+    token = _extract_bearer_token(authorization or "")
+    if not token:
+        raise _credentials_exception()
+    return token
+
+
+def get_optional_bearer_token(
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+) -> Optional[str]:
+    return _extract_bearer_token(authorization or "")
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """Create a signed JWT access token for API authentication."""
     to_encode = data.copy()
 
     if expires_delta:
@@ -50,25 +75,37 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
     to_encode.update({"exp": expire})
 
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=JWT_ALGORITHM)
     return encoded_jwt
 
 
-# =============================
-# Get Current User Dependency
-# =============================
+def get_optional_user(
+    token: Optional[str] = Depends(get_optional_bearer_token),
+    db: Session = Depends(get_db),
+) -> Optional[models.User]:
+    """Resolve the authenticated user if a valid token is present, otherwise return None."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            return None
+        user_id = int(user_id)
+    except (JWTError, ValueError, TypeError):
+        return None
+    return db.query(models.User).filter(models.User.id == user_id).first()
+
+
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    token: str = Depends(get_bearer_token),
     db: Session = Depends(get_db)
-):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid authentication credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+) -> models.User:
+    """Resolve the authenticated user from the bearer token."""
+    credentials_exception = _credentials_exception()
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[JWT_ALGORITHM])
         user_id = payload.get("sub")
 
         if user_id is None:
@@ -76,7 +113,7 @@ def get_current_user(
 
         user_id = int(user_id)
 
-    except JWTError:
+    except (JWTError, ValueError, TypeError):
         raise credentials_exception
 
     user = db.query(models.User).filter(models.User.id == user_id).first()
@@ -85,15 +122,3 @@ def get_current_user(
         raise credentials_exception
 
     return user
-
-
-# =============================
-# Google OAuth Token Validation
-# =============================
-
-def verify_google_token(token: str) -> dict:
-    """Verify a Google ID token and return the decoded payload."""
-    idinfo = google_id_token.verify_oauth2_token(
-        token, google_requests.Request(), GOOGLE_CLIENT_ID
-    )
-    return idinfo

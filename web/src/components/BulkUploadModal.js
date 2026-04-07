@@ -2,8 +2,8 @@ import React from "react";
 import {
   CATEGORIES as ITEM_CATEGORIES,
   FIT_TAG_OPTIONS,
-  ColorChipInput,
-  MultiSelectChipField,
+  ColorPickerField,
+  CompactMultiSelectField,
 } from "./ItemFormFields";
 import {
   LAYER_TYPE_OPTIONS,
@@ -27,15 +27,12 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
             return (
               <div
                 key={entry._key}
+                className="bulkUploadItemCard"
                 style={{
-                  border: "1px solid rgba(0,0,0,0.08)",
-                  borderRadius: 16,
-                  padding: 14,
                   display: "grid",
                   gridTemplateColumns: "80px 1fr auto",
                   gap: 12,
                   alignItems: "start",
-                  background: "#fff",
                 }}
               >
                 <img
@@ -79,7 +76,7 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
                     </select>
                   </div>
 
-                  <ColorChipInput value={entry.color} onChange={(v) => onUpdateItem(entry._key, "color", v)} />
+                  <ColorPickerField value={entry.color} onChange={(v) => onUpdateItem(entry._key, "color", v)} />
 
                   <div style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr" }}>
                     <select
@@ -120,19 +117,39 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
                     </label>
                   </div>
 
-                  <div>
-                    <div className="wardrobeFilterHeading">Style</div>
-                    <MultiSelectChipField options={STYLE_TAG_OPTIONS} value={entry.styleTags || []} onChange={(v) => onUpdateItem(entry._key, "styleTags", v)} />
-                  </div>
+                  <div className="bulkUploadPickerGrid">
+                    <div>
+                      <div className="wardrobeFilterHeading">Style</div>
+                      <CompactMultiSelectField
+                        options={STYLE_TAG_OPTIONS}
+                        value={entry.styleTags || []}
+                        onChange={(v) => onUpdateItem(entry._key, "styleTags", v)}
+                        placeholder="Choose styles"
+                        helperLabel="Pick styles"
+                      />
+                    </div>
 
-                  <div>
-                    <div className="wardrobeFilterHeading">Occasion</div>
-                    <MultiSelectChipField options={OCCASION_TAG_OPTIONS} value={entry.occasionTags || []} onChange={(v) => onUpdateItem(entry._key, "occasionTags", v)} />
-                  </div>
+                    <div>
+                      <div className="wardrobeFilterHeading">Occasion</div>
+                      <CompactMultiSelectField
+                        options={OCCASION_TAG_OPTIONS}
+                        value={entry.occasionTags || []}
+                        onChange={(v) => onUpdateItem(entry._key, "occasionTags", v)}
+                        placeholder="Choose occasions"
+                        helperLabel="Pick occasions"
+                      />
+                    </div>
 
-                  <div>
-                    <div className="wardrobeFilterHeading">Season</div>
-                    <MultiSelectChipField options={SEASON_TAG_OPTIONS} value={entry.seasonTags || []} onChange={(v) => onUpdateItem(entry._key, "seasonTags", v)} />
+                    <div>
+                      <div className="wardrobeFilterHeading">Season</div>
+                      <CompactMultiSelectField
+                        options={SEASON_TAG_OPTIONS}
+                        value={entry.seasonTags || []}
+                        onChange={(v) => onUpdateItem(entry._key, "seasonTags", v)}
+                        placeholder="Choose seasons"
+                        helperLabel="Pick seasons"
+                      />
+                    </div>
                   </div>
                 </div>
 

@@ -1,3 +1,6 @@
+/**
+ * Optional preference model for future personalization features.
+ */
 package com.fitgpt.app.data.model
 
 data class UserPreferences(
