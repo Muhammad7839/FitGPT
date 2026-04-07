@@ -243,6 +243,14 @@ def _build_system_prompt(context: Optional[dict] = None) -> str:
             "suggestions or styling advice you give.\n\n" + prefs
         )
 
+    recs = (context.get("recommendations_summary") or "").strip()
+    if recs:
+        sections.append(
+            "## Current Home Screen Recommendations\n"
+            "These outfit options are currently shown on the user's home screen. "
+            "When the user asks about their recommendations, refer to these.\n\n" + recs
+        )
+
     if not sections:
         return SYSTEM_PROMPT
 

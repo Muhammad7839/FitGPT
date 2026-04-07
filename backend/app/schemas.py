@@ -374,8 +374,15 @@ class ChatMessage(BaseModel):
         return cleaned
 
 
+class ChatContext(BaseModel):
+    wardrobe_summary: str = ""
+    preferences: str = ""
+    recommendations_summary: str = ""
+
+
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=20)
+    context: Optional[ChatContext] = None
 
 
 class ChatResponse(BaseModel):

@@ -11,7 +11,7 @@ import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 import ClothCard from "./ClothCard";
 import MeshGradient from "./MeshGradient";
 import ErrorBoundary from "./ErrorBoundary";
-import { OPEN_ADD_ITEM_FLAG, REUSE_OUTFIT_KEY } from "../utils/constants";
+import { OPEN_ADD_ITEM_FLAG, REUSE_OUTFIT_KEY, CURRENT_RECS_KEY } from "../utils/constants";
 import { readRecSeed, writeRecSeed, readTimeOverride, writeTimeOverride, readWeatherOverride, setWeatherOverride, loadRejectedOutfits, saveRejectedOutfit, loadRecommendationFeedback, saveRecommendationFeedback } from "../utils/userStorage";
 import { safeParse, formatToday, normalizeFitTag, normalizeItems, buildGoogleCalendarUrl, onTiltMove, onTiltLeave, tomorrowDateStr } from "../utils/helpers";
 import { getWeatherContext } from "../api/weatherApi";
@@ -797,6 +797,22 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       return { score, rankLabel, confidenceLabel, confidence, traits, comfortSummary, explanationPreview };
     });
   }, [outfits, weatherCategory, precipCondition, timeCategory, effectiveAnswers, bodyTypeId, aiSource, reused, pairedExplanations, feedbackProfile, recentRecommendationSigs]);
+
+  // Persist current recommendations so the chatbot can reference them
+  useEffect(() => {
+    if (!outfits.length) return;
+    try {
+      const summary = outfits.map((outfit, idx) => ({
+        option: idx + 1,
+        items: (Array.isArray(outfit) ? outfit : []).map((item) => ({
+          name: item?.name || "",
+          category: item?.category || "",
+          color: item?.color || "",
+        })).filter((i) => i.name),
+      }));
+      sessionStorage.setItem(CURRENT_RECS_KEY, JSON.stringify(summary));
+    } catch {}
+  }, [outfits]);
 
   const canRefresh = true;
 

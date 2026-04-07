@@ -13,7 +13,9 @@ def _safe_text(value: Optional[str], fallback: str = "unspecified") -> str:
 
 
 def build_chat_system_prompt(
-    user: Optional[models.User], wardrobe_items: list[models.ClothingItem]
+    user: Optional[models.User],
+    wardrobe_items: list[models.ClothingItem],
+    client_context=None,
 ) -> str:
     """Builds a concise system prompt scoped to the authenticated user's context."""
     base = (
@@ -23,19 +25,44 @@ def build_chat_system_prompt(
     )
 
     if user is None:
-        return base + "The user is a guest (not signed in). No wardrobe data is available."
+        # Use client-supplied wardrobe/preferences for guests
+        guest_parts = []
+        if client_context:
+            ws = (getattr(client_context, "wardrobe_summary", None) or "").strip()
+            prefs = (getattr(client_context, "preferences", None) or "").strip()
+            if ws:
+                guest_parts.append(f"Wardrobe snapshot: {ws}")
+            if prefs:
+                guest_parts.append(f"Preferences: {prefs}")
+        if not guest_parts:
+            guest_parts.append("The user is a guest (not signed in). No wardrobe data is available.")
+        prompt = base + "\n".join(guest_parts)
+    else:
+        item_preview = ", ".join(
+            f"{item.category}:{item.color}" for item in wardrobe_items[:20]
+        ) or "No wardrobe items available yet"
 
-    item_preview = ", ".join(
-        f"{item.category}:{item.color}" for item in wardrobe_items[:20]
-    ) or "No wardrobe items available yet"
+        prompt = (
+            base
+            + f"User profile: body_type={_safe_text(user.body_type)}, "
+            f"lifestyle={_safe_text(user.lifestyle)}, "
+            f"comfort_preference={_safe_text(user.comfort_preference)}.\n"
+            f"Wardrobe snapshot: {item_preview}."
+        )
 
-    return (
-        base
-        + f"User profile: body_type={_safe_text(user.body_type)}, "
-        f"lifestyle={_safe_text(user.lifestyle)}, "
-        f"comfort_preference={_safe_text(user.comfort_preference)}.\n"
-        f"Wardrobe snapshot: {item_preview}."
-    )
+    # Append current home screen recommendations if provided
+    recs = ""
+    if client_context:
+        recs = (getattr(client_context, "recommendations_summary", None) or "").strip()
+    if recs:
+        prompt += (
+            "\n\n## Current Home Screen Recommendations\n"
+            "These outfit options are currently shown on the user's home screen. "
+            "When the user asks about their recommendations, refer to these:\n"
+            + recs
+        )
+
+    return prompt
 
 
 def build_recommendation_prompt(

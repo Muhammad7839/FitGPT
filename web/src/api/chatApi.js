@@ -1,6 +1,6 @@
 import { apiFetch } from "./apiFetch";
 
-export function buildChatContext(wardrobeItems, answers) {
+export function buildChatContext(wardrobeItems, answers, recommendations) {
   const items = Array.isArray(wardrobeItems) ? wardrobeItems : [];
   const compact = items
     .filter((x) => x && x.is_active !== false && String(x.is_active) !== "false")
@@ -22,8 +22,21 @@ export function buildChatContext(wardrobeItems, answers) {
   if (answers?.bodyType) prefParts.push(`Body type: ${answers.bodyType}`);
   const preferences = prefParts.join(". ");
 
-  if (!wardrobe_summary && !preferences) return null;
-  return { wardrobe_summary, preferences };
+  let recommendations_summary = "";
+  const recs = Array.isArray(recommendations) ? recommendations : [];
+  if (recs.length > 0) {
+    recommendations_summary = recs
+      .map((rec) => {
+        const pieces = (rec.items || [])
+          .map((i) => [i.name, i.category, i.color].filter(Boolean).join(", "))
+          .filter(Boolean);
+        return `Option ${rec.option}: ${pieces.join(" + ")}`;
+      })
+      .join("\n");
+  }
+
+  if (!wardrobe_summary && !preferences && !recommendations_summary) return null;
+  return { wardrobe_summary, preferences, recommendations_summary };
 }
 
 export async function sendChatMessage(messages, context) {
