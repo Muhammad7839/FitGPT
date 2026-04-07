@@ -5466,6 +5466,155 @@ img.dashSquareImg {
 [data-theme="dark"] .packingEmptyText { color: rgba(232, 230, 227, 0.4); }
 [data-theme="dark"] .packingTripNote { color: rgba(232, 230, 227, 0.32); }
 
+/* ── DUPLICATE DETECTOR ─────────────────────────────────────────────── */
+
+.dupDetectorWrap {
+  margin-bottom: 14px;
+  border: 1px solid rgba(234, 179, 8, 0.25);
+  border-radius: 14px;
+  background: rgba(255, 251, 235, 0.7);
+  overflow: hidden;
+}
+.dupDetectorHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease;
+}
+.dupDetectorHeader:hover { background: rgba(234, 179, 8, 0.08); }
+.dupDetectorIcon { font-size: 1.1rem; }
+.dupDetectorTitle {
+  flex: 1;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: rgba(120, 80, 0, 0.85);
+}
+.dupDetectorChevron {
+  font-size: 0.7rem;
+  color: rgba(120, 80, 0, 0.5);
+}
+.dupDetectorBody {
+  padding: 0 16px 14px;
+  animation: tabFadeIn 0.2s ease-out;
+}
+.dupLevelGroup { margin-bottom: 10px; }
+.dupLevelGroup:last-child { margin-bottom: 0; }
+.dupLevelLabel {
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: rgba(120, 80, 0, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+}
+.dupPairCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+.dupPairCard--exact { border-left: 3px solid rgba(220, 38, 38, 0.5); }
+.dupPairCard--likely { border-left: 3px solid rgba(234, 179, 8, 0.6); }
+.dupPairCard--similar { border-left: 3px solid rgba(59, 130, 246, 0.4); }
+.dupPairItems {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dupPairItem {
+  flex: 1;
+  text-align: center;
+  min-width: 0;
+}
+.dupPairThumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-bottom: 4px;
+}
+.dupPairThumbPh {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(139, 30, 30, 0.1), rgba(17, 24, 39, 0.06));
+  margin: 0 auto 4px;
+}
+.dupPairName {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: rgba(17, 24, 39, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dupPairMeta {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(17, 24, 39, 0.4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dupPairVs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: 0 4px;
+}
+.dupPairPct {
+  font-size: 1.1rem;
+  font-weight: 950;
+  color: rgba(17, 24, 39, 0.75);
+}
+.dupPairLevel {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: rgba(17, 24, 39, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.dupDismissBtn {
+  align-self: flex-end;
+  font-size: 0.74rem;
+  padding: 4px 12px;
+  opacity: 0.7;
+}
+.dupDismissBtn:hover { opacity: 1; }
+.dupMoreNote {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: rgba(120, 80, 0, 0.5);
+  text-align: center;
+  padding: 4px 0;
+}
+
+/* ── Duplicate detector dark mode ─────────────────────────────────── */
+[data-theme="dark"] .dupDetectorWrap { background: rgba(60, 50, 20, 0.3); border-color: rgba(234, 179, 8, 0.2); }
+[data-theme="dark"] .dupDetectorTitle { color: rgba(234, 200, 80, 0.85); }
+[data-theme="dark"] .dupDetectorChevron { color: rgba(234, 200, 80, 0.5); }
+[data-theme="dark"] .dupLevelLabel { color: rgba(234, 200, 80, 0.55); }
+[data-theme="dark"] .dupPairCard { background: rgba(40, 40, 40, 0.7); border-color: rgba(255, 255, 255, 0.06); }
+[data-theme="dark"] .dupPairName { color: rgba(232, 230, 227, 0.8); }
+[data-theme="dark"] .dupPairMeta { color: rgba(232, 230, 227, 0.38); }
+[data-theme="dark"] .dupPairPct { color: rgba(232, 230, 227, 0.75); }
+[data-theme="dark"] .dupPairLevel { color: rgba(232, 230, 227, 0.38); }
+[data-theme="dark"] .dupPairThumbPh { background: linear-gradient(135deg, rgba(200, 80, 80, 0.15), rgba(232, 230, 227, 0.06)); }
+[data-theme="dark"] .dupMoreNote { color: rgba(234, 200, 80, 0.45); }
+
 /* WEATHER (Dashboard) */
 .dashWeatherRight {
   display: flex;

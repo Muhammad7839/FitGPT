@@ -35,6 +35,10 @@ import {
   groupHistoryByDate,
   analyzeHistoryPatterns,
   generatePackingList,
+  diceSimilarity,
+  itemSimilarityScore,
+  classifyDuplicateLevel,
+  detectDuplicates,
 } from "./recommendationEngine";
 
 describe("titleCase", () => {
@@ -2984,5 +2988,180 @@ describe("generatePackingList", () => {
     const rain = generatePackingList(makeWardrobe(), { days: 5, weatherCategory: "cool", precipCategory: "rain" });
     const clear = generatePackingList(makeWardrobe(), { days: 5, weatherCategory: "cool", precipCategory: "clear" });
     expect(rain.categories.Shoes.length).toBeGreaterThanOrEqual(clear.categories.Shoes.length);
+  });
+});
+
+/* ── Duplicate detection tests ──────────────────────────────────────── */
+
+describe("diceSimilarity", () => {
+  test("identical strings score 1", () => {
+    expect(diceSimilarity("White T-Shirt", "White T-Shirt")).toBe(1);
+  });
+
+  test("completely different strings score 0", () => {
+    expect(diceSimilarity("apple", "zebra")).toBe(0);
+  });
+
+  test("partial overlap scores between 0 and 1", () => {
+    const score = diceSimilarity("Blue Polo Shirt", "Blue Dress Shirt");
+    expect(score).toBeGreaterThan(0);
+    expect(score).toBeLessThan(1);
+  });
+
+  test("empty strings score 1 (both empty)", () => {
+    expect(diceSimilarity("", "")).toBe(1);
+  });
+
+  test("one empty scores 0", () => {
+    expect(diceSimilarity("hello", "")).toBe(0);
+  });
+});
+
+describe("itemSimilarityScore", () => {
+  test("identical items score near 1", () => {
+    const item = { name: "Black T-Shirt", category: "Tops", color: "black", clothing_type: "t-shirt", fit_tag: "regular" };
+    const { score } = itemSimilarityScore(item, { ...item });
+    expect(score).toBeGreaterThanOrEqual(0.95);
+  });
+
+  test("same category and type but different color scores moderate", () => {
+    const a = { name: "White Tee", category: "Tops", color: "white", clothing_type: "t-shirt" };
+    const b = { name: "Black Tee", category: "Tops", color: "black", clothing_type: "t-shirt" };
+    const { score } = itemSimilarityScore(a, b);
+    expect(score).toBeGreaterThan(0.5);
+    expect(score).toBeLessThan(0.95);
+  });
+
+  test("completely different items score low", () => {
+    const a = { name: "Red Parka", category: "Outerwear", color: "red", clothing_type: "parka" };
+    const b = { name: "White Sneakers", category: "Shoes", color: "white", clothing_type: "sneakers" };
+    const { score } = itemSimilarityScore(a, b);
+    expect(score).toBeLessThan(0.3);
+  });
+
+  test("returns breakdown object", () => {
+    const a = { name: "Blue Shirt", category: "Tops", color: "blue" };
+    const b = { name: "Blue Shirt", category: "Tops", color: "blue" };
+    const { breakdown } = itemSimilarityScore(a, b);
+    expect(breakdown).toHaveProperty("name");
+    expect(breakdown).toHaveProperty("category");
+    expect(breakdown).toHaveProperty("color");
+    expect(breakdown).toHaveProperty("clothingType");
+    expect(breakdown).toHaveProperty("imageHash");
+  });
+
+  test("handles null inputs gracefully", () => {
+    expect(itemSimilarityScore(null, null).score).toBe(0);
+    expect(itemSimilarityScore({}, null).score).toBe(0);
+  });
+
+  test("tag overlap increases score", () => {
+    const base = { name: "Shirt", category: "Tops", color: "white", clothing_type: "dress shirt" };
+    const withTags = { ...base, style_tags: ["formal"], occasion_tags: ["work"] };
+    const noTags = { ...base, style_tags: [], occasion_tags: [] };
+    const matchTags = { ...base, style_tags: ["formal"], occasion_tags: ["work"] };
+    const { score: withMatch } = itemSimilarityScore(withTags, matchTags);
+    const { score: noMatch } = itemSimilarityScore(withTags, noTags);
+    expect(withMatch).toBeGreaterThan(noMatch);
+  });
+});
+
+describe("classifyDuplicateLevel", () => {
+  test("high score classified as exact", () => {
+    expect(classifyDuplicateLevel(0.95)).toBe("exact");
+  });
+
+  test("medium-high classified as likely", () => {
+    expect(classifyDuplicateLevel(0.80)).toBe("likely");
+  });
+
+  test("medium classified as similar", () => {
+    expect(classifyDuplicateLevel(0.60)).toBe("similar");
+  });
+
+  test("low score classified as none", () => {
+    expect(classifyDuplicateLevel(0.30)).toBe("none");
+  });
+});
+
+describe("detectDuplicates", () => {
+  test("finds exact duplicates", () => {
+    const items = [
+      { id: "1", name: "Black T-Shirt", category: "Tops", color: "black", clothing_type: "t-shirt", fit_tag: "regular", is_active: true },
+      { id: "2", name: "Black T-Shirt", category: "Tops", color: "black", clothing_type: "t-shirt", fit_tag: "regular", is_active: true },
+    ];
+    const result = detectDuplicates(items);
+    expect(result.exact.length).toBe(1);
+    expect(result.exact[0].score).toBeGreaterThanOrEqual(0.92);
+  });
+
+  test("finds likely duplicates", () => {
+    const items = [
+      { id: "1", name: "White Tee", category: "Tops", color: "white", clothing_type: "t-shirt", is_active: true },
+      { id: "2", name: "Black Tee", category: "Tops", color: "black", clothing_type: "t-shirt", is_active: true },
+    ];
+    const result = detectDuplicates(items);
+    expect(result.total).toBeGreaterThanOrEqual(1);
+  });
+
+  test("does not flag items across different categories", () => {
+    const items = [
+      { id: "1", name: "Black Item", category: "Tops", color: "black", is_active: true },
+      { id: "2", name: "Black Item", category: "Shoes", color: "black", is_active: true },
+    ];
+    const result = detectDuplicates(items);
+    expect(result.total).toBe(0);
+  });
+
+  test("respects dismissed pairs", () => {
+    const items = [
+      { id: "1", name: "Black T-Shirt", category: "Tops", color: "black", clothing_type: "t-shirt", is_active: true },
+      { id: "2", name: "Black T-Shirt", category: "Tops", color: "black", clothing_type: "t-shirt", is_active: true },
+    ];
+    const dismissed = new Set(["1|2"]);
+    const result = detectDuplicates(items, dismissed);
+    expect(result.total).toBe(0);
+  });
+
+  test("returns empty for empty wardrobe", () => {
+    const result = detectDuplicates([]);
+    expect(result.total).toBe(0);
+    expect(result.exact).toEqual([]);
+    expect(result.likely).toEqual([]);
+    expect(result.similar).toEqual([]);
+  });
+
+  test("ignores archived items", () => {
+    const items = [
+      { id: "1", name: "Black T-Shirt", category: "Tops", color: "black", clothing_type: "t-shirt", is_active: true },
+      { id: "2", name: "Black T-Shirt", category: "Tops", color: "black", clothing_type: "t-shirt", is_active: false },
+    ];
+    const result = detectDuplicates(items);
+    expect(result.total).toBe(0);
+  });
+
+  test("pairs are sorted by score descending", () => {
+    const items = [
+      { id: "1", name: "White Polo", category: "Tops", color: "white", clothing_type: "polo", is_active: true },
+      { id: "2", name: "White Polo", category: "Tops", color: "white", clothing_type: "polo", is_active: true },
+      { id: "3", name: "Blue Polo", category: "Tops", color: "blue", clothing_type: "polo", is_active: true },
+    ];
+    const result = detectDuplicates(items);
+    if (result.total >= 2) {
+      const allPairs = [...result.exact, ...result.likely, ...result.similar];
+      for (let i = 1; i < allPairs.length; i++) {
+        expect(allPairs[i - 1].score).toBeGreaterThanOrEqual(allPairs[i].score);
+      }
+    }
+  });
+
+  test("works across different clothing types in same category", () => {
+    const items = [
+      { id: "1", name: "Navy Blazer", category: "Outerwear", color: "navy", clothing_type: "blazer", is_active: true },
+      { id: "2", name: "Navy Parka", category: "Outerwear", color: "navy", clothing_type: "parka", is_active: true },
+    ];
+    const result = detectDuplicates(items);
+    /* Same category + same color but different type — should be similar at most, not exact */
+    expect(result.exact.length).toBe(0);
   });
 });
