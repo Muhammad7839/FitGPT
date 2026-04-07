@@ -14,6 +14,7 @@ import {
   timeCategoryFromDate,
   generateThreeOutfits,
   defaultOutfitSet,
+  scoreOutfitForDisplay,
   signatureFromItems,
   idsSignature,
   makeRecentSets,
@@ -248,6 +249,66 @@ describe("generateThreeOutfits", () => {
     const a = generateThreeOutfits(wardrobe, 99, "rectangle", new Set(), new Map(), "mild", "morning", null);
     const b = generateThreeOutfits(wardrobe, 99, "rectangle", new Set(), new Map(), "mild", "morning", null);
     expect(a.map((o) => o.map((i) => i.id))).toEqual(b.map((o) => o.map((i) => i.id)));
+  });
+
+  test("supports a larger unique candidate pool when a limit is provided", () => {
+    const largerWardrobe = [
+      { id: "t1", name: "White Tee", category: "tops", color: "white", fit_tag: "regular", is_active: true },
+      { id: "t2", name: "Blue Shirt", category: "tops", color: "blue", fit_tag: "regular", is_active: true },
+      { id: "t3", name: "Olive Polo", category: "tops", color: "green", fit_tag: "regular", is_active: true },
+      { id: "b1", name: "Black Jeans", category: "bottoms", color: "black", fit_tag: "regular", is_active: true },
+      { id: "b2", name: "Khakis", category: "bottoms", color: "beige", fit_tag: "regular", is_active: true },
+      { id: "b3", name: "Navy Trousers", category: "bottoms", color: "navy", fit_tag: "regular", is_active: true },
+      { id: "s1", name: "White Sneakers", category: "shoes", color: "white", fit_tag: "regular", is_active: true },
+      { id: "s2", name: "Brown Boots", category: "shoes", color: "brown", fit_tag: "regular", is_active: true },
+      { id: "s3", name: "Black Loafers", category: "shoes", color: "black", fit_tag: "regular", is_active: true },
+    ];
+
+    const outfits = generateThreeOutfits(
+      largerWardrobe,
+      42,
+      "rectangle",
+      new Set(),
+      new Map(),
+      "mild",
+      "morning",
+      null,
+      new Set(),
+      { limit: 6 }
+    );
+
+    const signatures = outfits.map((outfit) => outfit.map((item) => item.id).sort().join("|"));
+
+    expect(outfits.length).toBeGreaterThan(3);
+    expect(outfits.length).toBeLessThanOrEqual(6);
+    expect(new Set(signatures).size).toBe(signatures.length);
+  });
+});
+
+describe("scoreOutfitForDisplay seasonal mode", () => {
+  test("penalizes out-of-season outfits only when seasonal mode is enabled", () => {
+    const outfit = [
+      { id: "1", name: "Heavy Coat", category: "Outerwear", color: "black", fit_tag: "regular", season_tags: ["winter"] },
+      { id: "2", name: "Boots", category: "Shoes", color: "black", fit_tag: "regular", season_tags: ["winter"] },
+    ];
+
+    const seasonalOn = scoreOutfitForDisplay(outfit, {
+      weatherCategory: "mild",
+      timeCategory: "morning",
+      bodyTypeId: "rectangle",
+      selectedSeason: "summer",
+      seasonalMode: true,
+    });
+
+    const seasonalOff = scoreOutfitForDisplay(outfit, {
+      weatherCategory: "mild",
+      timeCategory: "morning",
+      bodyTypeId: "rectangle",
+      selectedSeason: "summer",
+      seasonalMode: false,
+    });
+
+    expect(seasonalOff).toBeGreaterThan(seasonalOn);
   });
 });
 

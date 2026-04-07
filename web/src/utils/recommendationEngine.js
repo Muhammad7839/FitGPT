@@ -1,5 +1,8 @@
 
 import { normalizeFitTag, normalizeItems, idsSignature } from "./helpers";
+import { getCurrentSeason, getSeasonMatch } from "./seasonalWardrobe";
+import { feedbackBiasForOutfit } from "./recommendationFeedback";
+import { personalizationBiasForOutfit } from "./recommendationPersonalization";
 
 const DEFAULT_BODY_TYPE = "rectangle";
 
@@ -383,14 +386,6 @@ function normalizeSetId(value) {
   return (value || "").toString().trim().toLowerCase();
 }
 
-function seasonFromDate(dateObj) {
-  const month = (dateObj instanceof Date ? dateObj : new Date()).getMonth() + 1;
-  if (month === 12 || month <= 2) return "winter";
-  if (month >= 3 && month <= 5) return "spring";
-  if (month >= 6 && month <= 8) return "summer";
-  return "fall";
-}
-
 function targetLayersForWeather(weatherCat) {
   const cat = (weatherCat || "mild").toString().trim().toLowerCase();
   if (cat === "cold" || cat === "cool") return ["base", "mid", "outer"];
@@ -489,7 +484,7 @@ function clothingTypeBias(item, weatherCat) {
 }
 
 function metadataScore(item, context) {
-  const { answers, weatherCat, bodyTypeId, recentItemCounts, timeCat, outfitSoFar, selectedSeason } = context;
+  const { answers, weatherCat, bodyTypeId, recentItemCounts, timeCat, outfitSoFar, selectedSeason, seasonalMode } = context;
   const id = (item?.id ?? "").toString().trim();
   const recentPenalty = id && recentItemCounts ? (recentItemCounts.get(id) || 0) * 2 : 0;
 
@@ -511,10 +506,8 @@ function metadataScore(item, context) {
     score += occasions.some((occasion) => preferredOccasions.includes(occasion)) ? 12 : occasions.length ? -6 : 2;
   }
 
-  if (seasons.length) {
-    score += seasons.includes(selectedSeason) ? 8 : -4;
-  } else {
-    score += 1;
+  if (seasonalMode !== false) {
+    score += getSeasonMatch(seasons, selectedSeason).scoreAdjustment;
   }
 
   score += weatherScoreBias(weatherCat, item?.category);
@@ -839,10 +832,13 @@ function scoreOutfitCandidate(outfit, context) {
     }
   }
 
+  score += feedbackBiasForOutfit(outfit, context.feedbackProfile);
+  score += personalizationBiasForOutfit(outfit, context.personalizationProfile);
+
   return score;
 }
 
-export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactSigs, recentItemCounts, weatherCat, timeCat, answers, savedSigs) {
+export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactSigs, recentItemCounts, weatherCat, timeCat, answers, savedSigs, options = {}) {
   const active = (Array.isArray(items) ? items : []).filter(
     (x) => x && x.is_active !== false && String(x.is_active) !== "false"
   );
@@ -854,15 +850,19 @@ export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactS
   const seed = typeof seedNumber === "number" && Number.isFinite(seedNumber) ? seedNumber : Date.now();
   const rng = mulberry32(seed);
   const buckets = bucketWardrobe(active);
+  const requestedLimit = Math.max(1, Math.min(12, Math.trunc(Number(options?.limit) || 3)));
   const skipSigs = savedSigs instanceof Set ? savedSigs : new Set();
   const recentSigs = recentExactSigs instanceof Set ? recentExactSigs : new Set();
   const context = {
     answers,
     bodyTypeId,
     recentItemCounts,
+    feedbackProfile: options?.feedbackProfile || null,
+    personalizationProfile: options?.personalizationProfile || null,
     weatherCat: (weatherCat || "mild").toString().toLowerCase(),
     timeCat: (timeCat || "work hours").toString().toLowerCase(),
-    selectedSeason: seasonFromDate(new Date()),
+    selectedSeason: (options?.selectedSeason || getCurrentSeason()).toString().toLowerCase(),
+    seasonalMode: options?.seasonalMode !== false,
   };
 
   const candidates = [];
@@ -886,23 +886,40 @@ export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactS
 
   candidates.sort((a, b) => b.score - a.score);
 
-  const results = candidates.slice(0, 3).map((entry) => entry.outfit);
+  const results = candidates.slice(0, requestedLimit).map((entry) => entry.outfit);
   if (!results.length) return [];
-  while (results.length < 3) results.push(results[results.length - 1]);
-  return results.slice(0, 3);
+  if (requestedLimit <= 3) {
+    while (results.length < requestedLimit) results.push(results[results.length - 1]);
+  }
+  return results.slice(0, requestedLimit);
 }
 
-export function scoreOutfitForDisplay(outfit, { weatherCategory, timeCategory, answers, bodyTypeId } = {}) {
+export function scoreOutfitForDisplay(
+  outfit,
+  {
+    weatherCategory,
+    timeCategory,
+    answers,
+    bodyTypeId,
+    selectedSeason,
+    seasonalMode = true,
+    feedbackProfile = null,
+    personalizationProfile = null,
+  } = {}
+) {
   const mapped = mappedOutfit(Array.isArray(outfit) ? outfit : []);
   if (!mapped.length) return 0;
 
   const score = scoreOutfitCandidate(mapped, {
     answers,
     bodyTypeId: bodyTypeId || DEFAULT_BODY_TYPE,
+    feedbackProfile,
+    personalizationProfile,
     recentItemCounts: new Map(),
     weatherCat: (weatherCategory || "mild").toString().toLowerCase(),
     timeCat: (timeCategory || "work hours").toString().toLowerCase(),
-    selectedSeason: seasonFromDate(new Date()),
+    selectedSeason: (selectedSeason || getCurrentSeason()).toString().toLowerCase(),
+    seasonalMode,
   });
 
   return Math.max(0, Math.min(100, Math.round(score)));
