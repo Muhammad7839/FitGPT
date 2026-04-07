@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 
@@ -22,6 +22,10 @@ import {
   buildExplanation, buildOutfitFromIds, scoreOutfitForDisplay,
   analyzeOutfitColors, colorInfo, buildPersonalizationProfile,
 } from "../utils/recommendationEngine";
+import {
+  shouldShowPrompt, computePromptType, recordVisit, recordPromptShown,
+  recordPromptEngaged, recordPromptDismissed, PROMPT_TYPES,
+} from "../utils/feedbackPrompts";
 
 const DEFAULT_BODY_TYPE = "rectangle";
 const OCCASION_OPTIONS = ["", "casual", "work", "formal", "athletic", "social", "lounge"];
@@ -365,6 +369,27 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     loadProfile();
     return () => { alive = false; };
   }, [user, wardrobe]);
+
+  const [nudge, setNudge] = useState(null);
+  const [refreshCount, setRefreshCount] = useState(0);
+  const nudgeTimerRef = useRef(null);
+
+  useEffect(() => { recordVisit(user); }, [user]);
+
+  /* Show nudge after sustained engagement with selected outfit */
+  useEffect(() => {
+    if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current);
+    setNudge(null);
+    if (selectedIdx == null) return;
+    nudgeTimerRef.current = setTimeout(() => {
+      const result = shouldShowPrompt(user, { refreshCount, engagementSec: 3 });
+      if (result.show) {
+        setNudge(result);
+        recordPromptShown(user, result.type);
+      }
+    }, 3000);
+    return () => { if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current); };
+  }, [selectedIdx, user, refreshCount]);
 
   const [aiOutfits, setAiOutfits] = useState(null);
   const [aiExplanations, setAiExplanations] = useState([]);
@@ -785,6 +810,8 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     setRecSeed((prev) => prev + Math.floor(Math.random() * 100000) + 1);
     setAiExplanations([]);
     setAiRefreshToken((prev) => prev + 1);
+    setRefreshCount((c) => c + 1);
+    setNudge(null);
   };
 
 
@@ -926,7 +953,13 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       if (msg) setSaveMsg(msg);
       else setSaveMsg(created ? "Saved! Refreshing recommendations..." : "This outfit is already in your saved outfits.");
 
-      window.setTimeout(() => setSaveMsg(""), 2500);
+      window.setTimeout(() => {
+        setSaveMsg("");
+        if (created) {
+          const result = shouldShowPrompt(user, { justSaved: true });
+          if (result.show) { setNudge(result); recordPromptShown(user, result.type); }
+        }
+      }, 2500);
 
       setAiExplanations([]);
       setAiRefreshToken((prev) => prev + 1);
@@ -1365,6 +1398,28 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             {saveMsg}
           </div>
         ) : null}
+
+        {nudge && !saveMsg && selectedIdx != null && (
+          <div className="feedbackNudge" key={nudge.type}>
+            <span className="feedbackNudgeText">{nudge.text}</span>
+            <button
+              type="button"
+              className="feedbackNudgeBtn feedbackNudgeLike"
+              onClick={() => { handleFeedback(outfits[selectedIdx], "like"); recordPromptEngaged(user, nudge.type); setNudge(null); }}
+            >&#x25B2;</button>
+            <button
+              type="button"
+              className="feedbackNudgeBtn feedbackNudgeDislike"
+              onClick={() => { handleFeedback(outfits[selectedIdx], "dislike"); recordPromptEngaged(user, nudge.type); setNudge(null); }}
+            >&#x25BC;</button>
+            <button
+              type="button"
+              className="feedbackNudgeDismiss"
+              onClick={() => { recordPromptDismissed(user); setNudge(null); }}
+              aria-label="Dismiss"
+            >&times;</button>
+          </div>
+        )}
       </section>
 
 
