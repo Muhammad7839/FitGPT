@@ -4807,6 +4807,370 @@ img.dashSquareImg {
   color: rgba(17, 24, 39, 0.92);
 }
 
+/* ── OUTFIT CALENDAR ────────────────────────────────────────────────── */
+
+.calendarLoading {
+  text-align: center;
+  padding: 48px 0;
+  color: rgba(17, 24, 39, 0.5);
+  font-weight: 600;
+}
+
+.calendarNav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.calendarNavBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: rgba(17, 24, 39, 0.7);
+  cursor: pointer;
+  transition: background 140ms ease, transform 100ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.calendarNavBtn:hover:not(:disabled) {
+  background: rgba(139, 30, 30, 0.08);
+  transform: scale(1.08);
+}
+.calendarNavBtn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.calendarNavTitle {
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: rgba(17, 24, 39, 0.88);
+  letter-spacing: -0.01em;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 8px;
+  transition: background 140ms ease;
+}
+.calendarNavTitle:hover {
+  background: rgba(139, 30, 30, 0.06);
+}
+
+.calendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 10px;
+}
+.calendarDayHeader {
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: rgba(17, 24, 39, 0.42);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 6px 0 4px;
+}
+.calendarCell {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1.5px solid transparent;
+  background: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 100ms ease;
+  position: relative;
+  gap: 2px;
+  padding: 0;
+}
+.calendarCell:hover:not(:disabled) {
+  background: rgba(139, 30, 30, 0.06);
+  transform: scale(1.04);
+}
+.calendarCellEmpty {
+  background: transparent;
+  cursor: default;
+}
+.calendarCellFuture {
+  opacity: 0.3;
+  cursor: default;
+}
+.calendarCellToday {
+  border-color: rgba(139, 30, 30, 0.35);
+  background: rgba(139, 30, 30, 0.06);
+  font-weight: 900;
+}
+.calendarCellSelected {
+  border-color: rgba(139, 30, 30, 0.55);
+  background: rgba(139, 30, 30, 0.12);
+  transform: scale(1.06);
+  box-shadow: 0 2px 10px rgba(139, 30, 30, 0.12);
+}
+.calendarCellHasOutfit .calendarDayNum {
+  font-weight: 900;
+  color: rgba(17, 24, 39, 0.92);
+}
+.calendarDayNum {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(17, 24, 39, 0.6);
+  line-height: 1;
+}
+.calendarDots {
+  display: flex;
+  gap: 3px;
+  justify-content: center;
+}
+.calendarDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(139, 30, 30, 0.55);
+}
+
+.calendarMonthSummary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: rgba(17, 24, 39, 0.5);
+  margin-bottom: 16px;
+}
+.calendarMonthStatSep {
+  opacity: 0.35;
+}
+
+/* ── Calendar day detail ──────────────────────────────────────────── */
+.calendarDetailSection {
+  margin-bottom: 18px;
+  animation: tabFadeIn 0.2s ease-out;
+}
+.calendarDetailTitle {
+  font-size: 1rem;
+  font-weight: 900;
+  color: rgba(17, 24, 39, 0.85);
+  margin-bottom: 10px;
+}
+.calendarDetailEmpty {
+  color: rgba(17, 24, 39, 0.45);
+  font-size: 0.88rem;
+  padding: 16px 0;
+}
+.calendarDetailList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.calendarOutfitCard {
+  display: flex;
+  gap: 14px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.04);
+  transition: box-shadow 200ms ease;
+}
+.calendarOutfitCard:hover {
+  box-shadow: 0 4px 16px rgba(17, 24, 39, 0.08);
+}
+.calendarOutfitThumbs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  width: 80px;
+  flex-shrink: 0;
+}
+.calendarThumb {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.calendarThumbPh {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(139, 30, 30, 0.1), rgba(17, 24, 39, 0.06));
+}
+.calendarOutfitMeta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.calendarOutfitMetaTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.calendarOccasion {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: rgba(17, 24, 39, 0.7);
+  text-transform: capitalize;
+}
+.calendarOutfitNames {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(17, 24, 39, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.calendarWearAgain {
+  align-self: flex-start;
+  margin-top: auto;
+  font-size: 0.76rem;
+  padding: 5px 14px;
+}
+
+/* ── Calendar insights ────────────────────────────────────────────── */
+.calendarInsightsCard {
+  margin-top: 8px;
+}
+.calendarInsightsTitle {
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: rgba(17, 24, 39, 0.85);
+  margin-bottom: 14px;
+}
+.calendarInsightsEmpty {
+  text-align: center;
+  padding: 24px 0;
+}
+.calendarInsightsEmptyIcon {
+  font-size: 2rem;
+  margin-bottom: 6px;
+}
+.calendarInsightsEmptyText {
+  font-size: 0.88rem;
+  color: rgba(17, 24, 39, 0.45);
+}
+.calendarInsightsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.calendarInsightTile {
+  text-align: center;
+  padding: 14px 8px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+}
+.calendarInsightIcon {
+  font-size: 1.3rem;
+  margin-bottom: 2px;
+}
+.calendarInsightValue {
+  font-size: 1.5rem;
+  font-weight: 950;
+  color: rgba(17, 24, 39, 0.88);
+  line-height: 1.1;
+}
+.calendarInsightLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(17, 24, 39, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-top: 2px;
+}
+.calendarInsightNote {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(17, 24, 39, 0.55);
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.calendarInsightWarn {
+  background: rgba(234, 179, 8, 0.08);
+  color: rgba(120, 80, 0, 0.8);
+}
+.calendarRepeatSection {
+  margin-top: 8px;
+}
+.calendarRepeatTitle {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: rgba(17, 24, 39, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+}
+.calendarRepeatRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 0.85rem;
+  color: rgba(17, 24, 39, 0.65);
+}
+.calendarRepeatCount {
+  font-weight: 900;
+  color: rgba(139, 30, 30, 0.7);
+  min-width: 28px;
+}
+.calendarRepeatNames {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Calendar dark mode ───────────────────────────────────────────── */
+[data-theme="dark"] .calendarLoading { color: rgba(232, 230, 227, 0.45); }
+[data-theme="dark"] .calendarNavBtn {
+  background: rgba(40, 40, 40, 0.8);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(232, 230, 227, 0.7);
+}
+[data-theme="dark"] .calendarNavBtn:hover:not(:disabled) { background: rgba(139, 30, 30, 0.15); }
+[data-theme="dark"] .calendarNavTitle { color: rgba(232, 230, 227, 0.88); }
+[data-theme="dark"] .calendarNavTitle:hover { background: rgba(139, 30, 30, 0.1); }
+[data-theme="dark"] .calendarDayHeader { color: rgba(232, 230, 227, 0.38); }
+[data-theme="dark"] .calendarCell { background: rgba(40, 40, 40, 0.5); }
+[data-theme="dark"] .calendarCell:hover:not(:disabled) { background: rgba(139, 30, 30, 0.12); }
+[data-theme="dark"] .calendarCellEmpty { background: transparent; }
+[data-theme="dark"] .calendarCellToday { border-color: rgba(139, 30, 30, 0.4); background: rgba(139, 30, 30, 0.12); }
+[data-theme="dark"] .calendarCellSelected { border-color: rgba(139, 30, 30, 0.6); background: rgba(139, 30, 30, 0.2); box-shadow: 0 2px 10px rgba(139, 30, 30, 0.18); }
+[data-theme="dark"] .calendarDayNum { color: rgba(232, 230, 227, 0.55); }
+[data-theme="dark"] .calendarCellHasOutfit .calendarDayNum { color: rgba(232, 230, 227, 0.92); }
+[data-theme="dark"] .calendarDot { background: rgba(200, 80, 80, 0.65); }
+[data-theme="dark"] .calendarMonthSummary { color: rgba(232, 230, 227, 0.45); }
+[data-theme="dark"] .calendarDetailTitle { color: rgba(232, 230, 227, 0.85); }
+[data-theme="dark"] .calendarDetailEmpty { color: rgba(232, 230, 227, 0.4); }
+[data-theme="dark"] .calendarOutfitCard { background: rgba(40, 40, 40, 0.8); border-color: rgba(255, 255, 255, 0.06); }
+[data-theme="dark"] .calendarOccasion { color: rgba(232, 230, 227, 0.65); }
+[data-theme="dark"] .calendarOutfitNames { color: rgba(232, 230, 227, 0.5); }
+[data-theme="dark"] .calendarInsightsTitle { color: rgba(232, 230, 227, 0.85); }
+[data-theme="dark"] .calendarInsightsEmptyText { color: rgba(232, 230, 227, 0.4); }
+[data-theme="dark"] .calendarInsightTile { background: rgba(40, 40, 40, 0.6); border-color: rgba(255, 255, 255, 0.05); }
+[data-theme="dark"] .calendarInsightValue { color: rgba(232, 230, 227, 0.88); }
+[data-theme="dark"] .calendarInsightLabel { color: rgba(232, 230, 227, 0.4); }
+[data-theme="dark"] .calendarInsightNote { background: rgba(40, 40, 40, 0.5); color: rgba(232, 230, 227, 0.5); }
+[data-theme="dark"] .calendarInsightWarn { background: rgba(234, 179, 8, 0.1); color: rgba(234, 200, 80, 0.75); }
+[data-theme="dark"] .calendarRepeatTitle { color: rgba(232, 230, 227, 0.45); }
+[data-theme="dark"] .calendarRepeatRow { color: rgba(232, 230, 227, 0.55); }
+[data-theme="dark"] .calendarRepeatCount { color: rgba(200, 80, 80, 0.75); }
+[data-theme="dark"] .calendarThumbPh { background: linear-gradient(135deg, rgba(200, 80, 80, 0.15), rgba(232, 230, 227, 0.06)); }
+
 /* WEATHER (Dashboard) */
 .dashWeatherRight {
   display: flex;
