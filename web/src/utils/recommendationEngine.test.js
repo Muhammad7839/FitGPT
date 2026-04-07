@@ -47,6 +47,7 @@ import {
   personalizationLevel,
   explorationFactor,
   validatePersonalizationProgress,
+  computeOutfitConfidence,
 } from "./recommendationEngine";
 
 describe("titleCase", () => {
@@ -3733,5 +3734,135 @@ describe("recommendations without any feedback", () => {
     const result = measureFeedbackAlignment([], []);
     expect(result.accuracy).toBeNull();
     expect(result.message).toMatch(/Not enough/);
+  });
+});
+
+/* ── Confidence scoring model tests ─────────────────────────────────── */
+
+describe("computeOutfitConfidence", () => {
+  const baseCtx = { weatherCategory: "mild", precipCategory: "clear", timeCategory: "morning", answers: {}, bodyTypeId: "rectangle" };
+
+  test("returns score 0 and level 'none' for empty outfit", () => {
+    const result = computeOutfitConfidence([], baseCtx);
+    expect(result.score).toBe(0);
+    expect(result.level).toBe("none");
+  });
+
+  test("returns score between 0 and 100", () => {
+    const outfit = [
+      { id: "1", name: "Tee", category: "Tops", color: "white", clothing_type: "t-shirt" },
+      { id: "2", name: "Jeans", category: "Bottoms", color: "navy" },
+      { id: "3", name: "Sneakers", category: "Shoes", clothing_type: "sneakers", color: "white" },
+    ];
+    const result = computeOutfitConfidence(outfit, baseCtx);
+    expect(result.score).toBeGreaterThanOrEqual(0);
+    expect(result.score).toBeLessThanOrEqual(100);
+  });
+
+  test("complete outfit (top+bottom+shoes) scores higher than incomplete", () => {
+    const complete = [
+      { id: "1", name: "Tee", category: "Tops", color: "white" },
+      { id: "2", name: "Jeans", category: "Bottoms", color: "navy" },
+      { id: "3", name: "Sneakers", category: "Shoes", color: "white" },
+    ];
+    const noShoes = [
+      { id: "4", name: "Tee", category: "Tops", color: "white" },
+      { id: "5", name: "Jeans", category: "Bottoms", color: "navy" },
+    ];
+    expect(computeOutfitConfidence(complete, baseCtx).score).toBeGreaterThan(computeOutfitConfidence(noShoes, baseCtx).score);
+  });
+
+  test("returns all signal components", () => {
+    const outfit = [
+      { id: "1", name: "Tee", category: "Tops", color: "white" },
+      { id: "2", name: "Jeans", category: "Bottoms", color: "navy" },
+    ];
+    const result = computeOutfitConfidence(outfit, baseCtx);
+    expect(result.signals).toHaveProperty("algorithm");
+    expect(result.signals).toHaveProperty("coverage");
+    expect(result.signals).toHaveProperty("weather");
+    expect(result.signals).toHaveProperty("feedback");
+    expect(result.signals).toHaveProperty("variety");
+    expect(result.dataConfidence).toBeGreaterThan(0);
+  });
+
+  test("feedback signal is neutral (50) without feedback profile", () => {
+    const outfit = [
+      { id: "1", name: "Tee", category: "Tops", color: "white" },
+      { id: "2", name: "Jeans", category: "Bottoms", color: "navy" },
+    ];
+    const result = computeOutfitConfidence(outfit, { ...baseCtx, feedbackProfile: null });
+    expect(result.signals.feedback).toBe(50);
+  });
+
+  test("positive feedback boosts feedback signal above 50", () => {
+    const outfit = [
+      { id: "t1", name: "Black Tee", category: "Tops", color: "black", clothing_type: "t-shirt" },
+      { id: "b1", name: "Navy Jeans", category: "Bottoms", color: "navy" },
+    ];
+    const profile = buildFeedbackProfile([
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["t-shirt"], styleTags: [], itemIds: ["t1"] },
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["t-shirt"], styleTags: [], itemIds: ["t1"] },
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["t-shirt"], styleTags: [], itemIds: ["t1"] },
+    ]);
+    const result = computeOutfitConfidence(outfit, { ...baseCtx, feedbackProfile: profile });
+    expect(result.signals.feedback).toBeGreaterThan(50);
+  });
+
+  test("data confidence is lower without feedback", () => {
+    const outfit = [
+      { id: "1", name: "Tee", category: "Tops", color: "white" },
+      { id: "2", name: "Jeans", category: "Bottoms", color: "navy" },
+    ];
+    const noFeedback = computeOutfitConfidence(outfit, { ...baseCtx, feedbackProfile: null });
+    const richProfile = buildPersonalizationProfile(
+      Array.from({ length: 20 }, () => ({ feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["t-shirt"], styleTags: ["casual"], itemIds: ["t1"] })),
+      Array.from({ length: 30 }, () => ({ worn_at: new Date().toISOString(), item_ids: ["t1", "b1"] })),
+      [],
+      [{ id: "t1", color: "black", clothing_type: "t-shirt" }, { id: "b1", color: "navy" }]
+    );
+    const withFeedback = computeOutfitConfidence(outfit, { ...baseCtx, feedbackProfile: richProfile });
+    expect(withFeedback.dataConfidence).toBeGreaterThan(noFeedback.dataConfidence);
+  });
+
+  test("recently seen outfit gets lower variety signal", () => {
+    const outfit = [
+      { id: "1", name: "Tee", category: "Tops", color: "white" },
+      { id: "2", name: "Jeans", category: "Bottoms", color: "navy" },
+    ];
+    const sig = "1|2";
+    const fresh = computeOutfitConfidence(outfit, { ...baseCtx, recentSigs: new Set() });
+    const seen = computeOutfitConfidence(outfit, { ...baseCtx, recentSigs: new Set([sig]) });
+    expect(fresh.signals.variety).toBeGreaterThan(seen.signals.variety);
+  });
+
+  test("level labels are consistent with score ranges", () => {
+    const outfit = [
+      { id: "1", name: "Tee", category: "Tops", color: "white" },
+      { id: "2", name: "Jeans", category: "Bottoms", color: "navy" },
+      { id: "3", name: "Sneakers", category: "Shoes", color: "white" },
+    ];
+    const result = computeOutfitConfidence(outfit, baseCtx);
+    const { score, level } = result;
+    if (score >= 82) expect(level).toBe("excellent");
+    else if (score >= 68) expect(level).toBe("strong");
+    else if (score >= 52) expect(level).toBe("good");
+    else if (score >= 35) expect(level).toBe("fair");
+    else expect(level).toBe("low");
+  });
+
+  test("rain with waterproof outer boosts weather signal", () => {
+    const withRaincoat = [
+      { id: "1", name: "Tee", category: "Tops", color: "white" },
+      { id: "2", name: "Jeans", category: "Bottoms", color: "navy" },
+      { id: "3", name: "Raincoat", category: "Outerwear", clothing_type: "raincoat", color: "navy" },
+    ];
+    const withoutRaincoat = [
+      { id: "4", name: "Tee", category: "Tops", color: "white" },
+      { id: "5", name: "Jeans", category: "Bottoms", color: "navy" },
+    ];
+    const rainCtx = { ...baseCtx, weatherCategory: "cool", precipCategory: "rain" };
+    expect(computeOutfitConfidence(withRaincoat, rainCtx).signals.weather)
+      .toBeGreaterThan(computeOutfitConfidence(withoutRaincoat, rainCtx).signals.weather);
   });
 });

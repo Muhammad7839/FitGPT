@@ -1410,6 +1410,85 @@ export function scoreOutfitForDisplay(outfit, { weatherCategory, precipCategory,
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
+export function computeOutfitConfidence(outfit, { weatherCategory, precipCategory, timeCategory, answers, bodyTypeId, feedbackProfile, recentSigs } = {}) {
+  const mapped = mappedOutfit(Array.isArray(outfit) ? outfit : []);
+  if (!mapped.length) return { score: 0, level: "none", signals: {}, dataConfidence: 0 };
+
+  const wCat = (weatherCategory || "mild").toString().toLowerCase();
+  const pCat = (precipCategory || "clear").toString().toLowerCase();
+  const ctx = {
+    answers,
+    bodyTypeId: bodyTypeId || DEFAULT_BODY_TYPE,
+    recentItemCounts: new Map(),
+    weatherCat: wCat,
+    precipCat: pCat,
+    timeCat: (timeCategory || "work hours").toString().toLowerCase(),
+    selectedSeason: seasonFromDate(new Date()),
+    feedbackProfile: feedbackProfile || null,
+  };
+
+  /* 1. Algorithm quality (40%): raw score with softer normalization
+     Typical raw scores range 60-200+. Use sigmoid-like mapping
+     so the middle range (80-140) spreads across 40-90. */
+  const rawScore = scoreOutfitCandidate(mapped, ctx);
+  const algorithmSignal = Math.max(0, Math.min(100, Math.round(100 / (1 + Math.exp(-(rawScore - 100) / 30)))));
+
+  /* 2. Coverage (25%): essential roles filled */
+  const roles = new Set(mapped.map(itemRole));
+  const hasTop = roles.has("top") || roles.has("one-piece");
+  const hasBottom = roles.has("bottom") || roles.has("one-piece");
+  const hasShoes = roles.has("shoes");
+  const coverageSignal = (hasTop ? 40 : 0) + (hasBottom ? 40 : 0) + (hasShoes ? 20 : 0);
+
+  /* 3. Weather fit (15%): warmth appropriateness + precip readiness */
+  const warmthVal = warmthScore(mapped, wCat);
+  let weatherSignal = Math.max(0, Math.min(100, 60 + warmthVal * 5));
+  if (pCat !== "clear") {
+    const hasProtection = mapped.some((item) => {
+      const p = classifyWeatherProtection(item);
+      return p.waterproof || p.waterResistant;
+    });
+    weatherSignal = hasProtection ? Math.min(100, weatherSignal + 15) : Math.max(0, weatherSignal - 20);
+  }
+
+  /* 4. Feedback alignment (10%): how well this matches learned preferences */
+  let feedbackSignal = 50;
+  if (feedbackProfile && feedbackProfile.totalEntries > 0) {
+    const avgBias = mapped.reduce((s, item) => s + feedbackBias(item, feedbackProfile), 0) / mapped.length;
+    feedbackSignal = Math.max(0, Math.min(100, 50 + avgBias * 4));
+  }
+
+  /* 5. Variety (10%): not recently seen */
+  const sig = idsSignature(mapped.map((item) => item.id));
+  const recentSet = recentSigs instanceof Set ? recentSigs : new Set();
+  const varietySignal = recentSet.has(sig) ? 20 : 80;
+
+  /* Data confidence: honest about how much we know.
+     With no feedback at all, cap at 0.65 so scores don't over-promise. */
+  const personLevel = feedbackProfile?.personalizationLevel ?? 0;
+  const dataConfidence = Math.max(0.5, Math.min(1, 0.5 + personLevel / 200));
+
+  /* Weighted combination, scaled by data confidence */
+  const rawConfidence = algorithmSignal * 0.40 + coverageSignal * 0.25 + weatherSignal * 0.15 + feedbackSignal * 0.10 + varietySignal * 0.10;
+  const scaled = rawConfidence * (0.7 + dataConfidence * 0.3);
+  const score = Math.max(0, Math.min(100, Math.round(scaled)));
+
+  const level = score >= 82 ? "excellent" : score >= 68 ? "strong" : score >= 52 ? "good" : score >= 35 ? "fair" : "low";
+
+  return {
+    score,
+    level,
+    signals: {
+      algorithm: algorithmSignal,
+      coverage: coverageSignal,
+      weather: Math.round(weatherSignal),
+      feedback: Math.round(feedbackSignal),
+      variety: varietySignal,
+    },
+    dataConfidence: Math.round(dataConfidence * 100),
+  };
+}
+
 export function signatureFromItems(items) {
   const ids = normalizeItems((items || []).map((x) => x?.id));
   return ids.join("|");
