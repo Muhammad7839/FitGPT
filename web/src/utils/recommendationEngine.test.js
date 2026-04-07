@@ -31,6 +31,7 @@ import {
   getWashThreshold,
   buildLaundryStatus,
   getLaundryAlerts,
+  classifyWeatherProtection,
 } from "./recommendationEngine";
 
 describe("titleCase", () => {
@@ -2437,5 +2438,257 @@ describe("getLaundryAlerts", () => {
 
   test("empty wardrobe returns no alerts", () => {
     expect(getLaundryAlerts([], [])).toHaveLength(0);
+  });
+});
+
+/* ── Weather condition scenario tests ───────────────────────────────── */
+
+describe("classifyWeatherProtection", () => {
+  test("identifies waterproof items", () => {
+    expect(classifyWeatherProtection({ clothing_type: "raincoat" }).waterproof).toBe(true);
+    expect(classifyWeatherProtection({ name: "Rain Boots", clothing_type: "boots" }).waterproof).toBe(true);
+    expect(classifyWeatherProtection({ clothing_type: "anorak" }).waterproof).toBe(true);
+  });
+
+  test("identifies water-resistant items", () => {
+    expect(classifyWeatherProtection({ clothing_type: "windbreaker" }).waterResistant).toBe(true);
+    expect(classifyWeatherProtection({ clothing_type: "parka" }).waterResistant).toBe(true);
+    expect(classifyWeatherProtection({ clothing_type: "trench coat" }).waterResistant).toBe(true);
+  });
+
+  test("identifies open-toe footwear", () => {
+    expect(classifyWeatherProtection({ clothing_type: "sandals", category: "Shoes" }).openToe).toBe(true);
+    expect(classifyWeatherProtection({ clothing_type: "flip flops", category: "Shoes" }).openToe).toBe(true);
+  });
+
+  test("identifies closed-toe footwear", () => {
+    expect(classifyWeatherProtection({ clothing_type: "boots", category: "Shoes" }).closedToe).toBe(true);
+    expect(classifyWeatherProtection({ clothing_type: "sneakers", category: "Shoes" }).closedToe).toBe(true);
+  });
+
+  test("identifies wet-vulnerable items by name", () => {
+    expect(classifyWeatherProtection({ name: "Suede Chelsea Boots", clothing_type: "boots", category: "Shoes" }).vulnerableToWet).toBe(true);
+    expect(classifyWeatherProtection({ name: "Canvas Sneakers", clothing_type: "sneakers", category: "Shoes" }).vulnerableToWet).toBe(true);
+  });
+
+  test("identifies insulated items", () => {
+    expect(classifyWeatherProtection({ clothing_type: "parka" }).insulated).toBe(true);
+    expect(classifyWeatherProtection({ clothing_type: "down jacket" }).insulated).toBe(true);
+    expect(classifyWeatherProtection({ clothing_type: "puffer jacket" }).insulated).toBe(true);
+  });
+
+  test("regular items have no special protection", () => {
+    const p = classifyWeatherProtection({ clothing_type: "t-shirt", category: "Tops" });
+    expect(p.waterproof).toBe(false);
+    expect(p.waterResistant).toBe(false);
+    expect(p.insulated).toBe(false);
+    expect(p.vulnerableToWet).toBe(false);
+  });
+});
+
+describe("weather scenario scoring", () => {
+  const rainCtx = { weatherCategory: "cool", precipCategory: "rain", timeCategory: "morning", answers: {}, bodyTypeId: "rectangle" };
+  const snowCtx = { weatherCategory: "cold", precipCategory: "snow", timeCategory: "morning", answers: {}, bodyTypeId: "rectangle" };
+  const clearCtx = { weatherCategory: "mild", precipCategory: "clear", timeCategory: "morning", answers: {}, bodyTypeId: "rectangle" };
+  const hotCtx = { weatherCategory: "hot", precipCategory: "clear", timeCategory: "morning", answers: {}, bodyTypeId: "rectangle" };
+
+  test("rain: waterproof outerwear scores higher than non-waterproof", () => {
+    /* Use clashing colors and minimal items to keep raw scores well below the 100 clamp */
+    const waterproofOutfit = [
+      { id: "1", name: "Tee", category: "Tops", clothing_type: "t-shirt", color: "red" },
+      { id: "2", name: "Raincoat", category: "Outerwear", clothing_type: "raincoat", color: "yellow" },
+    ];
+    const nonWaterproofOutfit = [
+      { id: "3", name: "Tee", category: "Tops", clothing_type: "t-shirt", color: "red" },
+      { id: "4", name: "Blazer", category: "Outerwear", clothing_type: "blazer", color: "yellow" },
+    ];
+    expect(scoreOutfitForDisplay(waterproofOutfit, rainCtx)).toBeGreaterThan(scoreOutfitForDisplay(nonWaterproofOutfit, rainCtx));
+  });
+
+  test("rain: sandals score much lower than boots", () => {
+    const withBoots = [
+      { id: "1", name: "Tee", category: "Tops", color: "white" },
+      { id: "2", name: "Jeans", category: "Bottoms", color: "navy" },
+      { id: "3", name: "Boots", category: "Shoes", clothing_type: "boots", color: "black" },
+    ];
+    const withSandals = [
+      { id: "4", name: "Tee", category: "Tops", color: "white" },
+      { id: "5", name: "Jeans", category: "Bottoms", color: "navy" },
+      { id: "6", name: "Sandals", category: "Shoes", clothing_type: "sandals", color: "brown" },
+    ];
+    expect(scoreOutfitForDisplay(withBoots, rainCtx)).toBeGreaterThan(scoreOutfitForDisplay(withSandals, rainCtx));
+  });
+
+  test("snow: insulated waterproof outfit scores highest", () => {
+    const parkaOutfit = [
+      { id: "1", name: "Turtleneck", category: "Tops", clothing_type: "turtleneck", color: "black", layer_type: "base" },
+      { id: "2", name: "Sweater", category: "Tops", clothing_type: "sweater", color: "gray", layer_type: "mid" },
+      { id: "3", name: "Parka", category: "Outerwear", clothing_type: "parka", color: "navy", layer_type: "outer" },
+      { id: "4", name: "Wool Pants", category: "Bottoms", color: "black" },
+      { id: "5", name: "Boots", category: "Shoes", clothing_type: "boots", color: "brown" },
+    ];
+    const lightOutfit = [
+      { id: "6", name: "Tee", category: "Tops", clothing_type: "t-shirt", color: "white", layer_type: "base" },
+      { id: "7", name: "Shorts", category: "Bottoms", clothing_type: "shorts", color: "beige" },
+      { id: "8", name: "Sandals", category: "Shoes", clothing_type: "sandals", color: "brown" },
+    ];
+    expect(scoreOutfitForDisplay(parkaOutfit, snowCtx)).toBeGreaterThan(scoreOutfitForDisplay(lightOutfit, snowCtx));
+  });
+
+  test("snow: penalizes sandals and shorts", () => {
+    const snowAppropriate = [
+      { id: "1", name: "Sweater", category: "Tops", clothing_type: "sweater", color: "gray" },
+      { id: "2", name: "Pants", category: "Bottoms", color: "black" },
+      { id: "3", name: "Boots", category: "Shoes", clothing_type: "boots", color: "brown" },
+    ];
+    const snowInappropriate = [
+      { id: "4", name: "Tank Top", category: "Tops", clothing_type: "tank top", color: "white" },
+      { id: "5", name: "Shorts", category: "Bottoms", clothing_type: "shorts", color: "beige" },
+      { id: "6", name: "Sandals", category: "Shoes", clothing_type: "sandals", color: "brown" },
+    ];
+    expect(scoreOutfitForDisplay(snowAppropriate, snowCtx)).toBeGreaterThan(scoreOutfitForDisplay(snowInappropriate, snowCtx));
+  });
+
+  test("hot weather: coat penalized heavily", () => {
+    /* Minimal items with clashing colors to stay below 100 clamp */
+    const lightOutfit = [
+      { id: "1", name: "Tank Top", category: "Tops", clothing_type: "tank top", color: "red" },
+      { id: "2", name: "Shorts", category: "Bottoms", clothing_type: "shorts", color: "yellow" },
+    ];
+    const heavyOutfit = [
+      { id: "3", name: "Turtleneck", category: "Tops", clothing_type: "turtleneck", color: "red" },
+      { id: "4", name: "Coat", category: "Outerwear", clothing_type: "coat", color: "yellow", layer_type: "outer" },
+    ];
+    expect(scoreOutfitForDisplay(lightOutfit, hotCtx)).toBeGreaterThan(scoreOutfitForDisplay(heavyOutfit, hotCtx));
+  });
+
+  test("rain: suede outfit scores lower in rain than in clear weather", () => {
+    const suedeOutfit = [
+      { id: "1", name: "Tee", category: "Tops", color: "red" },
+      { id: "2", name: "Suede Chelsea Boots", category: "Shoes", clothing_type: "boots", color: "yellow" },
+    ];
+    const clearScore = scoreOutfitForDisplay(suedeOutfit, clearCtx);
+    const rainScore = scoreOutfitForDisplay(suedeOutfit, rainCtx);
+    expect(clearScore).toBeGreaterThan(rainScore);
+  });
+
+  test("clear weather: no precipitation penalty applied", () => {
+    const outfit = [
+      { id: "1", name: "Tee", category: "Tops", color: "white" },
+      { id: "2", name: "Jeans", category: "Bottoms", color: "navy" },
+      { id: "3", name: "Sandals", category: "Shoes", clothing_type: "sandals", color: "brown" },
+    ];
+    const clearScore = scoreOutfitForDisplay(outfit, clearCtx);
+    const rainScore = scoreOutfitForDisplay(outfit, rainCtx);
+    expect(clearScore).toBeGreaterThan(rainScore);
+  });
+});
+
+describe("weather scenario variety", () => {
+  const makeWardrobe = () => [
+    { id: "t1", name: "T-Shirt", category: "Tops", clothing_type: "t-shirt", color: "white", is_active: true, layer_type: "base" },
+    { id: "t2", name: "Long Sleeve", category: "Tops", clothing_type: "long sleeve", color: "gray", is_active: true, layer_type: "base" },
+    { id: "t3", name: "Turtleneck", category: "Tops", clothing_type: "turtleneck", color: "black", is_active: true, layer_type: "base" },
+    { id: "m1", name: "Sweater", category: "Tops", clothing_type: "sweater", color: "navy", is_active: true, layer_type: "mid" },
+    { id: "m2", name: "Hoodie", category: "Tops", clothing_type: "hoodie", color: "gray", is_active: true, layer_type: "mid" },
+    { id: "b1", name: "Jeans", category: "Bottoms", color: "navy", is_active: true },
+    { id: "b2", name: "Chinos", category: "Bottoms", color: "beige", is_active: true },
+    { id: "b3", name: "Shorts", category: "Bottoms", clothing_type: "shorts", color: "beige", is_active: true },
+    { id: "o1", name: "Raincoat", category: "Outerwear", clothing_type: "raincoat", color: "navy", is_active: true, layer_type: "outer" },
+    { id: "o2", name: "Parka", category: "Outerwear", clothing_type: "parka", color: "black", is_active: true, layer_type: "outer" },
+    { id: "o3", name: "Blazer", category: "Outerwear", clothing_type: "blazer", color: "navy", is_active: true, layer_type: "outer" },
+    { id: "s1", name: "Boots", category: "Shoes", clothing_type: "boots", color: "brown", is_active: true },
+    { id: "s2", name: "Sneakers", category: "Shoes", clothing_type: "sneakers", color: "white", is_active: true },
+    { id: "s3", name: "Sandals", category: "Shoes", clothing_type: "sandals", color: "brown", is_active: true },
+  ];
+
+  test("rain outfits exclude sandals", () => {
+    const wardrobe = makeWardrobe();
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "cool", "morning", {}, new Set(), [], new Set(), new Set(), "rain");
+    for (const outfit of outfits) {
+      const shoes = outfit.filter((item) => (item.category || "").toLowerCase().includes("shoe"));
+      for (const shoe of shoes) {
+        expect(shoe.clothing_type).not.toBe("sandals");
+      }
+    }
+  });
+
+  test("rain outfits include outerwear", () => {
+    const wardrobe = makeWardrobe();
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "cool", "morning", {}, new Set(), [], new Set(), new Set(), "rain");
+    for (const outfit of outfits) {
+      const hasOuter = outfit.some((item) => (item.category || "").toLowerCase().includes("outerwear") || item.layer_type === "outer");
+      expect(hasOuter).toBe(true);
+    }
+  });
+
+  test("snow outfits exclude shorts", () => {
+    const wardrobe = makeWardrobe();
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "cold", "morning", {}, new Set(), [], new Set(), new Set(), "snow");
+    for (const outfit of outfits) {
+      for (const item of outfit) {
+        expect(item.clothing_type).not.toBe("shorts");
+      }
+    }
+  });
+
+  test("different seeds produce different outfits in same weather", () => {
+    const wardrobe = [
+      ...makeWardrobe(),
+      { id: "t4", name: "Polo", category: "Tops", clothing_type: "polo", color: "green", is_active: true, layer_type: "base" },
+      { id: "t5", name: "Henley", category: "Tops", clothing_type: "henley", color: "red", is_active: true, layer_type: "base" },
+      { id: "m3", name: "Cardigan", category: "Tops", clothing_type: "cardigan", color: "beige", is_active: true, layer_type: "mid" },
+      { id: "b4", name: "Trousers", category: "Bottoms", color: "gray", is_active: true },
+      { id: "o4", name: "Windbreaker", category: "Outerwear", clothing_type: "windbreaker", color: "green", is_active: true, layer_type: "outer" },
+    ];
+    const seeds = [1, 42, 100, 500, 999];
+    const sigSets = seeds.map((seed) => {
+      const outfits = generateThreeOutfits(wardrobe, seed, "rectangle", new Set(), new Map(), "cool", "morning", {}, new Set(), [], new Set(), new Set(), "rain");
+      return outfits.map((o) => o.map((i) => i.id).sort().join(",")).join("|");
+    });
+    const unique = new Set(sigSets);
+    expect(unique.size).toBeGreaterThan(1);
+  });
+
+  test("rain outfits prefer raincoat over blazer", () => {
+    const wardrobe = makeWardrobe();
+    const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "cool", "morning", {}, new Set(), [], new Set(), new Set(), "rain");
+    let raincoatCount = 0;
+    let blazerCount = 0;
+    for (const outfit of outfits) {
+      for (const item of outfit) {
+        if (item.clothing_type === "raincoat") raincoatCount++;
+        if (item.clothing_type === "blazer") blazerCount++;
+      }
+    }
+    expect(raincoatCount).toBeGreaterThanOrEqual(blazerCount);
+  });
+});
+
+describe("weather explanation context", () => {
+  const baseOutfit = [
+    { id: "1", name: "Tee", category: "Tops", color: "white" },
+    { id: "2", name: "Jeans", category: "Bottoms", color: "navy" },
+    { id: "3", name: "Boots", category: "Shoes", color: "brown" },
+  ];
+
+  test("rain explanation mentions rain-related terms", () => {
+    const result = buildExplanation({ outfit: baseOutfit, answers: {}, weatherCategory: "cool", precipCategory: "rain", timeCategory: "morning" });
+    expect(result.toLowerCase()).toMatch(/rain|dry|water/);
+  });
+
+  test("snow explanation mentions snow-related terms", () => {
+    const result = buildExplanation({ outfit: baseOutfit, answers: {}, weatherCategory: "cold", precipCategory: "snow", timeCategory: "morning" });
+    expect(result.toLowerCase()).toMatch(/snow|insulated|warm/);
+  });
+
+  test("storm explanation mentions storm-related terms", () => {
+    const result = buildExplanation({ outfit: baseOutfit, answers: {}, weatherCategory: "cool", precipCategory: "storm", timeCategory: "morning" });
+    expect(result.toLowerCase()).toMatch(/storm|weather|proof|heavy/);
+  });
+
+  test("clear weather does not mention precipitation", () => {
+    const result = buildExplanation({ outfit: baseOutfit, answers: {}, weatherCategory: "mild", precipCategory: "clear", timeCategory: "morning" });
+    expect(result.toLowerCase()).not.toMatch(/rain|snow|storm/);
   });
 });

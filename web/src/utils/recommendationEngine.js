@@ -671,6 +671,94 @@ function clothingTypeBias(item, weatherCat) {
   return profile.coolness + profile.warm;
 }
 
+/* ── Weather condition → outfit type mapping ──────────────────────── */
+
+const WEATHER_OUTFIT_MAP = {
+  rain: {
+    boost:    ["raincoat", "anorak", "trench coat", "windbreaker", "boots", "rain boots", "parka"],
+    penalize: ["sandals", "flip flops", "slides", "canvas shoes", "espadrilles"],
+    requireOuterwear: true,
+  },
+  snow: {
+    boost:    ["parka", "down jacket", "puffer jacket", "coat", "overcoat", "boots", "rain boots", "scarf", "turtleneck", "fleece"],
+    penalize: ["sandals", "flip flops", "slides", "canvas shoes", "espadrilles", "tank top", "crop top", "shorts"],
+    requireOuterwear: true,
+  },
+  storm: {
+    boost:    ["raincoat", "anorak", "parka", "down jacket", "puffer jacket", "windbreaker", "boots", "rain boots"],
+    penalize: ["sandals", "flip flops", "slides", "canvas shoes", "espadrilles", "tank top", "crop top"],
+    requireOuterwear: true,
+  },
+  clear: { boost: [], penalize: [], requireOuterwear: false },
+};
+
+const WATERPROOF_TYPES = new Set([
+  "raincoat", "rain jacket", "anorak", "rain boots", "rubber boots", "galoshes",
+]);
+
+const WATER_RESISTANT_TYPES = new Set([
+  "trench coat", "windbreaker", "parka", "down jacket", "puffer jacket",
+]);
+
+const OPEN_TOE_TYPES = new Set([
+  "sandals", "flip flops", "slides", "espadrilles", "open-toe heels",
+]);
+
+const WET_VULNERABLE_KEYWORDS = ["suede", "canvas", "linen", "silk"];
+
+export function classifyWeatherProtection(item) {
+  const type = normalizeClothingType(item?.clothing_type || item?.type || item?.name || "");
+  const name = (item?.name || "").toLowerCase();
+
+  return {
+    waterproof:     WATERPROOF_TYPES.has(type) || name.includes("rain") || name.includes("waterproof"),
+    waterResistant: WATER_RESISTANT_TYPES.has(type) || name.includes("water-resistant") || name.includes("water resistant"),
+    closedToe:      !OPEN_TOE_TYPES.has(type) && normalizeCategory(item?.category) === "Shoes",
+    openToe:        OPEN_TOE_TYPES.has(type),
+    insulated:      ["parka", "down jacket", "puffer jacket", "fleece"].includes(type) || name.includes("insulated"),
+    vulnerableToWet: WET_VULNERABLE_KEYWORDS.some((kw) => name.includes(kw)),
+  };
+}
+
+function precipScoreBias(item, precipCat) {
+  if (!precipCat || precipCat === "clear") return 0;
+
+  const prot = classifyWeatherProtection(item);
+  const role = itemRole(item);
+  const type = normalizeClothingType(item?.clothing_type || item?.type || item?.name || "");
+  const map = WEATHER_OUTFIT_MAP[precipCat] || WEATHER_OUTFIT_MAP.clear;
+  let score = 0;
+
+  if (map.boost.includes(type)) score += 8;
+  if (map.penalize.includes(type)) score -= 10;
+
+  if (precipCat === "rain" || precipCat === "storm") {
+    if (prot.waterproof) score += 10;
+    else if (prot.waterResistant) score += 5;
+
+    if (role === "shoes") {
+      if (prot.openToe) score -= 12;
+      else if (prot.closedToe) score += 3;
+    }
+    if (role === "outerwear" && !prot.waterproof && !prot.waterResistant) score -= 4;
+    if (prot.vulnerableToWet) score -= 8;
+  }
+
+  if (precipCat === "snow") {
+    if (prot.waterproof && prot.insulated) score += 12;
+    else if (prot.waterproof) score += 7;
+    else if (prot.insulated) score += 5;
+
+    if (role === "shoes") {
+      if (prot.openToe) score -= 15;
+      else if (prot.closedToe) score += 4;
+    }
+    if (prot.vulnerableToWet) score -= 10;
+  }
+
+  return score;
+}
+
 function comfortPreferences(answers) {
   const raw = Array.isArray(answers?.comfort) ? answers.comfort : [];
   return new Set(raw.map((v) => (v || "").toString().trim().toLowerCase()).filter(Boolean));
@@ -727,6 +815,7 @@ function metadataScore(item, context) {
   score += weatherScoreBias(weatherCat, item?.category);
   score += timeScoreBias(timeCat, item?.category, answers);
   score += clothingTypeBias(item, weatherCat);
+  score += precipScoreBias(item, context.precipCat);
   score -= fitPenalty(item?.fit_tag, bodyTypeId, item?.category);
   score -= recentPenalty;
 
@@ -1053,21 +1142,41 @@ function buildOutfitCandidate(buckets, rng, context, variant) {
   }
 
   /* ── Layering: outer-layer selection ────────────────────────────── */
-  const needsOuter = layerTargets.includes("outer") || (wCat === "cool" && variant % 3 !== 2);
-  /* warm/hot: skip outerwear entirely */
-  const skipOuter = wCat === "warm" || wCat === "hot";
+  const pCat = (context.precipCat || "clear").toString().trim().toLowerCase();
+  const precipNeedsOuter = pCat === "rain" || pCat === "snow" || pCat === "storm";
+  const needsOuter = layerTargets.includes("outer") || (wCat === "cool" && variant % 3 !== 2) || precipNeedsOuter;
+  /* warm/hot: skip outerwear — unless precipitation demands it */
+  const skipOuter = (wCat === "warm" || wCat === "hot") && !precipNeedsOuter;
 
   if (needsOuter && !skipOuter) {
     const preferredOuter = outerCandidates.filter((item) => !item.layer_type || item.layer_type === "outer");
-    /* cold weather: prefer heavier outerwear */
-    const sortedOuter = wCat === "cold"
-      ? [...(preferredOuter.length ? preferredOuter : outerCandidates)].sort((a, b) => layerWarmth(b) - layerWarmth(a))
-      : preferredOuter.length ? preferredOuter : outerCandidates;
+    let sortedOuter;
+    if (precipNeedsOuter) {
+      /* Rain/snow/storm: prefer waterproof/water-resistant outerwear first */
+      const pool = preferredOuter.length ? preferredOuter : outerCandidates;
+      sortedOuter = [...pool].sort((a, b) => {
+        const pa = classifyWeatherProtection(a);
+        const pb = classifyWeatherProtection(b);
+        const wa = (pa.waterproof ? 3 : pa.waterResistant ? 1 : 0) + (pa.insulated && pCat === "snow" ? 2 : 0);
+        const wb = (pb.waterproof ? 3 : pb.waterResistant ? 1 : 0) + (pb.insulated && pCat === "snow" ? 2 : 0);
+        return wb - wa || layerWarmth(b) - layerWarmth(a);
+      });
+    } else if (wCat === "cold") {
+      /* cold weather: prefer heavier outerwear */
+      sortedOuter = [...(preferredOuter.length ? preferredOuter : outerCandidates)].sort((a, b) => layerWarmth(b) - layerWarmth(a));
+    } else {
+      sortedOuter = preferredOuter.length ? preferredOuter : outerCandidates;
+    }
     addItem(chooseFirstCompatible(sortedOuter, outfit));
   }
 
+  /* ── Shoes: prefer closed-toe in precipitation ─────────────────── */
   const shoeContext = outfit.filter((item) => ["one-piece", "top", "bottom", "outerwear"].includes(itemRole(item)));
-  const rankedShoes = sortCandidates(shoeCandidates, context, shoeContext.length ? shoeContext : outfit, rng);
+  let rankedShoes = sortCandidates(shoeCandidates, context, shoeContext.length ? shoeContext : outfit, rng);
+  if (precipNeedsOuter) {
+    const closedToe = rankedShoes.filter((item) => !classifyWeatherProtection(item).openToe);
+    if (closedToe.length) rankedShoes = closedToe;
+  }
   addItem(chooseFirstCompatible(rankedShoes, outfit));
 
   const accessoryLimit = accessoryLimitForWeather(context.weatherCat);
@@ -1154,6 +1263,25 @@ function scoreOutfitCandidate(outfit, context) {
   /* Warmth budget scoring */
   score += warmthScore(outfit, wCat);
 
+  /* ── Precipitation awareness ────────────────────────────────────── */
+  const pCat = (context.precipCat || "clear").toString().trim().toLowerCase();
+  if (pCat === "rain" || pCat === "snow" || pCat === "storm") {
+    const hasWaterproofOuter = outfit.some((item) => {
+      const p = classifyWeatherProtection(item);
+      return itemRole(item) === "outerwear" && (p.waterproof || p.waterResistant);
+    });
+    const hasAnyOuter = roles.has("outerwear") || layers.has("outer");
+    if (hasWaterproofOuter) score += 10;
+    else if (hasAnyOuter) score -= 4;
+    else score -= 12;
+
+    const hasOpenToeShoes = outfit.some((item) => itemRole(item) === "shoes" && classifyWeatherProtection(item).openToe);
+    if (hasOpenToeShoes) score -= 15;
+
+    const wetVulnerableCount = outfit.filter((item) => classifyWeatherProtection(item).vulnerableToWet).length;
+    score -= wetVulnerableCount * 6;
+  }
+
   /* ── Comfort preference outfit-level bonus ─────────────────────── */
   const comfortSet = comfortPreferences(context.answers);
   if (comfortSet.has("layered") && layers.size >= 2) score += 8;
@@ -1192,7 +1320,7 @@ function scoreOutfitCandidate(outfit, context) {
   return score;
 }
 
-export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactSigs, recentItemCounts, weatherCat, timeCat, answers, savedSigs, rejectedOutfits, underusedIds, neglectedIds) {
+export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactSigs, recentItemCounts, weatherCat, timeCat, answers, savedSigs, rejectedOutfits, underusedIds, neglectedIds, precipCat) {
   const active = (Array.isArray(items) ? items : []).filter(
     (x) => x && x.is_active !== false && String(x.is_active) !== "false"
   );
@@ -1211,6 +1339,7 @@ export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactS
     bodyTypeId,
     recentItemCounts,
     weatherCat: (weatherCat || "mild").toString().toLowerCase(),
+    precipCat: (precipCat || "clear").toString().toLowerCase(),
     timeCat: (timeCat || "work hours").toString().toLowerCase(),
     selectedSeason: seasonFromDate(new Date()),
     underusedIds: underusedIds instanceof Set ? underusedIds : new Set(),
@@ -1247,7 +1376,7 @@ export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactS
   return results.slice(0, 3);
 }
 
-export function scoreOutfitForDisplay(outfit, { weatherCategory, timeCategory, answers, bodyTypeId } = {}) {
+export function scoreOutfitForDisplay(outfit, { weatherCategory, precipCategory, timeCategory, answers, bodyTypeId } = {}) {
   const mapped = mappedOutfit(Array.isArray(outfit) ? outfit : []);
   if (!mapped.length) return 0;
 
@@ -1256,6 +1385,7 @@ export function scoreOutfitForDisplay(outfit, { weatherCategory, timeCategory, a
     bodyTypeId: bodyTypeId || DEFAULT_BODY_TYPE,
     recentItemCounts: new Map(),
     weatherCat: (weatherCategory || "mild").toString().toLowerCase(),
+    precipCat: (precipCategory || "clear").toString().toLowerCase(),
     timeCat: (timeCategory || "work hours").toString().toLowerCase(),
     selectedSeason: seasonFromDate(new Date()),
   });
@@ -1619,7 +1749,32 @@ function describeColorHarmony(colors, seed) {
   return `The ${names.join(", ")} palette ties everything together.`;
 }
 
-function weatherSentence(weatherCat, seed) {
+function precipSentence(precipCat, seed) {
+  const templates = {
+    rain: [
+      "Water-resistant layers keep you dry without the bulk.",
+      "Picked to handle the rain while staying sharp.",
+      "Rain-ready pieces that still look intentional.",
+    ],
+    snow: [
+      "Insulated and protected for snowy conditions.",
+      "Built to handle the snow — warm, dry, and polished.",
+      "Snow-ready layering that keeps you covered.",
+    ],
+    storm: [
+      "Sealed up for stormy weather without losing the look.",
+      "Storm-proof picks that still hold their shape.",
+      "Heavy weather calls for heavy-duty layers — this delivers.",
+    ],
+  };
+  const opts = templates[precipCat] || [];
+  return opts.length ? opts[seed % opts.length] : "";
+}
+
+function weatherSentence(weatherCat, seed, precipCat) {
+  const pSent = precipSentence(precipCat, seed);
+  if (pSent) return pSent;
+
   const templates = {
     cold: [
       "Layered for the cold without looking bulky.",
@@ -1728,7 +1883,7 @@ function outfitMetadataSentence(outfit, weatherCategory, seed) {
   return "The pieces work together without competing for the same role in the outfit.";
 }
 
-export function buildExplanation({ answers, outfit, weatherCategory, timeCategory }) {
+export function buildExplanation({ answers, outfit, weatherCategory, precipCategory, timeCategory }) {
   const dressFor = Array.isArray(answers?.dressFor) ? answers.dressFor : [];
   const style = Array.isArray(answers?.style) ? answers.style : [];
   const bodyTypeId = answers?.bodyType || DEFAULT_BODY_TYPE;
@@ -1743,8 +1898,9 @@ export function buildExplanation({ answers, outfit, weatherCategory, timeCategor
   const seed = explanationHash(outfit.map((x) => `${x?.name}${x?.color}`).join(""));
 
   const isNotableWeather = weatherCategory && weatherCategory !== "mild";
+  const hasPrecip = precipCategory && precipCategory !== "clear";
   const timePh = { morning: "this morning", "work hours": "today", evening: "tonight", night: "tonight" }[timeCategory] || "";
-  const timeHint = !isNotableWeather && timePh ? ` ${timePh}` : "";
+  const timeHint = !isNotableWeather && !hasPrecip && timePh ? ` ${timePh}` : "";
 
   const styleMatchesOccasion = styleHint && occasion && styleHint.toLowerCase() === occasion.toLowerCase();
 
@@ -1769,8 +1925,8 @@ export function buildExplanation({ answers, outfit, weatherCategory, timeCategor
 
   const structureSent = outfitMetadataSentence(outfit, weatherCategory, seed);
   const colorSent = describeColorHarmony(colors, seed);
-  const closing = isNotableWeather
-    ? weatherSentence(weatherCategory, seed)
+  const closing = (isNotableWeather || hasPrecip)
+    ? weatherSentence(weatherCategory, seed, precipCategory)
     : bodyTypeSentence(bodyTypeId, seed);
 
   const comfortSet = comfortPreferences(answers);
