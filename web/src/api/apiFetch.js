@@ -1,7 +1,6 @@
 import { TOKEN_KEY, AUTH_MODE_KEY } from "../utils/constants";
 
-const BASE_URL = process.env.REACT_APP_API_BASE_URL
-  || (window.location.hostname === "localhost" ? "http://localhost:8000" : "https://fitgpt-backend-tdiq.onrender.com");
+const BASE_URL = process.env.REACT_APP_API_BASE_URL || "https://fitgpt-backend-tdiq.onrender.com";
 
 const AUTH_STRATEGY = (process.env.REACT_APP_AUTH_STRATEGY || "token").toLowerCase();
 const USE_COOKIES = AUTH_STRATEGY === "cookies";
