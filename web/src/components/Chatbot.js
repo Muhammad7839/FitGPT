@@ -3,7 +3,7 @@ import { sendChatMessage, buildChatContext } from "../api/chatApi";
 import { loadWardrobe } from "../utils/userStorage";
 import { loadAnswers } from "../utils/userStorage";
 import { useAuth } from "../auth/AuthProvider";
-import { CHAT_HISTORY_KEY } from "../utils/constants";
+import { CHAT_HISTORY_KEY, CURRENT_RECS_KEY } from "../utils/constants";
 
 const GREETING = "Hi! I'm AURA. Ask me anything about the app — features, how-tos, troubleshooting, and more.";
 const MAX_CHATS = 30;
@@ -192,7 +192,9 @@ export default function Chatbot() {
     try {
       const wardrobe = loadWardrobe(user);
       const answers = loadAnswers();
-      const context = buildChatContext(wardrobe, answers);
+      let recommendations = [];
+      try { recommendations = JSON.parse(sessionStorage.getItem(CURRENT_RECS_KEY)) || []; } catch {}
+      const context = buildChatContext(wardrobe, answers, recommendations);
       const data = await sendChatMessage(next, context);
       const reply = { role: "assistant", content: data.reply };
       updateActiveChat((c) => {

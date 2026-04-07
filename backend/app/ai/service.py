@@ -67,6 +67,7 @@ class AiService:
         wardrobe_items: list[models.ClothingItem],
         messages: list[ProviderMessage],
         request_id: str,
+        client_context=None,
     ) -> ChatResult:
         if not self.provider_client.is_available:
             return ChatResult(
@@ -76,7 +77,9 @@ class AiService:
                 warning="provider_not_configured",
             )
 
-        system_prompt = prompts.build_chat_system_prompt(user=user, wardrobe_items=wardrobe_items)
+        system_prompt = prompts.build_chat_system_prompt(
+            user=user, wardrobe_items=wardrobe_items, client_context=client_context,
+        )
         try:
             reply = self.provider_client.chat(
                 [ProviderMessage(role="system", content=system_prompt)] + messages

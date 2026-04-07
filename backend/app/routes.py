@@ -1031,6 +1031,7 @@ def chat_with_ai(
         wardrobe_items=wardrobe_items,
         messages=messages,
         request_id=request_id,
+        client_context=payload.context,
     )
     user_id = current_user.id if current_user else "guest"
     logger.info(

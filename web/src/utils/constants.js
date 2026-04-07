@@ -18,6 +18,7 @@ export const REUSE_OUTFIT_KEY = "fitgpt_reuse_outfit_v1";
 export const REC_SEED_KEY = "fitgpt_rec_seed_v1";
 export const WEATHER_OVERRIDE_KEY = "fitgpt_weather_override_v1";
 export const TIME_OVERRIDE_KEY = "fitgpt_time_override_v1";
+export const CURRENT_RECS_KEY = "fitgpt_current_recs_v1";
 
 // User
 export const PROFILE_KEY = "fitgpt_profile_v1";
