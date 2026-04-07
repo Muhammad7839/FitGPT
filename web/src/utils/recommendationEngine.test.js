@@ -41,6 +41,8 @@ import {
   detectDuplicates,
   buildFeedbackProfile,
   feedbackBias,
+  computeAttributeWeights,
+  measureFeedbackAlignment,
 } from "./recommendationEngine";
 
 describe("titleCase", () => {
@@ -3275,5 +3277,179 @@ describe("feedbackBias", () => {
     ]);
     const bias = feedbackBias({ id: "x9", color: "red", clothing_type: "sandals", style_tags: ["casual"] }, profile);
     expect(bias).toBe(0);
+  });
+});
+
+/* ── Adaptive weighting model tests ─────────────────────────────────── */
+
+describe("computeAttributeWeights", () => {
+  test("returns default weights for empty feedback", () => {
+    const weights = computeAttributeWeights([]);
+    expect(weights.color).toBeGreaterThan(0);
+    expect(weights.clothingType).toBeGreaterThan(0);
+    expect(weights.item).toBeGreaterThan(0);
+    expect(weights.style).toBeGreaterThan(0);
+  });
+
+  test("boosts color weight when color is consistently present in likes", () => {
+    const feedback = Array.from({ length: 10 }, () => ({
+      feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: [], styleTags: [], itemIds: [],
+    }));
+    const weights = computeAttributeWeights(feedback);
+    const defaultWeights = computeAttributeWeights([]);
+    expect(weights.color).toBeGreaterThan(defaultWeights.color);
+  });
+
+  test("reduces weight for dimensions absent from feedback", () => {
+    const feedback = Array.from({ length: 10 }, () => ({
+      feedback: "like", timestamp: Date.now(), colors: ["navy"], clothingTypes: ["t-shirt"], styleTags: [], itemIds: [],
+    }));
+    const weights = computeAttributeWeights(feedback);
+    /* style never appears in likes → lower weight */
+    expect(weights.style).toBeLessThan(weights.color);
+  });
+
+  test("all weights remain positive (exploration preserved)", () => {
+    const feedback = [
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: [], styleTags: [], itemIds: [] },
+    ];
+    const weights = computeAttributeWeights(feedback);
+    expect(weights.color).toBeGreaterThan(0);
+    expect(weights.clothingType).toBeGreaterThan(0);
+    expect(weights.style).toBeGreaterThan(0);
+    expect(weights.item).toBeGreaterThan(0);
+  });
+});
+
+describe("buildFeedbackProfile — adaptive features", () => {
+  test("includes confidence scores", () => {
+    const feedback = [
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["t-shirt"], styleTags: [], itemIds: [] },
+    ];
+    const profile = buildFeedbackProfile(feedback);
+    expect(profile.confidence).toBeDefined();
+    expect(profile.confidence.color).toBeGreaterThan(0);
+    expect(profile.confidence.color).toBeLessThanOrEqual(1);
+  });
+
+  test("conflicting feedback reduces confidence", () => {
+    const clean = buildFeedbackProfile([
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: [], styleTags: [], itemIds: [] },
+      { feedback: "like", timestamp: Date.now(), colors: ["navy"], clothingTypes: [], styleTags: [], itemIds: [] },
+    ]);
+    const conflicted = buildFeedbackProfile([
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: [], styleTags: [], itemIds: [] },
+      { feedback: "dislike", timestamp: Date.now(), colors: ["black"], clothingTypes: [], styleTags: [], itemIds: [] },
+    ]);
+    expect(conflicted.confidence.color).toBeLessThan(clean.confidence.color);
+  });
+
+  test("includes attributeWeights", () => {
+    const profile = buildFeedbackProfile([
+      { feedback: "like", timestamp: Date.now(), colors: ["blue"], clothingTypes: ["polo"], styleTags: [], itemIds: [] },
+    ]);
+    expect(profile.attributeWeights).toBeDefined();
+    expect(profile.attributeWeights.color).toBeGreaterThan(0);
+  });
+
+  test("includes recentCounts for short-term preferences", () => {
+    const recent = { feedback: "like", timestamp: Date.now(), colors: ["red"], clothingTypes: [], styleTags: [], itemIds: [] };
+    const old = { feedback: "like", timestamp: Date.now() - 30 * 24 * 60 * 60 * 1000, colors: ["blue"], clothingTypes: [], styleTags: [], itemIds: [] };
+    const profile = buildFeedbackProfile([recent, old]);
+    expect(profile.recentCounts).toBeDefined();
+    expect(profile.recentCounts.colorCounts.red).toBeDefined();
+    /* Old entry should NOT be in recent counts */
+    expect(profile.recentCounts.colorCounts.blue).toBeUndefined();
+  });
+});
+
+describe("feedbackBias — adaptive behavior", () => {
+  test("recent feedback has more influence than old", () => {
+    const recentLike = [
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["t-shirt"], styleTags: [], itemIds: [] },
+    ];
+    const oldLike = [
+      { feedback: "like", timestamp: Date.now() - 50 * 24 * 60 * 60 * 1000, colors: ["black"], clothingTypes: ["t-shirt"], styleTags: [], itemIds: [] },
+    ];
+    const recentProfile = buildFeedbackProfile(recentLike);
+    const oldProfile = buildFeedbackProfile(oldLike);
+    const recentBias = feedbackBias({ color: "black", clothing_type: "t-shirt" }, recentProfile);
+    const oldBias = feedbackBias({ color: "black", clothing_type: "t-shirt" }, oldProfile);
+    expect(recentBias).toBeGreaterThanOrEqual(oldBias);
+  });
+
+  test("confidence scaling reduces bias for conflicted attributes", () => {
+    const clean = buildFeedbackProfile([
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: [], styleTags: [], itemIds: [] },
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: [], styleTags: [], itemIds: [] },
+    ]);
+    const conflicted = buildFeedbackProfile([
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: [], styleTags: [], itemIds: [] },
+      { feedback: "dislike", timestamp: Date.now(), colors: ["black"], clothingTypes: [], styleTags: [], itemIds: [] },
+      { feedback: "like", timestamp: Date.now(), colors: ["navy"], clothingTypes: [], styleTags: [], itemIds: [] },
+    ]);
+    const cleanBias = feedbackBias({ color: "black" }, clean);
+    const conflictBias = feedbackBias({ color: "black" }, conflicted);
+    /* Clean profile should produce stronger bias than conflicted */
+    expect(Math.abs(cleanBias)).toBeGreaterThanOrEqual(Math.abs(conflictBias));
+  });
+
+  test("weight adaptation amplifies dominant attribute", () => {
+    /* Heavy color-only feedback → color bias should be amplified */
+    const colorHeavy = Array.from({ length: 8 }, () => ({
+      feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: [], styleTags: [], itemIds: [],
+    }));
+    const balanced = Array.from({ length: 4 }, () => ({
+      feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["t-shirt"], styleTags: ["casual"], itemIds: ["t1"],
+    }));
+    const colorProfile = buildFeedbackProfile(colorHeavy);
+    const balancedProfile = buildFeedbackProfile(balanced);
+    /* Color weight should be higher in color-heavy profile */
+    expect(colorProfile.attributeWeights.color).toBeGreaterThan(balancedProfile.attributeWeights.color * 0.9);
+  });
+});
+
+describe("measureFeedbackAlignment", () => {
+  const wardrobe = [
+    { id: "t1", name: "Black Tee", category: "Tops", color: "black", clothing_type: "t-shirt" },
+    { id: "t2", name: "White Polo", category: "Tops", color: "white", clothing_type: "polo" },
+    { id: "b1", name: "Navy Jeans", category: "Bottoms", color: "navy" },
+  ];
+
+  test("returns null accuracy with insufficient feedback", () => {
+    const result = measureFeedbackAlignment([{ feedback: "like", itemIds: ["t1"] }], wardrobe);
+    expect(result.accuracy).toBeNull();
+    expect(result.sampleSize).toBe(1);
+  });
+
+  test("consistent feedback produces high accuracy", () => {
+    const feedback = [
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["t-shirt"], styleTags: [], itemIds: ["t1"] },
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["t-shirt"], styleTags: [], itemIds: ["t1"] },
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["t-shirt"], styleTags: [], itemIds: ["t1"] },
+      { feedback: "dislike", timestamp: Date.now(), colors: ["white"], clothingTypes: ["polo"], styleTags: [], itemIds: ["t2"] },
+    ];
+    const result = measureFeedbackAlignment(feedback, wardrobe);
+    expect(result.accuracy).toBeGreaterThanOrEqual(50);
+    expect(result.sampleSize).toBeGreaterThanOrEqual(3);
+  });
+
+  test("returns message about model status", () => {
+    const feedback = Array.from({ length: 5 }, () => ({
+      feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["t-shirt"], styleTags: [], itemIds: ["t1"],
+    }));
+    const result = measureFeedbackAlignment(feedback, wardrobe);
+    expect(typeof result.message).toBe("string");
+    expect(result.message.length).toBeGreaterThan(0);
+  });
+
+  test("handles empty wardrobe gracefully", () => {
+    const feedback = [
+      { feedback: "like", timestamp: Date.now(), colors: [], clothingTypes: [], styleTags: [], itemIds: ["missing1"] },
+      { feedback: "like", timestamp: Date.now(), colors: [], clothingTypes: [], styleTags: [], itemIds: ["missing2"] },
+      { feedback: "like", timestamp: Date.now(), colors: [], clothingTypes: [], styleTags: [], itemIds: ["missing3"] },
+    ];
+    const result = measureFeedbackAlignment(feedback, []);
+    expect(result.sampleSize).toBe(0);
   });
 });

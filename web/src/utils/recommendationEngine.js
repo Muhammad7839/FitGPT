@@ -2413,16 +2413,21 @@ export function detectDuplicates(wardrobeItems, dismissedPairs) {
 /* ── Recommendation feedback learning ─────────────────────────────── */
 
 const FEEDBACK_DECAY_DAYS = 60;
+const RECENT_WINDOW_DAYS = 14;
 const MAX_FEEDBACK_BIAS = 12;
 
-export function buildFeedbackProfile(feedbackList) {
-  const list = Array.isArray(feedbackList) ? feedbackList : [];
-  const now = Date.now();
+const DEFAULT_ATTRIBUTE_WEIGHTS = {
+  item: 1.5,
+  color: 1.0,
+  clothingType: 1.0,
+  style: 0.8,
+};
 
-  const colorCounts = {};    /* color → { liked, disliked } */
-  const typeCounts = {};     /* clothingType → { liked, disliked } */
-  const styleCounts = {};    /* styleTag → { liked, disliked } */
-  const itemCounts = {};     /* itemId → { liked, disliked } */
+function aggregateCounts(list, now) {
+  const colorCounts = {};
+  const typeCounts = {};
+  const styleCounts = {};
+  const itemCounts = {};
 
   for (const entry of list) {
     const fb = entry?.feedback;
@@ -2458,7 +2463,88 @@ export function buildFeedbackProfile(feedbackList) {
     }
   }
 
-  return { colorCounts, typeCounts, styleCounts, itemCounts, totalEntries: list.length };
+  return { colorCounts, typeCounts, styleCounts, itemCounts };
+}
+
+function computeConfidence(counts) {
+  let totalKeys = 0;
+  let conflicted = 0;
+  for (const val of Object.values(counts)) {
+    totalKeys++;
+    if (val.liked > 0 && val.disliked > 0) conflicted++;
+  }
+  if (!totalKeys) return 1;
+  return Math.max(0.3, 1 - (conflicted / totalKeys));
+}
+
+export function computeAttributeWeights(feedbackList) {
+  const list = Array.isArray(feedbackList) ? feedbackList : [];
+  if (!list.length) return { ...DEFAULT_ATTRIBUTE_WEIGHTS };
+
+  /* Measure signal strength per attribute: how often does the attribute
+     appear in liked entries relative to total likes? Strong signal = the
+     user consistently engages with that attribute dimension. */
+  const likes = list.filter((e) => e?.feedback === "like");
+  const total = Math.max(likes.length, 1);
+
+  let colorSignal = 0;
+  let typeSignal = 0;
+  let styleSignal = 0;
+  let itemSignal = 0;
+
+  for (const entry of likes) {
+    if ((entry.colors || []).length) colorSignal++;
+    if ((entry.clothingTypes || []).length) typeSignal++;
+    if ((entry.styleTags || []).length) styleSignal++;
+    if ((entry.itemIds || []).length) itemSignal++;
+  }
+
+  /* Scale each weight: default × (0.5 + signal_ratio).
+     A dimension seen in every like gets 1.5× its default weight.
+     A dimension never present keeps 0.5× its default.
+     This ensures all attributes stay active (exploration) while
+     boosting the dimensions the user actually engages with. */
+  return {
+    item:         DEFAULT_ATTRIBUTE_WEIGHTS.item * (0.5 + (itemSignal / total)),
+    color:        DEFAULT_ATTRIBUTE_WEIGHTS.color * (0.5 + (colorSignal / total)),
+    clothingType: DEFAULT_ATTRIBUTE_WEIGHTS.clothingType * (0.5 + (typeSignal / total)),
+    style:        DEFAULT_ATTRIBUTE_WEIGHTS.style * (0.5 + (styleSignal / total)),
+  };
+}
+
+export function buildFeedbackProfile(feedbackList) {
+  const list = Array.isArray(feedbackList) ? feedbackList : [];
+  const now = Date.now();
+
+  /* Full history aggregation */
+  const allCounts = aggregateCounts(list, now);
+
+  /* Recent window (short-term preferences) */
+  const recentCutoff = now - RECENT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  const recentList = list.filter((e) => (e?.timestamp || 0) >= recentCutoff);
+  const recentCounts = aggregateCounts(recentList, now);
+
+  /* Per-attribute confidence: 1.0 = no conflicts, 0.3 = heavily conflicted */
+  const confidence = {
+    color:        computeConfidence(allCounts.colorCounts),
+    clothingType: computeConfidence(allCounts.typeCounts),
+    style:        computeConfidence(allCounts.styleCounts),
+    item:         computeConfidence(allCounts.itemCounts),
+  };
+
+  /* Adaptive weights from feedback patterns */
+  const attributeWeights = computeAttributeWeights(list);
+
+  return {
+    colorCounts: allCounts.colorCounts,
+    typeCounts: allCounts.typeCounts,
+    styleCounts: allCounts.styleCounts,
+    itemCounts: allCounts.itemCounts,
+    recentCounts,
+    confidence,
+    attributeWeights,
+    totalEntries: list.length,
+  };
 }
 
 function netPreference(counts) {
@@ -2466,35 +2552,81 @@ function netPreference(counts) {
   return counts.liked - counts.disliked;
 }
 
+function blendedPreference(allCounts, recentCounts, key) {
+  const longTerm = netPreference(allCounts[key]);
+  const shortTerm = netPreference(recentCounts?.[key]);
+  /* Recent feedback gets 60% weight when available, historical 40% */
+  if (shortTerm !== 0) return longTerm * 0.4 + shortTerm * 0.6;
+  return longTerm;
+}
+
 export function feedbackBias(item, profile) {
   if (!profile || !profile.totalEntries) return 0;
 
-  let score = 0;
   const id = (item?.id ?? "").toString();
   const color = normalizeColorName(item?.color || "").toLowerCase();
   const type = normalizeClothingType(item?.clothing_type || item?.type || item?.name || "");
   const styles = normalizeTagArray(item?.style_tags).map((s) => (s || "").toLowerCase());
 
-  /* Item-level preference (strongest signal) */
-  const itemPref = netPreference(profile.itemCounts[id]);
-  score += Math.max(-4, Math.min(4, itemPref * 2));
+  const w = profile.attributeWeights || DEFAULT_ATTRIBUTE_WEIGHTS;
+  const conf = profile.confidence || { color: 1, clothingType: 1, style: 1, item: 1 };
+  const recent = profile.recentCounts || {};
+
+  let score = 0;
+
+  /* Item-level preference (strongest signal, confidence-scaled) */
+  const itemPref = blendedPreference(profile.itemCounts, recent.itemCounts, id);
+  score += Math.max(-4, Math.min(4, itemPref * 2)) * w.item * conf.item;
 
   /* Color preference */
-  const colorPref = netPreference(profile.colorCounts[color]);
-  score += Math.max(-3, Math.min(3, colorPref));
+  const colorPref = blendedPreference(profile.colorCounts, recent.colorCounts, color);
+  score += Math.max(-3, Math.min(3, colorPref)) * w.color * conf.color;
 
   /* Clothing type preference */
-  const typePref = netPreference(profile.typeCounts[type]);
-  score += Math.max(-3, Math.min(3, typePref));
+  const typePref = blendedPreference(profile.typeCounts, recent.typeCounts, type);
+  score += Math.max(-3, Math.min(3, typePref)) * w.clothingType * conf.clothingType;
 
   /* Style tag preference (averaged across tags) */
   if (styles.length) {
     let styleTotal = 0;
-    for (const s of styles) styleTotal += netPreference(profile.styleCounts[s]);
-    score += Math.max(-2, Math.min(2, styleTotal / styles.length));
+    for (const s of styles) styleTotal += blendedPreference(profile.styleCounts, recent.styleCounts, s);
+    score += Math.max(-2, Math.min(2, styleTotal / styles.length)) * w.style * conf.style;
   }
 
-  return Math.max(-MAX_FEEDBACK_BIAS, Math.min(MAX_FEEDBACK_BIAS, score));
+  return Math.max(-MAX_FEEDBACK_BIAS, Math.min(MAX_FEEDBACK_BIAS, Math.round(score * 100) / 100));
+}
+
+export function measureFeedbackAlignment(feedbackList, wardrobeItems, context) {
+  const list = (Array.isArray(feedbackList) ? feedbackList : []).filter((e) => e?.feedback === "like" || e?.feedback === "dislike");
+  if (list.length < 3) return { accuracy: null, sampleSize: list.length, message: "Not enough feedback yet." };
+
+  const profile = buildFeedbackProfile(list);
+  const items = Array.isArray(wardrobeItems) ? wardrobeItems : [];
+
+  let aligned = 0;
+  let total = 0;
+
+  for (const entry of list) {
+    const ids = Array.isArray(entry.itemIds) ? entry.itemIds : [];
+    const outfitItems = ids.map((id) => items.find((w) => (w?.id ?? "").toString() === id.toString())).filter(Boolean);
+    if (!outfitItems.length) continue;
+
+    /* Compute average feedback bias for this outfit's items */
+    const avgBias = outfitItems.reduce((sum, it) => sum + feedbackBias(it, profile), 0) / outfitItems.length;
+
+    total++;
+    /* Aligned = liked outfit has positive bias, or disliked has negative */
+    if ((entry.feedback === "like" && avgBias >= 0) || (entry.feedback === "dislike" && avgBias <= 0)) {
+      aligned++;
+    }
+  }
+
+  const accuracy = total ? Math.round((aligned / total) * 100) : null;
+  return {
+    accuracy,
+    sampleSize: total,
+    message: accuracy === null ? "No matchable feedback." : accuracy >= 70 ? "Model is well-aligned with your preferences." : "Model is still learning your preferences.",
+  };
 }
 
 /* ── Wardrobe gap detection ─────────────────────────────────────────── */
