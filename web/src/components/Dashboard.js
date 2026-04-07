@@ -245,8 +245,11 @@ function buildComfortSummary(outfit, answers, weatherCategory) {
   };
 }
 
-function getWeatherGlyph(category, isLoading) {
+function getWeatherGlyph(category, isLoading, precipCondition) {
   if (isLoading) return "⌛";
+  if (precipCondition === "snow") return "🌨️";
+  if (precipCondition === "storm") return "⛈️";
+  if (precipCondition === "rain") return "🌧️";
   if (category === "cold") return "😮‍💨";
   if (category === "cool") return "🧥";
   if (category === "warm") return "☀️";
@@ -254,14 +257,14 @@ function getWeatherGlyph(category, isLoading) {
   return "🙂";
 }
 
-function buildWeatherPresentation({ category, tempF, loading, source, message }) {
+function buildWeatherPresentation({ category, tempF, loading, source, message, precipCondition }) {
   const tempNumber = Number(tempF);
   const hasTemp = Number.isFinite(tempNumber);
   const tempC = hasTemp ? Math.round(((tempNumber - 32) * 5) / 9) : null;
 
   if (loading) {
     return {
-      glyph: getWeatherGlyph(category, true),
+      glyph: getWeatherGlyph(category, true, precipCondition),
       headline: "Detecting weather",
       subline: "Getting your local conditions now.",
       status: "Checking local weather",
@@ -274,7 +277,7 @@ function buildWeatherPresentation({ category, tempF, loading, source, message })
 
   if (source === "override") {
     return {
-      glyph: getWeatherGlyph(category, false),
+      glyph: getWeatherGlyph(category, false, precipCondition),
       headline: tempLabel,
       subline: `${categoryLabel} weather selected manually`,
       status: "Manual weather override",
@@ -284,7 +287,7 @@ function buildWeatherPresentation({ category, tempF, loading, source, message })
 
   if (source === "fallback") {
     return {
-      glyph: getWeatherGlyph(category, false),
+      glyph: getWeatherGlyph(category, false, precipCondition),
       headline: "Weather unavailable",
       subline: "Using balanced recommendations for now",
       status: "Fallback mode",
@@ -292,12 +295,19 @@ function buildWeatherPresentation({ category, tempF, loading, source, message })
     };
   }
 
+  const precipLabel = { rain: "Rain", snow: "Snow", storm: "Storm" }[precipCondition] || "";
+  const conditionSuffix = precipLabel ? ` / ${precipLabel}` : "";
+
   return {
-    glyph: getWeatherGlyph(category, false),
+    glyph: getWeatherGlyph(category, false, precipCondition),
     headline: tempLabel,
-    subline: `Live weather: ${categoryLabel}`,
+    subline: `Live weather: ${categoryLabel}${conditionSuffix}`,
     status: "Live weather active",
-    detail: hasTemp ? "Recommendations are using your current local temperature." : "",
+    detail: hasTemp
+      ? precipLabel
+        ? `Recommendations are adjusted for ${precipLabel.toLowerCase()} conditions.`
+        : "Recommendations are using your current local temperature."
+      : "",
   };
 }
 
@@ -322,6 +332,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [weatherMsg, setWeatherMsg] = useState("");
   const [weatherTempF, setWeatherTempF] = useState(null);
   const [weatherCategory, setWeatherCategory] = useState(() => readWeatherOverride() || "mild");
+  const [precipCondition, setPrecipCondition] = useState("clear");
   const [dotCount, setDotCount] = useState(1);
   const [showWeatherPicker, setShowWeatherPicker] = useState(false);
 
@@ -408,6 +419,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       setWeatherSource("override");
       setWeatherTempF(null);
       setWeatherCategory(override);
+      setPrecipCondition("clear");
       setWeatherMsg("");
       setWeatherLoading(false);
       return;
@@ -420,6 +432,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     const w = await getWeatherContext();
     setWeatherTempF(w.tempF);
     setWeatherCategory(w.category);
+    setPrecipCondition(w.precipCondition || "clear");
     setWeatherSource(w.source || "auto");
     setWeatherMsg(w.message || "");
     setWeatherLoading(false);
@@ -575,9 +588,13 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         weatherCategory,
         timeCategory,
         effectiveAnswers,
-        savedSigs
+        savedSigs,
+        undefined,
+        undefined,
+        undefined,
+        precipCondition
       ),
-    [wardrobe, recSeed, bodyTypeId, recentExactSigs, recentItemCounts, weatherCategory, timeCategory, effectiveAnswers, savedSigs]
+    [wardrobe, recSeed, bodyTypeId, recentExactSigs, recentItemCounts, weatherCategory, precipCondition, timeCategory, effectiveAnswers, savedSigs]
   );
 
   const reused = useMemo(() => readReuseOutfit(), []);
@@ -620,6 +637,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         signature: recommendationSignature(outfit),
         score: scoreOutfitForDisplay(outfit, {
           weatherCategory,
+          precipCategory: precipCondition,
           timeCategory,
           answers: effectiveAnswers,
           bodyTypeId,
@@ -643,6 +661,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     aiExplanations,
     savedSigs,
     weatherCategory,
+    precipCondition,
     timeCategory,
     effectiveAnswers,
     bodyTypeId,
@@ -665,10 +684,10 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     }
 
     const activeOutfit = outfits[selectedIdx] || outfits[0] || [];
-    const text = buildExplanation({ answers: effectiveAnswers, outfit: activeOutfit, weatherCategory, timeCategory });
+    const text = buildExplanation({ answers: effectiveAnswers, outfit: activeOutfit, weatherCategory, precipCategory: precipCondition, timeCategory });
     const cleaned = (text || "").toString().trim();
     return cleaned || "Pick a style and an occasion in onboarding to get a personalized explanation.";
-  }, [effectiveAnswers, outfits, selectedIdx, aiSource, pairedExplanations, reused, weatherCategory, timeCategory]);
+  }, [effectiveAnswers, outfits, selectedIdx, aiSource, pairedExplanations, reused, weatherCategory, precipCondition, timeCategory]);
 
   const explanationDetails = useMemo(() => {
     const activeOutfit = outfits[selectedIdx ?? 0] || outfits[0] || [];
@@ -695,6 +714,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     return outfits.map((outfit, idx) => {
       const score = scoreOutfitForDisplay(outfit, {
         weatherCategory,
+        precipCategory: precipCondition,
         timeCategory,
         answers: effectiveAnswers,
         bodyTypeId,
@@ -711,7 +731,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       const comfortSummary = buildComfortSummary(outfit, effectiveAnswers, weatherCategory);
       const explanation = aiSource === "ai" && !reused && pairedExplanations[idx]
         ? pairedExplanations[idx]
-        : buildExplanation({ answers: effectiveAnswers, outfit, weatherCategory, timeCategory });
+        : buildExplanation({ answers: effectiveAnswers, outfit, weatherCategory, precipCategory: precipCondition, timeCategory });
       const explanationPreview = summarizeExplanation(explanation) || buildColorReason(outfit);
 
       const traits = [];
@@ -723,7 +743,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
       return { score, rankLabel, confidenceLabel, traits, comfortSummary, explanationPreview };
     });
-  }, [outfits, weatherCategory, timeCategory, effectiveAnswers, bodyTypeId, aiSource, reused, pairedExplanations]);
+  }, [outfits, weatherCategory, precipCondition, timeCategory, effectiveAnswers, bodyTypeId, aiSource, reused, pairedExplanations]);
 
   const canRefresh = true;
 
@@ -905,8 +925,9 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       loading: weatherLoading,
       source: weatherSource,
       message: weatherMsg,
+      precipCondition,
     });
-  }, [weatherCategory, weatherTempF, weatherLoading, weatherSource, weatherMsg]);
+  }, [weatherCategory, weatherTempF, weatherLoading, weatherSource, weatherMsg, precipCondition]);
 
   const applyWeatherOverride = (next) => {
     const v = (next || "").toString().trim().toLowerCase();

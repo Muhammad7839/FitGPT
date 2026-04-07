@@ -10,6 +10,18 @@ function tempCategoryFromF(tempF) {
   return "hot";
 }
 
+function precipFromWmoCode(code) {
+  const c = Number(code);
+  if (!Number.isFinite(c)) return "clear";
+  if (c <= 48) return "clear";
+  if (c <= 57) return "rain";
+  if (c <= 67) return "rain";
+  if (c <= 77) return "snow";
+  if (c <= 82) return "rain";
+  if (c <= 86) return "snow";
+  return "storm";
+}
+
 async function getCoordsFromBrowser() {
   if (!("geolocation" in navigator)) return null;
 
@@ -27,12 +39,12 @@ async function getCoordsFromBrowser() {
   });
 }
 
-async function fetchOpenMeteoTempF({ lat, lon }) {
+async function fetchOpenMeteoWeather({ lat, lon }) {
   const url =
     "https://api.open-meteo.com/v1/forecast" +
     `?latitude=${encodeURIComponent(lat)}` +
     `&longitude=${encodeURIComponent(lon)}` +
-    "&current=temperature_2m" +
+    "&current=temperature_2m,weather_code" +
     "&temperature_unit=fahrenheit";
 
   const res = await fetch(url);
@@ -41,7 +53,8 @@ async function fetchOpenMeteoTempF({ lat, lon }) {
 
   const tempF = data?.current?.temperature_2m;
   if (typeof tempF !== "number") throw new Error("Weather data missing temperature.");
-  return tempF;
+  const weatherCode = data?.current?.weather_code;
+  return { tempF, precipCondition: precipFromWmoCode(weatherCode) };
 }
 
 export async function getWeatherContext() {
@@ -52,6 +65,7 @@ export async function getWeatherContext() {
       source: "override",
       tempF: null,
       category: override,
+      precipCondition: "clear",
       message: "",
     };
   }
@@ -63,17 +77,19 @@ export async function getWeatherContext() {
       source: "fallback",
       tempF: null,
       category: "mild",
+      precipCondition: "clear",
       message: "Weather unavailable, using default recommendations.",
     };
   }
 
   try {
-    const tempF = await fetchOpenMeteoTempF(coords);
+    const weather = await fetchOpenMeteoWeather(coords);
     return {
       status: "ok",
       source: "auto",
-      tempF,
-      category: tempCategoryFromF(tempF),
+      tempF: weather.tempF,
+      category: tempCategoryFromF(weather.tempF),
+      precipCondition: weather.precipCondition,
       message: "",
     };
   } catch {
@@ -82,6 +98,7 @@ export async function getWeatherContext() {
       source: "fallback",
       tempF: null,
       category: "mild",
+      precipCondition: "clear",
       message: "Weather unavailable, using default recommendations.",
     };
   }
