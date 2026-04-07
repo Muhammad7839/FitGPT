@@ -376,21 +376,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
   useEffect(() => { recordVisit(user); }, [user]);
 
-  /* Show nudge after sustained engagement with selected outfit */
-  useEffect(() => {
-    if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current);
-    setNudge(null);
-    if (selectedIdx == null) return;
-    nudgeTimerRef.current = setTimeout(() => {
-      const result = shouldShowPrompt(user, { refreshCount, engagementSec: 3 });
-      if (result.show) {
-        setNudge(result);
-        recordPromptShown(user, result.type);
-      }
-    }, 3000);
-    return () => { if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current); };
-  }, [selectedIdx, user, refreshCount]);
-
   const [aiOutfits, setAiOutfits] = useState(null);
   const [aiExplanations, setAiExplanations] = useState([]);
   const [aiLoading, setAiLoading] = useState(true);
@@ -725,6 +710,21 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     setShowWhyDetails(false);
     }
   }, [outfits.length, selectedIdx]);
+
+  /* Show nudge after sustained engagement with selected outfit */
+  useEffect(() => {
+    if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current);
+    setNudge(null);
+    if (selectedIdx == null) return;
+    nudgeTimerRef.current = setTimeout(() => {
+      const result = shouldShowPrompt(user, { refreshCount, engagementSec: 3 });
+      if (result.show) {
+        setNudge(result);
+        recordPromptShown(user, result.type);
+      }
+    }, 3000);
+    return () => { if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current); };
+  }, [selectedIdx, user, refreshCount]);
 
   const explanationText = useMemo(() => {
     if (selectedIdx == null) return "";
