@@ -1,6 +1,6 @@
 
 
-import { GUEST_WARDROBE_KEY, WARDROBE_KEY, SAVED_OUTFITS_KEY, OUTFIT_HISTORY_KEY, PLANNED_OUTFITS_KEY, PROFILE_KEY, ONBOARDING_ANSWERS_KEY, ONBOARDED_KEY, EVT_WARDROBE_CHANGED, REC_SEED_KEY, TIME_OVERRIDE_KEY, WEATHER_OVERRIDE_KEY, DEMO_AUTH_KEY, PROFILE_PIC_KEY, EVT_PROFILE_PIC_CHANGED, TUTORIAL_DONE_KEY, REJECTED_OUTFITS_KEY, DISMISSED_DUPLICATES_KEY, RECOMMENDATION_FEEDBACK_KEY } from "./constants";
+import { GUEST_WARDROBE_KEY, WARDROBE_KEY, SAVED_OUTFITS_KEY, OUTFIT_HISTORY_KEY, PLANNED_OUTFITS_KEY, TRIP_PACKING_KEY, PROFILE_KEY, ONBOARDING_ANSWERS_KEY, ONBOARDED_KEY, EVT_WARDROBE_CHANGED, REC_SEED_KEY, TIME_OVERRIDE_KEY, WEATHER_OVERRIDE_KEY, SEASONAL_PREFERENCES_KEY, DEMO_AUTH_KEY, PROFILE_PIC_KEY, EVT_PROFILE_PIC_CHANGED, TUTORIAL_DONE_KEY } from "./constants";
 import { safeParse } from "./helpers";
 import { normalizeItemMetadata, mergeWardrobeMetadata } from "./wardrobeOptions";
 
@@ -10,6 +10,7 @@ const KEY_STORAGE_MAP = [
   { key: SAVED_OUTFITS_KEY, storage: "local" },
   { key: OUTFIT_HISTORY_KEY, storage: "local" },
   { key: PLANNED_OUTFITS_KEY, storage: "local" },
+  { key: TRIP_PACKING_KEY, storage: "local" },
   { key: PROFILE_KEY, storage: "local" },
   { key: ONBOARDING_ANSWERS_KEY, storage: "local" },
   { key: ONBOARDED_KEY, storage: "local" },
@@ -177,6 +178,36 @@ export function makeObjectStore(storageKey, eventName) {
 const ALLOWED_WEATHER = new Set(["cold", "cool", "mild", "warm", "hot"]);
 const ALLOWED_TIMES = new Set(["morning", "work hours", "evening", "night"]);
 
+export function readSeasonalPreferences(user) {
+  const raw = localStorage.getItem(userKey(SEASONAL_PREFERENCES_KEY, user));
+  const parsed = raw ? safeParse(raw) : null;
+  const enabled = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? parsed.enabled !== false
+    : true;
+
+  return { enabled };
+}
+
+export function writeSeasonalPreferences(next, user) {
+  const current = readSeasonalPreferences(user);
+  const merged = next && typeof next === "object" && !Array.isArray(next)
+    ? { ...current, ...next }
+    : current;
+
+  localStorage.setItem(
+    userKey(SEASONAL_PREFERENCES_KEY, user),
+    JSON.stringify({ enabled: merged.enabled !== false })
+  );
+}
+
+export function readSeasonalMode(user) {
+  return readSeasonalPreferences(user).enabled;
+}
+
+export function writeSeasonalMode(enabled, user) {
+  writeSeasonalPreferences({ enabled: !!enabled }, user);
+}
+
 export function readWeatherOverride() {
   const raw = sessionStorage.getItem(WEATHER_OVERRIDE_KEY);
   const parsed = raw ? safeParse(raw) : null;
@@ -294,82 +325,65 @@ export function markTutorialDone() {
   } catch {}
 }
 
+const REJECTED_OUTFITS_KEY = "fitgpt_rejected_outfits_v1";
+const LEGACY_RECOMMENDATION_FEEDBACK_KEY = "fitgpt_recommendation_feedback_legacy_v1";
+const DISMISSED_DUPLICATES_KEY = "fitgpt_dismissed_duplicates_v1";
 
-const MAX_REJECTED_OUTFITS = 50;
+function summarizeOutfitFeedbackEntry(outfit, feedback) {
+  const items = Array.isArray(outfit) ? outfit : [];
+  return {
+    feedback: (feedback || "").toString().trim().toLowerCase(),
+    itemIds: items.map((item) => (item?.id ?? "").toString()).filter(Boolean),
+    colors: [...new Set(items.map((item) => (item?.color || "").toString().trim().toLowerCase()).filter(Boolean))],
+    categories: [...new Set(items.map((item) => (item?.category || "").toString().trim().toLowerCase()).filter(Boolean))],
+    fitTags: [...new Set(items.map((item) => (item?.fit_tag || item?.fitTag || item?.fit || "").toString().trim().toLowerCase()).filter(Boolean))],
+    styleTags: [...new Set(items.flatMap((item) => item?.style_tags || item?.styleTags || item?.style_tag || item?.styleTag || []).map((tag) => (tag || "").toString().trim().toLowerCase()).filter(Boolean))],
+    occasionTags: [...new Set(items.flatMap((item) => item?.occasion_tags || item?.occasionTags || []).map((tag) => (tag || "").toString().trim().toLowerCase()).filter(Boolean))],
+    timestamp: Date.now(),
+  };
+}
 
 export function loadRejectedOutfits(user) {
   const key = userKey(REJECTED_OUTFITS_KEY, user);
-  try {
-    const raw = localStorage.getItem(key);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
+  const raw = localStorage.getItem(key);
+  const parsed = raw ? safeParse(raw) : null;
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 export function saveRejectedOutfit(outfit, user) {
-  const items = (Array.isArray(outfit) ? outfit : []).map((x) => ({
-    id: (x?.id ?? "").toString(),
-    name: x?.name || "",
-    category: x?.category || "",
-    color: x?.color || "",
-  }));
-  if (!items.length) return;
-  const entry = { items, timestamp: Date.now() };
-  const existing = loadRejectedOutfits(user);
-  const updated = [entry, ...existing].slice(0, MAX_REJECTED_OUTFITS);
   const key = userKey(REJECTED_OUTFITS_KEY, user);
-  try { localStorage.setItem(key, JSON.stringify(updated)); } catch {}
+  const next = [...loadRejectedOutfits(user), { items: Array.isArray(outfit) ? outfit : [], timestamp: Date.now() }].slice(-40);
+  localStorage.setItem(key, JSON.stringify(next));
 }
 
-export function clearRejectedOutfits(user) {
-  const key = userKey(REJECTED_OUTFITS_KEY, user);
-  try { localStorage.removeItem(key); } catch {}
+export function loadRecommendationFeedback(user) {
+  const key = userKey(LEGACY_RECOMMENDATION_FEEDBACK_KEY, user);
+  const raw = localStorage.getItem(key);
+  const parsed = raw ? safeParse(raw) : null;
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+export function saveRecommendationFeedback(outfit, feedback, user) {
+  const key = userKey(LEGACY_RECOMMENDATION_FEEDBACK_KEY, user);
+  const next = [...loadRecommendationFeedback(user), summarizeOutfitFeedbackEntry(outfit, feedback)].slice(-120);
+  localStorage.setItem(key, JSON.stringify(next));
 }
 
 export function loadDismissedDuplicates(user) {
   const key = userKey(DISMISSED_DUPLICATES_KEY, user);
-  try {
-    const raw = localStorage.getItem(key);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-}
-
-const MAX_FEEDBACK_ENTRIES = 100;
-
-export function loadRecommendationFeedback(user) {
-  const key = userKey(RECOMMENDATION_FEEDBACK_KEY, user);
-  try {
-    const raw = localStorage.getItem(key);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-}
-
-export function saveRecommendationFeedback(outfit, feedback, user) {
-  if (feedback !== "like" && feedback !== "dislike") return;
-  const items = Array.isArray(outfit) ? outfit : [];
-  if (!items.length) return;
-  const entry = {
-    itemIds: items.map((x) => (x?.id ?? "").toString()).filter(Boolean),
-    feedback,
-    timestamp: Date.now(),
-    colors: [...new Set(items.map((x) => (x?.color || "").toLowerCase()).filter(Boolean))],
-    clothingTypes: [...new Set(items.map((x) => (x?.clothing_type || x?.type || "").toLowerCase()).filter(Boolean))],
-    styleTags: [...new Set(items.flatMap((x) => Array.isArray(x?.style_tags) ? x.style_tags : []).map((s) => (s || "").toLowerCase()).filter(Boolean))],
-  };
-  const existing = loadRecommendationFeedback(user);
-  const updated = [entry, ...existing].slice(0, MAX_FEEDBACK_ENTRIES);
-  const key = userKey(RECOMMENDATION_FEEDBACK_KEY, user);
-  try { localStorage.setItem(key, JSON.stringify(updated)); } catch {}
+  const raw = localStorage.getItem(key);
+  const parsed = raw ? safeParse(raw) : null;
+  return Array.isArray(parsed)
+    ? parsed.map((value) => (value || "").toString().trim()).filter(Boolean)
+    : [];
 }
 
 export function dismissDuplicatePair(pairKey, user) {
-  const list = loadDismissedDuplicates(user);
-  if (!list.includes(pairKey)) list.push(pairKey);
   const key = userKey(DISMISSED_DUPLICATES_KEY, user);
-  try { localStorage.setItem(key, JSON.stringify(list)); } catch {}
+  const next = [...new Set([...loadDismissedDuplicates(user), (pairKey || "").toString().trim()].filter(Boolean))];
+  localStorage.setItem(key, JSON.stringify(next));
 }
+
 
 export {
   GUEST_WARDROBE_KEY,
@@ -377,6 +391,7 @@ export {
   SAVED_OUTFITS_KEY,
   OUTFIT_HISTORY_KEY,
   PLANNED_OUTFITS_KEY,
+  TRIP_PACKING_KEY,
   PROFILE_KEY,
   ONBOARDING_ANSWERS_KEY,
   ONBOARDED_KEY,

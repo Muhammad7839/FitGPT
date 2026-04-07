@@ -1,5 +1,8 @@
 
 import { normalizeFitTag, normalizeItems, idsSignature } from "./helpers";
+import { getCurrentSeason, getSeasonMatch } from "./seasonalWardrobe";
+import { feedbackBiasForOutfit } from "./recommendationFeedback";
+import { personalizationBiasForOutfit } from "./recommendationPersonalization";
 
 const DEFAULT_BODY_TYPE = "rectangle";
 
@@ -784,7 +787,7 @@ function comfortFitScore(fitTag, comfortSet) {
 }
 
 function metadataScore(item, context) {
-  const { answers, weatherCat, bodyTypeId, recentItemCounts, timeCat, outfitSoFar, selectedSeason } = context;
+  const { answers, weatherCat, bodyTypeId, recentItemCounts, timeCat, outfitSoFar, selectedSeason, seasonalMode } = context;
   const id = (item?.id ?? "").toString().trim();
   const recentPenalty = id && recentItemCounts ? (recentItemCounts.get(id) || 0) * 2 : 0;
 
@@ -806,10 +809,8 @@ function metadataScore(item, context) {
     score += occasions.some((occasion) => preferredOccasions.includes(occasion)) ? 12 : occasions.length ? -6 : 2;
   }
 
-  if (seasons.length) {
-    score += seasons.includes(selectedSeason) ? 8 : -4;
-  } else {
-    score += 1;
+  if (seasonalMode !== false) {
+    score += getSeasonMatch(seasons, selectedSeason).scoreAdjustment;
   }
 
   score += weatherScoreBias(weatherCat, item?.category);
@@ -1322,10 +1323,28 @@ function scoreOutfitCandidate(outfit, context) {
     }
   }
 
+  score += feedbackBiasForOutfit(outfit, context.feedbackProfile);
+  score += personalizationBiasForOutfit(outfit, context.personalizationProfile);
+
   return score;
 }
 
-export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactSigs, recentItemCounts, weatherCat, timeCat, answers, savedSigs, rejectedOutfits, underusedIds, neglectedIds, precipCat, feedbackProfile) {
+export function generateThreeOutfits(
+  items,
+  seedNumber,
+  bodyTypeId,
+  recentExactSigs,
+  recentItemCounts,
+  weatherCat,
+  timeCat,
+  answers,
+  savedSigs,
+  optionsOrRejected = {},
+  underusedIdsArg,
+  neglectedIdsArg,
+  precipCatArg,
+  feedbackProfileArg
+) {
   const active = (Array.isArray(items) ? items : []).filter(
     (x) => x && x.is_active !== false && String(x.is_active) !== "false"
   );
@@ -1337,19 +1356,32 @@ export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactS
   const seed = typeof seedNumber === "number" && Number.isFinite(seedNumber) ? seedNumber : Date.now();
   const rng = mulberry32(seed);
   const buckets = bucketWardrobe(active);
+  const options = optionsOrRejected && typeof optionsOrRejected === "object" && !Array.isArray(optionsOrRejected) && !(optionsOrRejected instanceof Set)
+    ? optionsOrRejected
+    : {
+      rejectedOutfits: Array.isArray(optionsOrRejected) ? optionsOrRejected : [],
+      underusedIds: underusedIdsArg,
+      neglectedIds: neglectedIdsArg,
+      precipCat: precipCatArg,
+      feedbackProfile: feedbackProfileArg,
+    };
+  const requestedLimit = Math.max(1, Math.min(12, Math.trunc(Number(options?.limit) || 3)));
   const skipSigs = savedSigs instanceof Set ? savedSigs : new Set();
   const recentSigs = recentExactSigs instanceof Set ? recentExactSigs : new Set();
+  const rejectedOutfits = Array.isArray(options?.rejectedOutfits) ? options.rejectedOutfits : [];
   const context = {
     answers,
     bodyTypeId,
     recentItemCounts,
+    feedbackProfile: options?.feedbackProfile || null,
+    personalizationProfile: options?.personalizationProfile || null,
     weatherCat: (weatherCat || "mild").toString().toLowerCase(),
-    precipCat: (precipCat || "clear").toString().toLowerCase(),
+    precipCat: (options?.precipCat || "clear").toString().toLowerCase(),
     timeCat: (timeCat || "work hours").toString().toLowerCase(),
-    selectedSeason: seasonFromDate(new Date()),
-    underusedIds: underusedIds instanceof Set ? underusedIds : new Set(),
-    neglectedIds: neglectedIds instanceof Set ? neglectedIds : new Set(),
-    feedbackProfile: feedbackProfile || null,
+    selectedSeason: (options?.selectedSeason || getCurrentSeason() || seasonFromDate(new Date())).toString().toLowerCase(),
+    seasonalMode: options?.seasonalMode !== false,
+    underusedIds: options?.underusedIds instanceof Set ? options.underusedIds : new Set(),
+    neglectedIds: options?.neglectedIds instanceof Set ? options.neglectedIds : new Set(),
   };
 
   const candidates = [];
@@ -1386,25 +1418,42 @@ export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactS
 
   candidates.sort((a, b) => b.score - a.score);
 
-  const results = candidates.slice(0, 3).map((entry) => entry.outfit);
+  const results = candidates.slice(0, requestedLimit).map((entry) => entry.outfit);
   if (!results.length) return [];
-  while (results.length < 3) results.push(results[results.length - 1]);
-  return results.slice(0, 3);
+  if (requestedLimit <= 3) {
+    while (results.length < requestedLimit) results.push(results[results.length - 1]);
+  }
+  return results.slice(0, requestedLimit);
 }
 
-export function scoreOutfitForDisplay(outfit, { weatherCategory, precipCategory, timeCategory, answers, bodyTypeId, feedbackProfile } = {}) {
+export function scoreOutfitForDisplay(
+  outfit,
+  {
+    weatherCategory,
+    precipCategory,
+    timeCategory,
+    answers,
+    bodyTypeId,
+    selectedSeason,
+    seasonalMode = true,
+    feedbackProfile = null,
+    personalizationProfile = null,
+  } = {}
+) {
   const mapped = mappedOutfit(Array.isArray(outfit) ? outfit : []);
   if (!mapped.length) return 0;
 
   const score = scoreOutfitCandidate(mapped, {
     answers,
     bodyTypeId: bodyTypeId || DEFAULT_BODY_TYPE,
+    feedbackProfile,
+    personalizationProfile,
     recentItemCounts: new Map(),
     weatherCat: (weatherCategory || "mild").toString().toLowerCase(),
     precipCat: (precipCategory || "clear").toString().toLowerCase(),
     timeCat: (timeCategory || "work hours").toString().toLowerCase(),
-    selectedSeason: seasonFromDate(new Date()),
-    feedbackProfile: feedbackProfile || null,
+    selectedSeason: (selectedSeason || getCurrentSeason() || seasonFromDate(new Date())).toString().toLowerCase(),
+    seasonalMode,
   });
 
   return Math.max(0, Math.min(100, Math.round(score)));
