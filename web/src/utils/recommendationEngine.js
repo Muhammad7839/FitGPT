@@ -831,6 +831,11 @@ function metadataScore(item, context) {
   if (neglectedIds instanceof Set && neglectedIds.has(id)) score += 4;
   else if (underusedIds instanceof Set && underusedIds.has(id)) score += 3;
 
+  /* ── Feedback-based preference ──────────────────────────────────── */
+  if (context.feedbackProfile) {
+    score += feedbackBias(item, context.feedbackProfile);
+  }
+
   if (Array.isArray(outfitSoFar) && outfitSoFar.length) {
     const colorScore = outfitSoFar.reduce((total, existing) => total + pairScore(existing?.color, item?.color), 0) / outfitSoFar.length;
     score += colorScore * 8;
@@ -1320,7 +1325,7 @@ function scoreOutfitCandidate(outfit, context) {
   return score;
 }
 
-export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactSigs, recentItemCounts, weatherCat, timeCat, answers, savedSigs, rejectedOutfits, underusedIds, neglectedIds, precipCat) {
+export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactSigs, recentItemCounts, weatherCat, timeCat, answers, savedSigs, rejectedOutfits, underusedIds, neglectedIds, precipCat, feedbackProfile) {
   const active = (Array.isArray(items) ? items : []).filter(
     (x) => x && x.is_active !== false && String(x.is_active) !== "false"
   );
@@ -1344,6 +1349,7 @@ export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactS
     selectedSeason: seasonFromDate(new Date()),
     underusedIds: underusedIds instanceof Set ? underusedIds : new Set(),
     neglectedIds: neglectedIds instanceof Set ? neglectedIds : new Set(),
+    feedbackProfile: feedbackProfile || null,
   };
 
   const candidates = [];
@@ -1376,7 +1382,7 @@ export function generateThreeOutfits(items, seedNumber, bodyTypeId, recentExactS
   return results.slice(0, 3);
 }
 
-export function scoreOutfitForDisplay(outfit, { weatherCategory, precipCategory, timeCategory, answers, bodyTypeId } = {}) {
+export function scoreOutfitForDisplay(outfit, { weatherCategory, precipCategory, timeCategory, answers, bodyTypeId, feedbackProfile } = {}) {
   const mapped = mappedOutfit(Array.isArray(outfit) ? outfit : []);
   if (!mapped.length) return 0;
 
@@ -1388,6 +1394,7 @@ export function scoreOutfitForDisplay(outfit, { weatherCategory, precipCategory,
     precipCat: (precipCategory || "clear").toString().toLowerCase(),
     timeCat: (timeCategory || "work hours").toString().toLowerCase(),
     selectedSeason: seasonFromDate(new Date()),
+    feedbackProfile: feedbackProfile || null,
   });
 
   return Math.max(0, Math.min(100, Math.round(score)));
@@ -2401,6 +2408,93 @@ export function detectDuplicates(wardrobeItems, dismissedPairs) {
     similar: pairs.filter((p) => p.level === "similar"),
     total: pairs.length,
   };
+}
+
+/* ── Recommendation feedback learning ─────────────────────────────── */
+
+const FEEDBACK_DECAY_DAYS = 60;
+const MAX_FEEDBACK_BIAS = 12;
+
+export function buildFeedbackProfile(feedbackList) {
+  const list = Array.isArray(feedbackList) ? feedbackList : [];
+  const now = Date.now();
+
+  const colorCounts = {};    /* color → { liked, disliked } */
+  const typeCounts = {};     /* clothingType → { liked, disliked } */
+  const styleCounts = {};    /* styleTag → { liked, disliked } */
+  const itemCounts = {};     /* itemId → { liked, disliked } */
+
+  for (const entry of list) {
+    const fb = entry?.feedback;
+    if (fb !== "like" && fb !== "dislike") continue;
+
+    const age = entry?.timestamp ? (now - entry.timestamp) / (1000 * 60 * 60 * 24) : 0;
+    const weight = age > FEEDBACK_DECAY_DAYS ? 0.3 : age > 30 ? 0.6 : 1;
+    const field = fb === "like" ? "liked" : "disliked";
+
+    for (const c of Array.isArray(entry.colors) ? entry.colors : []) {
+      const k = (c || "").toLowerCase();
+      if (!k) continue;
+      if (!colorCounts[k]) colorCounts[k] = { liked: 0, disliked: 0 };
+      colorCounts[k][field] += weight;
+    }
+    for (const t of Array.isArray(entry.clothingTypes) ? entry.clothingTypes : []) {
+      const k = (t || "").toLowerCase();
+      if (!k) continue;
+      if (!typeCounts[k]) typeCounts[k] = { liked: 0, disliked: 0 };
+      typeCounts[k][field] += weight;
+    }
+    for (const s of Array.isArray(entry.styleTags) ? entry.styleTags : []) {
+      const k = (s || "").toLowerCase();
+      if (!k) continue;
+      if (!styleCounts[k]) styleCounts[k] = { liked: 0, disliked: 0 };
+      styleCounts[k][field] += weight;
+    }
+    for (const id of Array.isArray(entry.itemIds) ? entry.itemIds : []) {
+      const k = (id || "").toString();
+      if (!k) continue;
+      if (!itemCounts[k]) itemCounts[k] = { liked: 0, disliked: 0 };
+      itemCounts[k][field] += weight;
+    }
+  }
+
+  return { colorCounts, typeCounts, styleCounts, itemCounts, totalEntries: list.length };
+}
+
+function netPreference(counts) {
+  if (!counts) return 0;
+  return counts.liked - counts.disliked;
+}
+
+export function feedbackBias(item, profile) {
+  if (!profile || !profile.totalEntries) return 0;
+
+  let score = 0;
+  const id = (item?.id ?? "").toString();
+  const color = normalizeColorName(item?.color || "").toLowerCase();
+  const type = normalizeClothingType(item?.clothing_type || item?.type || item?.name || "");
+  const styles = normalizeTagArray(item?.style_tags).map((s) => (s || "").toLowerCase());
+
+  /* Item-level preference (strongest signal) */
+  const itemPref = netPreference(profile.itemCounts[id]);
+  score += Math.max(-4, Math.min(4, itemPref * 2));
+
+  /* Color preference */
+  const colorPref = netPreference(profile.colorCounts[color]);
+  score += Math.max(-3, Math.min(3, colorPref));
+
+  /* Clothing type preference */
+  const typePref = netPreference(profile.typeCounts[type]);
+  score += Math.max(-3, Math.min(3, typePref));
+
+  /* Style tag preference (averaged across tags) */
+  if (styles.length) {
+    let styleTotal = 0;
+    for (const s of styles) styleTotal += netPreference(profile.styleCounts[s]);
+    score += Math.max(-2, Math.min(2, styleTotal / styles.length));
+  }
+
+  return Math.max(-MAX_FEEDBACK_BIAS, Math.min(MAX_FEEDBACK_BIAS, score));
 }
 
 /* ── Wardrobe gap detection ─────────────────────────────────────────── */

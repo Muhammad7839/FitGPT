@@ -12,7 +12,7 @@ import ClothCard from "./ClothCard";
 import MeshGradient from "./MeshGradient";
 import ErrorBoundary from "./ErrorBoundary";
 import { OPEN_ADD_ITEM_FLAG, REUSE_OUTFIT_KEY } from "../utils/constants";
-import { readRecSeed, writeRecSeed, readTimeOverride, writeTimeOverride, readWeatherOverride, setWeatherOverride } from "../utils/userStorage";
+import { readRecSeed, writeRecSeed, readTimeOverride, writeTimeOverride, readWeatherOverride, setWeatherOverride, loadRejectedOutfits, saveRejectedOutfit, loadRecommendationFeedback, saveRecommendationFeedback } from "../utils/userStorage";
 import { safeParse, formatToday, normalizeFitTag, normalizeItems, buildGoogleCalendarUrl, onTiltMove, onTiltLeave, tomorrowDateStr } from "../utils/helpers";
 import { getWeatherContext } from "../api/weatherApi";
 import {
@@ -20,7 +20,7 @@ import {
   timeCategoryFromDate,
   generateThreeOutfits, idsSignature, makeRecentSets,
   buildExplanation, buildOutfitFromIds, scoreOutfitForDisplay,
-  analyzeOutfitColors, colorInfo,
+  analyzeOutfitColors, colorInfo, buildFeedbackProfile,
 } from "../utils/recommendationEngine";
 
 const DEFAULT_BODY_TYPE = "rectangle";
@@ -345,6 +345,9 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [showWhyDetails, setShowWhyDetails] = useState(false);
   const [showRefineControls, setShowRefineControls] = useState(false);
 
+  const [rejectedOutfits] = useState(() => loadRejectedOutfits(user));
+  const [feedbackProfile, setFeedbackProfile] = useState(() => buildFeedbackProfile(loadRecommendationFeedback(user)));
+
   const [aiOutfits, setAiOutfits] = useState(null);
   const [aiExplanations, setAiExplanations] = useState([]);
   const [aiLoading, setAiLoading] = useState(true);
@@ -589,12 +592,13 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         timeCategory,
         effectiveAnswers,
         savedSigs,
+        rejectedOutfits,
         undefined,
         undefined,
-        undefined,
-        precipCondition
+        precipCondition,
+        feedbackProfile
       ),
-    [wardrobe, recSeed, bodyTypeId, recentExactSigs, recentItemCounts, weatherCategory, precipCondition, timeCategory, effectiveAnswers, savedSigs]
+    [wardrobe, recSeed, bodyTypeId, recentExactSigs, recentItemCounts, weatherCategory, precipCondition, timeCategory, effectiveAnswers, savedSigs, rejectedOutfits, feedbackProfile]
   );
 
   const reused = useMemo(() => readReuseOutfit(), []);
@@ -641,6 +645,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           timeCategory,
           answers: effectiveAnswers,
           bodyTypeId,
+          feedbackProfile,
         }),
       }))
       .sort((a, b) => {
@@ -666,6 +671,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     effectiveAnswers,
     bodyTypeId,
     recentRecommendationSigs,
+    feedbackProfile,
   ]);
 
   const [selectedIdx, setSelectedIdx] = useState(null);
@@ -718,6 +724,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         timeCategory,
         answers: effectiveAnswers,
         bodyTypeId,
+        feedbackProfile,
       });
 
       const rankLabel = idx === 0 ? "Top Match" : idx === 1 ? "Strong Pick" : "Fresh Option";
@@ -743,7 +750,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
       return { score, rankLabel, confidenceLabel, traits, comfortSummary, explanationPreview };
     });
-  }, [outfits, weatherCategory, precipCondition, timeCategory, effectiveAnswers, bodyTypeId, aiSource, reused, pairedExplanations]);
+  }, [outfits, weatherCategory, precipCondition, timeCategory, effectiveAnswers, bodyTypeId, aiSource, reused, pairedExplanations, feedbackProfile]);
 
   const canRefresh = true;
 
@@ -911,6 +918,16 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     } finally {
       setSavingSig("");
     }
+  }
+
+  function handleFeedback(outfit, type) {
+    saveRecommendationFeedback(outfit, type, user);
+    if (type === "dislike") {
+      saveRejectedOutfit(outfit, user);
+    }
+    setFeedbackProfile(buildFeedbackProfile(loadRecommendationFeedback(user)));
+    setSaveMsg(type === "like" ? "Got it — more like this!" : "Noted — fewer like this.");
+    window.setTimeout(() => setSaveMsg(""), 2000);
   }
 
   const timeLine = useMemo(() => {
@@ -1285,6 +1302,10 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                       <span className="styledSaveBtnIcon">{isSaved ? "\u2713" : "\u2661"}</span>
                       <span className="styledSaveBtnText">{label}</span>
                     </button>
+                    <div className="dashFeedbackBtns">
+                      <button type="button" className="dashFeedbackBtn dashFeedbackLike" onClick={() => handleFeedback(outfit, "like")} title="More like this">&#x25B2;</button>
+                      <button type="button" className="dashFeedbackBtn dashFeedbackDislike" onClick={() => handleFeedback(outfit, "dislike")} title="Less like this">&#x25BC;</button>
+                    </div>
                   </div>
                 </div>
 
