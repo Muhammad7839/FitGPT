@@ -2257,6 +2257,152 @@ export function generatePackingList(wardrobeItems, { days, weatherCategory, prec
   };
 }
 
+/* ── Duplicate item detection ─────────────────────────────────────── */
+
+function tokenize(str) {
+  return (str || "").toString().toLowerCase().replace(/[^a-z0-9]/g, " ").split(/\s+/).filter(Boolean);
+}
+
+export function diceSimilarity(a, b) {
+  const tokA = tokenize(a);
+  const tokB = tokenize(b);
+  if (!tokA.length && !tokB.length) return 1;
+  if (!tokA.length || !tokB.length) return 0;
+  const setA = new Set(tokA);
+  const setB = new Set(tokB);
+  let shared = 0;
+  for (const t of setA) if (setB.has(t)) shared++;
+  return (2 * shared) / (setA.size + setB.size);
+}
+
+function tagOverlap(tagsA, tagsB) {
+  const a = new Set((Array.isArray(tagsA) ? tagsA : []).map((t) => (t || "").toString().toLowerCase()).filter(Boolean));
+  const b = new Set((Array.isArray(tagsB) ? tagsB : []).map((t) => (t || "").toString().toLowerCase()).filter(Boolean));
+  if (!a.size && !b.size) return 1;
+  if (!a.size || !b.size) return 0;
+  let shared = 0;
+  for (const t of a) if (b.has(t)) shared++;
+  return (2 * shared) / (a.size + b.size);
+}
+
+const SIM_WEIGHTS = {
+  name: 0.30,
+  category: 0.12,
+  color: 0.15,
+  clothingType: 0.20,
+  fit: 0.05,
+  styleTags: 0.06,
+  occasionTags: 0.04,
+  seasonTags: 0.03,
+  imageHash: 0.05,
+};
+
+export function itemSimilarityScore(a, b) {
+  if (!a || !b) return { score: 0, breakdown: {} };
+
+  const normA = typeof a._idx === "number" ? a : createNormalizedItem(a, 0);
+  const normB = typeof b._idx === "number" ? b : createNormalizedItem(b, 1);
+
+  const nameScore = diceSimilarity(normA.name, normB.name);
+  const categoryScore = normA.category === normB.category ? 1 : 0;
+  const colorScore = normalizeColorName(normA.color).toLowerCase() === normalizeColorName(normB.color).toLowerCase() ? 1
+    : diceSimilarity(normA.color, normB.color);
+  const typeScore = normA.clothing_type === normB.clothing_type ? 1
+    : diceSimilarity(normA.clothing_type, normB.clothing_type);
+  const fitScore = normA.fit_tag && normB.fit_tag && normA.fit_tag === normB.fit_tag ? 1 : 0;
+  const styleScore = tagOverlap(normA.style_tags, normB.style_tags);
+  const occasionScore = tagOverlap(normA.occasion_tags, normB.occasion_tags);
+  const seasonScore = tagOverlap(normA.season_tags, normB.season_tags);
+
+  /* Placeholder for future ML image comparison — always 0 for now */
+  const imageScore = 0;
+
+  const breakdown = {
+    name: nameScore,
+    category: categoryScore,
+    color: colorScore,
+    clothingType: typeScore,
+    fit: fitScore,
+    styleTags: styleScore,
+    occasionTags: occasionScore,
+    seasonTags: seasonScore,
+    imageHash: imageScore,
+  };
+
+  let score = 0;
+  for (const [key, weight] of Object.entries(SIM_WEIGHTS)) {
+    score += (breakdown[key] || 0) * weight;
+  }
+  /* Normalize to 0-1 (imageHash is always 0, so max possible is 0.95) */
+  const maxPossible = Object.values(SIM_WEIGHTS).reduce((s, w) => s + w, 0) - SIM_WEIGHTS.imageHash;
+  score = Math.min(1, score / maxPossible);
+
+  return { score: Math.round(score * 100) / 100, breakdown };
+}
+
+const DUP_EXACT = 0.92;
+const DUP_LIKELY = 0.72;
+const DUP_SIMILAR = 0.55;
+
+export function classifyDuplicateLevel(score) {
+  if (score >= DUP_EXACT) return "exact";
+  if (score >= DUP_LIKELY) return "likely";
+  if (score >= DUP_SIMILAR) return "similar";
+  return "none";
+}
+
+export function detectDuplicates(wardrobeItems, dismissedPairs) {
+  const items = (Array.isArray(wardrobeItems) ? wardrobeItems : []).filter(
+    (x) => x && x.is_active !== false && String(x.is_active) !== "false"
+  );
+  const dismissed = dismissedPairs instanceof Set ? dismissedPairs : new Set(Array.isArray(dismissedPairs) ? dismissedPairs : []);
+
+  /* Bucket by category to reduce comparisons */
+  const byCategory = {};
+  for (const item of items) {
+    const cat = normalizeCategory(item?.category);
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(item);
+  }
+
+  const pairs = [];
+
+  for (const pool of Object.values(byCategory)) {
+    for (let i = 0; i < pool.length; i++) {
+      for (let j = i + 1; j < pool.length; j++) {
+        const idA = (pool[i]?.id ?? "").toString();
+        const idB = (pool[j]?.id ?? "").toString();
+        if (!idA || !idB) continue;
+
+        const pairKey = [idA, idB].sort().join("|");
+        if (dismissed.has(pairKey)) continue;
+
+        const { score, breakdown } = itemSimilarityScore(pool[i], pool[j]);
+        const level = classifyDuplicateLevel(score);
+        if (level === "none") continue;
+
+        pairs.push({
+          pairKey,
+          itemA: pool[i],
+          itemB: pool[j],
+          score,
+          level,
+          breakdown,
+        });
+      }
+    }
+  }
+
+  pairs.sort((a, b) => b.score - a.score);
+
+  return {
+    exact: pairs.filter((p) => p.level === "exact"),
+    likely: pairs.filter((p) => p.level === "likely"),
+    similar: pairs.filter((p) => p.level === "similar"),
+    total: pairs.length,
+  };
+}
+
 /* ── Wardrobe gap detection ─────────────────────────────────────────── */
 
 const ESSENTIAL_CATEGORIES = ["Tops", "Bottoms", "Shoes"];

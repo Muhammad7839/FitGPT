@@ -21,6 +21,7 @@ import {
 import ItemFormFields, { CATEGORIES as ITEM_CATEGORIES, FIT_TAG_OPTIONS } from "./ItemFormFields";
 import WardrobeItemCard from "./WardrobeItemCard";
 import BulkUploadModal from "./BulkUploadModal";
+import DuplicateDetector from "./DuplicateDetector";
 
 const CATEGORIES = ["All Items", ...ITEM_CATEGORIES];
 
@@ -1517,6 +1518,10 @@ export default function Wardrobe() {
           })}
         </section>
       ) : null}
+
+      {tab === "active" && items.length >= 2 && (
+        <DuplicateDetector items={items} user={user} />
+      )}
 
       <section className={view === "grid" ? "wardrobeGrid" : "wardrobeList"}>
         {filtered.map((it) => (
