@@ -7,14 +7,45 @@ import { savedOutfitsApi } from "../api/savedOutfitsApi";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
 import useWardrobe from "../hooks/useWardrobe";
 import { fetchAIRecommendations } from "../api/recommendationsApi";
+import { submitRecommendationFeedback } from "../api/recommendationFeedbackApi";
 import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 import ClothCard from "./ClothCard";
 import MeshGradient from "./MeshGradient";
 import ErrorBoundary from "./ErrorBoundary";
-import { OPEN_ADD_ITEM_FLAG, REUSE_OUTFIT_KEY, CURRENT_RECS_KEY } from "../utils/constants";
-import { readRecSeed, writeRecSeed, readTimeOverride, writeTimeOverride, readWeatherOverride, setWeatherOverride, loadRejectedOutfits, saveRejectedOutfit, loadRecommendationFeedback, saveRecommendationFeedback } from "../utils/userStorage";
+import WardrobeGapPanel from "./WardrobeGapPanel";
+import WardrobeRotationPanel from "./WardrobeRotationPanel";
+import {
+  OPEN_ADD_ITEM_FLAG,
+  REUSE_OUTFIT_KEY,
+  CURRENT_RECS_KEY,
+  EVT_OUTFIT_HISTORY_CHANGED,
+  EVT_RECOMMENDATION_FEEDBACK_CHANGED,
+  EVT_RECOMMENDATION_PERSONALIZATION_CHANGED,
+  UNDERUSED_ALERTS_KEY,
+} from "../utils/constants";
+import {
+  readRecSeed,
+  writeRecSeed,
+  readTimeOverride,
+  writeTimeOverride,
+  readWeatherOverride,
+  setWeatherOverride,
+  makeObjectStore,
+  readSeasonalMode,
+  writeSeasonalMode,
+  loadRejectedOutfits,
+  saveRejectedOutfit,
+  loadRecommendationFeedback,
+  saveRecommendationFeedback,
+} from "../utils/userStorage";
 import { safeParse, formatToday, normalizeFitTag, normalizeItems, buildGoogleCalendarUrl, onTiltMove, onTiltLeave, tomorrowDateStr } from "../utils/helpers";
 import { getWeatherContext } from "../api/weatherApi";
+import { analyzeWardrobeGaps } from "../utils/wardrobeGapInsights";
+import { analyzeWardrobeRotation } from "../utils/wardrobeRotationInsights";
+import { getCurrentSeason, getSeasonLabel, getSeasonalWardrobeLabel, hasSeasonalMetadata } from "../utils/seasonalWardrobe";
+import {
+  readRotationAlertPreferences,
+} from "../utils/rotationAlertPreferences";
 import {
   titleCase, normalizeCategory, normalizeColorName, colorToCss,
   timeCategoryFromDate,
@@ -23,14 +54,39 @@ import {
   analyzeOutfitColors, colorInfo, buildPersonalizationProfile,
 } from "../utils/recommendationEngine";
 import {
-  shouldShowPrompt, computePromptType, recordVisit, recordPromptShown,
-  recordPromptEngaged, recordPromptDismissed, PROMPT_TYPES,
+  shouldShowPrompt, recordVisit, recordPromptShown,
+  recordPromptEngaged, recordPromptDismissed,
 } from "../utils/feedbackPrompts";
+import {
+  FEEDBACK_REASON_OPTIONS,
+  FEEDBACK_SIGNALS,
+  buildRecommendationFeedbackPayload,
+  buildRecommendationFeedbackProfile,
+  getRecommendationFeedback,
+  readRecommendationFeedback,
+  restoreRecommendationFeedback,
+  upsertRecommendationFeedback,
+} from "../utils/recommendationFeedback";
+import {
+  PERSONALIZATION_ACTIONS,
+  buildRecommendationPersonalizationProfile,
+  describeRecommendationPersonalization,
+  readRecommendationPersonalization,
+  trackRecommendationPersonalization,
+} from "../utils/recommendationPersonalization";
 
 const DEFAULT_BODY_TYPE = "rectangle";
 const OCCASION_OPTIONS = ["", "casual", "work", "formal", "athletic", "social", "lounge"];
 const STYLE_OPTIONS = ["", "casual", "formal", "smart casual", "relaxed", "lounge", "activewear", "social", "work"];
 const RECENT_RECOMMENDATION_SIGS_KEY = "fitgpt_recent_recommendation_sigs_v1";
+const FEEDBACK_PROMPT_SESSION_KEY = "fitgpt_feedback_prompt_session_v1";
+const FEEDBACK_PROMPT_DELAY_MS = 1400;
+const FEEDBACK_PROMPT_FADE_MS = 9000;
+const MAX_FEEDBACK_PROMPTS_PER_SESSION = 2;
+const FEEDBACK_NOTICE_MS = 4800;
+const REJECT_PENDING_MESSAGE = "Removing outfit...";
+const REJECT_SUCCESS_MESSAGE = "Outfit removed from your recommendations.";
+const dismissedUnderusedAlertsStore = makeObjectStore(UNDERUSED_ALERTS_KEY);
 
 function recommendationSignature(outfit) {
   return idsSignature((Array.isArray(outfit) ? outfit : []).map((item) => item?.id));
@@ -55,6 +111,43 @@ function writeRecentRecommendationSigs(signatures) {
   const next = [...new Set((Array.isArray(signatures) ? signatures : []).map((value) => (value || "").toString().trim()).filter(Boolean))].slice(-12);
   sessionStorage.setItem(RECENT_RECOMMENDATION_SIGS_KEY, JSON.stringify(next));
   return next;
+}
+
+function readFeedbackPromptSession() {
+  const raw = sessionStorage.getItem(FEEDBACK_PROMPT_SESSION_KEY);
+  const parsed = raw ? safeParse(raw) : null;
+  const shownSignatures = Array.isArray(parsed?.shownSignatures)
+    ? [...new Set(parsed.shownSignatures.map((value) => (value || "").toString().trim()).filter(Boolean))]
+    : [];
+
+  return {
+    shownSignatures,
+    shownCount: Math.max(0, Number(parsed?.shownCount) || shownSignatures.length),
+  };
+}
+
+function writeFeedbackPromptSession(next) {
+  const safeNext = {
+    shownSignatures: [...new Set((Array.isArray(next?.shownSignatures) ? next.shownSignatures : []).map((value) => (value || "").toString().trim()).filter(Boolean))],
+    shownCount: Math.max(0, Number(next?.shownCount) || 0),
+  };
+  sessionStorage.setItem(FEEDBACK_PROMPT_SESSION_KEY, JSON.stringify(safeNext));
+  return safeNext;
+}
+
+function uniqueRecommendationEntries(entries) {
+  const seen = new Set();
+
+  return (Array.isArray(entries) ? entries : []).filter((entry) => {
+    const signature = (entry?.signature || recommendationSignature(entry?.outfit) || "").toString().trim();
+
+    if (signature) {
+      if (seen.has(signature)) return false;
+      seen.add(signature);
+    }
+
+    return Array.isArray(entry?.outfit) && entry.outfit.length > 0;
+  });
 }
 
 function readReuseOutfit() {
@@ -315,6 +408,34 @@ function buildWeatherPresentation({ category, tempF, loading, source, message, p
   };
 }
 
+function feedbackSummaryText(entry) {
+  if (!entry) return "Optional feedback helps future picks feel more personal.";
+  if (entry.signal === FEEDBACK_SIGNALS.LIKE) {
+    return entry.detailCode ? "Liked with extra detail saved." : "Saved as a preference.";
+  }
+  if (entry.signal === FEEDBACK_SIGNALS.DISLIKE) {
+    return entry.detailCode ? "Not for you, with extra detail saved." : "Saved as not for you.";
+  }
+  return "Skipped for now.";
+}
+
+function feedbackBadgeText(signal) {
+  if (signal === FEEDBACK_SIGNALS.LIKE) return "Liked";
+  if (signal === FEEDBACK_SIGNALS.DISLIKE) return "Not for me";
+  if (signal === FEEDBACK_SIGNALS.SKIP) return "Skipped";
+  return "";
+}
+
+function feedbackNoticeText(signal) {
+  if (signal === FEEDBACK_SIGNALS.LIKE) return "We’ll lean into looks like this next time.";
+  if (signal === FEEDBACK_SIGNALS.DISLIKE) return "We’ll tone down similar looks over time.";
+  return "We’ll treat this as a pass and keep exploring.";
+}
+
+function rejectSyncErrorText() {
+  return `${REJECT_SUCCESS_MESSAGE} We couldn't sync that rejection right now.`;
+}
+
 export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -326,8 +447,21 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [saveMsg, setSaveMsg] = useState("");
   const [savingSig, setSavingSig] = useState("");
   const [savedSigs, setSavedSigs] = useState(() => new Set());
+  const [savedOutfitEntries, setSavedOutfitEntries] = useState([]);
   const [recentRecommendationSigs, setRecentRecommendationSigs] = useState(() => new Set(readRecentRecommendationSigs()));
+  const [recommendationFeedback, setRecommendationFeedback] = useState(() => readRecommendationFeedback(user));
+  const [recommendationPersonalization, setRecommendationPersonalization] = useState(() => readRecommendationPersonalization(user));
+  const [feedbackPendingSig, setFeedbackPendingSig] = useState("");
+  const [feedbackComposer, setFeedbackComposer] = useState(null);
+  const [feedbackNotice, setFeedbackNotice] = useState(null);
+  const [feedbackPromptSig, setFeedbackPromptSig] = useState("");
+  const feedbackNoticeTimerRef = useRef(null);
+  const feedbackPromptTimerRef = useRef(null);
+  const feedbackPromptFadeTimerRef = useRef(null);
 
+  const [historyEntries, setHistoryEntries] = useState([]);
+  const [dismissedRotationAlerts, setDismissedRotationAlerts] = useState({});
+  const [rotationPreferences, setRotationPreferences] = useState(() => readRotationAlertPreferences(user));
   const [recentExactSigs, setRecentExactSigs] = useState(() => new Set());
   const [recentItemCounts, setRecentItemCounts] = useState(() => new Map());
 
@@ -346,11 +480,12 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [selectedStyle, setSelectedStyle] = useState("");
   const [showOccasionPicker, setShowOccasionPicker] = useState(false);
   const [showStylePicker, setShowStylePicker] = useState(false);
+  const [seasonalMode, setSeasonalMode] = useState(() => readSeasonalMode(user));
   const [showWhyDetails, setShowWhyDetails] = useState(false);
   const [showRefineControls, setShowRefineControls] = useState(false);
 
   const [rejectedOutfits] = useState(() => loadRejectedOutfits(user));
-  const [feedbackProfile, setFeedbackProfile] = useState(null);
+  const [legacyPreferenceProfile, setLegacyPreferenceProfile] = useState(null);
 
   /* Build personalization profile from all signals once history + saved are loaded */
   useEffect(() => {
@@ -364,7 +499,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       const feedback = loadRecommendationFeedback(user);
       const history = Array.isArray(histRes?.history) ? histRes.history : [];
       const saved = Array.isArray(savedRes?.saved_outfits) ? savedRes.saved_outfits : [];
-      setFeedbackProfile(buildPersonalizationProfile(feedback, history, saved, wardrobe));
+      setLegacyPreferenceProfile(buildPersonalizationProfile(feedback, history, saved, wardrobe));
     }
     loadProfile();
     return () => { alive = false; };
@@ -382,11 +517,71 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [aiSource, setAiSource] = useState("local");
   const [aiRefreshToken, setAiRefreshToken] = useState(0);
   const [aiHasResolved, setAiHasResolved] = useState(false);
+  const [gapLoading, setGapLoading] = useState(true);
+  const [gapAnalysis, setGapAnalysis] = useState(() => ({
+    gaps: [],
+    summaryTitle: "Analyzing your wardrobe...",
+    summaryText: "",
+    checkedItems: 0,
+  }));
+  const currentSeason = useMemo(() => getCurrentSeason(), []);
+  const currentSeasonLabel = useMemo(() => getSeasonLabel(currentSeason), [currentSeason]);
+  const seasonalWardrobeLabel = useMemo(() => getSeasonalWardrobeLabel(currentSeason), [currentSeason]);
+  const hasSeasonTags = useMemo(() => hasSeasonalMetadata(wardrobe), [wardrobe]);
 
 
   useEffect(() => {
     writeRecSeed(recSeed);
   }, [recSeed]);
+
+  useEffect(() => {
+    setSeasonalMode(readSeasonalMode(user));
+  }, [user]);
+
+  useEffect(() => {
+    setRecommendationFeedback(readRecommendationFeedback(user));
+    setRecommendationPersonalization(readRecommendationPersonalization(user));
+    setFeedbackPendingSig("");
+    setFeedbackComposer(null);
+    setFeedbackNotice(null);
+    setFeedbackPromptSig("");
+  }, [user]);
+
+  useEffect(() => {
+    const syncFeedback = () => {
+      setRecommendationFeedback(readRecommendationFeedback(user));
+    };
+
+    window.addEventListener(EVT_RECOMMENDATION_FEEDBACK_CHANGED, syncFeedback);
+    return () => {
+      window.removeEventListener(EVT_RECOMMENDATION_FEEDBACK_CHANGED, syncFeedback);
+    };
+  }, [user]);
+
+  useEffect(() => {
+    const syncPersonalization = () => {
+      setRecommendationPersonalization(readRecommendationPersonalization(user));
+    };
+
+    window.addEventListener(EVT_RECOMMENDATION_PERSONALIZATION_CHANGED, syncPersonalization);
+    return () => {
+      window.removeEventListener(EVT_RECOMMENDATION_PERSONALIZATION_CHANGED, syncPersonalization);
+    };
+  }, [user]);
+
+  useEffect(() => {
+    return () => {
+      if (feedbackNoticeTimerRef.current) {
+        window.clearTimeout(feedbackNoticeTimerRef.current);
+      }
+      if (feedbackPromptTimerRef.current) {
+        window.clearTimeout(feedbackPromptTimerRef.current);
+      }
+      if (feedbackPromptFadeTimerRef.current) {
+        window.clearTimeout(feedbackPromptFadeTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -398,9 +593,15 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
         const sigs = new Set(list.map((o) => (o?.outfit_signature || "").toString().trim()).filter(Boolean));
 
-        if (alive) setSavedSigs(sigs);
+        if (alive) {
+          setSavedSigs(sigs);
+          setSavedOutfitEntries(list);
+        }
       } catch {
-        if (alive) setSavedSigs(new Set());
+        if (alive) {
+          setSavedSigs(new Set());
+          setSavedOutfitEntries([]);
+        }
       }
     }
 
@@ -419,30 +620,82 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         const res = await outfitHistoryApi.listHistory(user);
         const list = Array.isArray(res?.history) ? res.history : [];
 
-        const sorted = [...list].sort((a, b) => {
-          const da = (a?.worn_at || "").toString();
-          const db = (b?.worn_at || "").toString();
-          return db.localeCompare(da);
-        });
-
-        const recentSets = makeRecentSets(sorted);
-
         if (!alive) return;
-        setRecentExactSigs(recentSets.sigs);
-        setRecentItemCounts(recentSets.itemCounts);
+        syncHistoryState(list);
       } catch {
         if (!alive) return;
-        setRecentExactSigs(new Set());
-        setRecentItemCounts(new Map());
+        syncHistoryState([]);
       }
     }
 
     loadRecentHistory();
 
+    const onHistoryChanged = () => {
+      loadRecentHistory();
+    };
+    window.addEventListener(EVT_OUTFIT_HISTORY_CHANGED, onHistoryChanged);
+
     return () => {
       alive = false;
+      window.removeEventListener(EVT_OUTFIT_HISTORY_CHANGED, onHistoryChanged);
     };
   }, [user]);
+
+  useEffect(() => {
+    setDismissedRotationAlerts(dismissedUnderusedAlertsStore.read(user));
+  }, [user]);
+
+  useEffect(() => {
+    setRotationPreferences(readRotationAlertPreferences(user));
+  }, [user]);
+
+  const feedbackProfile = useMemo(
+    () => buildRecommendationFeedbackProfile(recommendationFeedback),
+    [recommendationFeedback]
+  );
+
+  const rejectedRecommendationSigs = useMemo(
+    () => new Set(
+      Object.values(recommendationFeedback?.entriesBySignature || {})
+        .filter((entry) => entry?.signal === FEEDBACK_SIGNALS.DISLIKE)
+        .map((entry) => (entry?.signature || "").toString().trim())
+        .filter(Boolean)
+    ),
+    [recommendationFeedback]
+  );
+
+  const personalizationProfile = useMemo(
+    () => buildRecommendationPersonalizationProfile({
+      interactionState: recommendationPersonalization,
+      savedOutfits: savedOutfitEntries,
+      historyEntries,
+      wardrobe,
+    }),
+    [recommendationPersonalization, savedOutfitEntries, historyEntries, wardrobe]
+  );
+
+  const explicitFeedbackCount = useMemo(
+    () => Object.values(recommendationFeedback?.entriesBySignature || {}).filter((entry) => entry?.signal !== FEEDBACK_SIGNALS.SKIP).length,
+    [recommendationFeedback]
+  );
+
+  const personalizationSummary = useMemo(
+    () => describeRecommendationPersonalization(personalizationProfile, explicitFeedbackCount),
+    [personalizationProfile, explicitFeedbackCount]
+  );
+
+  function syncHistoryState(nextList) {
+    const sorted = [...(Array.isArray(nextList) ? nextList : [])].sort((a, b) => {
+      const da = (a?.worn_at || "").toString();
+      const db = (b?.worn_at || "").toString();
+      return db.localeCompare(da);
+    });
+
+    const recentSets = makeRecentSets(sorted);
+    setHistoryEntries(sorted);
+    setRecentExactSigs(recentSets.sigs);
+    setRecentItemCounts(recentSets.itemCounts);
+  }
 
   const loadWeather = async () => {
     const override = readWeatherOverride();
@@ -544,6 +797,8 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             body_type: effectiveAnswers?.bodyType || DEFAULT_BODY_TYPE,
             occasion: dressFor.length ? dressFor[0] : "daily",
             style_preferences: style,
+            current_season: currentSeason,
+            seasonal_mode: seasonalMode,
           };
 
           const res = await fetchAIRecommendations(active, context);
@@ -604,7 +859,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       alive = false;
       clearTimeout(timerId);
     };
-  }, [wardrobe, weatherCategory, timeCategory, effectiveAnswers, aiRefreshToken]);
+  }, [wardrobe, weatherCategory, timeCategory, effectiveAnswers, aiRefreshToken, currentSeason, seasonalMode]);
 
   const bodyTypeId = effectiveAnswers?.bodyType ? effectiveAnswers.bodyType : DEFAULT_BODY_TYPE;
 
@@ -620,67 +875,81 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         timeCategory,
         effectiveAnswers,
         savedSigs,
-        rejectedOutfits,
-        undefined,
-        undefined,
-        precipCondition,
-        feedbackProfile
+        {
+          selectedSeason: currentSeason,
+          seasonalMode,
+          feedbackProfile,
+          personalizationProfile,
+          rejectedOutfits,
+          precipCat: precipCondition,
+          limit: 9,
+        }
       ),
-    [wardrobe, recSeed, bodyTypeId, recentExactSigs, recentItemCounts, weatherCategory, precipCondition, timeCategory, effectiveAnswers, savedSigs, rejectedOutfits, feedbackProfile]
+    [wardrobe, recSeed, bodyTypeId, recentExactSigs, recentItemCounts, weatherCategory, precipCondition, timeCategory, effectiveAnswers, savedSigs, currentSeason, seasonalMode, feedbackProfile, personalizationProfile, rejectedOutfits]
   );
 
   const reused = useMemo(() => readReuseOutfit(), []);
 
   const { outfits, pairedExplanations } = useMemo(() => {
-    let raw;
-    let rawExplanations;
+    const localEntries = (Array.isArray(generatedOutfits) ? generatedOutfits : []).map((outfit) => ({
+      outfit,
+      explanation: "",
+      signature: recommendationSignature(outfit),
+      allowSaved: false,
+    }));
+
+    let candidateEntries;
 
     if (reused) {
       const reusedOutfit = buildOutfitFromIds(reused.items, wardrobe);
-      const rest = generatedOutfits.slice(0, 2);
-      raw = [reusedOutfit, ...rest].slice(0, 3);
-      rawExplanations = raw.map(() => "");
+      candidateEntries = [
+        {
+          outfit: reusedOutfit,
+          explanation: "",
+          signature: recommendationSignature(reusedOutfit),
+          allowSaved: true,
+        },
+        ...localEntries,
+      ];
     } else if (aiOutfits && aiOutfits.length > 0) {
-      const paired = aiOutfits.map((outfit, i) => ({ outfit, explanation: aiExplanations[i] || "" }));
-      const filtered = paired.filter(({ outfit }) => {
-        const sig = idsSignature((outfit || []).map((x) => x?.id));
-        return !sig || !savedSigs.has(sig);
-      });
-      let localIdx = 0;
-      while (filtered.length < 3 && localIdx < generatedOutfits.length) {
-        filtered.push({ outfit: generatedOutfits[localIdx++], explanation: "" });
-      }
-      const sliced = filtered.slice(0, 3);
-      raw = sliced.map((p) => p.outfit);
-      rawExplanations = sliced.map((p) => p.explanation);
-    } else {
-      raw = generatedOutfits;
-      rawExplanations = generatedOutfits.map(() => "");
-    }
-
-    if (reused) {
-      return { outfits: raw, pairedExplanations: rawExplanations };
-    }
-
-    const ranked = raw
-      .map((outfit, idx) => ({
+      const aiEntries = aiOutfits.map((outfit, idx) => ({
         outfit,
-        explanation: rawExplanations[idx] || "",
+        explanation: aiExplanations[idx] || "",
         signature: recommendationSignature(outfit),
-        score: scoreOutfitForDisplay(outfit, {
+        allowSaved: false,
+      }));
+      candidateEntries = [...aiEntries, ...localEntries];
+    } else {
+      candidateEntries = localEntries;
+    }
+
+    const ranked = uniqueRecommendationEntries(candidateEntries)
+      .filter((entry) => {
+        if (!entry.signature) return true;
+        if (rejectedRecommendationSigs.has(entry.signature)) return false;
+        if (entry.allowSaved) return true;
+        return !savedSigs.has(entry.signature);
+      })
+      .map((entry) => ({
+        ...entry,
+        score: scoreOutfitForDisplay(entry.outfit, {
           weatherCategory,
           precipCategory: precipCondition,
           timeCategory,
           answers: effectiveAnswers,
           bodyTypeId,
+          selectedSeason: currentSeason,
+          seasonalMode,
           feedbackProfile,
+          personalizationProfile,
         }),
       }))
       .sort((a, b) => {
         const aSeen = a.signature && recentRecommendationSigs.has(a.signature) ? 1 : 0;
         const bSeen = b.signature && recentRecommendationSigs.has(b.signature) ? 1 : 0;
         return (aSeen - bSeen) || (b.score - a.score);
-      });
+      })
+      .slice(0, 3);
 
     return {
       outfits: ranked.map((entry) => entry.outfit),
@@ -699,7 +968,11 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     effectiveAnswers,
     bodyTypeId,
     recentRecommendationSigs,
+    rejectedRecommendationSigs,
+    currentSeason,
+    seasonalMode,
     feedbackProfile,
+    personalizationProfile,
   ]);
 
   const [selectedIdx, setSelectedIdx] = useState(null);
@@ -725,6 +998,58 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     }, 3000);
     return () => { if (nudgeTimerRef.current) clearTimeout(nudgeTimerRef.current); };
   }, [selectedIdx, user, refreshCount]);
+  useEffect(() => {
+    if (feedbackPromptTimerRef.current) {
+      window.clearTimeout(feedbackPromptTimerRef.current);
+      feedbackPromptTimerRef.current = null;
+    }
+    if (feedbackPromptFadeTimerRef.current) {
+      window.clearTimeout(feedbackPromptFadeTimerRef.current);
+      feedbackPromptFadeTimerRef.current = null;
+    }
+
+    if (!aiHasResolved || !outfits.length) {
+      setFeedbackPromptSig("");
+      return;
+    }
+
+    const activeOutfit = outfits[selectedIdx ?? 0] || [];
+    const signature = outfitSignature(activeOutfit);
+    if (!signature || getRecommendationFeedback(recommendationFeedback, signature)) {
+      setFeedbackPromptSig("");
+      return;
+    }
+
+    const session = readFeedbackPromptSession();
+    if (session.shownCount >= MAX_FEEDBACK_PROMPTS_PER_SESSION || session.shownSignatures.includes(signature)) {
+      setFeedbackPromptSig("");
+      return;
+    }
+
+    feedbackPromptTimerRef.current = window.setTimeout(() => {
+      setFeedbackPromptSig(signature);
+      writeFeedbackPromptSession({
+        shownSignatures: [...session.shownSignatures, signature],
+        shownCount: session.shownCount + 1,
+      });
+      feedbackPromptFadeTimerRef.current = window.setTimeout(() => {
+        setFeedbackPromptSig((prev) => (prev === signature ? "" : prev));
+        feedbackPromptFadeTimerRef.current = null;
+      }, FEEDBACK_PROMPT_FADE_MS);
+      feedbackPromptTimerRef.current = null;
+    }, FEEDBACK_PROMPT_DELAY_MS);
+
+    return () => {
+      if (feedbackPromptTimerRef.current) {
+        window.clearTimeout(feedbackPromptTimerRef.current);
+        feedbackPromptTimerRef.current = null;
+      }
+      if (feedbackPromptFadeTimerRef.current) {
+        window.clearTimeout(feedbackPromptFadeTimerRef.current);
+        feedbackPromptFadeTimerRef.current = null;
+      }
+    };
+  }, [aiHasResolved, outfits, selectedIdx, recommendationFeedback]);
 
   const explanationText = useMemo(() => {
     if (selectedIdx == null) return "";
@@ -814,6 +1139,30 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     } catch {}
   }, [outfits]);
 
+  const rotationAnalysis = useMemo(() => {
+    return analyzeWardrobeRotation({
+      wardrobe,
+      history: historyEntries,
+      outfits,
+      isGuestMode,
+      dismissedAlerts: dismissedRotationAlerts,
+      preferences: rotationPreferences,
+    });
+  }, [wardrobe, historyEntries, outfits, isGuestMode, dismissedRotationAlerts, rotationPreferences]);
+
+  const showRotationAlert = rotationAnalysis?.state === "alert"
+    && Array.isArray(rotationAnalysis?.items)
+    && rotationAnalysis.items.length > 0;
+
+  useEffect(() => {
+    const next = rotationAnalysis?.dismissedAlerts || {};
+    const current = dismissedRotationAlerts || {};
+    if (JSON.stringify(next) === JSON.stringify(current)) return;
+
+    setDismissedRotationAlerts(next);
+    dismissedUnderusedAlertsStore.write(next, user);
+  }, [rotationAnalysis, dismissedRotationAlerts, user]);
+
   const canRefresh = true;
 
   const rememberCurrentRecommendations = () => {
@@ -822,15 +1171,207 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     setRecentRecommendationSigs((prev) => new Set(writeRecentRecommendationSigs([...prev, ...current])));
   };
 
+  const selectRecommendationOption = (optionIndex, { track = true } = {}) => {
+    if (!Number.isInteger(optionIndex) || optionIndex < 0) return;
+
+    setSelectedIdx(optionIndex);
+    setShowWhyDetails(false);
+
+    if (!track) return;
+
+    const outfit = outfits[optionIndex] || [];
+    const tracked = trackRecommendationPersonalization({
+      user,
+      outfit,
+      action: PERSONALIZATION_ACTIONS.SELECT,
+    });
+
+    if (tracked?.state) {
+      setRecommendationPersonalization(tracked.state);
+    }
+  };
+
   const handleRefreshRecommendation = () => {
     rememberCurrentRecommendations();
     clearReuseOutfit();
     setSelectedIdx(0);
+    setFeedbackComposer(null);
     setRecSeed((prev) => prev + Math.floor(Math.random() * 100000) + 1);
     setAiExplanations([]);
     setAiRefreshToken((prev) => prev + 1);
     setRefreshCount((c) => c + 1);
     setNudge(null);
+  };
+
+  const showFeedbackNotice = (notice) => {
+    if (feedbackNoticeTimerRef.current) {
+      window.clearTimeout(feedbackNoticeTimerRef.current);
+    }
+
+    setFeedbackNotice({
+      tone: "success",
+      ...notice,
+    });
+    feedbackNoticeTimerRef.current = window.setTimeout(() => {
+      setFeedbackNotice(null);
+      feedbackNoticeTimerRef.current = null;
+    }, FEEDBACK_NOTICE_MS);
+  };
+
+  const openFeedbackComposer = (outfit, preferredSignal = FEEDBACK_SIGNALS.DISLIKE) => {
+    const signature = outfitSignature(outfit);
+    if (!signature) return;
+
+    const existing = getRecommendationFeedback(recommendationFeedback, signature);
+    const signal = existing?.signal === FEEDBACK_SIGNALS.LIKE || existing?.signal === FEEDBACK_SIGNALS.DISLIKE
+      ? existing.signal
+      : preferredSignal;
+
+    setFeedbackComposer({
+      signature,
+      signal,
+      detailCode: existing?.detailCode || "",
+      note: existing?.note || "",
+    });
+    setFeedbackPromptSig("");
+  };
+
+  const submitFeedback = async ({ outfit, signal, detailCode = "", note = "" }) => {
+    const signature = outfitSignature(outfit);
+    if (!signature || feedbackPendingSig === signature) return;
+
+    setFeedbackPendingSig(signature);
+
+    const result = upsertRecommendationFeedback({
+      user,
+      outfit,
+      signal,
+      detailCode,
+      note,
+      source: "dashboard",
+    });
+
+    if (!result) {
+      setFeedbackPendingSig("");
+      return;
+    }
+
+    setRecommendationFeedback(result.state);
+    setFeedbackComposer((prev) => (prev?.signature === signature ? null : prev));
+    setFeedbackPromptSig("");
+
+    try {
+      if (!isGuestMode) {
+        await submitRecommendationFeedback(
+          buildRecommendationFeedbackPayload({
+            entry: result.entry,
+            context: {
+              recommendation_source: aiSource,
+              weather_category: weatherCategory,
+              time_category: timeCategory,
+              occasion: chipText,
+            },
+          })
+        );
+      }
+    } catch {}
+
+    showFeedbackNotice({
+      message: feedbackNoticeText(signal),
+      undo: {
+        signature: result.signature,
+        previousEntry: result.previousEntry,
+      },
+    });
+
+    setFeedbackPendingSig("");
+  };
+
+  const handleRejectOutfit = async (outfit, optionIndex) => {
+    const signature = outfitSignature(outfit);
+    if (!signature || feedbackPendingSig === signature) return;
+
+    if (Number.isInteger(optionIndex) && optionIndex >= 0) {
+      selectRecommendationOption(optionIndex, { track: false });
+    }
+
+    setFeedbackPendingSig(signature);
+    setFeedbackComposer((prev) => (prev?.signature === signature ? null : prev));
+
+    if (!isGuestMode) {
+      showFeedbackNotice({
+        message: REJECT_PENDING_MESSAGE,
+        undo: null,
+        tone: "pending",
+      });
+    }
+
+    const result = upsertRecommendationFeedback({
+      user,
+      outfit,
+      signal: FEEDBACK_SIGNALS.DISLIKE,
+      source: "dashboard",
+    });
+
+    if (!result) {
+      setFeedbackPendingSig("");
+      return;
+    }
+
+    setRecommendationFeedback(result.state);
+
+    try {
+      if (!isGuestMode) {
+        await submitRecommendationFeedback(
+          buildRecommendationFeedbackPayload({
+            entry: result.entry,
+            context: {
+              recommendation_source: aiSource,
+              weather_category: weatherCategory,
+              time_category: timeCategory,
+              occasion: chipText,
+              action: "reject",
+            },
+          })
+        );
+      }
+
+      showFeedbackNotice({
+        message: REJECT_SUCCESS_MESSAGE,
+        undo: {
+          signature: result.signature,
+          previousEntry: result.previousEntry,
+        },
+        tone: "success",
+      });
+    } catch {
+      showFeedbackNotice({
+        message: rejectSyncErrorText(),
+        undo: {
+          signature: result.signature,
+          previousEntry: result.previousEntry,
+        },
+        tone: "error",
+      });
+    } finally {
+      setFeedbackPendingSig("");
+    }
+  };
+
+  const handleUndoFeedback = () => {
+    if (!feedbackNotice?.undo) return;
+
+    const restored = restoreRecommendationFeedback({
+      user,
+      signature: feedbackNotice.undo.signature,
+      previousEntry: feedbackNotice.undo.previousEntry,
+    });
+
+    setRecommendationFeedback(restored);
+    showFeedbackNotice({
+      message: "Feedback undone.",
+      undo: null,
+    });
   };
 
 
@@ -883,6 +1424,37 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     return recommendationSignature(outfit);
   }
 
+  const focusRecommendationOption = (optionIndex) => {
+    if (!Number.isInteger(optionIndex) || optionIndex < 0) {
+      navigate("/wardrobe");
+      return;
+    }
+
+    selectRecommendationOption(optionIndex);
+    const recCard = document.querySelector(".dashRecCard");
+    if (recCard?.scrollIntoView) {
+      recCard.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const handleWearRotationSuggestion = (_item, suggestion) => {
+    focusRecommendationOption(suggestion?.index);
+  };
+
+  const handleDismissRotationAlert = (item) => {
+    const itemId = (item?.id ?? "").toString().trim();
+    if (!itemId) return;
+
+    setDismissedRotationAlerts((prev) => {
+      const next = {
+        ...(prev && typeof prev === "object" ? prev : {}),
+        [itemId]: Date.now(),
+      };
+      dismissedUnderusedAlertsStore.write(next, user);
+      return next;
+    });
+  };
+
 
 
   async function handleSaveOutfit(outfit) {
@@ -912,6 +1484,8 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           next.delete(sig);
           return next;
         });
+        setSavedOutfitEntries((prev) => prev.filter((entry) => (entry?.outfit_signature || "").toString().trim() !== sig));
+        syncHistoryState(historyEntries.filter((entry) => idsSignature(Array.isArray(entry?.item_ids) ? entry.item_ids : []) !== sig));
         setSaveMsg("Removed from saved outfits.");
         window.setTimeout(() => setSaveMsg(""), 2500);
       } catch (e) {
@@ -955,9 +1529,15 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         next.add(sig);
         return next;
       });
+      if (res?.saved_outfit) {
+        setSavedOutfitEntries((prev) => {
+          const filtered = prev.filter((entry) => (entry?.outfit_signature || "").toString().trim() !== sig);
+          return [res.saved_outfit, ...filtered];
+        });
+      }
 
       if (created) {
-        outfitHistoryApi.recordWorn({
+        const historyRes = await outfitHistoryApi.recordWorn({
           item_ids: normalized,
           source: "recommendation",
           context: {
@@ -966,7 +1546,11 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             temperature_f: weatherTempF,
             time_of_day: timeCategory,
           },
-        }, user).catch(() => {});
+        }, user).catch(() => null);
+
+        if (historyRes?.history_entry) {
+          syncHistoryState([historyRes.history_entry, ...historyEntries]);
+        }
       }
 
       if (msg) setSaveMsg(msg);
@@ -1003,7 +1587,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       const feedback = loadRecommendationFeedback(user);
       const history = Array.isArray(histRes?.history) ? histRes.history : [];
       const saved = Array.isArray(savedRes?.saved_outfits) ? savedRes.saved_outfits : [];
-      setFeedbackProfile(buildPersonalizationProfile(feedback, history, saved, wardrobe));
+      setLegacyPreferenceProfile(buildPersonalizationProfile(feedback, history, saved, wardrobe));
     });
     setSaveMsg(type === "like" ? "Got it — more like this!" : "Noted — fewer like this.");
     window.setTimeout(() => setSaveMsg(""), 2000);
@@ -1024,6 +1608,30 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       precipCondition,
     });
   }, [weatherCategory, weatherTempF, weatherLoading, weatherSource, weatherMsg, precipCondition]);
+
+  useEffect(() => {
+    let alive = true;
+    setGapLoading(true);
+
+    const timerId = window.setTimeout(() => {
+      if (!alive) return;
+
+      setGapAnalysis(
+        analyzeWardrobeGaps({
+          wardrobe,
+          answers: effectiveAnswers,
+          weatherCategory,
+          recentItemCounts,
+        })
+      );
+      setGapLoading(false);
+    }, 380);
+
+    return () => {
+      alive = false;
+      window.clearTimeout(timerId);
+    };
+  }, [wardrobe, effectiveAnswers, weatherCategory, recentItemCounts]);
 
   const applyWeatherOverride = (next) => {
     const v = (next || "").toString().trim().toLowerCase();
@@ -1054,11 +1662,28 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     setShowTimePicker(false);
   };
 
+  const toggleSeasonalMode = () => {
+    setSeasonalMode((prev) => {
+      const next = !prev;
+      writeSeasonalMode(next, user);
+      return next;
+    });
+  };
+
+  const seasonalHelperText = useMemo(() => {
+    if (!seasonalMode) return "Seasonal filtering is off, so recommendations can use your full wardrobe.";
+    if (!hasSeasonTags) return `Filtered by current season. Add season tags to make ${currentSeasonLabel.toLowerCase()} recommendations more precise.`;
+    return "Filtered by current season. In season items stay first, while overlap pieces still help with transitional weather.";
+  }, [seasonalMode, hasSeasonTags, currentSeasonLabel]);
+
   return (
-    <div className="onboarding onboardingPage">
+    <div className="onboarding onboardingPage dashPage">
       <div className="dashHeroBar">
         <div className="dashHeroLeft">
           <div className="dashHeroDate">{formatToday()}</div>
+          <div className="dashHeroIntro">
+            A cleaner way to check today&apos;s outfit, refine it fast, and spot the next best move for your wardrobe.
+          </div>
           <div className="dashQuickRow">
             <button type="button" className="dashQuickBtn" onClick={goAddItem}>+ Add Item</button>
             {!isGuestMode ? (
@@ -1070,20 +1695,21 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           </div>
         </div>
         <div className="dashHeroRight">
-          {feedbackProfile && feedbackProfile.personalizationLevel > 0 && (
-            <div className="dashPersonalization" title={`Personalization: ${feedbackProfile.personalizationLevel}%`}>
+          {legacyPreferenceProfile && legacyPreferenceProfile.personalizationLevel > 0 ? (
+            <div className="dashPersonalization" title={`Personalization: ${legacyPreferenceProfile.personalizationLevel}%`}>
               <div className="dashPersonalizationBar">
-                <div className="dashPersonalizationFill" style={{ width: `${feedbackProfile.personalizationLevel}%` }} />
+                <div className="dashPersonalizationFill" style={{ width: `${legacyPreferenceProfile.personalizationLevel}%` }} />
               </div>
               <span className="dashPersonalizationLabel">
-                {feedbackProfile.personalizationLevel >= 70 ? "Tuned to you" : feedbackProfile.personalizationLevel >= 35 ? "Learning" : "Getting started"}
+                {legacyPreferenceProfile.personalizationLevel >= 70 ? "Tuned to you" : legacyPreferenceProfile.personalizationLevel >= 35 ? "Learning" : "Getting started"}
               </span>
             </div>
-          )}
+          ) : null}
+          <div className="dashHeroBadge">Personalized daily styling</div>
         </div>
       </div>
 
-      <section className="card dashWide dashWeatherCard">
+      <section className="card dashWide dashWeatherCard dashSectionCard">
         <div className="dashWeatherHud">
           <div className="dashWeatherMain">
             <span className="dashWeatherEmoji">
@@ -1103,6 +1729,8 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             <div className="dashRefinePills">
               <span className="dashMiniPill">{weatherLoading ? `Detecting${".".repeat(dotCount)}` : weatherPresentation.status}</span>
               <span className="dashMiniPill">{timeLine}</span>
+              <span className="dashMiniPill">{seasonalMode ? seasonalWardrobeLabel : "All Seasons"}</span>
+              {seasonalMode ? <span className="dashMiniPill">Filtered by current season</span> : null}
               {selectedOccasion ? <span className="dashMiniPill">{titleCase(selectedOccasion)}</span> : null}
               {selectedStyle ? <span className="dashMiniPill">{titleCase(selectedStyle)}</span> : null}
             </div>
@@ -1119,12 +1747,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
         {!weatherLoading && weatherPresentation.detail ? (
           <div className={"dashWeatherStatus" + (weatherSource === "fallback" ? " fallback" : "")}>{weatherPresentation.detail}</div>
-        ) : null}
-
-        {isGuestMode ? (
-          <div className="noteBox" style={{ marginTop: 12 }}>
-            Guest mode lets you upload items and generate recommendations for this session. Sign in to save outfits, plans, history, and profile details.
-          </div>
         ) : null}
 
         {showRefineControls ? (
@@ -1147,6 +1769,21 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                 <span className="dashContextChipIcon">{"\u25F7"}</span>
                 <span>{timeLine}</span>
               </button>
+
+              <button
+                type="button"
+                className={"dashContextChip" + (seasonalMode ? " active" : "")}
+                onClick={toggleSeasonalMode}
+                aria-pressed={seasonalMode}
+              >
+                <span className="dashContextChipIcon">{"\u25C8"}</span>
+                <span>{seasonalMode ? seasonalWardrobeLabel : "Seasonal Wardrobe Off"}</span>
+              </button>
+            </div>
+
+            <div className="dashSeasonNote">
+              <span className="dashSeasonIndicator">{currentSeasonLabel}</span>
+              <span>{seasonalHelperText}</span>
             </div>
 
             {showWeatherPicker ? (
@@ -1251,11 +1888,37 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         ) : null}
       </section>
 
-      <section className="card dashWide dashRecCard">
+      <div className="dashSectionLead">
+        <div>
+          <div className="dashSectionEyebrow">Today&apos;s focus</div>
+          <div className="dashSectionTitle">Outfit recommendations made simple</div>
+        </div>
+        {showRotationAlert ? (
+          <WardrobeRotationPanel
+            analysis={rotationAnalysis}
+            preferences={rotationPreferences}
+            loadingSuggestions={!aiHasResolved && aiLoading}
+            onOpenWardrobe={() => navigate("/wardrobe")}
+            onDismissAlert={handleDismissRotationAlert}
+            onWearSuggestion={handleWearRotationSuggestion}
+            onManagePreferences={() => navigate("/profile#smart-alerts")}
+          />
+        ) : null}
+      </div>
+
+      <section className="card dashWide dashRecCard dashSectionCard">
         <div className="dashRecHeader">
           <ErrorBoundary fallback={null}><MeshGradient className="dashRecHeaderGradient" /></ErrorBoundary>
           <div className="dashRecHeaderLeft">
             <div className="dashRecTitle">Today's Recommendation</div>
+            <div className="dashRecPersonalizationRow">
+              <span className={`dashRecPersonalizationBadge ${personalizationSummary.tone}`}>
+                {personalizationSummary.label}
+              </span>
+              <span className="dashRecPersonalizationText">
+                {personalizationSummary.subline}
+              </span>
+            </div>
             {reused ? (
               <div className="dashMuted" style={{ fontSize: 12, marginTop: 4 }}>
                 Reused from saved outfits
@@ -1290,13 +1953,13 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         <div key={recSeed} className="dashOutfitsAnimWrap">
           {!aiHasResolved ? (
             <div className="dashAiLoading" style={{ padding: "32px 0", textAlign: "center" }}>
-              Generating your outfits...
+              {personalizationSummary.loadingLabel}
             </div>
           ) : outfits.length === 0 ? (
             <div className="dashEmptyWardrobe">
               <div className="dashEmptyIcon">&#x1F455;</div>
-              <div className="dashEmptyTitle">Your wardrobe is ready for its first look</div>
-              <div className="dashEmptySub">Add a few tops, bottoms, or shoes and FitGPT will start building outfit recommendations for you.</div>
+              <div className="dashEmptyTitle">Your wardrobe is empty</div>
+              <div className="dashEmptySub">Add a few items to get recommendations.</div>
               <div className="dashEmptyActions">
                 <button className="btn primary" type="button" onClick={() => navigate("/wardrobe")}>
                   Add clothing items
@@ -1312,13 +1975,35 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             const disabled = !sig || savingSig === sig;
             const label = isGuestMode ? "Sign in to save" : isSaved ? "Unsave" : savingSig === sig ? "Saving..." : "Save";
             const summary = outfitSummaries[idx] || { score: 0, rankLabel: "Option", confidenceLabel: "Flexible", traits: [] };
+            const feedbackEntry = getRecommendationFeedback(recommendationFeedback, sig);
+            const feedbackSignal = feedbackEntry?.signal || "";
+            const isFeedbackPending = feedbackPendingSig === sig;
+            const isComposerOpen = feedbackComposer?.signature === sig;
+            const composerSignal = feedbackComposer?.signal || FEEDBACK_SIGNALS.DISLIKE;
+            const composerReasons = FEEDBACK_REASON_OPTIONS[composerSignal] || FEEDBACK_REASON_OPTIONS.dislike;
+            const isFeedbackCardActive = idx === (selectedIdx ?? 0);
+            const showFeedbackPanel = isFeedbackCardActive || Boolean(feedbackSignal) || isComposerOpen;
+            const showPromptHighlight = isFeedbackCardActive && feedbackPromptSig === sig && !feedbackSignal && !isComposerOpen;
+            const showDetailToggle = feedbackSignal === FEEDBACK_SIGNALS.LIKE || feedbackSignal === FEEDBACK_SIGNALS.DISLIKE || isComposerOpen;
+            const feedbackHint = feedbackSignal
+              ? feedbackSummaryText(feedbackEntry)
+              : showPromptHighlight
+                ? "Like or Not for me. One tap helps future picks improve over time."
+                : "Like or Not for me.";
+            const feedbackToneClass = feedbackSignal === FEEDBACK_SIGNALS.LIKE
+              ? " dashOutfitFeedbackLike"
+              : feedbackSignal === FEEDBACK_SIGNALS.DISLIKE
+                ? " dashOutfitFeedbackDislike"
+                : feedbackSignal === FEEDBACK_SIGNALS.SKIP
+                  ? " dashOutfitFeedbackSkip"
+                  : "";
 
             return (
               <div
                 key={`opt_${idx}`}
-                className={"dashOutfitOption" + (idx === selectedIdx ? " dashOutfitSelected" : "")}
+                className={"dashOutfitOption" + (idx === selectedIdx ? " dashOutfitSelected" : "") + feedbackToneClass}
                 style={{ animationDelay: `${idx * 120}ms`, marginTop: idx === 0 ? 0 : 18, cursor: "pointer" }}
-                onClick={() => { setSelectedIdx(idx); setShowWhyDetails(false); }}
+                onClick={() => selectRecommendationOption(idx)}
               >
                 <div className="dashOptionTopRow">
                   <div className="optionLabel">
@@ -1405,6 +2090,172 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                   </div>
                   <div className="dashOptionReasonText">{summary.explanationPreview}</div>
                 </div>
+
+                {showFeedbackPanel ? (
+                  <div className={"dashFeedbackPanel" + (showPromptHighlight ? " subtlePrompt" : "")} onClick={(event) => event.stopPropagation()}>
+                    <div className="dashFeedbackHeader compact">
+                      <div className="dashFeedbackCopy">
+                        <div className="dashFeedbackLabel">{feedbackSignal ? feedbackBadgeText(feedbackSignal) : "Quick feedback"}</div>
+                        <div className="dashFeedbackHint">{feedbackHint}</div>
+                      </div>
+                      {showPromptHighlight ? (
+                        <button
+                          type="button"
+                          className="dashFeedbackLaterBtn"
+                          onClick={() => setFeedbackPromptSig("")}
+                        >
+                          Later
+                        </button>
+                      ) : feedbackSignal ? (
+                        <span className={`dashFeedbackState ${feedbackSignal}`}>
+                          {feedbackBadgeText(feedbackSignal)}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="dashFeedbackActions compact">
+                    <button
+                      type="button"
+                      className={"dashFeedbackBtn like compact" + (feedbackSignal === FEEDBACK_SIGNALS.LIKE ? " active" : "")}
+                      aria-pressed={feedbackSignal === FEEDBACK_SIGNALS.LIKE}
+                      disabled={isFeedbackPending}
+                      onClick={() => {
+                        selectRecommendationOption(idx, { track: false });
+                        void submitFeedback({ outfit, signal: FEEDBACK_SIGNALS.LIKE });
+                      }}
+                    >
+                      <span aria-hidden="true">👍</span>
+                      Like
+                    </button>
+                    <button
+                      type="button"
+                      className={"dashFeedbackBtn dislike compact" + (feedbackSignal === FEEDBACK_SIGNALS.DISLIKE ? " active" : "")}
+                      aria-pressed={feedbackSignal === FEEDBACK_SIGNALS.DISLIKE}
+                      disabled={isFeedbackPending}
+                      onClick={() => {
+                        selectRecommendationOption(idx, { track: false });
+                        void submitFeedback({ outfit, signal: FEEDBACK_SIGNALS.DISLIKE });
+                      }}
+                    >
+                      <span aria-hidden="true">👎</span>
+                      Not for me
+                    </button>
+                    <button
+                      type="button"
+                      className="dashFeedbackBtn reject compact ghost"
+                      aria-label={`Hide outfit option ${idx + 1}`}
+                      disabled={isFeedbackPending}
+                      onClick={() => {
+                        void handleRejectOutfit(outfit, idx);
+                      }}
+                    >
+                      <span className="dashFeedbackBtnGlyph" aria-hidden="true">x</span>
+                      {isFeedbackPending ? "Hiding..." : "Hide"}
+                    </button>
+                    {showDetailToggle ? (
+                      <button
+                        type="button"
+                        className={"dashFeedbackBtn explain compact ghost" + (isComposerOpen ? " active" : "")}
+                        aria-expanded={isComposerOpen}
+                        disabled={isFeedbackPending}
+                        onClick={() => {
+                          selectRecommendationOption(idx, { track: false });
+                          if (isComposerOpen) {
+                            setFeedbackComposer(null);
+                            return;
+                          }
+                          openFeedbackComposer(outfit, feedbackSignal === FEEDBACK_SIGNALS.LIKE ? FEEDBACK_SIGNALS.LIKE : FEEDBACK_SIGNALS.DISLIKE);
+                        }}
+                      >
+                        {isComposerOpen ? "Hide detail" : "Add detail"}
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {isComposerOpen ? (
+                    <div className="dashFeedbackExplainCard">
+                      <div className="dashFeedbackExplainTop">
+                        <div className="dashFeedbackExplainTitle">Explain this recommendation</div>
+                        <div className="dashFeedbackExplainHint">Optional detail helps future picks feel more personal.</div>
+                      </div>
+
+                      <div className="dashFeedbackSignalTabs" role="group" aria-label="Feedback type">
+                        <button
+                          type="button"
+                          className={"dashFeedbackTab" + (composerSignal === FEEDBACK_SIGNALS.LIKE ? " active" : "")}
+                          aria-pressed={composerSignal === FEEDBACK_SIGNALS.LIKE}
+                          onClick={() => setFeedbackComposer((prev) => ({ ...prev, signal: FEEDBACK_SIGNALS.LIKE, detailCode: "" }))}
+                        >
+                          👍 Like
+                        </button>
+                        <button
+                          type="button"
+                          className={"dashFeedbackTab" + (composerSignal === FEEDBACK_SIGNALS.DISLIKE ? " active" : "")}
+                          aria-pressed={composerSignal === FEEDBACK_SIGNALS.DISLIKE}
+                          onClick={() => setFeedbackComposer((prev) => ({ ...prev, signal: FEEDBACK_SIGNALS.DISLIKE, detailCode: "" }))}
+                        >
+                          👎 Dislike
+                        </button>
+                      </div>
+
+                      <div className="dashFeedbackChipRow">
+                        {composerReasons.map((reason) => (
+                          <button
+                            key={`${sig}-${reason.code}`}
+                            type="button"
+                            className={"dashFeedbackReasonChip" + (feedbackComposer?.detailCode === reason.code ? " active" : "")}
+                            aria-pressed={feedbackComposer?.detailCode === reason.code}
+                            onClick={() => setFeedbackComposer((prev) => ({
+                              ...prev,
+                              detailCode: prev?.detailCode === reason.code ? "" : reason.code,
+                            }))}
+                          >
+                            {reason.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <label className="dashFeedbackNoteField">
+                        <span className="dashFeedbackNoteLabel">Optional note</span>
+                        <textarea
+                          value={feedbackComposer?.note || ""}
+                          onChange={(event) => setFeedbackComposer((prev) => ({ ...prev, note: event.target.value.slice(0, 140) }))}
+                          rows={2}
+                          maxLength={140}
+                          placeholder="Add a quick note if you want more detail."
+                        />
+                      </label>
+
+                      <div className="dashFeedbackExplainActions">
+                        <button
+                          type="button"
+                          className="btnSecondary"
+                          onClick={() => setFeedbackComposer(null)}
+                          disabled={isFeedbackPending}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="btnPrimary"
+                          onClick={() => {
+                            selectRecommendationOption(idx, { track: false });
+                            void submitFeedback({
+                              outfit,
+                              signal: feedbackComposer?.signal || FEEDBACK_SIGNALS.DISLIKE,
+                              detailCode: feedbackComposer?.detailCode || "",
+                              note: feedbackComposer?.note || "",
+                            });
+                          }}
+                          disabled={isFeedbackPending}
+                        >
+                          {isFeedbackPending ? "Saving..." : "Save feedback"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  </div>
+                ) : null}
               </div>
             );
           })}
@@ -1439,7 +2290,23 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             >&times;</button>
           </div>
         )}
+        {feedbackNotice ? (
+          <div className={`noteBox dashFeedbackNotice ${feedbackNotice.tone || "success"}`} style={{ marginTop: 12 }} role="status" aria-live="polite">
+            <span>{feedbackNotice.message}</span>
+            {feedbackNotice.undo ? (
+              <button type="button" className="dashFeedbackUndoBtn" onClick={handleUndoFeedback}>
+                Undo
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </section>
+
+      <WardrobeGapPanel
+        analysis={gapAnalysis}
+        loading={gapLoading}
+        onOpenWardrobe={() => navigate("/wardrobe")}
+      />
 
 
       {selectedIdx != null && ReactDOM.createPortal(
