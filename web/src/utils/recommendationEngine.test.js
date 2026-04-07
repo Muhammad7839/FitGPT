@@ -3617,3 +3617,121 @@ describe("validatePersonalizationProgress", () => {
     expect(result).toBeDefined();
   });
 });
+
+/* ── Zero-feedback recommendation quality tests ─────────────────────── */
+
+describe("recommendations without any feedback", () => {
+  const makeWardrobe = () => [
+    { id: "t1", name: "White Tee", category: "Tops", clothing_type: "t-shirt", color: "white", is_active: true, layer_type: "base" },
+    { id: "t2", name: "Blue Polo", category: "Tops", clothing_type: "polo", color: "blue", is_active: true, layer_type: "base" },
+    { id: "t3", name: "Gray Turtleneck", category: "Tops", clothing_type: "turtleneck", color: "gray", is_active: true, layer_type: "base" },
+    { id: "m1", name: "Navy Sweater", category: "Tops", clothing_type: "sweater", color: "navy", is_active: true, layer_type: "mid" },
+    { id: "b1", name: "Dark Jeans", category: "Bottoms", color: "navy", is_active: true },
+    { id: "b2", name: "Khaki Chinos", category: "Bottoms", color: "beige", is_active: true },
+    { id: "o1", name: "Gray Blazer", category: "Outerwear", clothing_type: "blazer", color: "gray", is_active: true, layer_type: "outer" },
+    { id: "s1", name: "White Sneakers", category: "Shoes", clothing_type: "sneakers", color: "white", is_active: true },
+    { id: "s2", name: "Brown Boots", category: "Shoes", clothing_type: "boots", color: "brown", is_active: true },
+  ];
+
+  test("generateThreeOutfits returns 3 outfits with null feedbackProfile", () => {
+    const outfits = generateThreeOutfits(makeWardrobe(), 42, "rectangle", new Set(), new Map(), "mild", "morning", {}, new Set(), [], new Set(), new Set(), "clear", null);
+    expect(outfits).toHaveLength(3);
+    for (const outfit of outfits) {
+      expect(outfit.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  test("generateThreeOutfits returns 3 outfits with undefined feedbackProfile", () => {
+    const outfits = generateThreeOutfits(makeWardrobe(), 42, "rectangle", new Set(), new Map(), "mild", "morning", {});
+    expect(outfits).toHaveLength(3);
+  });
+
+  test("scoreOutfitForDisplay works without feedbackProfile", () => {
+    const outfit = [
+      { id: "t1", name: "White Tee", category: "Tops", color: "white" },
+      { id: "b1", name: "Dark Jeans", category: "Bottoms", color: "navy" },
+      { id: "s1", name: "Sneakers", category: "Shoes", color: "white" },
+    ];
+    const score = scoreOutfitForDisplay(outfit, { weatherCategory: "mild", timeCategory: "morning", answers: {}, bodyTypeId: "rectangle" });
+    expect(score).toBeGreaterThan(0);
+  });
+
+  test("scoreOutfitForDisplay gives same score with null vs undefined feedbackProfile", () => {
+    const outfit = [
+      { id: "t1", name: "White Tee", category: "Tops", color: "white" },
+      { id: "b1", name: "Dark Jeans", category: "Bottoms", color: "navy" },
+    ];
+    const ctx = { weatherCategory: "mild", timeCategory: "morning", answers: {}, bodyTypeId: "rectangle" };
+    const scoreNull = scoreOutfitForDisplay(outfit, { ...ctx, feedbackProfile: null });
+    const scoreUndef = scoreOutfitForDisplay(outfit, ctx);
+    expect(scoreNull).toBe(scoreUndef);
+  });
+
+  test("feedbackBias returns 0 for null profile", () => {
+    expect(feedbackBias({ id: "t1", color: "black", clothing_type: "t-shirt" }, null)).toBe(0);
+  });
+
+  test("feedbackBias returns 0 for empty profile", () => {
+    const emptyProfile = buildFeedbackProfile([]);
+    expect(feedbackBias({ id: "t1", color: "black", clothing_type: "t-shirt" }, emptyProfile)).toBe(0);
+  });
+
+  test("buildPersonalizationProfile with all empty inputs returns level 0", () => {
+    const profile = buildPersonalizationProfile([], [], [], []);
+    expect(profile.personalizationLevel).toBe(0);
+    expect(profile.explorationFactor).toBeGreaterThan(0);
+    expect(profile.totalEntries).toBe(0);
+  });
+
+  test("no-feedback outfits still respect weather scoring", () => {
+    const wardrobe = makeWardrobe();
+    const coldOutfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "cold", "morning", {}, new Set(), [], new Set(), new Set(), "clear", null);
+    const hotOutfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "hot", "morning", {}, new Set(), [], new Set(), new Set(), "clear", null);
+    /* Cold outfits should differ from hot — weather scoring still active */
+    const coldSigs = coldOutfits.map((o) => o.map((i) => i.id).sort().join(","));
+    const hotSigs = hotOutfits.map((o) => o.map((i) => i.id).sort().join(","));
+    expect(coldSigs).not.toEqual(hotSigs);
+  });
+
+  test("no-feedback outfits still respect occasion preferences", () => {
+    const wardrobe = [
+      ...makeWardrobe(),
+      { id: "t4", name: "Dress Shirt", category: "Tops", clothing_type: "dress shirt", color: "white", is_active: true, occasion_tags: ["work"], style_tags: ["formal"] },
+    ];
+    const workOutfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "work hours", { dressFor: ["work"] }, new Set(), [], new Set(), new Set(), "clear", null);
+    /* Work-tagged items should still be preferred via metadataScore */
+    const allItems = workOutfits.flat();
+    const hasDressShirt = allItems.some((i) => i.clothing_type === "dress shirt");
+    expect(hasDressShirt).toBe(true);
+  });
+
+  test("exploration noise is NOT injected without feedback (deterministic)", () => {
+    const wardrobe = makeWardrobe();
+    const run1 = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", {}, new Set(), [], new Set(), new Set(), "clear", null);
+    const run2 = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", {}, new Set(), [], new Set(), new Set(), "clear", null);
+    const sigs1 = run1.map((o) => o.map((i) => i.id).sort().join(","));
+    const sigs2 = run2.map((o) => o.map((i) => i.id).sort().join(","));
+    expect(sigs1).toEqual(sigs2);
+  });
+
+  test("sparse feedback (1 entry) does not distort recommendations", () => {
+    const wardrobe = makeWardrobe();
+    const noFeedback = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", {}, new Set(), [], new Set(), new Set(), "clear", null);
+    const sparseProfile = buildPersonalizationProfile(
+      [{ feedback: "like", timestamp: Date.now(), colors: ["white"], clothingTypes: ["t-shirt"], styleTags: [], itemIds: ["t1"] }],
+      [], [], wardrobe
+    );
+    const withSparse = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", {}, new Set(), [], new Set(), new Set(), "clear", sparseProfile);
+    /* Both should return 3 valid outfits */
+    expect(noFeedback).toHaveLength(3);
+    expect(withSparse).toHaveLength(3);
+    /* With only 1 feedback entry, personalization level should be low */
+    expect(sparseProfile.personalizationLevel).toBeLessThan(30);
+  });
+
+  test("measureFeedbackAlignment handles zero feedback gracefully", () => {
+    const result = measureFeedbackAlignment([], []);
+    expect(result.accuracy).toBeNull();
+    expect(result.message).toMatch(/Not enough/);
+  });
+});
