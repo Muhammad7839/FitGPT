@@ -32,6 +32,8 @@ import {
   buildLaundryStatus,
   getLaundryAlerts,
   classifyWeatherProtection,
+  groupHistoryByDate,
+  analyzeHistoryPatterns,
 } from "./recommendationEngine";
 
 describe("titleCase", () => {
@@ -2690,5 +2692,164 @@ describe("weather explanation context", () => {
   test("clear weather does not mention precipitation", () => {
     const result = buildExplanation({ outfit: baseOutfit, answers: {}, weatherCategory: "mild", precipCategory: "clear", timeCategory: "morning" });
     expect(result.toLowerCase()).not.toMatch(/rain|snow|storm/);
+  });
+});
+
+/* ── History pattern analysis tests ─────────────────────────────────── */
+
+describe("groupHistoryByDate", () => {
+  test("groups entries by YYYY-MM-DD", () => {
+    const history = [
+      { worn_at: "2025-03-15T10:00:00Z", item_ids: ["a"] },
+      { worn_at: "2025-03-15T18:00:00Z", item_ids: ["b"] },
+      { worn_at: "2025-03-16T09:00:00Z", item_ids: ["c"] },
+    ];
+    const grouped = groupHistoryByDate(history);
+    expect(Object.keys(grouped).length).toBe(2);
+    expect(grouped["2025-03-15"].length).toBe(2);
+    expect(grouped["2025-03-16"].length).toBe(1);
+  });
+
+  test("skips entries with invalid dates", () => {
+    const history = [
+      { worn_at: "bad-date", item_ids: ["a"] },
+      { worn_at: "2025-03-15T10:00:00Z", item_ids: ["b"] },
+      { worn_at: null, item_ids: ["c"] },
+    ];
+    const grouped = groupHistoryByDate(history);
+    expect(Object.keys(grouped).length).toBe(1);
+  });
+
+  test("returns empty object for empty input", () => {
+    expect(groupHistoryByDate([])).toEqual({});
+    expect(groupHistoryByDate(null)).toEqual({});
+  });
+});
+
+describe("analyzeHistoryPatterns", () => {
+  const makeHistory = (entries) =>
+    entries.map(([date, ids]) => ({
+      worn_at: `${date}T12:00:00Z`,
+      item_ids: ids,
+      source: "recommendation",
+      context: {},
+    }));
+
+  test("detects repeated outfits", () => {
+    const history = makeHistory([
+      ["2025-03-10", ["a", "b"]],
+      ["2025-03-12", ["a", "b"]],
+      ["2025-03-14", ["a", "b"]],
+      ["2025-03-11", ["c", "d"]],
+    ]);
+    const result = analyzeHistoryPatterns(history, []);
+    expect(result.repeatedOutfits.length).toBe(1);
+    expect(result.repeatedOutfits[0].count).toBe(3);
+    expect(result.repeatedOutfits[0].itemIds).toEqual(expect.arrayContaining(["a", "b"]));
+  });
+
+  test("detects gaps between tracked days", () => {
+    const history = makeHistory([
+      ["2025-03-01", ["a"]],
+      ["2025-03-02", ["b"]],
+      ["2025-03-10", ["c"]],
+    ]);
+    const result = analyzeHistoryPatterns(history, []);
+    expect(result.gaps.length).toBe(1);
+    expect(result.gaps[0].days).toBe(7);
+    expect(result.gaps[0].from).toBe("2025-03-02");
+    expect(result.gaps[0].to).toBe("2025-03-10");
+  });
+
+  test("computes longest streak", () => {
+    const history = makeHistory([
+      ["2025-03-01", ["a"]],
+      ["2025-03-02", ["b"]],
+      ["2025-03-03", ["c"]],
+      ["2025-03-05", ["d"]],
+      ["2025-03-06", ["e"]],
+    ]);
+    const result = analyzeHistoryPatterns(history, []);
+    expect(result.longestStreak).toBe(3);
+  });
+
+  test("computes day-of-week distribution", () => {
+    const history = makeHistory([
+      ["2025-03-03", ["a"]], // Monday
+      ["2025-03-04", ["b"]], // Tuesday
+      ["2025-03-10", ["c"]], // Monday
+    ]);
+    const result = analyzeHistoryPatterns(history, []);
+    expect(result.dayOfWeekStats).toHaveLength(7);
+    const monStat = result.dayOfWeekStats.find((d) => d.day === "Mon");
+    expect(monStat.count).toBe(2);
+    expect(result.mostActiveDay.day).toBe("Mon");
+  });
+
+  test("detects orphaned item references", () => {
+    const history = makeHistory([
+      ["2025-03-01", ["a", "b", "c"]],
+    ]);
+    const wardrobe = [{ id: "a" }, { id: "b" }]; // "c" missing
+    const result = analyzeHistoryPatterns(history, wardrobe);
+    expect(result.orphanedItemCount).toBe(1);
+  });
+
+  test("counts invalid dates", () => {
+    const history = [
+      { worn_at: "bad-date", item_ids: ["a"] },
+      { worn_at: null, item_ids: ["b"] },
+      { worn_at: "2025-03-01T12:00:00Z", item_ids: ["c"] },
+    ];
+    const result = analyzeHistoryPatterns(history, []);
+    expect(result.invalidDateCount).toBe(2);
+  });
+
+  test("returns zeros for empty history", () => {
+    const result = analyzeHistoryPatterns([], []);
+    expect(result.totalEntries).toBe(0);
+    expect(result.trackedDays).toBe(0);
+    expect(result.currentStreak).toBe(0);
+    expect(result.longestStreak).toBe(0);
+    expect(result.repeatedOutfits).toEqual([]);
+    expect(result.gaps).toEqual([]);
+    expect(result.mostActiveDay).toBeNull();
+    expect(result.orphanedItemCount).toBe(0);
+    expect(result.invalidDateCount).toBe(0);
+  });
+
+  test("tracks total entries and days", () => {
+    const history = makeHistory([
+      ["2025-03-01", ["a"]],
+      ["2025-03-01", ["b"]],
+      ["2025-03-02", ["c"]],
+    ]);
+    const result = analyzeHistoryPatterns(history, []);
+    expect(result.totalEntries).toBe(3);
+    expect(result.trackedDays).toBe(2);
+  });
+
+  test("gaps sorted by length descending", () => {
+    const history = makeHistory([
+      ["2025-03-01", ["a"]],
+      ["2025-03-03", ["b"]], // 1-day gap
+      ["2025-03-10", ["c"]], // 6-day gap
+      ["2025-03-12", ["d"]], // 1-day gap
+    ]);
+    const result = analyzeHistoryPatterns(history, []);
+    expect(result.gaps[0].days).toBe(6);
+  });
+
+  test("repeated outfits sorted by count descending", () => {
+    const history = makeHistory([
+      ["2025-03-01", ["a", "b"]],
+      ["2025-03-02", ["a", "b"]],
+      ["2025-03-03", ["c", "d"]],
+      ["2025-03-04", ["c", "d"]],
+      ["2025-03-05", ["c", "d"]],
+    ]);
+    const result = analyzeHistoryPatterns(history, []);
+    expect(result.repeatedOutfits[0].count).toBe(3);
+    expect(result.repeatedOutfits[1].count).toBe(2);
   });
 });

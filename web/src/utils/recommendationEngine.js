@@ -1592,6 +1592,134 @@ export function outfitSimilarity(outfitA, outfitB) {
   return shared / Math.max(a.size, b.size);
 }
 
+/* ── History pattern analysis ─────────────────────────────────────── */
+
+function dateKey(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const t = d.getTime();
+  if (!Number.isFinite(t) || t <= 0) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+export function groupHistoryByDate(historyList) {
+  const byDate = {};
+  for (const entry of Array.isArray(historyList) ? historyList : []) {
+    const key = dateKey(entry?.worn_at);
+    if (!key) continue;
+    if (!byDate[key]) byDate[key] = [];
+    byDate[key].push(entry);
+  }
+  return byDate;
+}
+
+export function analyzeHistoryPatterns(historyList, wardrobeItems) {
+  const list = Array.isArray(historyList) ? historyList : [];
+  const byDate = groupHistoryByDate(list);
+  const dates = Object.keys(byDate).sort();
+
+  /* ── Repetition tracking ─────────────────────────────────────────── */
+  const sigCounts = new Map();
+  for (const entry of list) {
+    const ids = Array.isArray(entry?.item_ids) ? entry.item_ids : [];
+    const sig = [...ids].sort().join("|");
+    if (!sig) continue;
+    sigCounts.set(sig, (sigCounts.get(sig) || 0) + 1);
+  }
+  const repeatedOutfits = [];
+  for (const [sig, count] of sigCounts) {
+    if (count >= 2) {
+      repeatedOutfits.push({ signature: sig, count, itemIds: sig.split("|") });
+    }
+  }
+  repeatedOutfits.sort((a, b) => b.count - a.count);
+
+  /* ── Gap detection ───────────────────────────────────────────────── */
+  const gaps = [];
+  if (dates.length >= 2) {
+    for (let i = 1; i < dates.length; i++) {
+      const prev = new Date(dates[i - 1]);
+      const curr = new Date(dates[i]);
+      const diffDays = Math.round((curr - prev) / (24 * 60 * 60 * 1000));
+      if (diffDays > 1) {
+        gaps.push({ from: dates[i - 1], to: dates[i], days: diffDays - 1 });
+      }
+    }
+  }
+  gaps.sort((a, b) => b.days - a.days);
+
+  /* ── Streak tracking ─────────────────────────────────────────────── */
+  let currentStreak = 0;
+  let longestStreak = 0;
+  if (dates.length) {
+    const today = dateKey(new Date().toISOString());
+    let streak = 1;
+    for (let i = dates.length - 1; i >= 1; i--) {
+      const curr = new Date(dates[i]);
+      const prev = new Date(dates[i - 1]);
+      const diff = Math.round((curr - prev) / (24 * 60 * 60 * 1000));
+      if (diff === 1) {
+        streak++;
+      } else {
+        if (i === dates.length - 1) break;
+        streak = 1;
+      }
+    }
+    /* current streak: only counts if it reaches today or yesterday */
+    const lastDate = dates[dates.length - 1];
+    const lastDiff = Math.round((new Date(today) - new Date(lastDate)) / (24 * 60 * 60 * 1000));
+    currentStreak = lastDiff <= 1 ? streak : 0;
+
+    /* longest streak across all history */
+    let s = 1;
+    longestStreak = 1;
+    for (let i = 1; i < dates.length; i++) {
+      const diff = Math.round((new Date(dates[i]) - new Date(dates[i - 1])) / (24 * 60 * 60 * 1000));
+      if (diff === 1) { s++; longestStreak = Math.max(longestStreak, s); }
+      else { s = 1; }
+    }
+  }
+
+  /* ── Day-of-week distribution ────────────────────────────────────── */
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const dayCounts = [0, 0, 0, 0, 0, 0, 0];
+  for (const entry of list) {
+    const d = new Date(entry?.worn_at);
+    if (Number.isFinite(d.getTime())) dayCounts[d.getDay()]++;
+  }
+  const dayOfWeekStats = dayNames.map((name, i) => ({ day: name, count: dayCounts[i] }));
+  const mostActiveDay = dayOfWeekStats.reduce((best, d) => d.count > best.count ? d : best, { day: "—", count: 0 });
+  const leastActiveDay = dayOfWeekStats.reduce((best, d) => (d.count < best.count ? d : best), { day: "—", count: Infinity });
+
+  /* ── Data validation ─────────────────────────────────────────────── */
+  const wardrobeIds = new Set(
+    (Array.isArray(wardrobeItems) ? wardrobeItems : []).map((x) => (x?.id ?? "").toString()).filter(Boolean)
+  );
+  let orphanedItemCount = 0;
+  let invalidDateCount = 0;
+  for (const entry of list) {
+    if (!dateKey(entry?.worn_at)) invalidDateCount++;
+    for (const id of Array.isArray(entry?.item_ids) ? entry.item_ids : []) {
+      if (id && wardrobeIds.size && !wardrobeIds.has(id.toString())) orphanedItemCount++;
+    }
+  }
+
+  return {
+    byDate,
+    totalEntries: list.length,
+    trackedDays: dates.length,
+    repeatedOutfits,
+    gaps,
+    currentStreak,
+    longestStreak,
+    dayOfWeekStats,
+    mostActiveDay: mostActiveDay.count > 0 ? mostActiveDay : null,
+    leastActiveDay: leastActiveDay.count < Infinity ? leastActiveDay : null,
+    orphanedItemCount,
+    invalidDateCount,
+  };
+}
+
 const REJECTION_DECAY_DAYS = 30;
 const MAX_REJECTION_PENALTY = 30;
 

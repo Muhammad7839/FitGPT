@@ -2,26 +2,30 @@ import React, { useState, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { HistoryContent } from "./History";
 import { AnalyticsContent } from "./Analytics";
+import { OutfitCalendarContent } from "./OutfitCalendar";
 import ErrorBoundary from "./ErrorBoundary";
 import GuestModeNotice from "./GuestModeNotice";
 import { useAuth } from "../auth/AuthProvider";
 
 const TABS = [
   { key: "history", label: "History" },
+  { key: "calendar", label: "Calendar" },
   { key: "analytics", label: "Analytics" },
 ];
 
 const TAB_META = {
   history: { title: "Outfit History", sub: "Track what you've worn" },
+  calendar: { title: "Outfit Calendar", sub: "Visualize your outfit timeline" },
   analytics: { title: "Analytics", sub: "Your style at a glance" },
 };
 
-const TAB_INDEX = { history: 0, analytics: 1 };
+const TAB_INDEX = { history: 0, calendar: 1, analytics: 2 };
 
 export default function HistoryAnalytics() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") === "analytics" ? "analytics" : "history";
+  const tabParam = searchParams.get("tab");
+  const activeTab = tabParam === "analytics" ? "analytics" : tabParam === "calendar" ? "calendar" : "history";
   const meta = TAB_META[activeTab];
   const prevTabRef = useRef(activeTab);
   const [direction, setDirection] = useState("left");
@@ -75,7 +79,9 @@ export default function HistoryAnalytics() {
       </div>
 
       <div key={activeTab} className={`tabFlip tabFlip--${direction}`}>
-        {activeTab === "history" ? <HistoryContent /> : <ErrorBoundary><AnalyticsContent /></ErrorBoundary>}
+        {activeTab === "history" && <HistoryContent />}
+        {activeTab === "calendar" && <ErrorBoundary><OutfitCalendarContent /></ErrorBoundary>}
+        {activeTab === "analytics" && <ErrorBoundary><AnalyticsContent /></ErrorBoundary>}
       </div>
     </div>
   );
