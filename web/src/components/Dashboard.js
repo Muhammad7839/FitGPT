@@ -19,7 +19,7 @@ import {
   titleCase, normalizeCategory, normalizeColorName, colorToCss,
   timeCategoryFromDate,
   generateThreeOutfits, idsSignature, makeRecentSets,
-  buildExplanation, buildOutfitFromIds, scoreOutfitForDisplay,
+  buildExplanation, buildOutfitFromIds, scoreOutfitForDisplay, computeOutfitConfidence,
   analyzeOutfitColors, colorInfo, buildPersonalizationProfile,
 } from "../utils/recommendationEngine";
 import {
@@ -761,17 +761,20 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
   const outfitSummaries = useMemo(() => {
     return outfits.map((outfit, idx) => {
-      const score = scoreOutfitForDisplay(outfit, {
+      const confidence = computeOutfitConfidence(outfit, {
         weatherCategory,
         precipCategory: precipCondition,
         timeCategory,
         answers: effectiveAnswers,
         bodyTypeId,
         feedbackProfile,
+        recentSigs: recentRecommendationSigs,
       });
+      const score = confidence.score;
 
       const rankLabel = idx === 0 ? "Top Match" : idx === 1 ? "Strong Pick" : "Fresh Option";
-      const confidenceLabel = score >= 88 ? "Excellent" : score >= 76 ? "Strong" : score >= 64 ? "Good" : "Flexible";
+      const LEVEL_LABELS = { excellent: "Excellent", strong: "Strong", good: "Good", fair: "Fair", low: "Flexible", none: "—" };
+      const confidenceLabel = LEVEL_LABELS[confidence.level] || "Good";
       const pieces = Array.isArray(outfit) ? outfit : [];
       const hasOnePiece = pieces.some((item) => item?.is_one_piece);
       const layerCount = pieces.filter((item) => item?.layer_type).length;
@@ -791,9 +794,9 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       if (accessoryCount > 0) traits.push(accessoryCount === 1 ? "1 accessory" : `${accessoryCount} accessories`);
       if (!traits.length) traits.push("Balanced basics");
 
-      return { score, rankLabel, confidenceLabel, traits, comfortSummary, explanationPreview };
+      return { score, rankLabel, confidenceLabel, confidence, traits, comfortSummary, explanationPreview };
     });
-  }, [outfits, weatherCategory, precipCondition, timeCategory, effectiveAnswers, bodyTypeId, aiSource, reused, pairedExplanations, feedbackProfile]);
+  }, [outfits, weatherCategory, precipCondition, timeCategory, effectiveAnswers, bodyTypeId, aiSource, reused, pairedExplanations, feedbackProfile, recentRecommendationSigs]);
 
   const canRefresh = true;
 
@@ -1470,6 +1473,29 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                       <div className="dashWhyCardText">{detail.body}</div>
                     </div>
                   ))}
+                  {outfitSummaries[selectedIdx]?.confidence && (
+                    <div className="dashWhyCard">
+                      <div className="dashWhyCardTitle">Confidence Breakdown</div>
+                      <div className="dashConfidenceSignals">
+                        {[
+                          { label: "Algorithm", value: outfitSummaries[selectedIdx].confidence.signals.algorithm },
+                          { label: "Coverage", value: outfitSummaries[selectedIdx].confidence.signals.coverage },
+                          { label: "Weather", value: outfitSummaries[selectedIdx].confidence.signals.weather },
+                          { label: "Preferences", value: outfitSummaries[selectedIdx].confidence.signals.feedback },
+                          { label: "Variety", value: outfitSummaries[selectedIdx].confidence.signals.variety },
+                        ].map((s) => (
+                          <div key={s.label} className="dashConfidenceRow">
+                            <span className="dashConfidenceLabel">{s.label}</span>
+                            <div className="dashConfidenceBar"><div className="dashConfidenceFill" style={{ width: `${s.value}%` }} /></div>
+                            <span className="dashConfidenceValue">{s.value}</span>
+                          </div>
+                        ))}
+                        <div className="dashConfidenceNote">
+                          Data confidence: {outfitSummaries[selectedIdx].confidence.dataConfidence}%
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : null}
             </div>

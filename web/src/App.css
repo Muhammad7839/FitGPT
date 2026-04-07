@@ -2828,6 +2828,19 @@ img.dashSquareImg {
   color: rgba(232, 230, 227, 0.84);
 }
 
+.dashConfidenceSignals { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.dashConfidenceRow { display: flex; align-items: center; gap: 8px; }
+.dashConfidenceLabel { font-size: 0.72rem; font-weight: 700; color: rgba(17, 24, 39, 0.5); min-width: 72px; }
+.dashConfidenceBar { flex: 1; height: 5px; background: rgba(0, 0, 0, 0.06); border-radius: 3px; overflow: hidden; }
+.dashConfidenceFill { height: 100%; background: rgba(139, 30, 30, 0.45); border-radius: 3px; transition: width 300ms ease; }
+.dashConfidenceValue { font-size: 0.7rem; font-weight: 800; color: rgba(17, 24, 39, 0.4); min-width: 22px; text-align: right; }
+.dashConfidenceNote { font-size: 0.7rem; font-weight: 700; color: rgba(17, 24, 39, 0.35); margin-top: 4px; }
+[data-theme="dark"] .dashConfidenceLabel { color: rgba(232, 230, 227, 0.45); }
+[data-theme="dark"] .dashConfidenceBar { background: rgba(255, 255, 255, 0.08); }
+[data-theme="dark"] .dashConfidenceFill { background: rgba(200, 80, 80, 0.5); }
+[data-theme="dark"] .dashConfidenceValue { color: rgba(232, 230, 227, 0.38); }
+[data-theme="dark"] .dashConfidenceNote { color: rgba(232, 230, 227, 0.3); }
+
 .dashAiWord {
   display: inline-block;
   opacity: 0;
