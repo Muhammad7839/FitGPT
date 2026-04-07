@@ -39,6 +39,8 @@ import {
   itemSimilarityScore,
   classifyDuplicateLevel,
   detectDuplicates,
+  buildFeedbackProfile,
+  feedbackBias,
 } from "./recommendationEngine";
 
 describe("titleCase", () => {
@@ -3163,5 +3165,115 @@ describe("detectDuplicates", () => {
     const result = detectDuplicates(items);
     /* Same category + same color but different type — should be similar at most, not exact */
     expect(result.exact.length).toBe(0);
+  });
+});
+
+/* ── Recommendation feedback tests ──────────────────────────────────── */
+
+describe("buildFeedbackProfile", () => {
+  test("aggregates color preferences from likes", () => {
+    const feedback = [
+      { feedback: "like", timestamp: Date.now(), colors: ["black", "navy"], clothingTypes: [], styleTags: [], itemIds: [] },
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: [], styleTags: [], itemIds: [] },
+    ];
+    const profile = buildFeedbackProfile(feedback);
+    expect(profile.colorCounts.black.liked).toBe(2);
+    expect(profile.colorCounts.navy.liked).toBe(1);
+  });
+
+  test("aggregates dislikes separately", () => {
+    const feedback = [
+      { feedback: "dislike", timestamp: Date.now(), colors: ["red"], clothingTypes: ["shorts"], styleTags: [], itemIds: [] },
+    ];
+    const profile = buildFeedbackProfile(feedback);
+    expect(profile.colorCounts.red.disliked).toBe(1);
+    expect(profile.typeCounts.shorts.disliked).toBe(1);
+  });
+
+  test("applies time decay to old feedback", () => {
+    const old = Date.now() - 45 * 24 * 60 * 60 * 1000; // 45 days ago
+    const feedback = [
+      { feedback: "like", timestamp: old, colors: ["blue"], clothingTypes: [], styleTags: [], itemIds: [] },
+    ];
+    const profile = buildFeedbackProfile(feedback);
+    expect(profile.colorCounts.blue.liked).toBeLessThan(1);
+    expect(profile.colorCounts.blue.liked).toBeGreaterThan(0);
+  });
+
+  test("returns empty profile for empty input", () => {
+    const profile = buildFeedbackProfile([]);
+    expect(profile.totalEntries).toBe(0);
+    expect(Object.keys(profile.colorCounts)).toHaveLength(0);
+  });
+
+  test("tracks item-level preferences", () => {
+    const feedback = [
+      { feedback: "like", timestamp: Date.now(), colors: [], clothingTypes: [], styleTags: [], itemIds: ["item1", "item2"] },
+    ];
+    const profile = buildFeedbackProfile(feedback);
+    expect(profile.itemCounts.item1.liked).toBe(1);
+    expect(profile.itemCounts.item2.liked).toBe(1);
+  });
+
+  test("handles conflicting feedback (like + dislike same attribute)", () => {
+    const feedback = [
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: [], styleTags: [], itemIds: [] },
+      { feedback: "dislike", timestamp: Date.now(), colors: ["black"], clothingTypes: [], styleTags: [], itemIds: [] },
+    ];
+    const profile = buildFeedbackProfile(feedback);
+    expect(profile.colorCounts.black.liked).toBe(1);
+    expect(profile.colorCounts.black.disliked).toBe(1);
+  });
+});
+
+describe("feedbackBias", () => {
+  test("returns 0 for empty profile", () => {
+    expect(feedbackBias({ color: "black" }, null)).toBe(0);
+    expect(feedbackBias({ color: "black" }, { totalEntries: 0 })).toBe(0);
+  });
+
+  test("boosts items with liked attributes", () => {
+    const profile = buildFeedbackProfile([
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["t-shirt"], styleTags: ["casual"], itemIds: ["t1"] },
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["t-shirt"], styleTags: ["casual"], itemIds: ["t1"] },
+    ]);
+    const bias = feedbackBias({ id: "t1", color: "black", clothing_type: "t-shirt", style_tags: ["casual"] }, profile);
+    expect(bias).toBeGreaterThan(0);
+  });
+
+  test("penalizes items with disliked attributes", () => {
+    const profile = buildFeedbackProfile([
+      { feedback: "dislike", timestamp: Date.now(), colors: ["red"], clothingTypes: ["shorts"], styleTags: [], itemIds: ["s1"] },
+      { feedback: "dislike", timestamp: Date.now(), colors: ["red"], clothingTypes: ["shorts"], styleTags: [], itemIds: ["s1"] },
+    ]);
+    const bias = feedbackBias({ id: "s1", color: "red", clothing_type: "shorts" }, profile);
+    expect(bias).toBeLessThan(0);
+  });
+
+  test("conflicting feedback neutralizes bias", () => {
+    const profile = buildFeedbackProfile([
+      { feedback: "like", timestamp: Date.now(), colors: ["blue"], clothingTypes: ["polo"], styleTags: [], itemIds: [] },
+      { feedback: "dislike", timestamp: Date.now(), colors: ["blue"], clothingTypes: ["polo"], styleTags: [], itemIds: [] },
+    ]);
+    const bias = feedbackBias({ color: "blue", clothing_type: "polo" }, profile);
+    expect(Math.abs(bias)).toBeLessThanOrEqual(1);
+  });
+
+  test("bias is capped to prevent overfitting", () => {
+    const likes = Array.from({ length: 20 }, () => ({
+      feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["t-shirt"], styleTags: ["casual"], itemIds: ["t1"],
+    }));
+    const profile = buildFeedbackProfile(likes);
+    const bias = feedbackBias({ id: "t1", color: "black", clothing_type: "t-shirt", style_tags: ["casual"] }, profile);
+    expect(bias).toBeLessThanOrEqual(12);
+    expect(bias).toBeGreaterThanOrEqual(-12);
+  });
+
+  test("unrelated items get no bias", () => {
+    const profile = buildFeedbackProfile([
+      { feedback: "like", timestamp: Date.now(), colors: ["black"], clothingTypes: ["blazer"], styleTags: ["formal"], itemIds: ["b1"] },
+    ]);
+    const bias = feedbackBias({ id: "x9", color: "red", clothing_type: "sandals", style_tags: ["casual"] }, profile);
+    expect(bias).toBe(0);
   });
 });

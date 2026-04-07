@@ -2306,6 +2306,41 @@ a {
   line-height: 1;
 }
 
+.dashFeedbackBtns {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 6px;
+}
+.dashFeedbackBtn {
+  width: 26px;
+  height: 20px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  font-size: 0.55rem;
+  font-weight: 900;
+  color: rgba(17, 24, 39, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 120ms ease, color 120ms ease, transform 80ms ease;
+  padding: 0;
+  line-height: 1;
+}
+.dashFeedbackBtn:hover { transform: scale(1.15); }
+.dashFeedbackLike:hover { background: rgba(34, 197, 94, 0.15); color: rgba(22, 120, 55, 0.85); }
+.dashFeedbackDislike:hover { background: rgba(220, 38, 38, 0.12); color: rgba(180, 30, 30, 0.85); }
+
+[data-theme="dark"] .dashFeedbackBtn {
+  background: rgba(40, 40, 40, 0.7);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(232, 230, 227, 0.35);
+}
+[data-theme="dark"] .dashFeedbackLike:hover { background: rgba(34, 197, 94, 0.2); color: rgba(100, 220, 140, 0.85); }
+[data-theme="dark"] .dashFeedbackDislike:hover { background: rgba(220, 38, 38, 0.18); color: rgba(240, 100, 100, 0.85); }
+
 [data-theme="dark"] .styledSaveBtn {
   border-color: rgba(255, 255, 255, 0.10);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);

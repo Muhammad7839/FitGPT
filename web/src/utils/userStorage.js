@@ -1,6 +1,6 @@
 
 
-import { GUEST_WARDROBE_KEY, WARDROBE_KEY, SAVED_OUTFITS_KEY, OUTFIT_HISTORY_KEY, PLANNED_OUTFITS_KEY, PROFILE_KEY, ONBOARDING_ANSWERS_KEY, ONBOARDED_KEY, EVT_WARDROBE_CHANGED, REC_SEED_KEY, TIME_OVERRIDE_KEY, WEATHER_OVERRIDE_KEY, DEMO_AUTH_KEY, PROFILE_PIC_KEY, EVT_PROFILE_PIC_CHANGED, TUTORIAL_DONE_KEY, REJECTED_OUTFITS_KEY, DISMISSED_DUPLICATES_KEY } from "./constants";
+import { GUEST_WARDROBE_KEY, WARDROBE_KEY, SAVED_OUTFITS_KEY, OUTFIT_HISTORY_KEY, PLANNED_OUTFITS_KEY, PROFILE_KEY, ONBOARDING_ANSWERS_KEY, ONBOARDED_KEY, EVT_WARDROBE_CHANGED, REC_SEED_KEY, TIME_OVERRIDE_KEY, WEATHER_OVERRIDE_KEY, DEMO_AUTH_KEY, PROFILE_PIC_KEY, EVT_PROFILE_PIC_CHANGED, TUTORIAL_DONE_KEY, REJECTED_OUTFITS_KEY, DISMISSED_DUPLICATES_KEY, RECOMMENDATION_FEEDBACK_KEY } from "./constants";
 import { safeParse } from "./helpers";
 import { normalizeItemMetadata, mergeWardrobeMetadata } from "./wardrobeOptions";
 
@@ -333,6 +333,35 @@ export function loadDismissedDuplicates(user) {
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch { return []; }
+}
+
+const MAX_FEEDBACK_ENTRIES = 100;
+
+export function loadRecommendationFeedback(user) {
+  const key = userKey(RECOMMENDATION_FEEDBACK_KEY, user);
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
+export function saveRecommendationFeedback(outfit, feedback, user) {
+  if (feedback !== "like" && feedback !== "dislike") return;
+  const items = Array.isArray(outfit) ? outfit : [];
+  if (!items.length) return;
+  const entry = {
+    itemIds: items.map((x) => (x?.id ?? "").toString()).filter(Boolean),
+    feedback,
+    timestamp: Date.now(),
+    colors: [...new Set(items.map((x) => (x?.color || "").toLowerCase()).filter(Boolean))],
+    clothingTypes: [...new Set(items.map((x) => (x?.clothing_type || x?.type || "").toLowerCase()).filter(Boolean))],
+    styleTags: [...new Set(items.flatMap((x) => Array.isArray(x?.style_tags) ? x.style_tags : []).map((s) => (s || "").toLowerCase()).filter(Boolean))],
+  };
+  const existing = loadRecommendationFeedback(user);
+  const updated = [entry, ...existing].slice(0, MAX_FEEDBACK_ENTRIES);
+  const key = userKey(RECOMMENDATION_FEEDBACK_KEY, user);
+  try { localStorage.setItem(key, JSON.stringify(updated)); } catch {}
 }
 
 export function dismissDuplicatePair(pairKey, user) {
