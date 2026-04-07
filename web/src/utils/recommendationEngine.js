@@ -2070,6 +2070,193 @@ export function buildExplanation({ answers, outfit, weatherCategory, precipCateg
   return [opener, structureSent, colorSent, comfortSent, closing].filter(Boolean).join(" ").trim();
 }
 
+/* ── Trip packing list generation ──────────────────────────────────── */
+
+const PACKING_QUOTAS = {
+  /* base quantities per day, capped at max */
+  Tops:        { perDay: 1,    min: 2, max: 10 },
+  Bottoms:     { perDay: 0.5,  min: 1, max: 6  },
+  Outerwear:   { perDay: 0.25, min: 0, max: 3  },
+  Shoes:       { perDay: 0.33, min: 1, max: 3  },
+  Accessories: { perDay: 0.2,  min: 0, max: 4  },
+};
+
+function packingQuota(category, days, weatherCat, precipCat) {
+  const q = PACKING_QUOTAS[category];
+  if (!q) return 0;
+  const w = (weatherCat || "mild").toString().toLowerCase();
+  const p = (precipCat || "clear").toString().toLowerCase();
+  let count = Math.max(q.min, Math.ceil(days * q.perDay));
+
+  if (category === "Outerwear") {
+    if (w === "hot" && p === "clear") count = 0;
+    else if (w === "warm" && p === "clear") count = Math.min(count, 1);
+    else if (w === "cold" || w === "cool") count = Math.max(count, 2);
+    if (p === "rain" || p === "snow" || p === "storm") count = Math.max(count, 1);
+  }
+  if (category === "Tops") {
+    if (w === "cold" || w === "cool") count = Math.min(count + Math.ceil(days * 0.3), q.max);
+  }
+  if (category === "Bottoms") {
+    if (w === "hot") count = Math.min(count + 1, q.max);
+  }
+  if (category === "Accessories") {
+    if (w === "cold") count = Math.max(count, 2);
+    else if (w === "hot") count = Math.min(count, 1);
+  }
+  if (category === "Shoes") {
+    if (p === "rain" || p === "snow") count = Math.max(count, 2);
+  }
+
+  return Math.min(count, q.max);
+}
+
+function scoreItemForPacking(item, weatherCat, precipCat, preferredOccasions, preferredStyles) {
+  let score = 0;
+
+  score += weatherScoreBias(weatherCat, item?.category);
+  score += clothingTypeBias(item, weatherCat);
+  score += precipScoreBias(item, precipCat);
+
+  const occasions = normalizeTagArray(item?.occasion_tags).map(normalizeOccasionValue);
+  const styles = normalizeTagArray(item?.style_tags).map(normalizeStyleValue);
+  if (preferredOccasions.length && occasions.some((o) => preferredOccasions.includes(o))) score += 8;
+  if (preferredStyles.length && styles.some((s) => preferredStyles.includes(s))) score += 6;
+
+  /* Versatile items score higher — no occasion tags means wearable everywhere */
+  if (!occasions.length) score += 3;
+
+  /* Neutral colors pair with more items */
+  const color = normalizeColorName(item?.color || "").toLowerCase();
+  if (["black", "white", "gray", "grey", "navy", "beige"].includes(color)) score += 4;
+
+  return score;
+}
+
+export function generatePackingList(wardrobeItems, { days, weatherCategory, precipCategory, occasion, style } = {}) {
+  const tripDays = Math.max(1, Math.min(Number(days) || 3, 30));
+  const wCat = (weatherCategory || "mild").toString().toLowerCase();
+  const pCat = (precipCategory || "clear").toString().toLowerCase();
+  const prefOccasions = normalizeTagArray(occasion ? [occasion] : []).map(normalizeOccasionValue);
+  const prefStyles = normalizeTagArray(style ? [style] : []).map(normalizeStyleValue);
+
+  const active = (Array.isArray(wardrobeItems) ? wardrobeItems : []).filter(
+    (x) => x && x.is_active !== false && String(x.is_active) !== "false"
+  );
+  const buckets = bucketWardrobe(active);
+
+  const categories = ["Tops", "Bottoms", "Outerwear", "Shoes", "Accessories"];
+  const result = {};
+  let totalItems = 0;
+
+  for (const cat of categories) {
+    const quota = packingQuota(cat, tripDays, wCat, pCat);
+    if (quota === 0) { result[cat] = []; continue; }
+
+    const pool = cat === "Accessories"
+      ? [...(buckets.Accessories || []), ...(buckets.Other || [])]
+      : (buckets[cat] || []);
+
+    /* Score and sort candidates */
+    const scored = pool.map((item) => ({
+      item,
+      score: scoreItemForPacking(item, wCat, pCat, prefOccasions, prefStyles),
+    })).sort((a, b) => b.score - a.score);
+
+    /* Filter out inappropriate items for conditions */
+    const filtered = scored.filter(({ item }) => {
+      const prot = classifyWeatherProtection(item);
+      if ((pCat === "rain" || pCat === "snow" || pCat === "storm") && cat === "Shoes" && prot.openToe) return false;
+      if (pCat === "snow" && prot.vulnerableToWet) return false;
+      const type = normalizeClothingType(item?.clothing_type || item?.type || item?.name || "");
+      if (wCat === "hot" && cat === "Outerwear" && pCat === "clear") return false;
+      if ((pCat === "snow" || wCat === "cold") && ["shorts", "tank top", "crop top", "sandals"].includes(type)) return false;
+      return true;
+    });
+
+    const candidates = filtered.length ? filtered : scored;
+
+    /* Pick top items, ensuring variety (no duplicate clothing types) */
+    const picked = [];
+    const usedTypes = new Set();
+    for (const { item } of candidates) {
+      if (picked.length >= quota) break;
+      const type = normalizeClothingType(item?.clothing_type || item?.type || "");
+      /* Allow duplicates only after exhausting unique types */
+      if (usedTypes.has(type) && picked.length < Math.min(quota, candidates.length)) {
+        /* defer — we might still have unique types */
+        continue;
+      }
+      usedTypes.add(type);
+      picked.push(item);
+    }
+    /* If we still need more, fill from remaining (allow duplicate types) */
+    if (picked.length < quota) {
+      const pickedIds = new Set(picked.map((x) => (x?.id ?? "").toString()));
+      for (const { item } of candidates) {
+        if (picked.length >= quota) break;
+        const id = (item?.id ?? "").toString();
+        if (!pickedIds.has(id)) { picked.push(item); pickedIds.add(id); }
+      }
+    }
+
+    /* Include mid-layers as separate entries for cold weather */
+    if (cat === "Tops" && (wCat === "cold" || wCat === "cool")) {
+      const midLayers = (buckets.Tops || []).filter((item) => item.layer_type === "mid");
+      const midScored = midLayers
+        .map((item) => ({ item, score: scoreItemForPacking(item, wCat, pCat, prefOccasions, prefStyles) }))
+        .sort((a, b) => b.score - a.score);
+      const midQuota = wCat === "cold" ? Math.min(2, midScored.length) : Math.min(1, midScored.length);
+      const pickedIds = new Set(picked.map((x) => (x?.id ?? "").toString()));
+      for (const { item } of midScored) {
+        if (picked.length >= quota + midQuota) break;
+        const id = (item?.id ?? "").toString();
+        if (!pickedIds.has(id)) { picked.push(item); pickedIds.add(id); }
+      }
+    }
+
+    result[cat] = picked.map((item) => ({
+      id: (item.id ?? "").toString(),
+      name: item.name || "Item",
+      category: normalizeCategory(item.category),
+      color: titleCase(item.color || ""),
+      clothing_type: normalizeClothingType(item.clothing_type || item.type || ""),
+      image_url: item.image_url || "",
+      layer_type: item.layer_type || "",
+    }));
+    totalItems += result[cat].length;
+  }
+
+  /* Add one-pieces if available and weather-appropriate */
+  if (buckets.OnePieces && buckets.OnePieces.length && wCat !== "cold") {
+    const opScored = buckets.OnePieces
+      .map((item) => ({ item, score: scoreItemForPacking(item, wCat, pCat, prefOccasions, prefStyles) }))
+      .sort((a, b) => b.score - a.score);
+    const opQuota = Math.min(tripDays <= 3 ? 1 : 2, opScored.length);
+    const onePieces = opScored.slice(0, opQuota).map(({ item }) => ({
+      id: (item.id ?? "").toString(),
+      name: item.name || "Item",
+      category: "One-Piece",
+      color: titleCase(item.color || ""),
+      clothing_type: normalizeClothingType(item.clothing_type || item.type || ""),
+      image_url: item.image_url || "",
+      layer_type: "",
+    }));
+    if (onePieces.length) {
+      result["One-Piece"] = onePieces;
+      totalItems += onePieces.length;
+    }
+  }
+
+  return {
+    categories: result,
+    totalItems,
+    tripDays,
+    weatherCategory: wCat,
+    precipCategory: pCat,
+  };
+}
+
 /* ── Wardrobe gap detection ─────────────────────────────────────────── */
 
 const ESSENTIAL_CATEGORIES = ["Tops", "Bottoms", "Shoes"];

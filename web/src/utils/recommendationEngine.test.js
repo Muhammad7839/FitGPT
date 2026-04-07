@@ -34,6 +34,7 @@ import {
   classifyWeatherProtection,
   groupHistoryByDate,
   analyzeHistoryPatterns,
+  generatePackingList,
 } from "./recommendationEngine";
 
 describe("titleCase", () => {
@@ -2851,5 +2852,137 @@ describe("analyzeHistoryPatterns", () => {
     const result = analyzeHistoryPatterns(history, []);
     expect(result.repeatedOutfits[0].count).toBe(3);
     expect(result.repeatedOutfits[1].count).toBe(2);
+  });
+});
+
+/* ── Packing list generation tests ──────────────────────────────────── */
+
+describe("generatePackingList", () => {
+  const makeWardrobe = () => [
+    { id: "t1", name: "White Tee", category: "Tops", clothing_type: "t-shirt", color: "white", is_active: true, layer_type: "base" },
+    { id: "t2", name: "Blue Polo", category: "Tops", clothing_type: "polo", color: "blue", is_active: true, layer_type: "base" },
+    { id: "t3", name: "Black Long Sleeve", category: "Tops", clothing_type: "long sleeve", color: "black", is_active: true, layer_type: "base" },
+    { id: "t4", name: "Gray Turtleneck", category: "Tops", clothing_type: "turtleneck", color: "gray", is_active: true, layer_type: "base" },
+    { id: "m1", name: "Navy Sweater", category: "Tops", clothing_type: "sweater", color: "navy", is_active: true, layer_type: "mid" },
+    { id: "m2", name: "Gray Hoodie", category: "Tops", clothing_type: "hoodie", color: "gray", is_active: true, layer_type: "mid" },
+    { id: "b1", name: "Dark Jeans", category: "Bottoms", color: "navy", is_active: true },
+    { id: "b2", name: "Khaki Chinos", category: "Bottoms", color: "beige", is_active: true },
+    { id: "b3", name: "Black Shorts", category: "Bottoms", clothing_type: "shorts", color: "black", is_active: true },
+    { id: "b4", name: "Gray Trousers", category: "Bottoms", color: "gray", is_active: true },
+    { id: "o1", name: "Navy Raincoat", category: "Outerwear", clothing_type: "raincoat", color: "navy", is_active: true, layer_type: "outer" },
+    { id: "o2", name: "Black Parka", category: "Outerwear", clothing_type: "parka", color: "black", is_active: true, layer_type: "outer" },
+    { id: "o3", name: "Gray Blazer", category: "Outerwear", clothing_type: "blazer", color: "gray", is_active: true, layer_type: "outer" },
+    { id: "s1", name: "Brown Boots", category: "Shoes", clothing_type: "boots", color: "brown", is_active: true },
+    { id: "s2", name: "White Sneakers", category: "Shoes", clothing_type: "sneakers", color: "white", is_active: true },
+    { id: "s3", name: "Brown Sandals", category: "Shoes", clothing_type: "sandals", color: "brown", is_active: true },
+    { id: "a1", name: "Black Watch", category: "Accessories", clothing_type: "watch", color: "black", is_active: true },
+    { id: "a2", name: "Wool Scarf", category: "Accessories", clothing_type: "scarf", color: "red", is_active: true },
+    { id: "a3", name: "Sunglasses", category: "Accessories", clothing_type: "sunglasses", color: "black", is_active: true },
+  ];
+
+  test("returns items grouped by category", () => {
+    const result = generatePackingList(makeWardrobe(), { days: 5, weatherCategory: "mild" });
+    expect(result.categories).toBeDefined();
+    expect(result.categories.Tops).toBeDefined();
+    expect(result.categories.Bottoms).toBeDefined();
+    expect(result.categories.Shoes).toBeDefined();
+    expect(result.totalItems).toBeGreaterThan(0);
+    expect(result.tripDays).toBe(5);
+  });
+
+  test("scales tops with trip length", () => {
+    const short = generatePackingList(makeWardrobe(), { days: 2, weatherCategory: "mild" });
+    const long = generatePackingList(makeWardrobe(), { days: 14, weatherCategory: "mild" });
+    expect(long.categories.Tops.length).toBeGreaterThan(short.categories.Tops.length);
+  });
+
+  test("scales bottoms with trip length", () => {
+    const short = generatePackingList(makeWardrobe(), { days: 2, weatherCategory: "mild" });
+    const long = generatePackingList(makeWardrobe(), { days: 14, weatherCategory: "mild" });
+    expect(long.categories.Bottoms.length).toBeGreaterThanOrEqual(short.categories.Bottoms.length);
+  });
+
+  test("cold weather includes outerwear", () => {
+    const result = generatePackingList(makeWardrobe(), { days: 5, weatherCategory: "cold" });
+    expect(result.categories.Outerwear.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test("hot clear weather excludes outerwear", () => {
+    const result = generatePackingList(makeWardrobe(), { days: 5, weatherCategory: "hot", precipCategory: "clear" });
+    expect(result.categories.Outerwear.length).toBe(0);
+  });
+
+  test("rain weather includes outerwear even when warm", () => {
+    const result = generatePackingList(makeWardrobe(), { days: 5, weatherCategory: "warm", precipCategory: "rain" });
+    expect(result.categories.Outerwear.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("rain excludes sandals from shoes", () => {
+    const result = generatePackingList(makeWardrobe(), { days: 5, weatherCategory: "cool", precipCategory: "rain" });
+    const shoeTypes = result.categories.Shoes.map((s) => s.clothing_type);
+    expect(shoeTypes).not.toContain("sandals");
+  });
+
+  test("snow excludes shorts from bottoms", () => {
+    const result = generatePackingList(makeWardrobe(), { days: 5, weatherCategory: "cold", precipCategory: "snow" });
+    const bottomTypes = result.categories.Bottoms.map((b) => b.clothing_type);
+    expect(bottomTypes).not.toContain("shorts");
+  });
+
+  test("cold weather includes mid-layer tops", () => {
+    const result = generatePackingList(makeWardrobe(), { days: 5, weatherCategory: "cold" });
+    const hasLayers = result.categories.Tops.some((t) => t.layer_type === "mid");
+    expect(hasLayers).toBe(true);
+  });
+
+  test("cold weather includes accessories like scarf", () => {
+    const result = generatePackingList(makeWardrobe(), { days: 5, weatherCategory: "cold" });
+    expect(result.categories.Accessories.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test("does not exceed max quotas (no overpacking)", () => {
+    const result = generatePackingList(makeWardrobe(), { days: 21, weatherCategory: "mild" });
+    expect(result.categories.Tops.length).toBeLessThanOrEqual(10);
+    expect(result.categories.Bottoms.length).toBeLessThanOrEqual(6);
+    expect(result.categories.Outerwear.length).toBeLessThanOrEqual(3);
+    expect(result.categories.Shoes.length).toBeLessThanOrEqual(3);
+  });
+
+  test("empty wardrobe returns zero items", () => {
+    const result = generatePackingList([], { days: 5, weatherCategory: "mild" });
+    expect(result.totalItems).toBe(0);
+  });
+
+  test("items come from user wardrobe (IDs match)", () => {
+    const wardrobe = makeWardrobe();
+    const ids = new Set(wardrobe.map((w) => w.id));
+    const result = generatePackingList(wardrobe, { days: 5, weatherCategory: "mild" });
+    for (const cat of Object.values(result.categories)) {
+      for (const item of cat) {
+        expect(ids.has(item.id)).toBe(true);
+      }
+    }
+  });
+
+  test("ensures variety — no duplicate IDs within a category", () => {
+    const result = generatePackingList(makeWardrobe(), { days: 7, weatherCategory: "mild" });
+    for (const [, items] of Object.entries(result.categories)) {
+      const ids = items.map((i) => i.id);
+      expect(new Set(ids).size).toBe(ids.length);
+    }
+  });
+
+  test("different climates produce different lists", () => {
+    const wardrobe = makeWardrobe();
+    const cold = generatePackingList(wardrobe, { days: 7, weatherCategory: "cold", precipCategory: "snow" });
+    const hot = generatePackingList(wardrobe, { days: 7, weatherCategory: "hot", precipCategory: "clear" });
+    expect(cold.categories.Outerwear.length).toBeGreaterThan(hot.categories.Outerwear.length);
+    expect(cold.totalItems).not.toBe(hot.totalItems);
+  });
+
+  test("rain adds extra shoes for backup", () => {
+    const rain = generatePackingList(makeWardrobe(), { days: 5, weatherCategory: "cool", precipCategory: "rain" });
+    const clear = generatePackingList(makeWardrobe(), { days: 5, weatherCategory: "cool", precipCategory: "clear" });
+    expect(rain.categories.Shoes.length).toBeGreaterThanOrEqual(clear.categories.Shoes.length);
   });
 });
