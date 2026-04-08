@@ -3,10 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 import { loadAnswers, loadWardrobe } from "../utils/userStorage";
-import { EVT_PLANNED_OUTFITS_CHANGED } from "../utils/constants";
+import { EVT_OUTFIT_HISTORY_CHANGED, EVT_PLANNED_OUTFITS_CHANGED } from "../utils/constants";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
 import { buildWardrobeMap, formatPlanDate, setReuseOutfit, buildGoogleCalendarUrl } from "../utils/helpers";
 import GuestModeNotice from "./GuestModeNotice";
+import PlanningCalendar from "./PlanningCalendar";
 import UpcomingWeatherPlanner from "./UpcomingWeatherPlanner";
 import TripPackingPlanner from "./TripPackingPlanner";
 
@@ -15,6 +16,7 @@ export default function Plans() {
   const { user } = useAuth();
 
   const [planned, setPlanned] = useState([]);
+  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -26,11 +28,23 @@ export default function Plans() {
   const refresh = async () => {
     setLoading(true);
     try {
-      const res = await plannedOutfitsApi.listPlanned(user);
-      const list = Array.isArray(res?.planned_outfits) ? res.planned_outfits : [];
-      setPlanned(list);
+      const [plannedRes, historyRes] = await Promise.all([
+        plannedOutfitsApi.listPlanned(user),
+        outfitHistoryApi.listHistory(user),
+      ]);
+      const nextPlanned = Array.isArray(plannedRes?.planned_outfits) ? plannedRes.planned_outfits : [];
+      const nextHistory = Array.isArray(historyRes?.history) ? historyRes.history : [];
+      const sortedHistory = [...nextHistory].sort((a, b) => {
+        const da = (a?.worn_at || "").toString();
+        const db = (b?.worn_at || "").toString();
+        return db.localeCompare(da);
+      });
+
+      setPlanned(nextPlanned);
+      setHistory(sortedHistory);
     } catch {
       setPlanned([]);
+      setHistory([]);
     } finally {
       setLoading(false);
     }
@@ -41,7 +55,11 @@ export default function Plans() {
 
     const onChanged = () => refresh();
     window.addEventListener(EVT_PLANNED_OUTFITS_CHANGED, onChanged);
-    return () => window.removeEventListener(EVT_PLANNED_OUTFITS_CHANGED, onChanged);
+    window.addEventListener(EVT_OUTFIT_HISTORY_CHANGED, onChanged);
+    return () => {
+      window.removeEventListener(EVT_PLANNED_OUTFITS_CHANGED, onChanged);
+      window.removeEventListener(EVT_OUTFIT_HISTORY_CHANGED, onChanged);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -78,6 +96,25 @@ export default function Plans() {
       setMsg("Could not remove plan.");
       window.setTimeout(() => setMsg(""), 2500);
     }
+  };
+
+  const handleWearAgain = (entry) => {
+    const itemIds = Array.isArray(entry?.item_ids) ? entry.item_ids : [];
+    if (!itemIds.length) return;
+
+    setReuseOutfit(itemIds, entry?.history_id || "");
+    outfitHistoryApi.recordWorn({
+      item_ids: itemIds,
+      source: "history",
+      context: entry?.context || {},
+    }, user).catch(() => {});
+    navigate("/dashboard");
+  };
+
+  const handleOpenGoogleCalendar = (plan) => {
+    const names = (Array.isArray(plan?.item_details) ? plan.item_details : []).map((d) => d?.name).filter(Boolean);
+    const url = buildGoogleCalendarUrl({ date: plan?.planned_date, occasion: plan?.occasion, itemNames: names });
+    window.open(url, "_blank", "noopener");
   };
 
   const renderCard = (p) => {
@@ -125,11 +162,7 @@ export default function Plans() {
           <button className="btn primary" onClick={() => handleWearThis(p)}>
             Wear This
           </button>
-          <button className="btn" onClick={() => {
-            const names = (Array.isArray(p?.item_details) ? p.item_details : []).map((d) => d?.name).filter(Boolean);
-            const url = buildGoogleCalendarUrl({ date: p?.planned_date, occasion: p?.occasion, itemNames: names });
-            window.open(url, "_blank", "noopener");
-          }}>
+          <button className="btn" onClick={() => handleOpenGoogleCalendar(p)}>
             Add to Google Calendar
           </button>
           <button className="btn" onClick={() => handleRemove(p?.planned_id)}>
@@ -173,6 +206,15 @@ export default function Plans() {
 
       <UpcomingWeatherPlanner wardrobe={wardrobe} user={user} isGuestMode={!user} answers={answers} />
       <TripPackingPlanner wardrobe={wardrobe} user={user} answers={answers} />
+      <PlanningCalendar
+        plans={upcoming}
+        history={history}
+        wardrobeById={wardrobeById}
+        onWearThis={handleWearThis}
+        onRemovePlan={handleRemove}
+        onAddToGoogleCalendar={handleOpenGoogleCalendar}
+        onWearAgain={handleWearAgain}
+      />
 
       {msg && <div className="noteBox" style={{ marginTop: 12 }}>{msg}</div>}
 
