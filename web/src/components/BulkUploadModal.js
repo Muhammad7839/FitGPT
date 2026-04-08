@@ -20,7 +20,6 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
     <div className="modalOverlay" role="dialog" aria-modal="true">
       <div className="modalCard" style={{ maxHeight: "85vh", overflow: "auto", width: "min(780px, 96vw)" }}>
         <div className="modalTitle">Add {items.length} item{items.length > 1 ? "s" : ""}</div>
-        <div className="modalSub">Review and fill in details for each item.</div>
 
         <div style={{ display: "grid", gap: 14, marginTop: 12 }}>
           {items.map((entry) => {
@@ -168,7 +167,7 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
                   title="Remove"
                   aria-label="Remove item"
                 >
-                  ?
+                  X
                 </button>
               </div>
             );

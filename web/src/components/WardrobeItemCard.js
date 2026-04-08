@@ -165,9 +165,12 @@ function WardrobeItemCard({
 
           <div className="wardrobeRowText">
             <div className="wardrobeItemName">{item.name}</div>
-            <div className="wardrobeItemMeta">
-              {item.category} | Fit: {fitText}
-              <BodyFitBadge item={item} bodyFitOn={bodyFitOn} userBodyType={userBodyType} bodyFitRating={bodyFitRating} inline />
+            <div className="wardrobeMetaRow">
+              <div className="wardrobeItemMeta">
+                {item.category} | Fit: {fitText}
+                <BodyFitBadge item={item} bodyFitOn={bodyFitOn} userBodyType={userBodyType} bodyFitRating={bodyFitRating} inline />
+              </div>
+              <SeasonBadge match={seasonMatch} />
             </div>
             {colors.length ? (
               <div className="wardrobeColorRow">
@@ -179,7 +182,6 @@ function WardrobeItemCard({
                 ))}
               </div>
             ) : null}
-            <SeasonBadge match={seasonMatch} />
             {badges.length ? (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
                 {badges.map((badge) => <MetaBadge key={badge}>{badge}</MetaBadge>)}
@@ -207,8 +209,11 @@ function WardrobeItemCard({
 
       <div className="wardrobeCardBody">
         <div className="wardrobeItemName">{item.name}</div>
-        <div className="wardrobeItemMeta">
-          {item.category} | Fit: {fitText}
+        <div className="wardrobeMetaRow">
+          <div className="wardrobeItemMeta">
+            {item.category} | Fit: {fitText}
+          </div>
+          <SeasonBadge match={seasonMatch} />
         </div>
         {colors.length ? (
           <div className="wardrobeColorRow">
@@ -220,7 +225,6 @@ function WardrobeItemCard({
             ))}
           </div>
         ) : null}
-        <SeasonBadge match={seasonMatch} />
         <BodyFitBadge item={item} bodyFitOn={bodyFitOn} userBodyType={userBodyType} bodyFitRating={bodyFitRating} />
 
         {badges.length ? (
