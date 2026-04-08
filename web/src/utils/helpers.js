@@ -29,6 +29,21 @@ export function normalizeFitTag(raw) {
   return FIT_TAG_SET.has(v) ? v : "unknown";
 }
 
+export const PROFILE_PIC_MAX_BYTES = 10 * 1024 * 1024;
+export const PROFILE_GIF_MAX_BYTES = 3 * 1024 * 1024;
+
+export function getProfilePicUploadIssue(file) {
+  const type = (file?.type || "").toString().trim().toLowerCase();
+  if (!type.startsWith("image/")) return "Please choose an image file.";
+
+  const maxBytes = type === "image/gif" ? PROFILE_GIF_MAX_BYTES : PROFILE_PIC_MAX_BYTES;
+  if (Number(file?.size || 0) <= maxBytes) return "";
+
+  return type === "image/gif"
+    ? "This GIF is too large. Please upload one under 3MB."
+    : "This profile photo is too large. Please upload one under 10MB.";
+}
+
 export function fileToDataUrl(file, maxSize = 200) {
   if (file.type === "image/gif") {
     return new Promise((resolve, reject) => {
@@ -152,7 +167,9 @@ export function buildGoogleCalendarUrl({ date, occasion, itemNames }) {
 export function labelFromSource(src) {
   const s = (src || "").toString().trim().toLowerCase();
   if (s === "planner") return "Planned";
-  if (s === "recommended") return "Recommended";
+  if (s === "recommended" || s === "recommendation") return "Recommended";
+  if (s === "history") return "History";
+  if (s === "saved") return "Saved";
   return "Saved";
 }
 
