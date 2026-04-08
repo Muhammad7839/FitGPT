@@ -2,6 +2,7 @@ import {
   getUserId, userKey, makeLocalStore, makeObjectStore,
   loadWardrobe, saveWardrobe, migrateGuestData, clearGuestData, mirrorUserDataToGuest, mergeWardrobeWithLocalMetadata,
   readWeatherOverride, setWeatherOverride,
+  readSeasonalMode, writeSeasonalMode,
   readRecSeed, writeRecSeed, readTimeOverride, writeTimeOverride,
   readDemoAuth, writeDemoAuth,
   loadAnswers, saveAnswers, isOnboarded, clearOnboarding,
@@ -290,6 +291,18 @@ describe("readWeatherOverride / setWeatherOverride", () => {
     setWeatherOverride(null);
     expect(sessionStorage.getItem(WEATHER_OVERRIDE_KEY)).toBeNull();
     expect(readWeatherOverride()).toBeNull();
+  });
+});
+
+describe("readSeasonalMode / writeSeasonalMode", () => {
+  test("defaults to enabled", () => {
+    expect(readSeasonalMode(null)).toBe(true);
+  });
+
+  test("round-trips the seasonal toggle", () => {
+    writeSeasonalMode(false, { id: "u1" });
+    expect(readSeasonalMode({ id: "u1" })).toBe(false);
+    expect(readSeasonalMode(null)).toBe(true);
   });
 });
 

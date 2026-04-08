@@ -3,10 +3,13 @@ import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { wardrobeApi } from "../api/wardrobeApi";
 import { useAuth } from "../auth/AuthProvider";
-import { loadWardrobe, saveWardrobe, loadAnswers, mergeWardrobeWithLocalMetadata } from "../utils/userStorage";
-import { classifyFromUrl, preloadModel } from "../utils/classifyClothing";
+import { loadWardrobe, saveWardrobe, loadAnswers, mergeWardrobeWithLocalMetadata, readSeasonalMode, writeSeasonalMode } from "../utils/userStorage";
+import { preloadModel } from "../utils/classifyClothing";
+import { detectDuplicateFindings, loadIgnoredDuplicateKeys, mergeDuplicateItems, saveIgnoredDuplicateKeys } from "../utils/duplicateDetection";
 import { OPEN_ADD_ITEM_FLAG } from "../utils/constants";
 import { makeId, normalizeFitTag, fileToDataUrl, isNetworkError, onTiltMove, onTiltLeave } from "../utils/helpers";
+import { generateItemTagSuggestions } from "../utils/tagSuggestions";
+import { getCurrentSeason, getSeasonLabel, getSeasonalWardrobeLabel, sortItemsBySeasonalRelevance, summarizeSeasonalCollection } from "../utils/seasonalWardrobe";
 import {
   LAYER_TYPE_OPTIONS,
   STYLE_TAG_OPTIONS,
@@ -21,9 +24,9 @@ import {
 import ItemFormFields, { CATEGORIES as ITEM_CATEGORIES, FIT_TAG_OPTIONS } from "./ItemFormFields";
 import WardrobeItemCard from "./WardrobeItemCard";
 import BulkUploadModal from "./BulkUploadModal";
+import DuplicateReviewModal from "./DuplicateReviewModal";
 
 const CATEGORIES = ["All Items", ...ITEM_CATEGORIES];
-
 function fileIsOk(file) {
   const isImage = file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp";
   const under10mb = file.size <= 10 * 1024 * 1024;
@@ -178,6 +181,37 @@ function guessCategoryFromName(name) {
   return "Tops";
 }
 
+function hasSuggestedTagValues(suggestions) {
+  if (!suggestions) return false;
+  return Boolean(
+    (suggestions.color || "").trim() ||
+    (suggestions.clothingType || "").trim() ||
+    (Array.isArray(suggestions.styleTags) && suggestions.styleTags.length) ||
+    (Array.isArray(suggestions.occasionTags) && suggestions.occasionTags.length) ||
+    (Array.isArray(suggestions.seasonTags) && suggestions.seasonTags.length)
+  );
+}
+
+function applySuggestionToBulkEntry(entry, result) {
+  const suggestions = result?.suggestions || null;
+  const next = {
+    ...entry,
+    classifying: false,
+    taggingState: result?.status || "error",
+    taggingMessage: result?.message || "We couldn't generate tags. Please add them manually.",
+    suggestedTags: hasSuggestedTagValues(suggestions) ? suggestions : null,
+  };
+
+  if (result?.category && !entry.userOverrode) next.category = result.category;
+  if (!entry.color && suggestions?.color) next.color = suggestions.color;
+  if (!entry.clothingType && suggestions?.clothingType) next.clothingType = suggestions.clothingType;
+  if ((!Array.isArray(entry.styleTags) || entry.styleTags.length === 0) && suggestions?.styleTags?.length) next.styleTags = suggestions.styleTags;
+  if ((!Array.isArray(entry.occasionTags) || entry.occasionTags.length === 0) && suggestions?.occasionTags?.length) next.occasionTags = suggestions.occasionTags;
+  if ((!Array.isArray(entry.seasonTags) || entry.seasonTags.length === 0) && suggestions?.seasonTags?.length) next.seasonTags = suggestions.seasonTags;
+
+  return next;
+}
+
 export default function Wardrobe() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -191,6 +225,7 @@ export default function Wardrobe() {
   const fileInputRef = useRef(null);
   const filterRef = useRef(null);
   const localEditRef = useRef(false);
+  const addCategoryTouchedRef = useRef(false);
   const setItemsAndSave = useCallback((updater) => {
     setItems((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
@@ -223,6 +258,7 @@ export default function Wardrobe() {
   const [itemsLoaded, setItemsLoaded] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All Items");
   const [query, setQuery] = useState("");
+  const [seasonalMode, setSeasonalMode] = useState(() => readSeasonalMode(user));
   const [bodyFitOn, setBodyFitOn] = useState(false);
   const [view, setView] = useState("grid");
   const [toast, setToast] = useState("");
@@ -276,6 +312,9 @@ export default function Wardrobe() {
   const [isSaving, setIsSaving] = useState(false);
   const [addError, setAddError] = useState("");
   const [isClassifying, setIsClassifying] = useState(false);
+  const [addTaggingState, setAddTaggingState] = useState("idle");
+  const [addTaggingMessage, setAddTaggingMessage] = useState("");
+  const [addSuggestedTags, setAddSuggestedTags] = useState(null);
 
 
 
@@ -283,6 +322,11 @@ export default function Wardrobe() {
   const [bulkItems, setBulkItems] = useState([]);
   const [isBulkSaving, setIsBulkSaving] = useState(false);
   const [bulkError, setBulkError] = useState("");
+  const [duplicateScan, setDuplicateScan] = useState({ status: "idle", findings: [], scannedIds: [], scannedAt: 0 });
+  const [duplicateReviewOpen, setDuplicateReviewOpen] = useState(false);
+  const [pendingDuplicateAction, setPendingDuplicateAction] = useState(null);
+  const [ignoredDuplicateKeys, setIgnoredDuplicateKeys] = useState(() => loadIgnoredDuplicateKeys(user));
+  const duplicateScanRef = useRef(0);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -302,6 +346,95 @@ export default function Wardrobe() {
 
   const [isArchiving, setIsArchiving] = useState(false);
   const [pendingArchiveId, setPendingArchiveId] = useState(null);
+  const currentSeason = useMemo(() => getCurrentSeason(), []);
+  const currentSeasonLabel = useMemo(() => getSeasonLabel(currentSeason), [currentSeason]);
+  const seasonalWardrobeLabel = useMemo(() => getSeasonalWardrobeLabel(currentSeason), [currentSeason]);
+
+  useEffect(() => {
+    setSeasonalMode(readSeasonalMode(user));
+  }, [user]);
+  const uploadErrorId = "wardrobe-upload-error";
+
+  useEffect(() => {
+    const ignored = loadIgnoredDuplicateKeys(user);
+    setIgnoredDuplicateKeys(ignored);
+    setDuplicateScan({ status: "idle", findings: [], scannedIds: [], scannedAt: 0 });
+    setDuplicateReviewOpen(false);
+    setPendingDuplicateAction(null);
+  }, [user]);
+
+  useEffect(() => {
+    saveIgnoredDuplicateKeys(ignoredDuplicateKeys, user);
+  }, [ignoredDuplicateKeys, user]);
+
+  useEffect(() => {
+    setDuplicateScan((prev) => {
+      if (!prev.findings.length) return prev;
+      const itemIds = new Set(items.map((item) => String(item.id || "")));
+      const nextFindings = prev.findings.filter(
+        (finding) => itemIds.has(String(finding.leftItem?.id || "")) && itemIds.has(String(finding.rightItem?.id || ""))
+      );
+      if (nextFindings.length === prev.findings.length) return prev;
+      return {
+        ...prev,
+        findings: nextFindings,
+        status: nextFindings.length ? "found" : (prev.status === "loading" ? "loading" : "clear"),
+      };
+    });
+  }, [items]);
+
+  const runDuplicateScan = useCallback(async (allItems, newItems = [], options = {}) => {
+    const scanItems = Array.isArray(newItems) ? newItems.filter(Boolean) : [];
+    const scannedIds = scanItems.map((item) => String(item?.id || "")).filter(Boolean);
+    if (!scannedIds.length) {
+      setDuplicateScan({ status: "clear", findings: [], scannedIds: [], scannedAt: Date.now() });
+      return [];
+    }
+
+    const runId = Date.now() + Math.random();
+    duplicateScanRef.current = runId;
+    setDuplicateScan({ status: "loading", findings: [], scannedIds, scannedAt: Date.now() });
+
+    try {
+      const findings = await detectDuplicateFindings({
+        items: allItems,
+        newItemIds: scannedIds,
+        ignoredPairKeys: ignoredDuplicateKeys,
+      });
+
+      if (duplicateScanRef.current !== runId) return findings;
+
+      const nextState = {
+        status: findings.length ? "found" : "clear",
+        findings,
+        scannedIds,
+        scannedAt: Date.now(),
+      };
+      setDuplicateScan(nextState);
+      if (findings.length && options.openOnFound !== false) setDuplicateReviewOpen(true);
+      return findings;
+    } catch {
+      if (duplicateScanRef.current === runId) {
+        setDuplicateScan({ status: "clear", findings: [], scannedIds, scannedAt: Date.now() });
+      }
+      return [];
+    }
+  }, [ignoredDuplicateKeys]);
+
+  const applyDuplicateScanResult = useCallback((nextItems, focusItems = [], options = {}) => {
+    void runDuplicateScan(nextItems, focusItems, options);
+  }, [runDuplicateScan]);
+
+  const removeDuplicateFinding = useCallback((pairKey) => {
+    setDuplicateScan((prev) => {
+      const nextFindings = prev.findings.filter((finding) => finding.pairKey !== pairKey);
+      return {
+        ...prev,
+        findings: nextFindings,
+        status: nextFindings.length ? "found" : "clear",
+      };
+    });
+  }, []);
 
   React.useEffect(() => {
     let alive = true;
@@ -510,7 +643,7 @@ export default function Wardrobe() {
     const q = query.trim().toLowerCase();
     const base = tab === "archived" ? archivedItems : tab === "favorites" ? favoriteItems : activeItems;
 
-    return base.filter((it) => {
+    const matches = base.filter((it) => {
       const catOk = activeCategory === "All Items" ? true : it.category === activeCategory;
       const fit = fitLabel(it.fit_tag || it.fitTag || it.fit);
       const itemColors = (it.color || "").split(",").map((c) => c.trim()).filter(Boolean);
@@ -547,7 +680,39 @@ export default function Wardrobe() {
       const seasonOk = filterSeasons.size === 0 || seasonTags.some((tag) => filterSeasons.has(tag));
       return catOk && qOk && colorOk && fitOk && clothingTypeOk && layerOk && styleOk && occasionOk && seasonOk;
     });
-  }, [activeItems, archivedItems, favoriteItems, tab, activeCategory, query, filterColors, filterFits, filterClothingTypes, filterLayers, filterStyles, filterOccasions, filterSeasons]);
+
+    return seasonalMode ? sortItemsBySeasonalRelevance(matches, currentSeason) : matches;
+  }, [activeItems, archivedItems, favoriteItems, tab, activeCategory, query, filterColors, filterFits, filterClothingTypes, filterLayers, filterStyles, filterOccasions, filterSeasons, seasonalMode, currentSeason]);
+
+  const seasonalSummarySource = useMemo(() => (
+    tab === "archived" ? archivedItems : tab === "favorites" ? favoriteItems : activeItems
+  ), [activeItems, archivedItems, favoriteItems, tab]);
+
+  const seasonalSummary = useMemo(
+    () => summarizeSeasonalCollection(seasonalSummarySource, currentSeason),
+    [seasonalSummarySource, currentSeason]
+  );
+
+  const seasonalSummaryText = useMemo(() => {
+    if (!seasonalMode) return "Seasonal filtering is off, so you are seeing your full wardrobe.";
+    if (!seasonalSummary.hasSeasonalMetadata) return `Filtered by current season. Add season tags to make your ${currentSeasonLabel.toLowerCase()} wardrobe smarter.`;
+
+    const parts = [];
+    if (seasonalSummary.inSeasonCount) parts.push(`${seasonalSummary.inSeasonCount} in season`);
+    if (seasonalSummary.allSeasonCount) parts.push(`${seasonalSummary.allSeasonCount} all season`);
+    if (seasonalSummary.overlapCount) parts.push(`${seasonalSummary.overlapCount} season overlap`);
+    if (seasonalSummary.outOfSeasonCount) parts.push(`${seasonalSummary.outOfSeasonCount} out of season`);
+
+    return `Filtered by current season. ${parts.join(" · ")}.`;
+  }, [seasonalMode, seasonalSummary, currentSeasonLabel]);
+
+  const toggleSeasonalMode = () => {
+    setSeasonalMode((prev) => {
+      const next = !prev;
+      writeSeasonalMode(next, user);
+      return next;
+    });
+  };
 
   const openPicker = () => fileInputRef.current?.click();
 
@@ -563,6 +728,7 @@ export default function Wardrobe() {
 
   const resetAddForm = () => {
     if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+    addCategoryTouchedRef.current = false;
     setPendingPreview("");
     setPendingFile(null);
     setFormName("");
@@ -578,6 +744,14 @@ export default function Wardrobe() {
     setFormSeasonTags([]);
     setAddError("");
     setIsClassifying(false);
+    setAddTaggingState("idle");
+    setAddTaggingMessage("");
+    setAddSuggestedTags(null);
+  };
+
+  const handleAddCategoryChange = (value) => {
+    addCategoryTouchedRef.current = true;
+    setFormCategory(value);
   };
 
   const openAddModalForFile = (file) => {
@@ -585,6 +759,7 @@ export default function Wardrobe() {
 
     if (!fileIsOk(file)) {
       const message = uploadIssueMessage(file);
+      setShowUploadPanel(true);
       setUploadError(message);
       setToast(message);
       window.setTimeout(() => setToast(""), 2500);
@@ -598,8 +773,10 @@ export default function Wardrobe() {
       setPendingFile(file);
 
       const niceName = file.name.replace(/\.[^/.]+$/, "");
+      const fallbackCategory = guessCategoryFromName(file.name);
       setFormName(niceName);
-      setFormCategory(guessCategoryFromName(file.name));
+      addCategoryTouchedRef.current = false;
+      setFormCategory(fallbackCategory);
       setFormColor("");
       setFormFitTag("unknown");
       setFormClothingType("");
@@ -610,15 +787,49 @@ export default function Wardrobe() {
       setFormOccasionTags([]);
       setFormSeasonTags([]);
       setAddError("");
-        setIsClassifying(true);
+      setIsClassifying(true);
+      setAddTaggingState("loading");
+      setAddTaggingMessage("");
+      setAddSuggestedTags(null);
 
       setAddOpen(true);
 
-      classifyFromUrl(preview).then((result) => {
-        if (result.category) setFormCategory(result.category);
+      generateItemTagSuggestions({
+        imageUrl: preview,
+        fileName: file.name,
+        fallbackCategory,
+      }).then((result) => {
         setIsClassifying(false);
-      }).catch(() => setIsClassifying(false));
+        setAddTaggingState(result.status);
+        setAddTaggingMessage(result.message);
+        setAddSuggestedTags(hasSuggestedTagValues(result.suggestions) ? result.suggestions : null);
+        if (result.category) {
+          setFormCategory((current) => (addCategoryTouchedRef.current ? current : result.category));
+        }
+        if (result.suggestions?.color) {
+          setFormColor((current) => (current.trim() ? current : result.suggestions.color));
+        }
+        if (result.suggestions?.clothingType) {
+          setFormClothingType((current) => (current.trim() ? current : result.suggestions.clothingType));
+        }
+        if (result.suggestions?.styleTags?.length) {
+          setFormStyleTags((current) => (current.length ? current : result.suggestions.styleTags));
+        }
+        if (result.suggestions?.occasionTags?.length) {
+          setFormOccasionTags((current) => (current.length ? current : result.suggestions.occasionTags));
+        }
+        if (result.suggestions?.seasonTags?.length) {
+          setFormSeasonTags((current) => (current.length ? current : result.suggestions.seasonTags));
+        }
+      }).catch(() => {
+        setIsClassifying(false);
+        setAddTaggingState("error");
+        setAddTaggingMessage("We couldn't generate tags. Please add them manually.");
+        setAddSuggestedTags(null);
+      });
     } catch {
+      setShowUploadPanel(true);
+      setUploadError("Upload failed. Try again.");
       setToast("Upload failed. Try again.");
       window.setTimeout(() => setToast(""), 2500);
     }
@@ -631,6 +842,7 @@ export default function Wardrobe() {
     if (!files.length) {
       if (fileList?.length) {
         const message = uploadBatchMessage(invalidFiles, 0);
+        setShowUploadPanel(true);
         setUploadError(message);
         setToast(message);
         window.setTimeout(() => setToast(""), 2500);
@@ -640,6 +852,7 @@ export default function Wardrobe() {
 
     if (invalidFiles.length) {
       const message = uploadBatchMessage(invalidFiles, files.length);
+      setShowUploadPanel(true);
       setUploadError(message);
       setToast(message);
       window.setTimeout(() => setToast(""), 2800);
@@ -670,6 +883,9 @@ export default function Wardrobe() {
             occasionTags: [],
             seasonTags: [],
             classifying: true,
+            taggingState: "loading",
+            taggingMessage: "",
+            suggestedTags: null,
             userOverrode: false,
           };
         })
@@ -679,20 +895,26 @@ export default function Wardrobe() {
       setBulkOpen(true);
 
       for (const entry of entries) {
-        classifyFromUrl(entry.preview).then((result) => {
+        generateItemTagSuggestions({
+          imageUrl: entry.preview,
+          fileName: entry.file?.name || entry.name,
+          fallbackCategory: entry.category,
+        }).then((result) => {
           setBulkItems((prev) =>
             prev.map((e) => {
               if (e._key !== entry._key) return e;
-              return {
-                ...e,
-                classifying: false,
-                category: result.category && !e.userOverrode ? result.category : e.category,
-              };
+              return applySuggestionToBulkEntry(e, result);
             })
           );
         }).catch(() => {
           setBulkItems((prev) =>
-            prev.map((e) => e._key === entry._key ? { ...e, classifying: false } : e)
+            prev.map((e) => e._key === entry._key ? {
+              ...e,
+              classifying: false,
+              taggingState: "error",
+              taggingMessage: "We couldn't generate tags. Please add them manually.",
+              suggestedTags: null,
+            } : e)
           );
         });
       }
@@ -755,7 +977,9 @@ export default function Wardrobe() {
           is_favorite: false,
         });
 
-        setItemsAndSave((prev) => [localItem, ...prev]);
+        const nextItems = [localItem, ...items];
+        setItemsAndSave(nextItems);
+        applyDuplicateScanResult(nextItems, [localItem]);
 
         setIsSaving(false);
         setAddOpen(false);
@@ -803,7 +1027,9 @@ export default function Wardrobe() {
         is_favorite: created?.is_favorite ?? false,
       });
 
-      setItemsAndSave((prev) => [localShadow, ...prev]);
+      const nextItems = [localShadow, ...items];
+      setItemsAndSave(nextItems);
+      applyDuplicateScanResult(nextItems, [localShadow]);
 
       setIsSaving(false);
       setAddOpen(false);
@@ -835,7 +1061,9 @@ export default function Wardrobe() {
           is_favorite: false,
         });
 
-        setItemsAndSave((prev) => [localItem, ...prev]);
+        const nextItems = [localItem, ...items];
+        setItemsAndSave(nextItems);
+        applyDuplicateScanResult(nextItems, [localItem]);
 
         setIsSaving(false);
         setAddOpen(false);
@@ -866,7 +1094,9 @@ export default function Wardrobe() {
         is_favorite: false,
       });
 
-      setItemsAndSave((prev) => [localItem, ...prev]);
+      const nextItems = [localItem, ...items];
+      setItemsAndSave(nextItems);
+      applyDuplicateScanResult(nextItems, [localItem]);
 
       setIsSaving(false);
       setAddOpen(false);
@@ -966,7 +1196,9 @@ export default function Wardrobe() {
         }
       }
 
-      setItemsAndSave((prev) => [...newItems, ...prev]);
+      const nextItems = [...newItems, ...items];
+      setItemsAndSave(nextItems);
+      applyDuplicateScanResult(nextItems, newItems);
       setIsBulkSaving(false);
       setBulkOpen(false);
       setBulkItems([]);
@@ -978,6 +1210,137 @@ export default function Wardrobe() {
       setBulkError(e?.message || "Bulk upload failed. Please try again.");
     }
   };
+
+  const closeDuplicateReview = () => {
+    setDuplicateReviewOpen(false);
+    setPendingDuplicateAction(null);
+  };
+
+  const keepDuplicateItems = (finding) => {
+    if (!finding?.pairKey) return;
+    const nextIgnored = [...new Set([...ignoredDuplicateKeys, finding.pairKey])];
+    setIgnoredDuplicateKeys(nextIgnored);
+    removeDuplicateFinding(finding.pairKey);
+    setPendingDuplicateAction(null);
+    setToast("We will stop flagging this pair as a duplicate.");
+    window.setTimeout(() => setToast(""), 2200);
+  };
+
+  const handleDuplicateActionChange = (nextAction) => {
+    if (!nextAction) {
+      setPendingDuplicateAction(null);
+      return;
+    }
+
+    if (nextAction.confirmNow) {
+      setPendingDuplicateAction((prev) => prev ? { ...prev, confirmNow: true } : prev);
+      return;
+    }
+
+    setPendingDuplicateAction({ ...nextAction, isProcessing: false, confirmNow: false });
+  };
+
+  const syncMergedItemBestEffort = useCallback(async (mergedItem, removeId) => {
+    if (!effectiveSignedIn) return;
+
+    try {
+      await wardrobeApi.updateItem(mergedItem.id, buildWardrobeApiPayload({
+        name: mergedItem.name,
+        category: mergedItem.category,
+        color: mergedItem.color,
+        fitTag: mergedItem.fit_tag,
+        clothingType: mergedItem.clothing_type,
+        layerType: mergedItem.layer_type,
+        isOnePiece: mergedItem.is_one_piece,
+        setId: mergedItem.set_id,
+        styleTags: mergedItem.style_tags,
+        occasionTags: mergedItem.occasion_tags,
+        seasonTags: mergedItem.season_tags,
+        imageUrl: mergedItem.image_url,
+      }));
+      await wardrobeApi.deleteItem(removeId);
+      if (backendOffline) setBackendOffline(false);
+    } catch (e) {
+      if (isNetworkError(e)) setBackendOffline(true);
+    }
+  }, [backendOffline, effectiveSignedIn]);
+
+  useEffect(() => {
+    if (!pendingDuplicateAction?.confirmNow || pendingDuplicateAction?.isProcessing) return;
+
+    let cancelled = false;
+
+    async function run() {
+      const action = pendingDuplicateAction;
+      setPendingDuplicateAction((prev) => prev ? { ...prev, isProcessing: true } : prev);
+
+      if (action.mode === "delete") {
+        const nextItems = items.filter((item) => String(item.id) !== String(action.removeId));
+        const focusItem = nextItems.find((item) => String(item.id) === String(action.survivorId));
+
+        setItemsAndSave(nextItems);
+        removeDuplicateFinding(action.pairKey);
+
+        if (effectiveSignedIn) {
+          try {
+            await wardrobeApi.deleteItem(action.removeId);
+            if (backendOffline) setBackendOffline(false);
+          } catch (e) {
+            if (isNetworkError(e)) setBackendOffline(true);
+          }
+        }
+
+        if (!cancelled) {
+          if (focusItem) applyDuplicateScanResult(nextItems, [focusItem], { openOnFound: false });
+          else setDuplicateScan({ status: "clear", findings: [], scannedIds: [], scannedAt: Date.now() });
+          setPendingDuplicateAction(null);
+          setToast("Duplicate item removed.");
+          window.setTimeout(() => setToast(""), 2200);
+        }
+        return;
+      }
+
+      if (action.mode === "merge") {
+        const keepItem = items.find((item) => String(item.id) === String(action.keepId));
+        const removeItem = items.find((item) => String(item.id) === String(action.removeId));
+        if (!keepItem || !removeItem) {
+          if (!cancelled) setPendingDuplicateAction(null);
+          return;
+        }
+
+        const mergedItem = mergeDuplicateItems(keepItem, removeItem);
+        const nextItems = items
+          .filter((item) => String(item.id) !== String(action.removeId))
+          .map((item) => (String(item.id) === String(action.keepId) ? mergedItem : item));
+
+        setItemsAndSave(nextItems);
+        removeDuplicateFinding(action.pairKey);
+        await syncMergedItemBestEffort(mergedItem, action.removeId);
+
+        if (!cancelled) {
+          applyDuplicateScanResult(nextItems, [mergedItem], { openOnFound: false });
+          setPendingDuplicateAction(null);
+          setToast("Items merged into one wardrobe entry.");
+          window.setTimeout(() => setToast(""), 2200);
+        }
+      }
+    }
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    applyDuplicateScanResult,
+    backendOffline,
+    effectiveSignedIn,
+    items,
+    pendingDuplicateAction,
+    removeDuplicateFinding,
+    setItemsAndSave,
+    syncMergedItemBestEffort,
+  ]);
 
   const askDelete = (id) => {
     setPendingDeleteId(id);
@@ -1186,15 +1549,31 @@ export default function Wardrobe() {
         <div>
           <div className="wardrobeTitleRow">
             <div className="wardrobeTitle">Wardrobe</div>
+            <div className="wardrobeSeasonIndicator">{currentSeasonLabel}</div>
           </div>
-          <div className="wardrobeSub">
-            {isGuestMode ? "Upload pieces and generate recommendations in guest mode. Guest wardrobes stay temporary." : "Upload and manage your clothing items"}
-            {!effectiveSignedIn && !backendOffline ? (
-              <button type="button" className="btn primary" onClick={() => navigate("/login")} style={{ marginLeft: 12, fontSize: "0.85rem", padding: "6px 16px", verticalAlign: "middle" }}>
+          <div className="wardrobeSeasonBanner">
+            <div className="wardrobeSeasonCopy">
+              <div className="wardrobeSeasonEyebrow">Seasonal Wardrobe</div>
+              <div className="wardrobeSeasonHeadline">{seasonalWardrobeLabel}</div>
+              <div className="wardrobeSeasonMeta">{seasonalMode ? "Filtered by current season" : "Seasonal filtering is off"}</div>
+              <div className="wardrobeSeasonNote">{seasonalSummaryText}</div>
+            </div>
+            <button
+              type="button"
+              className={seasonalMode ? "wardrobeChipBtn active wardrobeSeasonToggle" : "wardrobeChipBtn wardrobeSeasonToggle"}
+              onClick={toggleSeasonalMode}
+              aria-pressed={seasonalMode}
+            >
+              {seasonalMode ? "Seasonal filtering on" : "Seasonal filtering off"}
+            </button>
+          </div>
+          {!effectiveSignedIn && !backendOffline ? (
+            <div className="wardrobeSub">
+              <button type="button" className="btn primary" onClick={() => navigate("/login")} style={{ fontSize: "0.85rem", padding: "6px 16px", verticalAlign: "middle" }}>
                 Sign in to save
               </button>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
 
         <input
@@ -1202,6 +1581,7 @@ export default function Wardrobe() {
           type="file"
           accept="image/png,image/jpeg,image/webp"
           multiple
+          aria-describedby={uploadError ? uploadErrorId : undefined}
           style={{ display: "none" }}
           onChange={(e) => onPickFile(e.target.files)}
         />
@@ -1250,7 +1630,6 @@ export default function Wardrobe() {
       <section className="wardrobeActionStrip">
         <div className="wardrobeActionCopy">
           <div className="wardrobeActionTitle">Add to your wardrobe</div>
-          <div className="wardrobeActionSub">Upload photos when you are ready. Keep the screen focused on your clothes the rest of the time.</div>
         </div>
         <div className="wardrobeActionButtons">
           <button type="button" className="wardrobeChooseBtn" onClick={openPicker}>
@@ -1267,6 +1646,18 @@ export default function Wardrobe() {
         </div>
       </section>
 
+      {uploadError ? (
+        <div
+          id={uploadErrorId}
+          className="wardrobeFormError"
+          role="alert"
+          aria-live="assertive"
+          style={{ marginTop: 12 }}
+        >
+          {uploadError}
+        </div>
+      ) : null}
+
       {showUploadPanel ? (
         <section
           className="card wardrobeUploadCard"
@@ -1281,7 +1672,7 @@ export default function Wardrobe() {
         >
           <div className="wardrobeUploadInner">
             <div className="wardrobeUploadTitle">Upload Wardrobe Items</div>
-            <div className="wardrobeUploadSub">Drag and drop photos or click to browse</div>
+            <div className="wardrobeUploadSub">Drag photos here or browse</div>
             <button
               type="button"
               className="wardrobeChooseBtn"
@@ -1294,7 +1685,6 @@ export default function Wardrobe() {
               Choose Files
             </button>
             <div className="wardrobeUploadHint">Supports JPG, PNG, WEBP up to 10MB each</div>
-            {uploadError ? <div className="wardrobeFormError" style={{ marginTop: 12, width: "min(520px, 100%)" }}>{uploadError}</div> : null}
           </div>
         </section>
       ) : null}
@@ -1518,6 +1908,54 @@ export default function Wardrobe() {
         </section>
       ) : null}
 
+      {duplicateScan.status !== "idle" ? (
+        <section
+          className={`duplicateScanBanner ${duplicateScan.status}`}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="duplicateScanCopy">
+            <div className="duplicateScanEyebrow">Wardrobe Organization</div>
+            <div className="duplicateScanTitle">
+              {duplicateScan.status === "loading"
+                ? "Checking your latest upload for duplicates"
+                : duplicateScan.status === "found"
+                  ? "Possible duplicate detected"
+                  : "No duplicates found"}
+            </div>
+            <div className="duplicateScanSub">
+              {duplicateScan.status === "loading"
+                ? "We are comparing your newest wardrobe items across category, color, style, fit, and image similarity."
+                : duplicateScan.status === "found"
+                  ? `${duplicateScan.findings.length} potential duplicate ${duplicateScan.findings.length === 1 ? "pair was" : "pairs were"} found. These items look similar.`
+                  : "Your latest upload stayed below the duplicate-confidence threshold."}
+            </div>
+          </div>
+
+          <div className="duplicateScanActions">
+            {duplicateScan.status === "found" ? (
+              <button type="button" className="wardrobeChooseBtn duplicateReviewBtn" onClick={() => setDuplicateReviewOpen(true)}>
+                Review matches
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="wardrobeChipBtn"
+              onClick={() => {
+                if (duplicateScan.status === "found") {
+                  setDuplicateReviewOpen(false);
+                  return;
+                }
+                setDuplicateScan((prev) => ({ ...prev, status: "idle" }));
+                setDuplicateReviewOpen(false);
+              }}
+            >
+              {duplicateScan.status === "found" ? "Later" : "Hide"}
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       <section className={view === "grid" ? "wardrobeGrid" : "wardrobeList"}>
         {filtered.map((it) => (
           <WardrobeItemCard
@@ -1525,6 +1963,8 @@ export default function Wardrobe() {
             item={it}
             view={view}
             tab={tab}
+            seasonalModeEnabled={seasonalMode}
+            currentSeason={currentSeason}
             bodyFitOn={bodyFitOn}
             userBodyType={userBodyType}
             bodyFitRating={bodyFitRating}
@@ -1547,10 +1987,10 @@ export default function Wardrobe() {
             <div className="wardrobeEmptyTitle">{tab === "archived" ? "No archived items yet" : tab === "favorites" ? "No favorites yet" : "Nothing matches right now"}</div>
             <div className="wardrobeEmptySub">
               {tab === "favorites"
-                ? "Tap the heart on wardrobe items you love and they will show up here."
+                ? "Favorite items appear here."
                 : tab === "archived"
-                  ? "Archived pieces will stay here until you bring them back into your active wardrobe."
-                  : "Try clearing filters, changing your search, or adding a few more items to your wardrobe."}
+                  ? "Archived items appear here."
+                  : "Try another search or add an item."}
             </div>
             {tab === "active" ? (
               <button type="button" className="btn primary wardrobeEmptyBtn" onClick={() => setShowUploadPanel(true)}>
@@ -1565,7 +2005,6 @@ export default function Wardrobe() {
         <div className="modalOverlay" role="dialog" aria-modal="true">
           <div className="modalCard">
             <div className="modalTitle">Add wardrobe item</div>
-            <div className="modalSub">Fill in the details before saving.</div>
 
             <div className="wardrobeAddPreview">
               {pendingPreview ? <img className="wardrobeAddPreviewImg" src={pendingPreview} alt="Preview" /> : null}
@@ -1573,7 +2012,7 @@ export default function Wardrobe() {
 
             <ItemFormFields
               name={formName} onNameChange={setFormName}
-              category={formCategory} onCategoryChange={setFormCategory}
+              category={formCategory} onCategoryChange={handleAddCategoryChange}
               color={formColor} onColorChange={setFormColor}
               fitTag={formFitTag} onFitTagChange={setFormFitTag}
               clothingType={formClothingType} onClothingTypeChange={setFormClothingType}
@@ -1584,6 +2023,9 @@ export default function Wardrobe() {
               occasionTags={formOccasionTags} onOccasionTagsChange={setFormOccasionTags}
               seasonTags={formSeasonTags} onSeasonTagsChange={setFormSeasonTags}
               isClassifying={isClassifying}
+              tagSuggestionStatus={addTaggingState}
+              tagSuggestionMessage={addTaggingMessage}
+              tagSuggestions={addSuggestedTags}
               error={addError}
             />
 
@@ -1612,11 +2054,20 @@ export default function Wardrobe() {
         />
       ) : null}
 
+      <DuplicateReviewModal
+        open={duplicateReviewOpen}
+        findings={duplicateScan.findings}
+        isDetecting={duplicateScan.status === "loading"}
+        pendingAction={pendingDuplicateAction}
+        onClose={closeDuplicateReview}
+        onStartAction={handleDuplicateActionChange}
+        onKeepBoth={keepDuplicateItems}
+      />
+
       {editOpen ? ReactDOM.createPortal(
         <div className="modalOverlay" role="dialog" aria-modal="true">
           <div className="modalCard">
             <div className="modalTitle">Edit item</div>
-            <div className="modalSub">Update the details and save changes.</div>
 
             <ItemFormFields
               name={editName} onNameChange={setEditName}

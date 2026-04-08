@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   LAYER_TYPE_OPTIONS,
   STYLE_TAG_OPTIONS,
@@ -9,6 +9,7 @@ import {
   optionLabel,
 } from "../utils/wardrobeOptions";
 import { colorToCss } from "../utils/recommendationEngine";
+import SuggestedTagsPanel from "./SuggestedTagsPanel";
 
 const CATEGORIES = ["Tops", "Bottoms", "Outerwear", "Shoes", "Accessories"];
 const COLOR_PICKER_OPTIONS = [
@@ -274,10 +275,19 @@ function ItemFormFields({
   occasionTags = [], onOccasionTagsChange = () => {},
   seasonTags = [], onSeasonTagsChange = () => {},
   isClassifying,
+  tagSuggestionStatus = "idle",
+  tagSuggestionMessage = "",
+  tagSuggestions = null,
   error,
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const clothingTypeOptions = clothingTypeOptionsForCategory(category);
+
+  useEffect(() => {
+    if (tagSuggestionStatus !== "idle" || tagSuggestions) {
+      setShowAdvanced(true);
+    }
+  }, [tagSuggestionStatus, tagSuggestions]);
 
   return (
     <div className="wardrobeAddForm">
@@ -322,6 +332,12 @@ function ItemFormFields({
         <span className="wardrobeFieldHelp">Choose one or more visible colors so recommendations can coordinate better.</span>
       </label>
 
+      <SuggestedTagsPanel
+        status={tagSuggestionStatus}
+        message={tagSuggestionMessage}
+        suggestions={tagSuggestions}
+      />
+
       <div className="wardrobeAdvancedCard">
         <button
           type="button"
@@ -334,7 +350,9 @@ function ItemFormFields({
         </button>
 
         <div className="wardrobeAdvancedHint">
-          Optional extras for better recommendations like fit, layering, seasons, and style.
+          {tagSuggestionStatus !== "idle"
+            ? "Suggested tags are ready to review here, and you can still change anything before saving."
+            : "Optional extras for better recommendations like fit, layering, seasons, and style."}
         </div>
 
         {showAdvanced ? (

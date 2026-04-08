@@ -1,6 +1,6 @@
 
 
-import { GUEST_WARDROBE_KEY, WARDROBE_KEY, SAVED_OUTFITS_KEY, OUTFIT_HISTORY_KEY, PLANNED_OUTFITS_KEY, PROFILE_KEY, ONBOARDING_ANSWERS_KEY, ONBOARDED_KEY, EVT_WARDROBE_CHANGED, REC_SEED_KEY, TIME_OVERRIDE_KEY, WEATHER_OVERRIDE_KEY, DEMO_AUTH_KEY, PROFILE_PIC_KEY, EVT_PROFILE_PIC_CHANGED, TUTORIAL_DONE_KEY } from "./constants";
+import { GUEST_WARDROBE_KEY, WARDROBE_KEY, SAVED_OUTFITS_KEY, OUTFIT_HISTORY_KEY, PLANNED_OUTFITS_KEY, TRIP_PACKING_KEY, PROFILE_KEY, ONBOARDING_ANSWERS_KEY, ONBOARDED_KEY, EVT_WARDROBE_CHANGED, REC_SEED_KEY, TIME_OVERRIDE_KEY, WEATHER_OVERRIDE_KEY, SEASONAL_PREFERENCES_KEY, DEMO_AUTH_KEY, PROFILE_PIC_KEY, EVT_PROFILE_PIC_CHANGED, TUTORIAL_DONE_KEY } from "./constants";
 import { safeParse } from "./helpers";
 import { normalizeItemMetadata, mergeWardrobeMetadata } from "./wardrobeOptions";
 
@@ -10,6 +10,7 @@ const KEY_STORAGE_MAP = [
   { key: SAVED_OUTFITS_KEY, storage: "local" },
   { key: OUTFIT_HISTORY_KEY, storage: "local" },
   { key: PLANNED_OUTFITS_KEY, storage: "local" },
+  { key: TRIP_PACKING_KEY, storage: "local" },
   { key: PROFILE_KEY, storage: "local" },
   { key: ONBOARDING_ANSWERS_KEY, storage: "local" },
   { key: ONBOARDED_KEY, storage: "local" },
@@ -177,6 +178,36 @@ export function makeObjectStore(storageKey, eventName) {
 const ALLOWED_WEATHER = new Set(["cold", "cool", "mild", "warm", "hot"]);
 const ALLOWED_TIMES = new Set(["morning", "work hours", "evening", "night"]);
 
+export function readSeasonalPreferences(user) {
+  const raw = localStorage.getItem(userKey(SEASONAL_PREFERENCES_KEY, user));
+  const parsed = raw ? safeParse(raw) : null;
+  const enabled = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? parsed.enabled !== false
+    : true;
+
+  return { enabled };
+}
+
+export function writeSeasonalPreferences(next, user) {
+  const current = readSeasonalPreferences(user);
+  const merged = next && typeof next === "object" && !Array.isArray(next)
+    ? { ...current, ...next }
+    : current;
+
+  localStorage.setItem(
+    userKey(SEASONAL_PREFERENCES_KEY, user),
+    JSON.stringify({ enabled: merged.enabled !== false })
+  );
+}
+
+export function readSeasonalMode(user) {
+  return readSeasonalPreferences(user).enabled;
+}
+
+export function writeSeasonalMode(enabled, user) {
+  writeSeasonalPreferences({ enabled: !!enabled }, user);
+}
+
 export function readWeatherOverride() {
   const raw = sessionStorage.getItem(WEATHER_OVERRIDE_KEY);
   const parsed = raw ? safeParse(raw) : null;
@@ -301,6 +332,7 @@ export {
   SAVED_OUTFITS_KEY,
   OUTFIT_HISTORY_KEY,
   PLANNED_OUTFITS_KEY,
+  TRIP_PACKING_KEY,
   PROFILE_KEY,
   ONBOARDING_ANSWERS_KEY,
   ONBOARDED_KEY,

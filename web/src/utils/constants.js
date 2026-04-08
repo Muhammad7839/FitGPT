@@ -12,12 +12,19 @@ export const OPEN_ADD_ITEM_FLAG = "fitgpt_open_add_item";
 export const SAVED_OUTFITS_KEY = "fitgpt_saved_outfits_v1";
 export const OUTFIT_HISTORY_KEY = "fitgpt_outfit_history_v1";
 export const PLANNED_OUTFITS_KEY = "fitgpt_planned_outfits_v1";
+export const TRIP_PACKING_KEY = "fitgpt_trip_packing_v1";
 export const REUSE_OUTFIT_KEY = "fitgpt_reuse_outfit_v1";
+export const UNDERUSED_ALERTS_KEY = "fitgpt_underused_alerts_v1";
+export const ROTATION_ALERT_PREFERENCES_KEY = "fitgpt_rotation_alert_preferences_v1";
+export const LAUNDRY_PREFERENCES_KEY = "fitgpt_laundry_preferences_v1";
 
 // Recommendations
 export const REC_SEED_KEY = "fitgpt_rec_seed_v1";
 export const WEATHER_OVERRIDE_KEY = "fitgpt_weather_override_v1";
 export const TIME_OVERRIDE_KEY = "fitgpt_time_override_v1";
+export const SEASONAL_PREFERENCES_KEY = "fitgpt_seasonal_preferences_v1";
+export const RECOMMENDATION_FEEDBACK_KEY = "fitgpt_recommendation_feedback_v1";
+export const RECOMMENDATION_PERSONALIZATION_KEY = "fitgpt_recommendation_personalization_v1";
 
 // User
 export const PROFILE_KEY = "fitgpt_profile_v1";
@@ -38,8 +45,13 @@ export const CHAT_HISTORY_KEY = "fitgpt_chat_history_v1";
 // Custom events
 export const EVT_WARDROBE_CHANGED = "fitgpt:guest-wardrobe-changed";
 export const EVT_SAVED_OUTFITS_CHANGED = "fitgpt:saved-outfits-changed";
+export const EVT_OUTFIT_HISTORY_CHANGED = "fitgpt:outfit-history-changed";
 export const EVT_PLANNED_OUTFITS_CHANGED = "fitgpt:planned-outfits-changed";
+export const EVT_TRIP_PACKING_CHANGED = "fitgpt:trip-packing-changed";
 export const EVT_PROFILE_PIC_CHANGED = "fitgpt:profile-pic-changed";
+export const EVT_LAUNDRY_CHANGED = "fitgpt:laundry-changed";
+export const EVT_RECOMMENDATION_FEEDBACK_CHANGED = "fitgpt:recommendation-feedback-changed";
+export const EVT_RECOMMENDATION_PERSONALIZATION_CHANGED = "fitgpt:recommendation-personalization-changed";
 
 // Fit tags (canonical set — used by Wardrobe form + recommendation scoring)
 export const FIT_TAGS = ["unknown", "slim", "regular", "relaxed", "oversized", "tailored", "athletic", "petite", "plus"];

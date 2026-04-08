@@ -1,4 +1,4 @@
-import { safeParse, makeId, formatToday, normalizeFitTag, normalizeItems, idsSignature, formatCardDate, formatPlanDate, buildWardrobeMap, labelFromSource, setReuseOutfit, monthKey } from "./helpers";
+import { safeParse, makeId, formatToday, normalizeFitTag, normalizeItems, idsSignature, formatCardDate, formatPlanDate, buildWardrobeMap, labelFromSource, setReuseOutfit, monthKey, getProfilePicUploadIssue, PROFILE_GIF_MAX_BYTES, PROFILE_PIC_MAX_BYTES } from "./helpers";
 import { REUSE_OUTFIT_KEY } from "./constants";
 
 describe("safeParse", () => {
@@ -59,6 +59,31 @@ describe("normalizeFitTag", () => {
     expect(normalizeFitTag("")).toBe("unknown");
     expect(normalizeFitTag(null)).toBe("unknown");
     expect(normalizeFitTag(undefined)).toBe("unknown");
+  });
+});
+
+describe("getProfilePicUploadIssue", () => {
+  test("allows regular images up to 10MB", () => {
+    const file = new File(["avatar"], "avatar.png", { type: "image/png" });
+    Object.defineProperty(file, "size", { value: PROFILE_PIC_MAX_BYTES, configurable: true });
+    expect(getProfilePicUploadIssue(file)).toBe("");
+  });
+
+  test("rejects oversized regular images", () => {
+    const file = new File(["avatar"], "avatar.png", { type: "image/png" });
+    Object.defineProperty(file, "size", { value: PROFILE_PIC_MAX_BYTES + 1, configurable: true });
+    expect(getProfilePicUploadIssue(file)).toBe("This profile photo is too large. Please upload one under 10MB.");
+  });
+
+  test("rejects oversized GIFs with the stricter limit", () => {
+    const file = new File(["avatar"], "avatar.gif", { type: "image/gif" });
+    Object.defineProperty(file, "size", { value: PROFILE_GIF_MAX_BYTES + 1, configurable: true });
+    expect(getProfilePicUploadIssue(file)).toBe("This GIF is too large. Please upload one under 3MB.");
+  });
+
+  test("rejects non-image files", () => {
+    const file = new File(["avatar"], "avatar.txt", { type: "text/plain" });
+    expect(getProfilePicUploadIssue(file)).toBe("Please choose an image file.");
   });
 });
 

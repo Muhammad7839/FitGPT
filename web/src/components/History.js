@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
+import OutfitHistoryCalendar from "./OutfitHistoryCalendar";
 
 import { loadWardrobe } from "../utils/userStorage";
 import { buildWardrobeMap, formatCardDate, idsSignature, labelFromSource, monthKey, setReuseOutfit } from "../utils/helpers";
@@ -29,6 +30,7 @@ export function HistoryContent() {
   const [msg, setMsg] = useState("");
   const [history, setHistory] = useState([]);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [historySurface, setHistorySurface] = useState("calendar");
 
   const wardrobe = useMemo(() => loadWardrobe(user), [user]);
 
@@ -157,6 +159,28 @@ export function HistoryContent() {
   return (
     <div className="tabContentFadeIn">
       <div className="historyControls" style={{ marginTop: 14, marginBottom: 8 }}>
+        <div className="historyViewToggle" role="tablist" aria-label="History view">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={historySurface === "calendar"}
+            className={historySurface === "calendar" ? "active" : ""}
+            onClick={() => setHistorySurface("calendar")}
+          >
+            Calendar
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={historySurface === "timeline"}
+            className={historySurface === "timeline" ? "active" : ""}
+            onClick={() => setHistorySurface("timeline")}
+          >
+            Timeline
+          </button>
+        </div>
+
+        {historySurface === "timeline" ? (
         <select
           className="historySelect"
           value={range}
@@ -166,6 +190,7 @@ export function HistoryContent() {
           <option value="30">Last 30 days</option>
           <option value="0">All</option>
         </select>
+        ) : null}
 
         <button className="btn" onClick={refresh} disabled={loading}>
           {loading ? "Loading..." : "Refresh"}
@@ -205,67 +230,85 @@ export function HistoryContent() {
         </div>
       )}
 
-      <div className="historyList">
-        {filtered.map((h) => {
-          const wornAt = formatCardDate(h?.worn_at);
-          const sourceLabel = labelFromSource(h?.source);
-          const title = h?.context?.occasion || "Outfit";
+      {historySurface === "calendar" ? (
+        <OutfitHistoryCalendar
+          history={history}
+          wardrobeById={wardrobeById}
+          onWearAgain={handleWearAgain}
+        />
+      ) : filtered.length > 0 ? (
+        <div className="historyList">
+          {filtered.map((h) => {
+            const wornAt = formatCardDate(h?.worn_at);
+            const sourceLabel = labelFromSource(h?.source);
+            const title = h?.context?.occasion || "Outfit";
 
-          const itemIds = Array.isArray(h?.item_ids) ? h.item_ids : [];
-          const previewIds = itemIds.slice(0, 4);
+            const itemIds = Array.isArray(h?.item_ids) ? h.item_ids : [];
+            const previewIds = itemIds.slice(0, 4);
 
-          return (
-            <div key={h?.history_id || h?.worn_at} className="historyCard">
-              <div className="historyCardLeft">
-                <div className="historyThumbGrid">
-                  {previewIds.map((id) => {
-                    const item = wardrobeById.get((id ?? "").toString().trim());
-                    const img = item?.image_url;
-                    const name = item?.name || "Item";
+            return (
+              <div key={h?.history_id || h?.worn_at} className="historyCard">
+                <div className="historyCardLeft">
+                  <div className="historyThumbGrid">
+                    {previewIds.map((id) => {
+                      const item = wardrobeById.get((id ?? "").toString().trim());
+                      const img = item?.image_url;
+                      const name = item?.name || "Item";
 
-                    return (
-                      <div key={`${h?.history_id}_${id}`} className="historyThumbTile">
-                        {img ? (
-                          <img className="historyThumbImg" src={img} alt={name} />
-                        ) : (
-                          <div className="historyThumbPh" />
-                        )}
-                        <div className="historyThumbLabel">{name}</div>
-                      </div>
-                    );
-                  })}
+                      return (
+                        <div key={`${h?.history_id}_${id}`} className="historyThumbTile">
+                          {img ? (
+                            <img className="historyThumbImg" src={img} alt={name} />
+                          ) : (
+                            <div className="historyThumbPh" />
+                          )}
+                          <div className="historyThumbLabel">{name}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="historyCardRight">
+                  <div className="historyMetaRow">
+                    <div className="historyMetaDate">{wornAt}</div>
+                    <span className={`historyBadge ${sourceLabel.toLowerCase()}`}>
+                      {sourceLabel}
+                    </span>
+                  </div>
+
+                  <div className="historyCardTitle">{title}</div>
+
+                  <div className="historyItemsLine">
+                    {previewIds
+                      .map(
+                        (id) =>
+                          wardrobeById.get((id ?? "").toString().trim())?.name || "Item"
+                      )
+                      .join(" | ")}
+                  </div>
+
+                  <div className="historyActions">
+                    <button className="btn primary" onClick={() => handleWearAgain(h)}>
+                      Wear Again
+                    </button>
+                  </div>
                 </div>
               </div>
-
-              <div className="historyCardRight">
-                <div className="historyMetaRow">
-                  <div className="historyMetaDate">{wornAt}</div>
-                  <span className={`historyBadge ${sourceLabel.toLowerCase()}`}>
-                    {sourceLabel}
-                  </span>
-                </div>
-
-                <div className="historyCardTitle">{title}</div>
-
-                <div className="historyItemsLine">
-                  {previewIds
-                    .map(
-                      (id) =>
-                        wardrobeById.get((id ?? "").toString().trim())?.name || "Item"
-                    )
-                    .join(" | ")}
-                </div>
-
-                <div className="historyActions">
-                  <button className="btn primary" onClick={() => handleWearAgain(h)}>
-                    Wear Again
-                  </button>
-                </div>
-              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <section className="card dashWide historyStatsCard historyRangeEmpty">
+          <div className="historyStatsEmpty">
+            <div className="historyStatsEmptyIcon">&#x1F5D3;</div>
+            <div className="historyStatsEmptyTitle">No outfits in this range</div>
+            <div className="historyStatsEmptySub">
+              Try another date range.
             </div>
-          );
-        })}
-      </div>
+          </div>
+        </section>
+      )}
 
       <section className="card dashWide historyStatsCard" style={{ marginTop: 18 }}>
         <div className="historyStatsTitle">This Month's Activity</div>
@@ -336,4 +379,3 @@ export default function History() {
     </div>
   );
 }
-
