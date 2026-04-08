@@ -1,18 +1,25 @@
 // web/src/components/Profile.js
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import ReactDOM from "react-dom";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { logout } from "../api/authApi";
 import { readDemoAuth, writeDemoAuth, loadProfilePic, saveProfilePic, loadAnswers, saveAnswers, mirrorUserDataToGuest } from "../utils/userStorage";
-import { fileToDataUrl } from "../utils/helpers";
+import { fileToDataUrl, getProfilePicUploadIssue } from "../utils/helpers";
 import { STYLE_OPTIONS, COMFORT_OPTIONS, DRESS_FOR_OPTIONS, BODY_TYPE_OPTIONS, GENDER_OPTIONS } from "../utils/formOptions";
+import {
+  readRotationAlertPreferences,
+  ROTATION_REMINDER_OPTIONS,
+  setRotationAlertsEnabled,
+  setRotationReminderPace,
+} from "../utils/rotationAlertPreferences";
 import GuestModeNotice from "./GuestModeNotice";
 
 const DEFAULT_PREFS = { style: [], comfort: [], dressFor: [], bodyType: null, gender: "", heightCm: "" };
 
 export default function Profile({ onResetOnboarding = () => {} }) {
   const navigate = useNavigate();
+  const { hash } = useLocation();
   const { user, setUser } = useAuth();
 
   const demoUser = useMemo(() => readDemoAuth(), []);
@@ -23,19 +30,47 @@ export default function Profile({ onResetOnboarding = () => {} }) {
   // ── Profile picture ──
   const [profilePic, setProfilePic] = useState(() => loadProfilePic(effectiveUser));
   const fileInputRef = useRef(null);
+  const [picMsg, setPicMsg] = useState("");
 
   useEffect(() => {
     setProfilePic(loadProfilePic(effectiveUser));
   }, [effectiveUser]);
 
+  const openPicMenu = useCallback(() => {
+    setPicMsg("");
+    setShowPicMenu(true);
+  }, []);
+
+  const closePicMenu = useCallback(() => {
+    setShowPicMenu(false);
+    setPendingPic(null);
+    setPicMsg("");
+  }, []);
+
   const handlePicSelect = async (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      e.target.value = "";
+      return;
+    }
+
+    const issue = getProfilePicUploadIssue(file);
+    if (issue) {
+      setPicMsg(issue);
+      setShowPicMenu(true);
+      e.target.value = "";
+      return;
+    }
+
     try {
       const dataUrl = await fileToDataUrl(file, 300);
       setPendingPic(dataUrl);
+      setPicMsg("");
       setShowPicMenu(true);
-    } catch {}
+    } catch {
+      setPicMsg("Could not read that image. Please try another file.");
+      setShowPicMenu(true);
+    }
     e.target.value = "";
   };
 
@@ -55,6 +90,10 @@ export default function Profile({ onResetOnboarding = () => {} }) {
 
   const [prefs, setPrefs] = useState(loadPrefs);
   const [prefsSaved, setPrefsSaved] = useState(false);
+  const [rotationPrefs, setRotationPrefs] = useState(() => readRotationAlertPreferences(effectiveUser));
+  const [alertsSaved, setAlertsSaved] = useState(false);
+  const smartAlertsRef = useRef(null);
+  const alertsSavedTimerRef = useRef(null);
 
   // ── Account settings state ──
   const [showEmailEdit, setShowEmailEdit] = useState(false);
@@ -71,6 +110,26 @@ export default function Profile({ onResetOnboarding = () => {} }) {
   useEffect(() => {
     setPrefs(loadPrefs());
   }, [loadPrefs]);
+
+  useEffect(() => {
+    setRotationPrefs(readRotationAlertPreferences(effectiveUser));
+  }, [effectiveUser]);
+
+  useEffect(() => {
+    if (hash !== "#smart-alerts") return;
+    const node = smartAlertsRef.current;
+    if (!node) return;
+
+    window.setTimeout(() => {
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+  }, [hash]);
+
+  useEffect(() => () => {
+    if (alertsSavedTimerRef.current) {
+      window.clearTimeout(alertsSavedTimerRef.current);
+    }
+  }, []);
 
   const updatePrefs = useCallback((updater) => {
     setPrefs((prev) => {
@@ -98,6 +157,26 @@ export default function Profile({ onResetOnboarding = () => {} }) {
     updatePrefs((prev) => ({ ...prev, [key]: value }));
   }, [updatePrefs]);
 
+  const flashAlertsSaved = useCallback(() => {
+    setAlertsSaved(true);
+    if (alertsSavedTimerRef.current) {
+      window.clearTimeout(alertsSavedTimerRef.current);
+    }
+    alertsSavedTimerRef.current = window.setTimeout(() => setAlertsSaved(false), 1500);
+  }, []);
+
+  const handleToggleRotationAlerts = useCallback(() => {
+    const next = setRotationAlertsEnabled(!rotationPrefs?.enabled, effectiveUser);
+    setRotationPrefs(next);
+    flashAlertsSaved();
+  }, [effectiveUser, flashAlertsSaved, rotationPrefs]);
+
+  const handleChangeReminderPace = useCallback((nextPace) => {
+    const next = setRotationReminderPace(nextPace, effectiveUser);
+    setRotationPrefs(next);
+    flashAlertsSaved();
+  }, [effectiveUser, flashAlertsSaved]);
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -118,7 +197,6 @@ export default function Profile({ onResetOnboarding = () => {} }) {
           <div className="profileHeaderRow">
             <div>
               <h1 className="heroTitle profileTitle">Profile</h1>
-              <p className="heroSub profileSub">Sign in to save and manage your profile.</p>
             </div>
           </div>
           <GuestModeNotice compact />
@@ -157,12 +235,12 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 src={profilePic}
                 alt="Profile"
                 className="profileAvatar"
-                onClick={() => setShowPicMenu(true)}
+                onClick={openPicMenu}
               />
             ) : (
               <div
                 className="profileAvatar profileAvatarPlaceholder"
-                onClick={() => setShowPicMenu(true)}
+                onClick={openPicMenu}
                 title="Upload profile picture"
               >
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -305,13 +383,71 @@ export default function Profile({ onResetOnboarding = () => {} }) {
               </div>
             </div>
 
+            <div className="profileSection profileSettingsSection" id="smart-alerts" ref={smartAlertsRef}>
+              <div className="profileSectionTop">
+                <div className="dashCardTitle" style={{ marginBottom: 0 }}>
+                  Smart Alerts
+                </div>
+                {alertsSaved ? (
+                  <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 700 }}>Saved</span>
+                ) : null}
+              </div>
+
+              <div className="profileSettingsIntro">
+                Control how FitGPT surfaces underused clothing so reminders stay helpful and not overwhelming.
+              </div>
+
+              <div className="profileSettingsCard">
+                <div className="profileSettingsHeader">
+                  <div>
+                    <div className="profilePrefLabel">Underused Clothing Alerts</div>
+                    <div className="profileSettingsSub">
+                      Use your outfit history to spotlight pieces that have not been worn in a while.
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className={`btn profileToggleBtn${rotationPrefs?.enabled ? " active" : ""}`}
+                    onClick={handleToggleRotationAlerts}
+                    aria-pressed={rotationPrefs?.enabled !== false}
+                  >
+                    {rotationPrefs?.enabled ? "Alerts On" : "Alerts Off"}
+                  </button>
+                </div>
+
+                <div className="profileSettingsGrid">
+                  <label className="wardrobeLabel">
+                    Reminder pace
+                    <select
+                      className="wardrobeInput"
+                      value={rotationPrefs?.reminderPace || "balanced"}
+                      onChange={(e) => handleChangeReminderPace(e.target.value)}
+                    >
+                      {ROTATION_REMINDER_OPTIONS.map((option) => (
+                        <option key={option.key} value={option.key}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="profileSettingsHintCard">
+                    <div className="profilePrefLabel">What this changes</div>
+                    <div className="profileSettingsHintText">
+                      Less often keeps alerts quiet longer after dismissal. Balanced is the default. More often brings items back sooner.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </>
         ) : (
           <>
             <div className="profileSignInCard">
               <div className="profileSignInIcon">&#x1F464;</div>
               <div className="profileSignInTitle">You're browsing as a guest</div>
-              <div className="profileSignInSub">Sign in to save outfits, sync your wardrobe, and access your full profile.</div>
               <button className="btn primary" type="button" onClick={() => navigate("/login")}>
                 Sign in
               </button>
@@ -523,10 +659,10 @@ export default function Profile({ onResetOnboarding = () => {} }) {
       )}
 
       {showPicMenu && ReactDOM.createPortal(
-        <div className="modalOverlay" role="dialog" aria-modal="true" onClick={() => { setShowPicMenu(false); setPendingPic(null); }}>
+        <div className="modalOverlay" role="dialog" aria-modal="true" onClick={closePicMenu}>
           <div className="modalCard profilePicMenu" onClick={(e) => e.stopPropagation()}>
             <div className="modalTitle">Profile Picture</div>
-            <div className="modalSub">Upload a photo or animated GIF as your avatar.</div>
+            <div className="modalSub">Upload a photo or animated GIF as your avatar. Photos can be up to 10MB, and GIFs up to 3MB.</div>
 
             <div className="profilePicMenuPreview">
               {(pendingPic !== null ? pendingPic : profilePic) ? (
@@ -540,12 +676,13 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 </div>
               )}
             </div>
+            {picMsg && <div className="noteBox" style={{ marginTop: 8 }}>{picMsg}</div>}
 
             <div className="profilePicMenuActions">
               <button
                 className="btnSecondary"
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => { setPicMsg(""); fileInputRef.current?.click(); }}
               >
                 {(pendingPic !== null ? pendingPic : profilePic) ? "Change Photo" : "Upload Photo"}
               </button>
@@ -553,7 +690,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 <button
                   className="btnSecondary"
                   type="button"
-                  onClick={() => setPendingPic("")}
+                  onClick={() => { setPendingPic(""); setPicMsg(""); }}
                 >
                   Reset
                 </button>
@@ -561,7 +698,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
               <button
                 className="btnSecondary"
                 type="button"
-                onClick={() => { setShowPicMenu(false); setPendingPic(null); }}
+                onClick={closePicMenu}
               >
                 Cancel
               </button>
@@ -570,10 +707,15 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 type="button"
                 disabled={pendingPic === null}
                 onClick={() => {
-                  saveProfilePic(pendingPic || "", effectiveUser);
-                  setProfilePic(pendingPic || "");
-                  setPendingPic(null);
-                  setShowPicMenu(false);
+                  try {
+                    saveProfilePic(pendingPic || "", effectiveUser);
+                    setProfilePic(pendingPic || "");
+                    setPendingPic(null);
+                    setPicMsg("");
+                    setShowPicMenu(false);
+                  } catch {
+                    setPicMsg("That profile picture is too large to save. Please choose a smaller image or GIF.");
+                  }
                 }}
               >
                 Save
