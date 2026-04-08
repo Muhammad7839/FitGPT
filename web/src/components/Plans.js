@@ -2,11 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
-import { loadWardrobe } from "../utils/userStorage";
+import { loadAnswers, loadWardrobe } from "../utils/userStorage";
 import { EVT_PLANNED_OUTFITS_CHANGED } from "../utils/constants";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
 import { buildWardrobeMap, formatPlanDate, setReuseOutfit, buildGoogleCalendarUrl } from "../utils/helpers";
 import GuestModeNotice from "./GuestModeNotice";
+import TripPackingPlanner from "./TripPackingPlanner";
 
 export default function Plans() {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ export default function Plans() {
   const [msg, setMsg] = useState("");
 
   const wardrobe = useMemo(() => loadWardrobe(user), [user]);
+  const answers = useMemo(() => loadAnswers(user), [user]);
 
   const wardrobeById = useMemo(() => buildWardrobeMap(wardrobe), [wardrobe]);
 
@@ -146,6 +148,7 @@ export default function Plans() {
             <div className="historySub">Sign in to save calendar-ready outfit plans</div>
           </div>
         </div>
+        <TripPackingPlanner wardrobe={wardrobe} user={user} answers={answers} />
         <GuestModeNotice compact />
       </div>
     );
@@ -165,6 +168,8 @@ export default function Plans() {
           </button>
         </div>
       </div>
+
+      <TripPackingPlanner wardrobe={wardrobe} user={user} answers={answers} />
 
       {msg && <div className="noteBox" style={{ marginTop: 12 }}>{msg}</div>}
 
