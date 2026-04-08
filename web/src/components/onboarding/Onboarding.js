@@ -7,6 +7,8 @@ const TOTAL_STEPS = 5;
 
 const DEFAULT_BODY_TYPE_ID = "rectangle";
 const DEFAULT_COMFORT = ["Balanced"];
+const HEIGHT_RANGE_START_INCHES = 4 * 12 + 8;
+const HEIGHT_RANGE_END_INCHES = 7 * 12;
 
 const BODY_TYPE_VISUALS = {
   pear: {
@@ -45,6 +47,26 @@ const BODY_TYPE_VISUALS = {
     silhouette: "M24 16 Q46 8 68 16 Q66 24 62 32 Q57 41 55 50 Q53 60 54 70 Q55 80 51 89 Q49 92 46 92 Q43 92 41 89 Q37 80 38 70 Q39 60 37 50 Q35 41 30 32 Q26 24 24 16 Z",
   },
 };
+
+const HEIGHT_OPTIONS = Array.from(
+  { length: HEIGHT_RANGE_END_INCHES - HEIGHT_RANGE_START_INCHES + 1 },
+  (_, index) => {
+    const totalInches = HEIGHT_RANGE_START_INCHES + index;
+    const feet = Math.floor(totalInches / 12);
+    const inches = totalInches % 12;
+    const cm = Math.round(totalInches * 2.54);
+
+    return {
+      value: String(cm),
+      label: `${feet}'${inches}" (${cm} cm)`,
+    };
+  }
+);
+
+const HEIGHT_LABEL_BY_CM = HEIGHT_OPTIONS.reduce((acc, option) => {
+  acc[option.value] = option.label;
+  return acc;
+}, {});
 
 function ShapeFigure({ bodyTypeId }) {
   const visual = BODY_TYPE_VISUALS[bodyTypeId] || BODY_TYPE_VISUALS.rectangle;
@@ -95,6 +117,12 @@ function clampStep(n) {
   const num = Number(n);
   if (!Number.isFinite(num)) return 1;
   return Math.min(Math.max(num, 1), TOTAL_STEPS);
+}
+
+function formatHeightLabel(heightCm) {
+  const value = (heightCm || "").toString().trim();
+  if (!value) return "";
+  return HEIGHT_LABEL_BY_CM[value] || `${value} cm`;
 }
 
 function withDefaultsOnFinish(answers) {
@@ -198,6 +226,16 @@ export default function Onboarding({
   const defaultBodyTypeLabel = useMemo(() => {
     return BODY_TYPE_OPTIONS.find((x) => x.id === DEFAULT_BODY_TYPE_ID)?.label ?? "Default";
   }, []);
+
+  const heightOptions = useMemo(() => {
+    const currentValue = (answers.heightCm || "").toString().trim();
+    if (!currentValue || HEIGHT_LABEL_BY_CM[currentValue]) return HEIGHT_OPTIONS;
+
+    return [
+      { value: currentValue, label: `${currentValue} cm` },
+      ...HEIGHT_OPTIONS,
+    ];
+  }, [answers.heightCm]);
 
   const renderStepContent = () => {
     if (step === 1) {
@@ -385,14 +423,19 @@ export default function Onboarding({
             </label>
 
             <label className="wardrobeLabel">
-              Height in centimeters (optional)
-              <input
+              Height (optional)
+              <select
                 className="wardrobeInput"
-                inputMode="numeric"
-                placeholder="Example: 170"
                 value={answers.heightCm || ""}
-                onChange={(e) => setSingle("heightCm", e.target.value.replace(/[^\d.]/g, ""))}
-              />
+                onChange={(e) => setSingle("heightCm", e.target.value)}
+              >
+                <option value="">Select height</option>
+                {heightOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
         </div>
@@ -445,7 +488,7 @@ export default function Onboarding({
           <button type="button" className="reviewCard reviewCardButton" onClick={() => jumpToStep(4)}>
             <div className="reviewLabel">Height</div>
             <div className="reviewValue">
-              {answers.heightCm ? `${answers.heightCm} cm` : "Skipped"}
+              {answers.heightCm ? formatHeightLabel(answers.heightCm) : "Skipped"}
             </div>
           </button>
         </div>
