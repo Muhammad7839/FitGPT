@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { wardrobeApi } from "../api/wardrobeApi";
 import { useAuth } from "../auth/AuthProvider";
 import { loadWardrobe, saveWardrobe, loadAnswers, mergeWardrobeWithLocalMetadata, readSeasonalMode, writeSeasonalMode } from "../utils/userStorage";
-import { classifyFromUrl, preloadModel } from "../utils/classifyClothing";
+import { preloadModel } from "../utils/classifyClothing";
 import { detectDuplicateFindings, loadIgnoredDuplicateKeys, mergeDuplicateItems, saveIgnoredDuplicateKeys } from "../utils/duplicateDetection";
 import { OPEN_ADD_ITEM_FLAG } from "../utils/constants";
 import { makeId, normalizeFitTag, fileToDataUrl, isNetworkError, onTiltMove, onTiltLeave } from "../utils/helpers";
@@ -354,6 +354,7 @@ export default function Wardrobe() {
   useEffect(() => {
     setSeasonalMode(readSeasonalMode(user));
   }, [user]);
+  const uploadErrorId = "wardrobe-upload-error";
 
   useEffect(() => {
     const ignored = loadIgnoredDuplicateKeys(user);
@@ -727,6 +728,7 @@ export default function Wardrobe() {
 
   const resetAddForm = () => {
     if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+    addCategoryTouchedRef.current = false;
     setPendingPreview("");
     setPendingFile(null);
     setFormName("");
@@ -757,6 +759,7 @@ export default function Wardrobe() {
 
     if (!fileIsOk(file)) {
       const message = uploadIssueMessage(file);
+      setShowUploadPanel(true);
       setUploadError(message);
       setToast(message);
       window.setTimeout(() => setToast(""), 2500);
@@ -772,6 +775,7 @@ export default function Wardrobe() {
       const niceName = file.name.replace(/\.[^/.]+$/, "");
       const fallbackCategory = guessCategoryFromName(file.name);
       setFormName(niceName);
+      addCategoryTouchedRef.current = false;
       setFormCategory(fallbackCategory);
       setFormColor("");
       setFormFitTag("unknown");
@@ -787,7 +791,6 @@ export default function Wardrobe() {
       setAddTaggingState("loading");
       setAddTaggingMessage("");
       setAddSuggestedTags(null);
-      addCategoryTouchedRef.current = false;
 
       setAddOpen(true);
 
@@ -825,6 +828,8 @@ export default function Wardrobe() {
         setAddSuggestedTags(null);
       });
     } catch {
+      setShowUploadPanel(true);
+      setUploadError("Upload failed. Try again.");
       setToast("Upload failed. Try again.");
       window.setTimeout(() => setToast(""), 2500);
     }
@@ -837,6 +842,7 @@ export default function Wardrobe() {
     if (!files.length) {
       if (fileList?.length) {
         const message = uploadBatchMessage(invalidFiles, 0);
+        setShowUploadPanel(true);
         setUploadError(message);
         setToast(message);
         window.setTimeout(() => setToast(""), 2500);
@@ -846,6 +852,7 @@ export default function Wardrobe() {
 
     if (invalidFiles.length) {
       const message = uploadBatchMessage(invalidFiles, files.length);
+      setShowUploadPanel(true);
       setUploadError(message);
       setToast(message);
       window.setTimeout(() => setToast(""), 2800);
@@ -1559,14 +1566,13 @@ export default function Wardrobe() {
               {seasonalMode ? "Seasonal filtering on" : "Seasonal filtering off"}
             </button>
           </div>
-          <div className="wardrobeSub">
-            {isGuestMode ? "Upload pieces and generate recommendations in guest mode. Guest wardrobes stay temporary." : "Upload and manage your clothing items"}
-            {!effectiveSignedIn && !backendOffline ? (
-              <button type="button" className="btn primary" onClick={() => navigate("/login")} style={{ marginLeft: 12, fontSize: "0.85rem", padding: "6px 16px", verticalAlign: "middle" }}>
+          {!effectiveSignedIn && !backendOffline ? (
+            <div className="wardrobeSub">
+              <button type="button" className="btn primary" onClick={() => navigate("/login")} style={{ fontSize: "0.85rem", padding: "6px 16px", verticalAlign: "middle" }}>
                 Sign in to save
               </button>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
 
         <input
@@ -1574,6 +1580,7 @@ export default function Wardrobe() {
           type="file"
           accept="image/png,image/jpeg,image/webp"
           multiple
+          aria-describedby={uploadError ? uploadErrorId : undefined}
           style={{ display: "none" }}
           onChange={(e) => onPickFile(e.target.files)}
         />
@@ -1622,7 +1629,6 @@ export default function Wardrobe() {
       <section className="wardrobeActionStrip">
         <div className="wardrobeActionCopy">
           <div className="wardrobeActionTitle">Add to your wardrobe</div>
-          <div className="wardrobeActionSub">Upload photos when you are ready. Keep the screen focused on your clothes the rest of the time.</div>
         </div>
         <div className="wardrobeActionButtons">
           <button type="button" className="wardrobeChooseBtn" onClick={openPicker}>
@@ -1639,6 +1645,18 @@ export default function Wardrobe() {
         </div>
       </section>
 
+      {uploadError ? (
+        <div
+          id={uploadErrorId}
+          className="wardrobeFormError"
+          role="alert"
+          aria-live="assertive"
+          style={{ marginTop: 12 }}
+        >
+          {uploadError}
+        </div>
+      ) : null}
+
       {showUploadPanel ? (
         <section
           className="card wardrobeUploadCard"
@@ -1653,7 +1671,7 @@ export default function Wardrobe() {
         >
           <div className="wardrobeUploadInner">
             <div className="wardrobeUploadTitle">Upload Wardrobe Items</div>
-            <div className="wardrobeUploadSub">Drag and drop photos or click to browse</div>
+            <div className="wardrobeUploadSub">Drag photos here or browse</div>
             <button
               type="button"
               className="wardrobeChooseBtn"
@@ -1666,7 +1684,6 @@ export default function Wardrobe() {
               Choose Files
             </button>
             <div className="wardrobeUploadHint">Supports JPG, PNG, WEBP up to 10MB each</div>
-            {uploadError ? <div className="wardrobeFormError" style={{ marginTop: 12, width: "min(520px, 100%)" }}>{uploadError}</div> : null}
           </div>
         </section>
       ) : null}
@@ -1969,10 +1986,10 @@ export default function Wardrobe() {
             <div className="wardrobeEmptyTitle">{tab === "archived" ? "No archived items yet" : tab === "favorites" ? "No favorites yet" : "Nothing matches right now"}</div>
             <div className="wardrobeEmptySub">
               {tab === "favorites"
-                ? "Tap the heart on wardrobe items you love and they will show up here."
+                ? "Favorite items appear here."
                 : tab === "archived"
-                  ? "Archived pieces will stay here until you bring them back into your active wardrobe."
-                  : "Try clearing filters, changing your search, or adding a few more items to your wardrobe."}
+                  ? "Archived items appear here."
+                  : "Try another search or add an item."}
             </div>
             {tab === "active" ? (
               <button type="button" className="btn primary wardrobeEmptyBtn" onClick={() => setShowUploadPanel(true)}>
@@ -1987,7 +2004,6 @@ export default function Wardrobe() {
         <div className="modalOverlay" role="dialog" aria-modal="true">
           <div className="modalCard">
             <div className="modalTitle">Add wardrobe item</div>
-            <div className="modalSub">Fill in the details before saving.</div>
 
             <div className="wardrobeAddPreview">
               {pendingPreview ? <img className="wardrobeAddPreviewImg" src={pendingPreview} alt="Preview" /> : null}
@@ -2051,7 +2067,6 @@ export default function Wardrobe() {
         <div className="modalOverlay" role="dialog" aria-modal="true">
           <div className="modalCard">
             <div className="modalTitle">Edit item</div>
-            <div className="modalSub">Update the details and save changes.</div>
 
             <ItemFormFields
               name={editName} onNameChange={setEditName}
