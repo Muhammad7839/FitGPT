@@ -8,6 +8,7 @@ import { classifyFromUrl, preloadModel } from "../utils/classifyClothing";
 import { detectDuplicateFindings, loadIgnoredDuplicateKeys, mergeDuplicateItems, saveIgnoredDuplicateKeys } from "../utils/duplicateDetection";
 import { OPEN_ADD_ITEM_FLAG } from "../utils/constants";
 import { makeId, normalizeFitTag, fileToDataUrl, isNetworkError, onTiltMove, onTiltLeave } from "../utils/helpers";
+import { generateItemTagSuggestions } from "../utils/tagSuggestions";
 import {
   LAYER_TYPE_OPTIONS,
   STYLE_TAG_OPTIONS,
@@ -180,6 +181,37 @@ function guessCategoryFromName(name) {
   return "Tops";
 }
 
+function hasSuggestedTagValues(suggestions) {
+  if (!suggestions) return false;
+  return Boolean(
+    (suggestions.color || "").trim() ||
+    (suggestions.clothingType || "").trim() ||
+    (Array.isArray(suggestions.styleTags) && suggestions.styleTags.length) ||
+    (Array.isArray(suggestions.occasionTags) && suggestions.occasionTags.length) ||
+    (Array.isArray(suggestions.seasonTags) && suggestions.seasonTags.length)
+  );
+}
+
+function applySuggestionToBulkEntry(entry, result) {
+  const suggestions = result?.suggestions || null;
+  const next = {
+    ...entry,
+    classifying: false,
+    taggingState: result?.status || "error",
+    taggingMessage: result?.message || "We couldn't generate tags. Please add them manually.",
+    suggestedTags: hasSuggestedTagValues(suggestions) ? suggestions : null,
+  };
+
+  if (result?.category && !entry.userOverrode) next.category = result.category;
+  if (!entry.color && suggestions?.color) next.color = suggestions.color;
+  if (!entry.clothingType && suggestions?.clothingType) next.clothingType = suggestions.clothingType;
+  if ((!Array.isArray(entry.styleTags) || entry.styleTags.length === 0) && suggestions?.styleTags?.length) next.styleTags = suggestions.styleTags;
+  if ((!Array.isArray(entry.occasionTags) || entry.occasionTags.length === 0) && suggestions?.occasionTags?.length) next.occasionTags = suggestions.occasionTags;
+  if ((!Array.isArray(entry.seasonTags) || entry.seasonTags.length === 0) && suggestions?.seasonTags?.length) next.seasonTags = suggestions.seasonTags;
+
+  return next;
+}
+
 export default function Wardrobe() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -193,6 +225,7 @@ export default function Wardrobe() {
   const fileInputRef = useRef(null);
   const filterRef = useRef(null);
   const localEditRef = useRef(false);
+  const addCategoryTouchedRef = useRef(false);
   const setItemsAndSave = useCallback((updater) => {
     setItems((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
@@ -278,6 +311,9 @@ export default function Wardrobe() {
   const [isSaving, setIsSaving] = useState(false);
   const [addError, setAddError] = useState("");
   const [isClassifying, setIsClassifying] = useState(false);
+  const [addTaggingState, setAddTaggingState] = useState("idle");
+  const [addTaggingMessage, setAddTaggingMessage] = useState("");
+  const [addSuggestedTags, setAddSuggestedTags] = useState(null);
 
 
 
@@ -666,6 +702,14 @@ export default function Wardrobe() {
     setFormSeasonTags([]);
     setAddError("");
     setIsClassifying(false);
+    setAddTaggingState("idle");
+    setAddTaggingMessage("");
+    setAddSuggestedTags(null);
+  };
+
+  const handleAddCategoryChange = (value) => {
+    addCategoryTouchedRef.current = true;
+    setFormCategory(value);
   };
 
   const openAddModalForFile = (file) => {
@@ -686,8 +730,9 @@ export default function Wardrobe() {
       setPendingFile(file);
 
       const niceName = file.name.replace(/\.[^/.]+$/, "");
+      const fallbackCategory = guessCategoryFromName(file.name);
       setFormName(niceName);
-      setFormCategory(guessCategoryFromName(file.name));
+      setFormCategory(fallbackCategory);
       setFormColor("");
       setFormFitTag("unknown");
       setFormClothingType("");
@@ -698,14 +743,47 @@ export default function Wardrobe() {
       setFormOccasionTags([]);
       setFormSeasonTags([]);
       setAddError("");
-        setIsClassifying(true);
+      setIsClassifying(true);
+      setAddTaggingState("loading");
+      setAddTaggingMessage("");
+      setAddSuggestedTags(null);
+      addCategoryTouchedRef.current = false;
 
       setAddOpen(true);
 
-      classifyFromUrl(preview).then((result) => {
-        if (result.category) setFormCategory(result.category);
+      generateItemTagSuggestions({
+        imageUrl: preview,
+        fileName: file.name,
+        fallbackCategory,
+      }).then((result) => {
         setIsClassifying(false);
-      }).catch(() => setIsClassifying(false));
+        setAddTaggingState(result.status);
+        setAddTaggingMessage(result.message);
+        setAddSuggestedTags(hasSuggestedTagValues(result.suggestions) ? result.suggestions : null);
+        if (result.category) {
+          setFormCategory((current) => (addCategoryTouchedRef.current ? current : result.category));
+        }
+        if (result.suggestions?.color) {
+          setFormColor((current) => (current.trim() ? current : result.suggestions.color));
+        }
+        if (result.suggestions?.clothingType) {
+          setFormClothingType((current) => (current.trim() ? current : result.suggestions.clothingType));
+        }
+        if (result.suggestions?.styleTags?.length) {
+          setFormStyleTags((current) => (current.length ? current : result.suggestions.styleTags));
+        }
+        if (result.suggestions?.occasionTags?.length) {
+          setFormOccasionTags((current) => (current.length ? current : result.suggestions.occasionTags));
+        }
+        if (result.suggestions?.seasonTags?.length) {
+          setFormSeasonTags((current) => (current.length ? current : result.suggestions.seasonTags));
+        }
+      }).catch(() => {
+        setIsClassifying(false);
+        setAddTaggingState("error");
+        setAddTaggingMessage("We couldn't generate tags. Please add them manually.");
+        setAddSuggestedTags(null);
+      });
     } catch {
       setToast("Upload failed. Try again.");
       window.setTimeout(() => setToast(""), 2500);
@@ -758,6 +836,9 @@ export default function Wardrobe() {
             occasionTags: [],
             seasonTags: [],
             classifying: true,
+            taggingState: "loading",
+            taggingMessage: "",
+            suggestedTags: null,
             userOverrode: false,
           };
         })
@@ -767,20 +848,26 @@ export default function Wardrobe() {
       setBulkOpen(true);
 
       for (const entry of entries) {
-        classifyFromUrl(entry.preview).then((result) => {
+        generateItemTagSuggestions({
+          imageUrl: entry.preview,
+          fileName: entry.file?.name || entry.name,
+          fallbackCategory: entry.category,
+        }).then((result) => {
           setBulkItems((prev) =>
             prev.map((e) => {
               if (e._key !== entry._key) return e;
-              return {
-                ...e,
-                classifying: false,
-                category: result.category && !e.userOverrode ? result.category : e.category,
-              };
+              return applySuggestionToBulkEntry(e, result);
             })
           );
         }).catch(() => {
           setBulkItems((prev) =>
-            prev.map((e) => e._key === entry._key ? { ...e, classifying: false } : e)
+            prev.map((e) => e._key === entry._key ? {
+              ...e,
+              classifying: false,
+              taggingState: "error",
+              taggingMessage: "We couldn't generate tags. Please add them manually.",
+              suggestedTags: null,
+            } : e)
           );
         });
       }
@@ -1849,7 +1936,7 @@ export default function Wardrobe() {
 
             <ItemFormFields
               name={formName} onNameChange={setFormName}
-              category={formCategory} onCategoryChange={setFormCategory}
+              category={formCategory} onCategoryChange={handleAddCategoryChange}
               color={formColor} onColorChange={setFormColor}
               fitTag={formFitTag} onFitTagChange={setFormFitTag}
               clothingType={formClothingType} onClothingTypeChange={setFormClothingType}
@@ -1860,6 +1947,9 @@ export default function Wardrobe() {
               occasionTags={formOccasionTags} onOccasionTagsChange={setFormOccasionTags}
               seasonTags={formSeasonTags} onSeasonTagsChange={setFormSeasonTags}
               isClassifying={isClassifying}
+              tagSuggestionStatus={addTaggingState}
+              tagSuggestionMessage={addTaggingMessage}
+              tagSuggestions={addSuggestedTags}
               error={addError}
             />
 

@@ -13,6 +13,7 @@ import {
   clothingTypeOptionsForCategory,
   optionLabel,
 } from "../utils/wardrobeOptions";
+import SuggestedTagsPanel from "./SuggestedTagsPanel";
 
 function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, isSaving, error }) {
   return (
@@ -42,6 +43,13 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
                 />
 
                 <div style={{ display: "grid", gap: 8 }}>
+                  <SuggestedTagsPanel
+                    status={entry.taggingState}
+                    message={entry.taggingMessage}
+                    suggestions={entry.suggestedTags}
+                    compact
+                  />
+
                   <input
                     className="wardrobeInput"
                     placeholder="Item name"
