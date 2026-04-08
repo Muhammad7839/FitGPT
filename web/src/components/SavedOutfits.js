@@ -154,12 +154,12 @@ export default function SavedOutfits() {
   if (!user) {
     return (
       <div className="onboarding onboardingPage">
-        <div className="historyTopBar">
-          <div>
-            <div className="historyTitle">Saved Outfits</div>
-          </div>
+      <div className="historyTopBar">
+        <div>
+          <div className="historyTitle">Saved Outfits</div>
         </div>
-        <GuestModeNotice compact />
+      </div>
+      <GuestModeNotice compact />
       </div>
     );
   }

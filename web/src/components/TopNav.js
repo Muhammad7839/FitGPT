@@ -12,7 +12,6 @@ const NAV_ITEMS = [
   { to: "/history", label: "Insights" },
   { to: "/saved-outfits", label: "Outfits" },
   { to: "/plans", label: "Plans" },
-  { to: "/packing", label: "Packing" },
   { to: "/profile", label: "Profile" },
 ];
 
