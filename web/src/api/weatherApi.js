@@ -57,6 +57,31 @@ async function fetchOpenMeteoWeather({ lat, lon }) {
   return { tempF, precipCondition: precipFromWmoCode(weatherCode) };
 }
 
+function buildForecastUrl({ lat, lon, days }) {
+  const forecastDays = Math.max(1, Math.min(Number(days) || 6, 10));
+
+  return (
+    "https://api.open-meteo.com/v1/forecast" +
+    `?latitude=${encodeURIComponent(lat)}` +
+    `&longitude=${encodeURIComponent(lon)}` +
+    "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,weather_code,wind_speed_10m_max" +
+    "&temperature_unit=fahrenheit" +
+    "&wind_speed_unit=mph" +
+    "&precipitation_unit=inch" +
+    `&forecast_days=${forecastDays}` +
+    "&timezone=auto"
+  );
+}
+
+async function fetchOpenMeteoForecast({ lat, lon, days = 6 }) {
+  const res = await fetch(buildForecastUrl({ lat, lon, days }));
+  if (!res.ok) throw new Error("Forecast request failed.");
+  const data = await res.json();
+  const normalized = normalizeForecastDays(data, days);
+  if (!normalized.length) throw new Error("Forecast data missing.");
+  return normalized;
+}
+
 export async function getWeatherContext() {
   const override = readWeatherOverride();
   if (override) {
@@ -100,6 +125,35 @@ export async function getWeatherContext() {
       category: "mild",
       precipCondition: "clear",
       message: "Weather unavailable, using default recommendations.",
+    };
+  }
+}
+
+export async function getWeatherForecast(days = 6) {
+  const coords = await getCoordsFromBrowser();
+  if (!coords) {
+    return {
+      status: "fallback",
+      source: "fallback",
+      days: [],
+      message: "Weather data is unavailable, showing general recommendations.",
+    };
+  }
+
+  try {
+    const forecastDays = await fetchOpenMeteoForecast({ ...coords, days });
+    return {
+      status: "ok",
+      source: "auto",
+      days: forecastDays,
+      message: "",
+    };
+  } catch {
+    return {
+      status: "fallback",
+      source: "fallback",
+      days: [],
+      message: "Weather data is unavailable, showing general recommendations.",
     };
   }
 }

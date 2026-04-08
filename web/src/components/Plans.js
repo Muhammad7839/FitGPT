@@ -7,6 +7,7 @@ import { EVT_PLANNED_OUTFITS_CHANGED } from "../utils/constants";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
 import { buildWardrobeMap, formatPlanDate, setReuseOutfit, buildGoogleCalendarUrl } from "../utils/helpers";
 import GuestModeNotice from "./GuestModeNotice";
+import UpcomingWeatherPlanner from "./UpcomingWeatherPlanner";
 import TripPackingPlanner from "./TripPackingPlanner";
 
 export default function Plans() {
@@ -148,6 +149,7 @@ export default function Plans() {
             <div className="historySub">Sign in to save calendar-ready outfit plans</div>
           </div>
         </div>
+        <UpcomingWeatherPlanner wardrobe={wardrobe} user={user} isGuestMode={!user} answers={answers} />
         <TripPackingPlanner wardrobe={wardrobe} user={user} answers={answers} />
         <GuestModeNotice compact />
       </div>
@@ -169,6 +171,7 @@ export default function Plans() {
         </div>
       </div>
 
+      <UpcomingWeatherPlanner wardrobe={wardrobe} user={user} isGuestMode={!user} answers={answers} />
       <TripPackingPlanner wardrobe={wardrobe} user={user} answers={answers} />
 
       {msg && <div className="noteBox" style={{ marginTop: 12 }}>{msg}</div>}
