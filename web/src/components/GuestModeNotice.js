@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 export default function GuestModeNotice({
   title = "Sign in to unlock this page",
-  message = "Guest mode is limited to wardrobe uploads and recommendations. Sign in to save outfits, plans, history, and profile details.",
+  message = "",
   compact = false,
 }) {
   const navigate = useNavigate();
@@ -11,9 +11,11 @@ export default function GuestModeNotice({
   return (
     <div className="profileEmpty" style={{ marginTop: compact ? 0 : 24 }}>
       <div className="dashStrong">{title}</div>
-      <div className="dashSubText" style={{ marginTop: 6 }}>
-        {message}
-      </div>
+      {message ? (
+        <div className="dashSubText" style={{ marginTop: 6 }}>
+          {message}
+        </div>
+      ) : null}
       <div style={{ marginTop: 12, display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
         <button className="btn primary" type="button" onClick={() => navigate("/login")}>
           Sign In
