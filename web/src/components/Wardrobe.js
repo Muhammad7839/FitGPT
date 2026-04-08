@@ -3,12 +3,13 @@ import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { wardrobeApi } from "../api/wardrobeApi";
 import { useAuth } from "../auth/AuthProvider";
-import { loadWardrobe, saveWardrobe, loadAnswers, mergeWardrobeWithLocalMetadata } from "../utils/userStorage";
+import { loadWardrobe, saveWardrobe, loadAnswers, mergeWardrobeWithLocalMetadata, readSeasonalMode, writeSeasonalMode } from "../utils/userStorage";
 import { classifyFromUrl, preloadModel } from "../utils/classifyClothing";
 import { detectDuplicateFindings, loadIgnoredDuplicateKeys, mergeDuplicateItems, saveIgnoredDuplicateKeys } from "../utils/duplicateDetection";
 import { OPEN_ADD_ITEM_FLAG } from "../utils/constants";
 import { makeId, normalizeFitTag, fileToDataUrl, isNetworkError, onTiltMove, onTiltLeave } from "../utils/helpers";
 import { generateItemTagSuggestions } from "../utils/tagSuggestions";
+import { getCurrentSeason, getSeasonLabel, getSeasonalWardrobeLabel, sortItemsBySeasonalRelevance, summarizeSeasonalCollection } from "../utils/seasonalWardrobe";
 import {
   LAYER_TYPE_OPTIONS,
   STYLE_TAG_OPTIONS,
@@ -258,6 +259,7 @@ export default function Wardrobe() {
   const [itemsLoaded, setItemsLoaded] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All Items");
   const [query, setQuery] = useState("");
+  const [seasonalMode, setSeasonalMode] = useState(() => readSeasonalMode(user));
   const [bodyFitOn, setBodyFitOn] = useState(false);
   const [view, setView] = useState("grid");
   const [toast, setToast] = useState("");
@@ -345,6 +347,13 @@ export default function Wardrobe() {
 
   const [isArchiving, setIsArchiving] = useState(false);
   const [pendingArchiveId, setPendingArchiveId] = useState(null);
+  const currentSeason = useMemo(() => getCurrentSeason(), []);
+  const currentSeasonLabel = useMemo(() => getSeasonLabel(currentSeason), [currentSeason]);
+  const seasonalWardrobeLabel = useMemo(() => getSeasonalWardrobeLabel(currentSeason), [currentSeason]);
+
+  useEffect(() => {
+    setSeasonalMode(readSeasonalMode(user));
+  }, [user]);
 
   useEffect(() => {
     const ignored = loadIgnoredDuplicateKeys(user);
@@ -634,7 +643,7 @@ export default function Wardrobe() {
     const q = query.trim().toLowerCase();
     const base = tab === "archived" ? archivedItems : tab === "favorites" ? favoriteItems : activeItems;
 
-    return base.filter((it) => {
+    const matches = base.filter((it) => {
       const catOk = activeCategory === "All Items" ? true : it.category === activeCategory;
       const fit = fitLabel(it.fit_tag || it.fitTag || it.fit);
       const itemColors = (it.color || "").split(",").map((c) => c.trim()).filter(Boolean);
@@ -671,7 +680,38 @@ export default function Wardrobe() {
       const seasonOk = filterSeasons.size === 0 || seasonTags.some((tag) => filterSeasons.has(tag));
       return catOk && qOk && colorOk && fitOk && clothingTypeOk && layerOk && styleOk && occasionOk && seasonOk;
     });
-  }, [activeItems, archivedItems, favoriteItems, tab, activeCategory, query, filterColors, filterFits, filterClothingTypes, filterLayers, filterStyles, filterOccasions, filterSeasons]);
+
+    return seasonalMode ? sortItemsBySeasonalRelevance(matches, currentSeason) : matches;
+  }, [activeItems, archivedItems, favoriteItems, tab, activeCategory, query, filterColors, filterFits, filterClothingTypes, filterLayers, filterStyles, filterOccasions, filterSeasons, seasonalMode, currentSeason]);
+
+  const seasonalSummarySource = useMemo(() => (
+    tab === "archived" ? archivedItems : tab === "favorites" ? favoriteItems : activeItems
+  ), [activeItems, archivedItems, favoriteItems, tab]);
+
+  const seasonalSummary = useMemo(
+    () => summarizeSeasonalCollection(seasonalSummarySource, currentSeason),
+    [seasonalSummarySource, currentSeason]
+  );
+
+  const seasonalSummaryText = useMemo(() => {
+    if (!seasonalMode) return "Seasonal filtering is off, so you are seeing your full wardrobe.";
+    if (!seasonalSummary.hasSeasonalMetadata) return `Filtered by current season. Add season tags to make your ${currentSeasonLabel.toLowerCase()} wardrobe smarter.`;
+
+    const parts = [];
+    if (seasonalSummary.inSeasonCount) parts.push(`${seasonalSummary.inSeasonCount} in season`);
+    if (seasonalSummary.allSeasonCount) parts.push(`${seasonalSummary.allSeasonCount} all season`);
+    if (seasonalSummary.overlapCount) parts.push(`${seasonalSummary.overlapCount} season overlap`);
+    if (seasonalSummary.outOfSeasonCount) parts.push(`${seasonalSummary.outOfSeasonCount} out of season`);
+    return `Filtered by current season. ${parts.join(" · ")}.`;
+  }, [seasonalMode, seasonalSummary, currentSeasonLabel]);
+
+  const toggleSeasonalMode = () => {
+    setSeasonalMode((prev) => {
+      const next = !prev;
+      writeSeasonalMode(next, user);
+      return next;
+    });
+  };
 
   const openPicker = () => fileInputRef.current?.click();
 
@@ -1501,6 +1541,23 @@ export default function Wardrobe() {
         <div>
           <div className="wardrobeTitleRow">
             <div className="wardrobeTitle">Wardrobe</div>
+            <div className="wardrobeSeasonIndicator">{currentSeasonLabel}</div>
+          </div>
+          <div className="wardrobeSeasonBanner">
+            <div className="wardrobeSeasonCopy">
+              <div className="wardrobeSeasonEyebrow">Seasonal Wardrobe</div>
+              <div className="wardrobeSeasonHeadline">{seasonalWardrobeLabel}</div>
+              <div className="wardrobeSeasonMeta">{seasonalMode ? "Filtered by current season" : "Seasonal filtering is off"}</div>
+              <div className="wardrobeSeasonNote">{seasonalSummaryText}</div>
+            </div>
+            <button
+              type="button"
+              className={seasonalMode ? "wardrobeChipBtn active wardrobeSeasonToggle" : "wardrobeChipBtn wardrobeSeasonToggle"}
+              onClick={toggleSeasonalMode}
+              aria-pressed={seasonalMode}
+            >
+              {seasonalMode ? "Seasonal filtering on" : "Seasonal filtering off"}
+            </button>
           </div>
           <div className="wardrobeSub">
             {isGuestMode ? "Upload pieces and generate recommendations in guest mode. Guest wardrobes stay temporary." : "Upload and manage your clothing items"}
@@ -1888,6 +1945,8 @@ export default function Wardrobe() {
             item={it}
             view={view}
             tab={tab}
+            seasonalModeEnabled={seasonalMode}
+            currentSeason={currentSeason}
             bodyFitOn={bodyFitOn}
             userBodyType={userBodyType}
             bodyFitRating={bodyFitRating}

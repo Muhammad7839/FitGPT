@@ -3,6 +3,7 @@ import { normalizeFitTag } from "../utils/helpers";
 import { FIT_TAG_OPTIONS } from "./ItemFormFields";
 import { optionLabel } from "../utils/wardrobeOptions";
 import { colorToCss } from "../utils/recommendationEngine";
+import { getSeasonMatch } from "../utils/seasonalWardrobe";
 
 function fitLabel(value) {
   const v = normalizeFitTag(value);
@@ -27,6 +28,11 @@ function MetaBadge({ children }) {
       {children}
     </span>
   );
+}
+
+function SeasonBadge({ match }) {
+  if (!match?.label) return null;
+  return <span className={`wardrobeSeasonBadge ${match.tone}`}>{match.label}</span>;
 }
 
 function ItemActions({ item, tab, onToggleFavorite, onEdit, onArchive, onUnarchive, onDelete, isBusy, allowFavorites, allowArchive }) {
@@ -134,16 +140,20 @@ function WardrobeItemCard({
   allowArchive = true,
   onTiltMove,
   onTiltLeave,
+  seasonalModeEnabled = false,
+  currentSeason = "",
 }) {
   const fitText = fitLabel(item.fit_tag || item.fitTag || item.fit);
   const isBusy = isItemBusy(item.id);
   const actionProps = { item, tab, onToggleFavorite, onEdit, onArchive, onUnarchive, onDelete, isBusy, allowFavorites, allowArchive };
   const badges = metadataSummary(item);
   const colors = colorList(item.color);
+  const seasonMatch = seasonalModeEnabled ? getSeasonMatch(item, currentSeason) : null;
+  const seasonToneClass = seasonMatch ? `wardrobeSeasonTone-${seasonMatch.tone}` : "";
 
   if (view === "list") {
     return (
-      <div className="wardrobeRowItem">
+      <div className={`wardrobeRowItem ${seasonToneClass}`.trim()}>
         <div className="wardrobeRowLeft">
           <div className="wardrobeThumbWrap sm">
             {item.image_url ? (
@@ -169,6 +179,7 @@ function WardrobeItemCard({
                 ))}
               </div>
             ) : null}
+            <SeasonBadge match={seasonMatch} />
             {badges.length ? (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
                 {badges.map((badge) => <MetaBadge key={badge}>{badge}</MetaBadge>)}
@@ -185,7 +196,7 @@ function WardrobeItemCard({
   }
 
   return (
-    <div className="wardrobeCard" onPointerMove={onTiltMove} onPointerLeave={onTiltLeave}>
+    <div className={`wardrobeCard ${seasonToneClass}`.trim()} onPointerMove={onTiltMove} onPointerLeave={onTiltLeave}>
       <div className="wardrobeThumbWrap">
         {item.image_url ? (
           <img className="wardrobeThumbImg" src={item.image_url} alt={item.name} />
@@ -209,6 +220,7 @@ function WardrobeItemCard({
             ))}
           </div>
         ) : null}
+        <SeasonBadge match={seasonMatch} />
         <BodyFitBadge item={item} bodyFitOn={bodyFitOn} userBodyType={userBodyType} bodyFitRating={bodyFitRating} />
 
         {badges.length ? (
