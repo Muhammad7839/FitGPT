@@ -5,6 +5,7 @@ import { wardrobeApi } from "../api/wardrobeApi";
 import { useAuth } from "../auth/AuthProvider";
 import { loadWardrobe, saveWardrobe, loadAnswers, mergeWardrobeWithLocalMetadata } from "../utils/userStorage";
 import { classifyFromUrl, preloadModel } from "../utils/classifyClothing";
+import { detectDuplicateFindings, loadIgnoredDuplicateKeys, mergeDuplicateItems, saveIgnoredDuplicateKeys } from "../utils/duplicateDetection";
 import { OPEN_ADD_ITEM_FLAG } from "../utils/constants";
 import { makeId, normalizeFitTag, fileToDataUrl, isNetworkError, onTiltMove, onTiltLeave } from "../utils/helpers";
 import {
@@ -21,7 +22,7 @@ import {
 import ItemFormFields, { CATEGORIES as ITEM_CATEGORIES, FIT_TAG_OPTIONS } from "./ItemFormFields";
 import WardrobeItemCard from "./WardrobeItemCard";
 import BulkUploadModal from "./BulkUploadModal";
-import DuplicateDetector from "./DuplicateDetector";
+import DuplicateReviewModal from "./DuplicateReviewModal";
 
 const CATEGORIES = ["All Items", ...ITEM_CATEGORIES];
 
@@ -284,6 +285,11 @@ export default function Wardrobe() {
   const [bulkItems, setBulkItems] = useState([]);
   const [isBulkSaving, setIsBulkSaving] = useState(false);
   const [bulkError, setBulkError] = useState("");
+  const [duplicateScan, setDuplicateScan] = useState({ status: "idle", findings: [], scannedIds: [], scannedAt: 0 });
+  const [duplicateReviewOpen, setDuplicateReviewOpen] = useState(false);
+  const [pendingDuplicateAction, setPendingDuplicateAction] = useState(null);
+  const [ignoredDuplicateKeys, setIgnoredDuplicateKeys] = useState(() => loadIgnoredDuplicateKeys(user));
+  const duplicateScanRef = useRef(0);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -303,6 +309,87 @@ export default function Wardrobe() {
 
   const [isArchiving, setIsArchiving] = useState(false);
   const [pendingArchiveId, setPendingArchiveId] = useState(null);
+
+  useEffect(() => {
+    const ignored = loadIgnoredDuplicateKeys(user);
+    setIgnoredDuplicateKeys(ignored);
+    setDuplicateScan({ status: "idle", findings: [], scannedIds: [], scannedAt: 0 });
+    setDuplicateReviewOpen(false);
+    setPendingDuplicateAction(null);
+  }, [user]);
+
+  useEffect(() => {
+    saveIgnoredDuplicateKeys(ignoredDuplicateKeys, user);
+  }, [ignoredDuplicateKeys, user]);
+
+  useEffect(() => {
+    setDuplicateScan((prev) => {
+      if (!prev.findings.length) return prev;
+      const itemIds = new Set(items.map((item) => String(item.id || "")));
+      const nextFindings = prev.findings.filter(
+        (finding) => itemIds.has(String(finding.leftItem?.id || "")) && itemIds.has(String(finding.rightItem?.id || ""))
+      );
+      if (nextFindings.length === prev.findings.length) return prev;
+      return {
+        ...prev,
+        findings: nextFindings,
+        status: nextFindings.length ? "found" : (prev.status === "loading" ? "loading" : "clear"),
+      };
+    });
+  }, [items]);
+
+  const runDuplicateScan = useCallback(async (allItems, newItems = [], options = {}) => {
+    const scanItems = Array.isArray(newItems) ? newItems.filter(Boolean) : [];
+    const scannedIds = scanItems.map((item) => String(item?.id || "")).filter(Boolean);
+    if (!scannedIds.length) {
+      setDuplicateScan({ status: "clear", findings: [], scannedIds: [], scannedAt: Date.now() });
+      return [];
+    }
+
+    const runId = Date.now() + Math.random();
+    duplicateScanRef.current = runId;
+    setDuplicateScan({ status: "loading", findings: [], scannedIds, scannedAt: Date.now() });
+
+    try {
+      const findings = await detectDuplicateFindings({
+        items: allItems,
+        newItemIds: scannedIds,
+        ignoredPairKeys: ignoredDuplicateKeys,
+      });
+
+      if (duplicateScanRef.current !== runId) return findings;
+
+      const nextState = {
+        status: findings.length ? "found" : "clear",
+        findings,
+        scannedIds,
+        scannedAt: Date.now(),
+      };
+      setDuplicateScan(nextState);
+      if (findings.length && options.openOnFound !== false) setDuplicateReviewOpen(true);
+      return findings;
+    } catch {
+      if (duplicateScanRef.current === runId) {
+        setDuplicateScan({ status: "clear", findings: [], scannedIds, scannedAt: Date.now() });
+      }
+      return [];
+    }
+  }, [ignoredDuplicateKeys]);
+
+  const applyDuplicateScanResult = useCallback((nextItems, focusItems = [], options = {}) => {
+    void runDuplicateScan(nextItems, focusItems, options);
+  }, [runDuplicateScan]);
+
+  const removeDuplicateFinding = useCallback((pairKey) => {
+    setDuplicateScan((prev) => {
+      const nextFindings = prev.findings.filter((finding) => finding.pairKey !== pairKey);
+      return {
+        ...prev,
+        findings: nextFindings,
+        status: nextFindings.length ? "found" : "clear",
+      };
+    });
+  }, []);
 
   React.useEffect(() => {
     let alive = true;
@@ -756,7 +843,9 @@ export default function Wardrobe() {
           is_favorite: false,
         });
 
-        setItemsAndSave((prev) => [localItem, ...prev]);
+        const nextItems = [localItem, ...items];
+        setItemsAndSave(nextItems);
+        applyDuplicateScanResult(nextItems, [localItem]);
 
         setIsSaving(false);
         setAddOpen(false);
@@ -804,7 +893,9 @@ export default function Wardrobe() {
         is_favorite: created?.is_favorite ?? false,
       });
 
-      setItemsAndSave((prev) => [localShadow, ...prev]);
+      const nextItems = [localShadow, ...items];
+      setItemsAndSave(nextItems);
+      applyDuplicateScanResult(nextItems, [localShadow]);
 
       setIsSaving(false);
       setAddOpen(false);
@@ -836,7 +927,9 @@ export default function Wardrobe() {
           is_favorite: false,
         });
 
-        setItemsAndSave((prev) => [localItem, ...prev]);
+        const nextItems = [localItem, ...items];
+        setItemsAndSave(nextItems);
+        applyDuplicateScanResult(nextItems, [localItem]);
 
         setIsSaving(false);
         setAddOpen(false);
@@ -867,7 +960,9 @@ export default function Wardrobe() {
         is_favorite: false,
       });
 
-      setItemsAndSave((prev) => [localItem, ...prev]);
+      const nextItems = [localItem, ...items];
+      setItemsAndSave(nextItems);
+      applyDuplicateScanResult(nextItems, [localItem]);
 
       setIsSaving(false);
       setAddOpen(false);
@@ -967,7 +1062,9 @@ export default function Wardrobe() {
         }
       }
 
-      setItemsAndSave((prev) => [...newItems, ...prev]);
+      const nextItems = [...newItems, ...items];
+      setItemsAndSave(nextItems);
+      applyDuplicateScanResult(nextItems, newItems);
       setIsBulkSaving(false);
       setBulkOpen(false);
       setBulkItems([]);
@@ -989,6 +1086,35 @@ export default function Wardrobe() {
     if (isDeleting) return;
     setConfirmOpen(false);
     setPendingDeleteId(null);
+  };
+
+  const closeDuplicateReview = () => {
+    setDuplicateReviewOpen(false);
+    setPendingDuplicateAction(null);
+  };
+
+  const keepDuplicateItems = (finding) => {
+    if (!finding?.pairKey) return;
+    const nextIgnored = [...new Set([...ignoredDuplicateKeys, finding.pairKey])];
+    setIgnoredDuplicateKeys(nextIgnored);
+    removeDuplicateFinding(finding.pairKey);
+    setPendingDuplicateAction(null);
+    setToast("We will stop flagging this pair as a duplicate.");
+    window.setTimeout(() => setToast(""), 2200);
+  };
+
+  const handleDuplicateActionChange = (nextAction) => {
+    if (!nextAction) {
+      setPendingDuplicateAction(null);
+      return;
+    }
+
+    if (nextAction.confirmNow) {
+      setPendingDuplicateAction((prev) => prev ? { ...prev, confirmNow: true } : prev);
+      return;
+    }
+
+    setPendingDuplicateAction({ ...nextAction, isProcessing: false, confirmNow: false });
   };
 
   const confirmDelete = async () => {
@@ -1072,6 +1198,107 @@ export default function Wardrobe() {
       setPendingArchiveId(null);
     }
   };
+
+  const syncMergedItemBestEffort = useCallback(async (mergedItem, removeId) => {
+    if (!effectiveSignedIn) return;
+
+    try {
+      await wardrobeApi.updateItem(mergedItem.id, buildWardrobeApiPayload({
+        name: mergedItem.name,
+        category: mergedItem.category,
+        color: mergedItem.color,
+        fitTag: mergedItem.fit_tag || mergedItem.fitTag || mergedItem.fit,
+        clothingType: mergedItem.clothing_type,
+        layerType: mergedItem.layer_type,
+        isOnePiece: mergedItem.is_one_piece,
+        setId: mergedItem.set_id,
+        styleTags: mergedItem.style_tags,
+        occasionTags: mergedItem.occasion_tags,
+        seasonTags: mergedItem.season_tags,
+        imageUrl: mergedItem.image_url,
+      }));
+    } catch (e) {
+      if (isNetworkError(e)) setBackendOffline(true);
+    }
+
+    try {
+      await wardrobeApi.deleteItem(removeId);
+    } catch (e) {
+      if (isNetworkError(e)) setBackendOffline(true);
+    }
+  }, [effectiveSignedIn]);
+
+  useEffect(() => {
+    if (!pendingDuplicateAction?.confirmNow || pendingDuplicateAction?.isProcessing) return;
+
+    let cancelled = false;
+
+    async function run() {
+      const action = pendingDuplicateAction;
+      setPendingDuplicateAction((prev) => prev ? { ...prev, isProcessing: true } : prev);
+
+      if (action.mode === "delete") {
+        const nextItems = items.filter((item) => String(item.id) !== String(action.removeId));
+        const focusItem = nextItems.find((item) => String(item.id) === String(action.survivorId));
+
+        setItemsAndSave(nextItems);
+        removeDuplicateFinding(action.pairKey);
+
+        try {
+          if (effectiveSignedIn) await wardrobeApi.deleteItem(action.removeId);
+        } catch (e) {
+          if (isNetworkError(e)) setBackendOffline(true);
+        }
+
+        if (!cancelled) {
+          if (focusItem) applyDuplicateScanResult(nextItems, [focusItem], { openOnFound: false });
+          else setDuplicateScan({ status: "clear", findings: [], scannedIds: [], scannedAt: Date.now() });
+          setPendingDuplicateAction(null);
+          setToast("Duplicate item removed.");
+          window.setTimeout(() => setToast(""), 2200);
+        }
+        return;
+      }
+
+      if (action.mode === "merge") {
+        const keepItem = items.find((item) => String(item.id) === String(action.keepId));
+        const removeItem = items.find((item) => String(item.id) === String(action.removeId));
+        if (!keepItem || !removeItem) {
+          if (!cancelled) setPendingDuplicateAction(null);
+          return;
+        }
+
+        const mergedItem = mergeDuplicateItems(keepItem, removeItem);
+        const nextItems = items
+          .filter((item) => String(item.id) !== String(action.removeId))
+          .map((item) => (String(item.id) === String(action.keepId) ? mergedItem : item));
+
+        setItemsAndSave(nextItems);
+        removeDuplicateFinding(action.pairKey);
+        await syncMergedItemBestEffort(mergedItem, action.removeId);
+
+        if (!cancelled) {
+          applyDuplicateScanResult(nextItems, [mergedItem], { openOnFound: false });
+          setPendingDuplicateAction(null);
+          setToast("Items merged into one wardrobe entry.");
+          window.setTimeout(() => setToast(""), 2200);
+        }
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    applyDuplicateScanResult,
+    effectiveSignedIn,
+    items,
+    pendingDuplicateAction,
+    removeDuplicateFinding,
+    setItemsAndSave,
+    syncMergedItemBestEffort,
+  ]);
 
   const openEdit = (item) => {
     if (!item) return;
@@ -1519,9 +1746,53 @@ export default function Wardrobe() {
         </section>
       ) : null}
 
-      {tab === "active" && items.length >= 2 && (
-        <DuplicateDetector items={items} user={user} />
-      )}
+      {duplicateScan.status !== "idle" ? (
+        <section
+          className={`duplicateScanBanner ${duplicateScan.status}`}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="duplicateScanCopy">
+            <div className="duplicateScanEyebrow">Wardrobe Organization</div>
+            <div className="duplicateScanTitle">
+              {duplicateScan.status === "loading"
+                ? "Checking your latest upload for duplicates"
+                : duplicateScan.status === "found"
+                  ? "Possible duplicate detected"
+                  : "No duplicates found"}
+            </div>
+            <div className="duplicateScanSub">
+              {duplicateScan.status === "loading"
+                ? "We are comparing your newest wardrobe items across category, color, style, fit, and image similarity."
+                : duplicateScan.status === "found"
+                  ? `${duplicateScan.findings.length} potential duplicate ${duplicateScan.findings.length === 1 ? "pair was" : "pairs were"} found. These items look similar.`
+                  : "Your latest upload stayed below the duplicate-confidence threshold."}
+            </div>
+          </div>
+
+          <div className="duplicateScanActions">
+            {duplicateScan.status === "found" ? (
+              <button type="button" className="wardrobeChooseBtn duplicateReviewBtn" onClick={() => setDuplicateReviewOpen(true)}>
+                Review matches
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="wardrobeChipBtn"
+              onClick={() => {
+                if (duplicateScan.status === "found") {
+                  setDuplicateReviewOpen(false);
+                  return;
+                }
+                setDuplicateScan((prev) => ({ ...prev, status: "idle" }));
+                setDuplicateReviewOpen(false);
+              }}
+            >
+              {duplicateScan.status === "found" ? "Later" : "Hide"}
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <section className={view === "grid" ? "wardrobeGrid" : "wardrobeList"}>
         {filtered.map((it) => (
@@ -1616,6 +1887,16 @@ export default function Wardrobe() {
           error={bulkError}
         />
       ) : null}
+
+      <DuplicateReviewModal
+        open={duplicateReviewOpen}
+        findings={duplicateScan.findings}
+        isDetecting={duplicateScan.status === "loading"}
+        pendingAction={pendingDuplicateAction}
+        onClose={closeDuplicateReview}
+        onStartAction={handleDuplicateActionChange}
+        onKeepBoth={keepDuplicateItems}
+      />
 
       {editOpen ? ReactDOM.createPortal(
         <div className="modalOverlay" role="dialog" aria-modal="true">
