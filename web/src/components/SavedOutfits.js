@@ -157,7 +157,6 @@ export default function SavedOutfits() {
         <div className="historyTopBar">
           <div>
             <div className="historyTitle">Saved Outfits</div>
-            <div className="historySub">Sign in to save and revisit outfit combinations</div>
           </div>
         </div>
         <GuestModeNotice compact />
