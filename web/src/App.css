@@ -14004,13 +14004,28 @@ select:focus-visible {
   font-size: 12px;
   box-shadow: none;
   justify-content: flex-start;
-  white-space: normal;
+  align-items: center;
+  white-space: nowrap;
   text-align: left;
+  overflow: hidden;
 }
 
 .dashFeedbackBtn.ghost {
   background: transparent;
   box-shadow: none;
+}
+
+.dashFeedbackEmoji,
+.dashFeedbackBtnGlyph {
+  flex: 0 0 auto;
+}
+
+.dashFeedbackBtnText {
+  display: inline-block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
 .dashFeedbackBtn.explain.ghost,
@@ -14111,6 +14126,7 @@ select:focus-visible {
     min-height: 38px;
     padding: 0 12px;
     font-size: 12px;
+    white-space: normal;
   }
 }
 
