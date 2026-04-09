@@ -3790,6 +3790,88 @@ describe("recommendations without any feedback", () => {
     expect(sparseProfile.personalizationLevel).toBeLessThan(30);
   });
 
+  test("established feedback weights recommendations more strongly than sparse feedback", () => {
+    const wardrobe = makeWardrobe();
+    const targetOutfit = [
+      wardrobe.find((item) => item.id === "t1"),
+      wardrobe.find((item) => item.id === "b1"),
+      wardrobe.find((item) => item.id === "s1"),
+    ].filter(Boolean);
+
+    const sparseProfile = buildPersonalizationProfile(
+      [{ feedback: "like", timestamp: Date.now(), colors: ["white"], clothingTypes: ["t-shirt"], styleTags: [], itemIds: ["t1"] }],
+      [],
+      [],
+      wardrobe
+    );
+
+    const richProfile = buildPersonalizationProfile(
+      Array.from({ length: 10 }, () => ({
+        feedback: "like",
+        timestamp: Date.now(),
+        colors: ["white", "black"],
+        clothingTypes: ["t-shirt", "jeans"],
+        styleTags: ["casual"],
+        itemIds: ["t1", "b1", "s1"],
+      })),
+      Array.from({ length: 6 }, () => ({
+        worn_at: new Date().toISOString(),
+        item_ids: ["t1", "b1", "s1"],
+      })),
+      [],
+      wardrobe
+    );
+
+    const sparseScore = scoreOutfitForDisplay(targetOutfit, {
+      weatherCategory: "mild",
+      timeCategory: "morning",
+      bodyTypeId: "rectangle",
+      feedbackProfile: sparseProfile,
+      personalizationProfile: sparseProfile,
+    });
+
+    const richScore = scoreOutfitForDisplay(targetOutfit, {
+      weatherCategory: "mild",
+      timeCategory: "morning",
+      bodyTypeId: "rectangle",
+      feedbackProfile: richProfile,
+      personalizationProfile: richProfile,
+    });
+
+    expect(richProfile.personalizationLevel).toBeGreaterThan(sparseProfile.personalizationLevel);
+    expect(richScore).toBeGreaterThanOrEqual(sparseScore);
+  });
+
+  test("established personalization lowers exploration noise over time", () => {
+    const wardrobe = makeWardrobe();
+
+    const sparseProfile = buildPersonalizationProfile(
+      [{ feedback: "like", timestamp: Date.now(), colors: ["white"], clothingTypes: ["t-shirt"], styleTags: [], itemIds: ["t1"] }],
+      [],
+      [],
+      wardrobe
+    );
+
+    const richProfile = buildPersonalizationProfile(
+      Array.from({ length: 12 }, () => ({
+        feedback: "like",
+        timestamp: Date.now(),
+        colors: ["white", "black"],
+        clothingTypes: ["t-shirt", "jeans"],
+        styleTags: ["casual"],
+        itemIds: ["t1", "b1", "s1"],
+      })),
+      Array.from({ length: 8 }, () => ({
+        worn_at: new Date().toISOString(),
+        item_ids: ["t1", "b1", "s1"],
+      })),
+      [],
+      wardrobe
+    );
+
+    expect(richProfile.explorationFactor).toBeLessThan(sparseProfile.explorationFactor);
+  });
+
   test("measureFeedbackAlignment handles zero feedback gracefully", () => {
     const result = measureFeedbackAlignment([], []);
     expect(result.accuracy).toBeNull();
