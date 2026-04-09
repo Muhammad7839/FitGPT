@@ -1220,10 +1220,39 @@ function mappedOutfit(items) {
   }));
 }
 
+function averageConfidence(confidence = {}) {
+  const values = ["item", "color", "clothingType", "style"]
+    .map((key) => Number(confidence?.[key]))
+    .filter((value) => Number.isFinite(value));
+
+  if (!values.length) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function recommendationWeightFactors(context = {}) {
+  const feedbackProfile = context.feedbackProfile || null;
+  const personalizationProfile = context.personalizationProfile || null;
+
+  const feedbackEntries = Math.max(0, Number(feedbackProfile?.totalEntries) || 0);
+  const personalizationLevelValue = Math.max(0, Number(personalizationProfile?.personalizationLevel) || 0);
+  const confidence = averageConfidence(feedbackProfile?.confidence);
+
+  const maturity = Math.min(1, (feedbackEntries / 8) + (personalizationLevelValue / 160));
+  const balance = 0.7 + confidence * 0.5;
+
+  return {
+    feedback: 0.9 + maturity * balance * 0.7,
+    personalization: 0.85 + maturity * 0.55,
+    colorHarmony: 1 + maturity * 0.12,
+    metadata: 1 + maturity * 0.08,
+  };
+}
+
 function scoreOutfitCandidate(outfit, context) {
   if (!Array.isArray(outfit) || !outfit.length) return -Infinity;
 
   const roles = new Set(outfit.map(itemRole));
+  const weightFactors = recommendationWeightFactors(context);
   let score = 0;
 
   if (roles.has("one-piece")) {
@@ -1301,7 +1330,7 @@ function scoreOutfitCandidate(outfit, context) {
   }
 
   for (const item of outfit) {
-    score += metadataScore(item, { ...context, outfitSoFar: outfit.filter((entry) => entry?.id !== item?.id) });
+    score += metadataScore(item, { ...context, outfitSoFar: outfit.filter((entry) => entry?.id !== item?.id) }) * weightFactors.metadata;
   }
 
   const accessories = outfit.filter((item) => itemRole(item) === "accessory");
@@ -1318,13 +1347,13 @@ function scoreOutfitCandidate(outfit, context) {
 
   for (let i = 0; i < outfit.length; i += 1) {
     for (let j = i + 1; j < outfit.length; j += 1) {
-      score += pairScore(outfit[i]?.color, outfit[j]?.color) * 2;
+      score += pairScore(outfit[i]?.color, outfit[j]?.color) * 2 * weightFactors.colorHarmony;
       if (itemsConflict(outfit[i], outfit[j])) score -= 20;
     }
   }
 
-  score += feedbackBiasForOutfit(outfit, context.feedbackProfile);
-  score += personalizationBiasForOutfit(outfit, context.personalizationProfile);
+  score += feedbackBiasForOutfit(outfit, context.feedbackProfile) * weightFactors.feedback;
+  score += personalizationBiasForOutfit(outfit, context.personalizationProfile) * weightFactors.personalization;
 
   return score;
 }
@@ -1405,8 +1434,10 @@ export function generateThreeOutfits(
     /* Exploration noise: when personalization is low, add randomness to
        diversify recommendations. As the model learns, noise shrinks.
        Only applies when a feedback profile exists (skip for cold-start). */
-    if (context.feedbackProfile && context.feedbackProfile.totalEntries > 0) {
-      const expFactor = context.feedbackProfile.explorationFactor ?? 1;
+    const expProfile = context.personalizationProfile || context.feedbackProfile;
+    const expEntries = context.feedbackProfile?.totalEntries || context.personalizationProfile?.signalCount || 0;
+    if (expProfile && expEntries > 0) {
+      const expFactor = expProfile.explorationFactor ?? 1;
       if (expFactor > 0.15) {
         score += (rng() - 0.5) * expFactor * 16;
       }
