@@ -32,19 +32,42 @@ function OnboardingWrapper({ onComplete, savedAnswers }) {
 }
 
 export default function AppRoutes() {
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname, search } = location;
   const { user } = useAuth();
 
   const [answers, setAnswers] = useState(() => loadAnswers(user));
   const [onboarded, setOnboarded] = useState(() => isOnboarded(user));
+  const [justOnboarded, setJustOnboarded] = useState(false);
+  const showTutorial = justOnboarded && !isTutorialDone();
 
   useEffect(() => {
     setAnswers(loadAnswers(user));
     setOnboarded(isOnboarded(user));
   }, [user]);
 
-  const [justOnboarded, setJustOnboarded] = useState(false);
-  const showTutorial = justOnboarded && !isTutorialDone();
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    if (params.get("resetOnboarding") !== "1") return;
+
+    Object.keys(localStorage)
+      .filter(
+        (key) =>
+          key.startsWith("fitgpt_onboarded_v1") ||
+          key.startsWith("fitgpt_onboarding_answers_v1") ||
+          key.startsWith("fitgpt_tutorial_done_v1")
+      )
+      .forEach((key) => localStorage.removeItem(key));
+
+    setAnswers(null);
+    setOnboarded(false);
+    setJustOnboarded(false);
+
+    const nextParams = new URLSearchParams(search);
+    nextParams.delete("resetOnboarding");
+    const nextUrl = nextParams.toString() ? `/?${nextParams.toString()}` : "/";
+    window.location.replace(nextUrl);
+  }, [search]);
 
   const handleOnboardingComplete = useCallback(
     (finalAnswers) => {

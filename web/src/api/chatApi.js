@@ -8,16 +8,30 @@ export async function sendChatMessage(messages, context = null) {
 }
 
 export async function listChatConversations() {
-  return apiFetch("/chat/conversations", {
-    method: "GET",
-  });
+  try {
+    return await apiFetch("/chat/conversations", {
+      method: "GET",
+    });
+  } catch (error) {
+    if (error?.status === 404) {
+      return { conversations: [], localOnly: true };
+    }
+    throw error;
+  }
 }
 
 export async function syncChatConversations(conversations) {
-  return apiFetch("/chat/conversations", {
-    method: "PUT",
-    body: JSON.stringify({
-      conversations: Array.isArray(conversations) ? conversations : [],
-    }),
-  });
+  try {
+    return await apiFetch("/chat/conversations", {
+      method: "PUT",
+      body: JSON.stringify({
+        conversations: Array.isArray(conversations) ? conversations : [],
+      }),
+    });
+  } catch (error) {
+    if (error?.status === 404) {
+      return { saved: false, localOnly: true };
+    }
+    throw error;
+  }
 }
