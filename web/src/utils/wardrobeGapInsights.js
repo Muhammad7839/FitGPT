@@ -118,44 +118,44 @@ function escapeXml(value) {
 
 const REAL_SUGGESTION_IMAGES = {
   "plain-tee": {
-    imageUrl: "/wardrobe-tee.svg",
-    imageAlt: "Plain white t-shirt",
+    imageUrl: "/wardrobe-tee-real.jpg",
+    imageAlt: "Real plain white t-shirt",
   },
   "long-sleeve": {
-    imageUrl: "/wardrobe-sweater.svg",
-    imageAlt: "Folded long-sleeve basics",
+    imageUrl: "/wardrobe-sweater-real.jpg",
+    imageAlt: "Real long-sleeve sweater",
   },
   jeans: {
-    imageUrl: "/wardrobe-jeans.svg",
-    imageAlt: "Plain blue jeans",
+    imageUrl: "/wardrobe-jeans-real.jpg",
+    imageAlt: "Real blue jeans",
   },
   trousers: {
     imageUrl: "/gap-trousers.svg",
     imageAlt: "Versatile neutral trousers",
   },
   "casual-sneakers": {
-    imageUrl: "/gap-sneakers.svg",
-    imageAlt: "Everyday sneakers",
+    imageUrl: "/gap-sneakers-real.jpg",
+    imageAlt: "Real everyday sneakers",
   },
   "athletic-shoes": {
-    imageUrl: "/gap-athletic-shoes.svg",
-    imageAlt: "Athletic sneakers",
+    imageUrl: "/gap-sneakers-real.jpg",
+    imageAlt: "Real athletic sneakers",
   },
   "formal-shoes": {
-    imageUrl: "/gap-sneakers.svg",
-    imageAlt: "Shoe option",
+    imageUrl: "/gap-sneakers-real.jpg",
+    imageAlt: "Real shoe option",
   },
   "light-jacket": {
-    imageUrl: "/gap-warm-jacket.svg",
-    imageAlt: "Light jacket",
+    imageUrl: "/gap-jacket-real.jpg",
+    imageAlt: "Real light jacket",
   },
   "warm-jacket": {
-    imageUrl: "/gap-warm-jacket.svg",
-    imageAlt: "Warm jacket",
+    imageUrl: "/gap-jacket-real.jpg",
+    imageAlt: "Real warm jacket",
   },
   "structured-layer": {
-    imageUrl: "/gap-warm-jacket.svg",
-    imageAlt: "Structured jacket layer",
+    imageUrl: "/gap-jacket-real.jpg",
+    imageAlt: "Real structured jacket layer",
   },
 };
 

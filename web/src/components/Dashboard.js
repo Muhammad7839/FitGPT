@@ -2125,7 +2125,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                       }}
                     >
                       <span aria-hidden="true">👍</span>
-                      Like
+                      <span className="dashFeedbackBtnText">Like</span>
                     </button>
                     <button
                       type="button"
@@ -2138,7 +2138,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                       }}
                     >
                       <span aria-hidden="true">👎</span>
-                      Not for me
+                      <span className="dashFeedbackBtnText">Not for me</span>
                     </button>
                     <button
                       type="button"
@@ -2150,7 +2150,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                       }}
                     >
                       <span className="dashFeedbackBtnGlyph" aria-hidden="true">x</span>
-                      {isFeedbackPending ? "Hiding..." : "Hide"}
+                      <span className="dashFeedbackBtnText">{isFeedbackPending ? "Hiding..." : "Hide"}</span>
                     </button>
                     {showDetailToggle ? (
                       <button
@@ -2167,7 +2167,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                           openFeedbackComposer(outfit, feedbackSignal === FEEDBACK_SIGNALS.LIKE ? FEEDBACK_SIGNALS.LIKE : FEEDBACK_SIGNALS.DISLIKE);
                         }}
                       >
-                        {isComposerOpen ? "Hide detail" : "Add detail"}
+                        <span className="dashFeedbackBtnText">{isComposerOpen ? "Hide detail" : "Add detail"}</span>
                       </button>
                     ) : null}
                   </div>
