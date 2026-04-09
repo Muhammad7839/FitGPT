@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { HistoryContent } from "./History";
 import { AnalyticsContent } from "./Analytics";
-import { OutfitCalendarContent } from "./OutfitCalendar";
 import { LaundryContent } from "./LaundryInsights";
 import ErrorBoundary from "./ErrorBoundary";
 import GuestModeNotice from "./GuestModeNotice";
@@ -14,19 +13,17 @@ import { buildLaundryInsights, readLaundryPreferences } from "../utils/laundryTr
 
 const TABS = [
   { key: "history", label: "History" },
-  { key: "calendar", label: "Calendar" },
   { key: "analytics", label: "Analytics" },
   { key: "laundry", label: "Laundry" },
 ];
 
 const TAB_META = {
   history: { title: "Outfit History", sub: "Track what you've worn" },
-  calendar: { title: "Outfit Calendar", sub: "Visualize your outfit timeline" },
   analytics: { title: "Analytics", sub: "Your style at a glance" },
   laundry: { title: "Laundry Insights", sub: "Track outfit reuse and plan wash cycles" },
 };
 
-const TAB_INDEX = { history: 0, calendar: 1, analytics: 2, laundry: 3 };
+const TAB_INDEX = { history: 0, analytics: 1, laundry: 2 };
 
 export default function HistoryAnalytics() {
   const { user } = useAuth();
@@ -34,11 +31,9 @@ export default function HistoryAnalytics() {
   const tabParam = searchParams.get("tab");
   const activeTab = tabParam === "analytics"
     ? "analytics"
-    : tabParam === "calendar"
-      ? "calendar"
-      : tabParam === "laundry"
-        ? "laundry"
-        : "history";
+    : tabParam === "laundry"
+      ? "laundry"
+      : "history";
   const meta = TAB_META[activeTab];
   const prevTabRef = useRef(activeTab);
   const [direction, setDirection] = useState("left");
@@ -147,7 +142,6 @@ export default function HistoryAnalytics() {
 
       <div key={activeTab} className={`tabFlip tabFlip--${direction}`}>
         {activeTab === "history" && <HistoryContent />}
-        {activeTab === "calendar" && <ErrorBoundary><OutfitCalendarContent /></ErrorBoundary>}
         {activeTab === "analytics" && <ErrorBoundary><AnalyticsContent /></ErrorBoundary>}
         {activeTab === "laundry" && <ErrorBoundary><LaundryContent /></ErrorBoundary>}
       </div>
