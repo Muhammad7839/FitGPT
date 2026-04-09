@@ -2113,7 +2113,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                       ) : null}
                     </div>
 
-                    <div className="dashFeedbackActions compact">
+                    <div className="dashFeedbackActions compact" role="group" aria-label={`Recommendation feedback for outfit option ${idx + 1}`}>
                     <button
                       type="button"
                       className={"dashFeedbackBtn like compact" + (feedbackSignal === FEEDBACK_SIGNALS.LIKE ? " active" : "")}

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 700">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#efe4dc" />
+      <stop offset="100%" stop-color="#d6c5bb" />
+    </linearGradient>
+    <linearGradient id="shirt" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#fdfcfa" />
+      <stop offset="100%" stop-color="#e9e1d7" />
+    </linearGradient>
+  </defs>
+  <rect width="900" height="700" fill="url(#bg)" />
+  <g opacity="0.18">
+    <circle cx="105" cy="120" r="72" fill="#fff" />
+    <circle cx="792" cy="606" r="94" fill="#fff" />
+  </g>
+  <g transform="translate(150 70)">
+    <path d="M156 86 L250 34 H354 L448 86 L526 52 L612 182 L520 238 L476 154 L446 538 H160 L128 154 L82 238 L-10 182 L76 52 Z" fill="url(#shirt)" />
+    <path d="M250 34 L286 118 H318 L354 34" fill="none" stroke="#d7cdc2" stroke-width="24" stroke-linecap="round" />
+    <path d="M156 86 L92 188 L146 214 L190 128" fill="none" stroke="#d8cfc5" stroke-width="18" stroke-linecap="round" />
+    <path d="M448 86 L512 188 L458 214 L414 128" fill="none" stroke="#d8cfc5" stroke-width="18" stroke-linecap="round" />
+    <path d="M196 256 C250 284 354 286 410 258" fill="none" stroke="#d9d0c5" stroke-width="10" stroke-linecap="round" opacity="0.75" />
+    <path d="M206 354 C254 376 344 378 398 354" fill="none" stroke="#d5cbc0" stroke-width="8" stroke-linecap="round" opacity="0.7" />
+    <path d="M286 118 C308 132 330 132 352 118" fill="none" stroke="#cabcae" stroke-width="10" stroke-linecap="round" />
+  </g>
+</svg>
