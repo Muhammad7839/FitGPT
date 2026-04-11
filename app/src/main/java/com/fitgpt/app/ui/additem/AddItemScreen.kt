@@ -72,6 +72,7 @@ import kotlinx.coroutines.withContext
 
 private const val UPLOAD_LOG_TAG = "FitGPTUpload"
 private const val AUTO_FILL_UNKNOWN = "Unknown"
+private const val CATEGORY_CONFIRMATION_THRESHOLD = 0.82f
 
 private enum class PhotoFlowState {
     IDLE,
@@ -147,14 +148,14 @@ fun AddItemScreen(
         val inferredFromName = inferFromFileName(sourceName)
         detectedCategory = inferredFromName.category
         detectionConfidence = inferredFromName.confidence
-        if (inferredFromName.confidence < 0.66f) {
+        if (inferredFromName.confidence < CATEGORY_CONFIRMATION_THRESHOLD) {
             needsCategoryConfirmation = true
             categorySuggestionNotice = "Detected category may be inaccurate. Review if needed before saving."
         } else {
             needsCategoryConfirmation = false
             categorySuggestionNotice = null
         }
-        category = category.ifBlank { inferredFromName.category ?: "Top" }
+        category = category.ifBlank { inferredFromName.category.orEmpty() }
         if (clothingType.isBlank()) {
             clothingType = inferredFromName.clothingType.orEmpty()
         }
@@ -165,7 +166,7 @@ fun AddItemScreen(
             season = inferredFromName.season ?: "All"
         }
         if (color.isBlank()) {
-            color = inferDominantColorName(bytes) ?: AUTO_FILL_UNKNOWN
+            color = inferColorFromFileName(sourceName) ?: inferDominantColorName(bytes) ?: AUTO_FILL_UNKNOWN
         }
         if (comfort.isBlank()) {
             comfort = inferredFromName.comfortLevel?.toString().orEmpty()
@@ -177,7 +178,14 @@ fun AddItemScreen(
 
     fun saveCurrentItem() {
         formError = null
-        val resolvedCategory = category.resolveSelectedValue(categoryCustom).ifBlank { "Top" }
+        if (needsCategoryConfirmation) {
+            formError = "Confirm the category before saving this item."
+            return
+        }
+        val resolvedCategory = category.resolveSelectedValue(categoryCustom).ifBlank {
+            formError = "Choose a category before saving this item."
+            return
+        }
         val resolvedClothingType = clothingType.resolveSelectedValue(clothingTypeCustom)
         val resolvedFitTag = fitTag.resolveSelectedValue(fitTagCustom)
         val resolvedColor = color.resolveSelectedValue(colorCustom).ifBlank { AUTO_FILL_UNKNOWN }
@@ -214,7 +222,10 @@ fun AddItemScreen(
     }
 
     fun requestTagSuggestion() {
-        val resolvedCategory = category.resolveSelectedValue(categoryCustom).ifBlank { "Top" }
+        val resolvedCategory = category.resolveSelectedValue(categoryCustom).ifBlank {
+            formError = "Choose a category before requesting suggestions."
+            return
+        }
         val resolvedClothingType = clothingType.resolveSelectedValue(clothingTypeCustom)
         val resolvedFitTag = fitTag.resolveSelectedValue(fitTagCustom)
         val resolvedColor = color.resolveSelectedValue(colorCustom).ifBlank { AUTO_FILL_UNKNOWN }
@@ -433,7 +444,10 @@ fun AddItemScreen(
         val items = successfulEntries.mapIndexedNotNull { index, entry ->
             val url = entry.imageUrl?.trim()?.takeIf(String::isNotEmpty) ?: return@mapIndexedNotNull null
             val hint = batchAutoFillHints[entry.fileName]
-            val resolvedCategory = typedCategory.ifBlank { hint?.category ?: "Top" }
+            val resolvedCategory = typedCategory.ifBlank { hint?.category.orEmpty() }
+            if (resolvedCategory.isBlank()) {
+                return@mapIndexedNotNull null
+            }
             val resolvedClothingType = typedClothingType ?: hint?.clothingType
             val resolvedColor = typedColor.ifBlank { hint?.color ?: AUTO_FILL_UNKNOWN }
             val resolvedSeason = typedSeason.ifBlank { hint?.season ?: "All" }
@@ -595,7 +609,7 @@ fun AddItemScreen(
 
             SectionHeader(
                 title = "Add New Item",
-                subtitle = "Capture or upload clothing, then save to your wardrobe"
+                subtitle = "Upload a photo, confirm the basics, then save."
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -670,15 +684,6 @@ fun AddItemScreen(
                     )
 
                     SelectableField(
-                        label = "Fit Type",
-                        selectedValue = fitTag,
-                        onValueChange = { fitTag = it },
-                        options = FormOptionCatalog.fitTypeOptions,
-                        customValue = fitTagCustom,
-                        onCustomValueChange = { fitTagCustom = it }
-                    )
-
-                    SelectableField(
                         label = "Color",
                         selectedValue = color,
                         onValueChange = { color = it },
@@ -696,28 +701,34 @@ fun AddItemScreen(
                         onCustomValueChange = { seasonCustom = it }
                     )
 
-                    OutlinedTextField(
-                        value = comfort,
-                        onValueChange = { comfort = it },
-                        label = { Text("Comfort Level (1–5)") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = brand,
-                        onValueChange = { brand = it },
-                        label = { Text("Brand (optional)") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
                     Button(
                         onClick = { showAdvancedMetadata = !showAdvancedMetadata },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (showAdvancedMetadata) "Hide advanced metadata" else "Show advanced metadata")
+                        Text(if (showAdvancedMetadata) "Hide optional details" else "Add optional details")
                     }
 
                     if (showAdvancedMetadata) {
+                        SelectableField(
+                            label = "Fit Type",
+                            selectedValue = fitTag,
+                            onValueChange = { fitTag = it },
+                            options = FormOptionCatalog.fitTypeOptions,
+                            customValue = fitTagCustom,
+                            onCustomValueChange = { fitTagCustom = it }
+                        )
+                        OutlinedTextField(
+                            value = comfort,
+                            onValueChange = { comfort = it },
+                            label = { Text("Comfort Level (1–5)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = brand,
+                            onValueChange = { brand = it },
+                            label = { Text("Brand (optional)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                         SelectableField(
                             label = "Layer Type",
                             selectedValue = layerType,
@@ -768,13 +779,31 @@ fun AddItemScreen(
                         ) {
                             Text(if (onePiece) "One-piece: ON" else "One-piece: OFF")
                         }
+
+                        Button(
+                            onClick = {
+                                if (!isSavingItem && tagSuggestionState !is UiState.Loading) {
+                                    requestTagSuggestion()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isSavingItem && tagSuggestionState !is UiState.Loading,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            val label = if (tagSuggestionState is UiState.Loading) {
+                                "Suggesting tags..."
+                            } else {
+                                "Suggest Tags"
+                            }
+                            Text(label)
+                        }
                     }
 
                     Button(
                         onClick = { showPhotoOptions = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Add Photo")
+                        Text(if (imageUrl.isBlank()) "Add Photo" else "Change Photo")
                     }
 
                     when (val upload = imageUploadState) {
@@ -806,19 +835,13 @@ fun AddItemScreen(
                         is UiState.Success -> {
                             if (!imageUrl.isNullOrBlank()) {
                                 Text(
-                                    text = "Photo uploaded. Tap Save Item to finish.",
+                                    text = "Photo uploaded. We filled in the basics from the image so you can confirm and save.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
                     }
-
-                    Text(
-                        text = "Photo state: ${photoFlowState.name.lowercase().replace('_', ' ')}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
 
                     cameraMessage?.let {
                         Text(
@@ -843,16 +866,6 @@ fun AddItemScreen(
                                 .fillMaxWidth()
                                 .height(180.dp)
                         )
-                        Button(
-                            onClick = {
-                                if (!isSavingItem) saveCurrentItem()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !isSavingItem,
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(if (isSavingItem) "Saving..." else "Quick Save Photo")
-                        }
                     }
 
                     when (val batch = batchUploadState) {
@@ -875,24 +888,6 @@ fun AddItemScreen(
                                 )
                             }
                         }
-                    }
-
-                    Button(
-                        onClick = {
-                            if (!isSavingItem && tagSuggestionState !is UiState.Loading) {
-                                requestTagSuggestion()
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !isSavingItem && tagSuggestionState !is UiState.Loading,
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        val label = if (tagSuggestionState is UiState.Loading) {
-                            "Suggesting tags..."
-                        } else {
-                            "Suggest Tags"
-                        }
-                        Text(label)
                     }
 
                     Button(
@@ -1071,38 +1066,64 @@ private data class ImageAutoFillHint(
 
 private fun inferFromFileName(fileName: String): InferredNameHint {
     val normalized = fileName.lowercase()
+    val searchableTokens = normalized
+        .split(Regex("[^a-z0-9]+"))
+        .flatMap { token ->
+            val cleaned = token.trim()
+            if (cleaned.isBlank()) {
+                emptyList()
+            } else {
+                listOf(cleaned, cleaned.removeSuffix("s"))
+            }
+        }
+        .filter { it.isNotBlank() }
+        .toSet()
     val keywordHints = listOf(
-        "jacket" to InferredNameHint(category = "Outerwear", clothingType = "Jacket", season = "Winter", comfortLevel = 4, confidence = 0.86f),
-        "coat" to InferredNameHint(category = "Outerwear", clothingType = "Coat", season = "Winter", comfortLevel = 4, confidence = 0.86f),
-        "hoodie" to InferredNameHint(category = "Outerwear", clothingType = "Hoodie", season = "Fall", comfortLevel = 4, confidence = 0.82f),
-        "sweater" to InferredNameHint(category = "Top", clothingType = "Sweater", season = "Fall", comfortLevel = 4, confidence = 0.82f),
-        "shirt" to InferredNameHint(category = "Top", clothingType = "Shirt", season = "All", comfortLevel = 3, confidence = 0.74f),
-        "tshirt" to InferredNameHint(category = "Top", clothingType = "T-Shirt", season = "Summer", comfortLevel = 4, confidence = 0.75f),
-        "tee" to InferredNameHint(category = "Top", clothingType = "T-Shirt", season = "Summer", comfortLevel = 4, confidence = 0.72f),
-        "blouse" to InferredNameHint(category = "Top", clothingType = "Blouse", season = "Spring", comfortLevel = 3, confidence = 0.74f),
-        "jeans" to InferredNameHint(category = "Bottom", clothingType = "Jeans", season = "All", comfortLevel = 3, confidence = 0.88f),
-        "pants" to InferredNameHint(category = "Bottom", clothingType = "Pants", season = "All", comfortLevel = 3, confidence = 0.82f),
-        "trouser" to InferredNameHint(category = "Bottom", clothingType = "Trousers", season = "All", comfortLevel = 3, confidence = 0.82f),
-        "shorts" to InferredNameHint(category = "Bottom", clothingType = "Shorts", season = "Summer", comfortLevel = 4, confidence = 0.84f),
-        "skirt" to InferredNameHint(category = "Bottom", clothingType = "Skirt", season = "Spring", comfortLevel = 3, confidence = 0.82f),
-        "shoe" to InferredNameHint(category = "Shoes", clothingType = "Shoes", season = "All", comfortLevel = 3, confidence = 0.84f),
-        "sneaker" to InferredNameHint(category = "Shoes", clothingType = "Sneakers", season = "All", comfortLevel = 4, confidence = 0.86f),
-        "boot" to InferredNameHint(category = "Shoes", clothingType = "Boots", season = "Winter", comfortLevel = 3, confidence = 0.84f),
-        "sandal" to InferredNameHint(category = "Shoes", clothingType = "Sandals", season = "Summer", comfortLevel = 4, confidence = 0.84f),
-        "hat" to InferredNameHint(category = "Accessories", clothingType = "Hat", season = "All", comfortLevel = 3, confidence = 0.76f),
-        "cap" to InferredNameHint(category = "Accessories", clothingType = "Cap", season = "Summer", comfortLevel = 3, confidence = 0.76f),
-        "scarf" to InferredNameHint(category = "Accessories", clothingType = "Scarf", season = "Winter", comfortLevel = 3, confidence = 0.76f),
-        "watch" to InferredNameHint(category = "Accessories", clothingType = "Watch", season = "All", comfortLevel = 3, confidence = 0.74f),
-        "bag" to InferredNameHint(category = "Accessories", clothingType = "Bag", season = "All", comfortLevel = 3, confidence = 0.78f),
+        setOf("jacket", "blazer", "coat", "cardigan", "hoodie", "sweatshirt", "puffer", "windbreaker", "parka", "anorak") to
+            InferredNameHint(category = "Outerwear", clothingType = "Jacket", season = "Winter", comfortLevel = 4, confidence = 0.88f),
+        setOf("sweater", "knit", "pullover", "shirt", "tshirt", "tee", "polo", "blouse", "tank", "top", "cami", "camisole", "henley", "jersey") to
+            InferredNameHint(category = "Top", clothingType = "Shirt", season = "All", comfortLevel = 3, confidence = 0.82f),
+        setOf("dress", "gown", "romper", "jumpsuit") to
+            InferredNameHint(category = "Top", clothingType = "Dress", season = "Spring", comfortLevel = 3, confidence = 0.84f),
+        setOf("jean", "pant", "trouser", "short", "skirt", "legging", "jogger", "chino", "cargo", "slack", "sweatpant") to
+            InferredNameHint(category = "Bottom", clothingType = "Pants", season = "All", comfortLevel = 3, confidence = 0.86f),
+        setOf("shoe", "sneaker", "boot", "sandal", "loafer", "heel", "flat", "trainer", "oxford", "mule", "slipper") to
+            InferredNameHint(category = "Shoes", clothingType = "Shoes", season = "All", comfortLevel = 3, confidence = 0.86f),
+        setOf("hat", "cap", "beanie", "scarf", "watch", "bag", "belt", "necklace", "ring", "bracelet", "wallet", "earring", "sunglass") to
+            InferredNameHint(category = "Accessories", clothingType = "Accessory", season = "All", comfortLevel = 3, confidence = 0.8f),
     )
-    val baseHint = keywordHints.firstOrNull { (keyword, _) ->
-        normalized.contains(keyword)
-    }?.second ?: InferredNameHint(
-        category = "Top",
+    val baseHint = keywordHints.firstOrNull { (keywords, _) ->
+        keywords.any { keyword -> keyword in searchableTokens || normalized.contains(keyword) }
+    }?.let { (keywords, hint) ->
+        val matchedKeyword = keywords.firstOrNull { keyword -> keyword in searchableTokens || normalized.contains(keyword) }
+        when (matchedKeyword) {
+            "tshirt", "tee" -> hint.copy(clothingType = "T-Shirt", season = "Summer", comfortLevel = 4, confidence = 0.84f)
+            "polo" -> hint.copy(clothingType = "Polo", season = "Summer", confidence = 0.82f)
+            "blouse" -> hint.copy(clothingType = "Blouse", season = "Spring", confidence = 0.8f)
+            "tank" -> hint.copy(clothingType = "T-Shirt", season = "Summer", confidence = 0.8f)
+            "sweater", "knit", "pullover" -> hint.copy(clothingType = "Sweater", season = "Fall", comfortLevel = 4, confidence = 0.84f)
+            "hoodie" -> hint.copy(clothingType = "Hoodie", season = "Fall", comfortLevel = 4, confidence = 0.84f)
+            "coat" -> hint.copy(clothingType = "Coat")
+            "cardigan" -> hint.copy(clothingType = "Cardigan", season = "Fall", confidence = 0.82f)
+            "blazer" -> hint.copy(clothingType = "Jacket", confidence = 0.84f)
+            "jean" -> hint.copy(clothingType = "Jeans")
+            "short" -> hint.copy(clothingType = "Shorts", season = "Summer", comfortLevel = 4)
+            "skirt" -> hint.copy(clothingType = "Skirt", season = "Spring")
+            "legging" -> hint.copy(clothingType = "Leggings", comfortLevel = 4)
+            "jogger", "chino", "pant", "slack", "cargo", "sweatpant" -> hint.copy(clothingType = "Trousers")
+            "sneaker", "trainer" -> hint.copy(clothingType = "Sneakers", comfortLevel = 4)
+            "boot" -> hint.copy(clothingType = "Boots", season = "Winter")
+            "sandal" -> hint.copy(clothingType = "Sandals", season = "Summer", comfortLevel = 4)
+            "bag" -> hint.copy(clothingType = "Bag")
+            "cap", "beanie", "hat" -> hint.copy(clothingType = "Hat")
+            else -> hint
+        }
+    } ?: InferredNameHint(
+        category = null,
         clothingType = null,
-        season = "All",
-        comfortLevel = 3,
-        confidence = 0.42f
+        season = null,
+        comfortLevel = null,
+        confidence = 0.18f
     )
 
     val inferredFitTag = when {
@@ -1114,43 +1135,77 @@ private fun inferFromFileName(fileName: String): InferredNameHint {
     return baseHint.copy(fitTag = baseHint.fitTag ?: inferredFitTag)
 }
 
+private fun inferColorFromFileName(fileName: String): String? {
+    val normalized = fileName.lowercase()
+    val colorMap = linkedMapOf(
+        "black" to "Black",
+        "white" to "White",
+        "gray" to "Gray",
+        "grey" to "Gray",
+        "navy" to "Navy",
+        "blue" to "Blue",
+        "brown" to "Brown",
+        "tan" to "Brown",
+        "beige" to "Brown",
+        "green" to "Green",
+        "olive" to "Green",
+        "red" to "Red",
+        "pink" to "Pink",
+        "purple" to "Purple",
+        "yellow" to "Yellow",
+        "orange" to "Orange"
+    )
+    return colorMap.entries.firstOrNull { (keyword, _) ->
+        normalized.contains(keyword)
+    }?.value
+}
+
 private fun inferDominantColorName(bytes: ByteArray): String? {
     val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
     val width = bitmap.width
     val height = bitmap.height
     if (width <= 0 || height <= 0) return null
 
-    val stepX = (width / 24).coerceAtLeast(1)
-    val stepY = (height / 24).coerceAtLeast(1)
-    var redTotal = 0L
-    var greenTotal = 0L
-    var blueTotal = 0L
-    var countedPixels = 0L
+    val startX = (width * 0.1f).toInt()
+    val endX = (width * 0.9f).toInt().coerceAtLeast(startX + 1)
+    val startY = (height * 0.1f).toInt()
+    val endY = (height * 0.9f).toInt().coerceAtLeast(startY + 1)
+    val stepX = ((endX - startX) / 24).coerceAtLeast(1)
+    val stepY = ((endY - startY) / 24).coerceAtLeast(1)
+    val colorCounts = linkedMapOf<String, Int>()
+    var countedPixels = 0
 
-    var y = 0
-    while (y < height) {
-        var x = 0
-        while (x < width) {
+    var y = startY
+    while (y < endY) {
+        var x = startX
+        while (x < endX) {
             val pixel = bitmap.getPixel(x, y)
             if (Color.alpha(pixel) >= 24) {
-                redTotal += Color.red(pixel)
-                greenTotal += Color.green(pixel)
-                blueTotal += Color.blue(pixel)
-                countedPixels += 1
+                val colorName = mapRgbToColorName(Color.red(pixel), Color.green(pixel), Color.blue(pixel))
+                if (colorName != null) {
+                    colorCounts[colorName] = (colorCounts[colorName] ?: 0) + 1
+                    countedPixels += 1
+                }
             }
             x += stepX
         }
         y += stepY
     }
 
-    if (countedPixels == 0L) return null
-    val red = (redTotal / countedPixels).toInt()
-    val green = (greenTotal / countedPixels).toInt()
-    val blue = (blueTotal / countedPixels).toInt()
-    return mapRgbToColorName(red, green, blue)
+    if (countedPixels == 0) return null
+    val colorfulMatch = colorCounts
+        .filterKeys { it !in setOf("White", "Gray", "Beige") }
+        .maxByOrNull { it.value }
+    if (colorfulMatch != null) {
+        val whiteCount = colorCounts["White"] ?: 0
+        if (colorfulMatch.value >= whiteCount) {
+            return colorfulMatch.key
+        }
+    }
+    return colorCounts.maxByOrNull { it.value }?.key
 }
 
-private fun mapRgbToColorName(red: Int, green: Int, blue: Int): String {
+private fun mapRgbToColorName(red: Int, green: Int, blue: Int): String? {
     val hsv = FloatArray(3)
     Color.RGBToHSV(red, green, blue, hsv)
     val hue = hsv[0]
@@ -1158,17 +1213,19 @@ private fun mapRgbToColorName(red: Int, green: Int, blue: Int): String {
     val value = hsv[2]
 
     if (value < 0.15f) return "Black"
+    if (saturation < 0.06f && value > 0.94f) return null
     if (saturation < 0.10f && value > 0.88f) return "White"
     if (saturation < 0.14f) return "Gray"
+    if (value > 0.75f && saturation < 0.22f && hue in 25f..55f) return "Beige"
 
     if (hue < 15f || hue >= 345f) return "Red"
     if (hue < 35f) return if (value < 0.58f) "Brown" else "Orange"
     if (hue < 55f) return "Yellow"
     if (hue < 90f) return "Green"
     if (hue < 145f) return "Green"
-    if (hue < 210f) return "Blue"
+    if (hue < 210f) return if (value < 0.48f) "Navy" else "Blue"
     if (hue < 270f) return "Purple"
     if (hue < 330f) return "Pink"
 
-    return AUTO_FILL_UNKNOWN
+    return null
 }

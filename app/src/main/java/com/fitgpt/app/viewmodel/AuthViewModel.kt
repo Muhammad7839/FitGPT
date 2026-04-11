@@ -62,7 +62,7 @@ class AuthViewModel(
                 _loginState.value = AuthState.Success
             } catch (e: HttpException) {
                 val message = if (e.code() == 401) {
-                    "Invalid email or password"
+                    "Incorrect email or password. If this account already exists, try resetting your password."
                 } else {
                     "Login failed (${e.code()})"
                 }
@@ -86,7 +86,12 @@ class AuthViewModel(
                 tokenStore.saveToken(token)
                 _loginState.value = AuthState.Success
             } catch (e: HttpException) {
-                _loginState.value = AuthState.Error("Google login failed (${e.code()})")
+                val message = when (e.code()) {
+                    400 -> "Google sign-in is unavailable right now. Please use email sign-in."
+                    401 -> "Google sign-in expired. Please try again."
+                    else -> "Google sign-in failed. Please try again."
+                }
+                _loginState.value = AuthState.Error(message)
             } catch (e: Exception) {
                 _loginState.value = AuthState.Error(resolveNetworkAuthError(e, action = "Google login"))
             }
@@ -112,12 +117,10 @@ class AuthViewModel(
         viewModelScope.launch {
             try {
                 repository.register(email = normalizedEmail, password = password)
-                val token = repository.login(email = normalizedEmail, password = password)
-                tokenStore.saveToken(token)
                 _registerState.value = AuthState.Success
             } catch (e: HttpException) {
                 val message = when (e.code()) {
-                    400 -> "Registration failed (email may already exist)"
+                    400 -> "An account with this email already exists. Sign in instead or reset your password."
                     else -> "Registration failed (${e.code()})"
                 }
                 _registerState.value = AuthState.Error(message)

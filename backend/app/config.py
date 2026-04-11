@@ -3,10 +3,12 @@
 import os
 from pathlib import Path
 
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+
 
 def _load_local_env_file() -> None:
     """Load key=value pairs from backend/.env into process env if missing."""
-    env_path = Path(__file__).resolve().parents[1] / ".env"
+    env_path = BACKEND_ROOT / ".env"
     if not env_path.exists():
         return
 
@@ -57,13 +59,21 @@ def get_bool_env(name: str, default: bool) -> bool:
     raise ValueError(f"{name} must be a boolean, got '{raw_value}'")
 
 
-DATABASE_URL = get_env("DATABASE_URL", "sqlite:///./fitgpt.db")
+def _default_sqlite_url(file_name: str) -> str:
+    return f"sqlite:///{(BACKEND_ROOT / file_name).resolve()}"
+
+
+DATABASE_URL = get_env("DATABASE_URL", _default_sqlite_url("fitgpt.db"))
 SECRET_KEY = get_env("SECRET_KEY", "dev-only-change-me")
 JWT_ALGORITHM = get_env("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = get_int_env("ACCESS_TOKEN_EXPIRE_MINUTES", 60)
 GOOGLE_CLIENT_ID = get_env("GOOGLE_CLIENT_ID", "")
 RESET_TOKEN_EXPIRE_MINUTES = get_int_env("RESET_TOKEN_EXPIRE_MINUTES", 30)
-EXPOSE_RESET_TOKEN_IN_RESPONSE = get_bool_env("EXPOSE_RESET_TOKEN_IN_RESPONSE", False)
+ENVIRONMENT = get_env("ENVIRONMENT", "development").strip().lower()
+EXPOSE_RESET_TOKEN_IN_RESPONSE = get_bool_env(
+    "EXPOSE_RESET_TOKEN_IN_RESPONSE",
+    ENVIRONMENT not in {"prod", "production"},
+)
 OPENWEATHER_API_KEY = get_env("OPENWEATHER_API_KEY", "")
 OPENWEATHER_TIMEOUT_SECONDS = get_float_env("OPENWEATHER_TIMEOUT_SECONDS", 5)
 OPENWEATHER_FORECAST_CACHE_SECONDS = get_int_env("OPENWEATHER_FORECAST_CACHE_SECONDS", 900)
@@ -74,6 +84,5 @@ AI_TIMEOUT_SECONDS = get_float_env("AI_TIMEOUT_SECONDS", 12)
 AI_MAX_TOKENS = get_int_env("AI_MAX_TOKENS", 450)
 AI_TEMPERATURE = get_float_env("AI_TEMPERATURE", 0.4)
 
-ENVIRONMENT = get_env("ENVIRONMENT", "development").strip().lower()
 if ENVIRONMENT in {"prod", "production"} and SECRET_KEY == "dev-only-change-me":
     raise RuntimeError("SECRET_KEY must be set in production")

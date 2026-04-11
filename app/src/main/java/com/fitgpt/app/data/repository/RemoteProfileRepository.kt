@@ -14,15 +14,39 @@ class RemoteProfileRepository(
     private val api: ApiService
 ) : ProfileRepository {
 
-    override suspend fun getProfile(): UserProfile {
-        val response = api.getProfileSummary()
+    private fun mapStylePreferences(
+        stylePreferences: List<String>,
+        legacyLifestyle: String
+    ): List<String> {
+        return stylePreferences.ifEmpty {
+            legacyLifestyle
+                .takeIf { it.isNotBlank() && !it.equals("casual", ignoreCase = true) }
+                ?.let { listOf(it) }
+                ?: emptyList()
+        }
+    }
+
+    private fun mapComfortPreferences(
+        comfortPreferences: List<String>,
+        legacyComfort: String
+    ): List<String> {
+        return comfortPreferences.ifEmpty {
+            legacyComfort.takeIf { it.isNotBlank() }?.let { listOf(it) } ?: emptyList()
+        }
+    }
+
+    private fun mapProfile(response: com.fitgpt.app.data.remote.dto.UserProfileSummaryResponse): UserProfile {
         return UserProfile(
             id = response.id,
             email = response.email,
             avatarUrl = resolveApiUrl(response.avatarUrl),
             bodyType = response.bodyType,
-            lifestyle = response.lifestyle,
             comfortPreference = response.comfortPreference,
+            stylePreferences = mapStylePreferences(response.stylePreferences, response.lifestyle),
+            comfortPreferences = mapComfortPreferences(response.comfortPreferences, response.comfortPreference),
+            dressFor = response.dressFor,
+            gender = response.gender,
+            heightCm = response.heightCm,
             onboardingComplete = response.onboardingComplete,
             wardrobeCount = response.wardrobeCount,
             activeWardrobeCount = response.activeWardrobeCount,
@@ -33,36 +57,58 @@ class RemoteProfileRepository(
         )
     }
 
+    override suspend fun getProfile(): UserProfile {
+        val response = api.getProfileSummary()
+        return mapProfile(response)
+    }
+
     override suspend fun updateProfile(
         bodyType: String,
-        lifestyle: String,
-        comfortPreference: String,
+        stylePreferences: List<String>,
+        comfortPreferences: List<String>,
+        dressFor: List<String>,
+        gender: String?,
+        heightCm: Int?,
         onboardingComplete: Boolean
     ): UserProfile {
         api.updateMyProfile(
             UserProfileUpdateRequest(
                 bodyType = bodyType,
-                lifestyle = lifestyle,
-                comfortPreference = comfortPreference,
+                lifestyle = stylePreferences.firstOrNull(),
+                comfortPreference = comfortPreferences.firstOrNull(),
+                stylePreferences = stylePreferences,
+                comfortPreferences = comfortPreferences,
+                dressFor = dressFor,
+                gender = gender,
+                heightCm = heightCm,
                 onboardingComplete = onboardingComplete
             )
         )
-        val summary = api.getProfileSummary()
-        return UserProfile(
-            id = summary.id,
-            email = summary.email,
-            avatarUrl = resolveApiUrl(summary.avatarUrl),
-            bodyType = summary.bodyType,
-            lifestyle = summary.lifestyle,
-            comfortPreference = summary.comfortPreference,
-            onboardingComplete = summary.onboardingComplete,
-            wardrobeCount = summary.wardrobeCount,
-            activeWardrobeCount = summary.activeWardrobeCount,
-            favoriteCount = summary.favoriteCount,
-            savedOutfitCount = summary.savedOutfitCount,
-            plannedOutfitCount = summary.plannedOutfitCount,
-            historyCount = summary.historyCount
+        return mapProfile(api.getProfileSummary())
+    }
+
+    override suspend fun completeOnboarding(
+        stylePreferences: List<String>,
+        comfortPreferences: List<String>,
+        dressFor: List<String>,
+        bodyType: String?,
+        gender: String?,
+        heightCm: Int?
+    ): UserProfile {
+        api.completeOnboarding(
+            UserProfileUpdateRequest(
+                bodyType = bodyType,
+                lifestyle = stylePreferences.firstOrNull(),
+                comfortPreference = comfortPreferences.firstOrNull(),
+                stylePreferences = stylePreferences,
+                comfortPreferences = comfortPreferences,
+                dressFor = dressFor,
+                gender = gender,
+                heightCm = heightCm,
+                onboardingComplete = true
+            )
         )
+        return mapProfile(api.getProfileSummary())
     }
 
     override suspend fun uploadAvatar(bytes: ByteArray, fileName: String, mimeType: String): String {

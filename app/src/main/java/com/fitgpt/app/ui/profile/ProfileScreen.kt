@@ -1,5 +1,5 @@
 /**
- * Profile page for account identity and preference management, separated from app settings.
+ * Profile page for account identity, onboarding preferences, and wardrobe summary.
  */
 package com.fitgpt.app.ui.profile
 
@@ -21,38 +21,40 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.fitgpt.app.data.PreferencesManager
-import com.fitgpt.app.ui.common.MAX_LOCAL_IMAGE_BYTES
-import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.navigation.TopLevelReselectBus
 import com.fitgpt.app.ui.common.FormOptionCatalog
-import com.fitgpt.app.ui.common.FitGptScaffold
+import com.fitgpt.app.ui.common.MAX_LOCAL_IMAGE_BYTES
+import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SelectableField
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.ui.common.isImagePayloadAllowed
+import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.viewmodel.ProfileViewModel
 import com.fitgpt.app.viewmodel.UiState
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 private const val UPLOAD_LOG_TAG = "FitGPTUpload"
@@ -101,8 +103,8 @@ fun ProfileScreen(
     }
 
     LaunchedEffect(avatarUploadState) {
-        val state = avatarUploadState
-        if (state is UiState.Success && !state.data.isNullOrBlank()) {
+        val uploadState = avatarUploadState
+        if (uploadState is UiState.Success && !uploadState.data.isNullOrBlank()) {
             delay(2200)
             viewModel.clearAvatarUploadState()
         }
@@ -145,9 +147,10 @@ fun ProfileScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding),
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    CircularProgressIndicator(modifier = Modifier.padding(horizontal = 24.dp))
+                    CircularProgressIndicator()
                 }
             }
 
@@ -168,16 +171,36 @@ fun ProfileScreen(
 
             is UiState.Success -> {
                 val profile = currentState.data
-                var bodyType by remember(profile.idHash()) { mutableStateOf(profile.bodyType.toUiSelection()) }
-                var bodyTypeCustom by remember(profile.idHash()) { mutableStateOf(profile.bodyType.customValueFallback()) }
-                var lifestyle by remember(profile.idHash()) { mutableStateOf(profile.lifestyle.toUiSelection()) }
-                var lifestyleCustom by remember(profile.idHash()) { mutableStateOf(profile.lifestyle.customValueFallback()) }
-                var comfort by remember(profile.idHash()) { mutableStateOf(profile.comfortPreference.toUiSelection()) }
-                var comfortCustom by remember(profile.idHash()) { mutableStateOf(profile.comfortPreference.customValueFallback()) }
-                var skinTone by remember(profile.idHash(), storedSkinTone) { mutableStateOf(storedSkinTone.toUiSelection()) }
-                var skinToneCustom by remember(profile.idHash(), storedSkinTone) { mutableStateOf(storedSkinTone.customValueFallback()) }
-                var hairColor by remember(profile.idHash(), storedHairColor) { mutableStateOf(storedHairColor.toUiSelection()) }
-                var hairColorCustom by remember(profile.idHash(), storedHairColor) { mutableStateOf(storedHairColor.customValueFallback()) }
+                var bodyTypeSelection by remember(profile.profileKey()) {
+                    mutableStateOf(bodyTypeIdToLabel(profile.bodyType))
+                }
+                var genderSelection by remember(profile.profileKey()) {
+                    mutableStateOf(genderValueToLabel(profile.gender))
+                }
+                var heightCm by remember(profile.profileKey()) {
+                    mutableStateOf(profile.heightCm?.toString().orEmpty())
+                }
+                var stylePreferences by remember(profile.profileKey()) {
+                    mutableStateOf(profile.stylePreferences)
+                }
+                var comfortPreferences by remember(profile.profileKey()) {
+                    mutableStateOf(profile.comfortPreferences)
+                }
+                var dressFor by remember(profile.profileKey()) {
+                    mutableStateOf(profile.dressFor)
+                }
+                var skinTone by remember(profile.profileKey(), storedSkinTone) {
+                    mutableStateOf(storedSkinTone.toUiSelection())
+                }
+                var skinToneCustom by remember(profile.profileKey(), storedSkinTone) {
+                    mutableStateOf(storedSkinTone.customValueFallback())
+                }
+                var hairColor by remember(profile.profileKey(), storedHairColor) {
+                    mutableStateOf(storedHairColor.toUiSelection())
+                }
+                var hairColorCustom by remember(profile.profileKey(), storedHairColor) {
+                    mutableStateOf(storedHairColor.customValueFallback())
+                }
                 val isSavingProfile = profileSaveState is UiState.Loading
 
                 Column(
@@ -186,39 +209,45 @@ fun ProfileScreen(
                         .padding(padding)
                         .padding(horizontal = 20.dp, vertical = 12.dp)
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     SectionHeader(
                         title = "Profile",
-                        subtitle = "Manage your account and saved preferences."
+                        subtitle = "Manage your account, fit profile, and style preferences."
                     )
 
-                    WebCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        accentTop = false
-                    ) {
+                    WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
                         Column(
                             modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text("Account", style = MaterialTheme.typography.titleMedium)
                             Text(
                                 text = profile.email,
                                 style = MaterialTheme.typography.bodyMedium
                             )
+                            Text(
+                                text = "Profile photo",
+                                style = MaterialTheme.typography.titleSmall
+                            )
                             RemoteImagePreview(
                                 imageUrl = profile.avatarUrl,
                                 contentDescription = "Profile avatar",
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(160.dp)
+                                    .height(170.dp)
                             )
                             Button(
                                 onClick = { avatarPickerLauncher.launch("image/*") },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Upload Photo")
+                                Text("Upload profile photo")
                             }
+                            Text(
+                                text = "This image identifies your account only. Outfit try-on and styling previews stay separate.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             when (val uploadState = avatarUploadState) {
                                 UiState.Loading -> CircularProgressIndicator()
                                 is UiState.Error -> Text(
@@ -227,17 +256,14 @@ fun ProfileScreen(
                                 )
                                 is UiState.Success -> if (!uploadState.data.isNullOrBlank()) {
                                     Text(
-                                        text = "Photo saved",
+                                        text = "Avatar saved",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
                             avatarError?.let {
-                                Text(
-                                    text = it,
-                                    color = MaterialTheme.colorScheme.error
-                                )
+                                Text(text = it, color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
@@ -245,112 +271,107 @@ fun ProfileScreen(
                     WebCard(modifier = Modifier.fillMaxWidth()) {
                         Column(
                             modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text("Profile preferences", style = MaterialTheme.typography.titleMedium)
+                            Text("Fit profile", style = MaterialTheme.typography.titleMedium)
                             SelectableField(
-                                label = "Body Type",
-                                selectedValue = bodyType,
-                                onValueChange = { bodyType = it },
-                                options = FormOptionCatalog.profileBodyTypes,
-                                customValue = bodyTypeCustom,
-                                onCustomValueChange = { bodyTypeCustom = it }
+                                label = "Body type",
+                                selectedValue = bodyTypeSelection,
+                                onValueChange = { bodyTypeSelection = it },
+                                options = FormOptionCatalog.onboardingBodyTypes.map { it.label }
                             )
                             SelectableField(
-                                label = "Lifestyle",
-                                selectedValue = lifestyle,
-                                onValueChange = { lifestyle = it },
-                                options = FormOptionCatalog.profileLifestyle,
-                                customValue = lifestyleCustom,
-                                onCustomValueChange = { lifestyleCustom = it }
+                                label = "Gender",
+                                selectedValue = genderSelection,
+                                onValueChange = { genderSelection = it },
+                                options = FormOptionCatalog.onboardingGenderOptions.map { it.label }
                             )
-                            SelectableField(
-                                label = "Comfort Preference",
-                                selectedValue = comfort,
-                                onValueChange = { comfort = it },
-                                options = FormOptionCatalog.profileComfortPreference,
-                                customValue = comfortCustom,
-                                onCustomValueChange = { comfortCustom = it }
-                            )
-                            SelectableField(
-                                label = "Skin Tone",
-                                selectedValue = skinTone,
-                                onValueChange = { skinTone = it },
-                                options = FormOptionCatalog.skinToneOptions,
-                                customValue = skinToneCustom,
-                                onCustomValueChange = { skinToneCustom = it }
-                            )
-                            SelectableField(
-                                label = "Hair Color",
-                                selectedValue = hairColor,
-                                onValueChange = { hairColor = it },
-                                options = FormOptionCatalog.hairColorOptions,
-                                customValue = hairColorCustom,
-                                onCustomValueChange = { hairColorCustom = it }
-                            )
-
-                            Button(
-                                onClick = {
-                                    val resolvedBodyType = bodyType.resolveSelectedValue(bodyTypeCustom)
-                                    val resolvedLifestyle = lifestyle.resolveSelectedValue(lifestyleCustom)
-                                    val resolvedComfort = comfort.resolveSelectedValue(comfortCustom)
-                                    val resolvedSkinTone = skinTone.resolveSelectedValue(skinToneCustom)
-                                    val resolvedHairColor = hairColor.resolveSelectedValue(hairColorCustom)
-
-                                    viewModel.updateProfile(
-                                        bodyType = resolvedBodyType.toBackendProfileValue(),
-                                        lifestyle = resolvedLifestyle.toBackendProfileValue(),
-                                        comfortPreference = resolvedComfort.toBackendProfileValue(),
-                                        onboardingComplete = profile.onboardingComplete
-                                    )
-                                    scope.launch {
-                                        preferencesManager.setLocalProfileDetails(
-                                            skinTone = resolvedSkinTone.orEmpty(),
-                                            hairColor = resolvedHairColor.orEmpty()
-                                        )
-                                    }
-                                },
+                            OutlinedTextField(
+                                value = heightCm,
+                                onValueChange = { heightCm = it.filter(Char::isDigit).take(3) },
+                                label = { Text("Height in centimeters") },
                                 modifier = Modifier.fillMaxWidth(),
-                                enabled = !isSavingProfile
-                            ) {
-                                if (isSavingProfile) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.width(18.dp).height(18.dp),
-                                            strokeWidth = 2.dp
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Saving...")
-                                    }
-                                } else {
-                                    Text("Save Profile")
-                                }
-                            }
-                            Text(
-                                text = "Profile photo upload and profile details are saved separately.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                singleLine = true
                             )
                         }
                     }
 
-                    WebCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        accentTop = false
-                    ) {
+                    WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
                         Column(
                             modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text("Profile Summary", style = MaterialTheme.typography.titleMedium)
-                            Text("Wardrobe items: ${profile.wardrobeCount}")
-                            Text("Active items: ${profile.activeWardrobeCount}")
-                            Text("Favorites: ${profile.favoriteCount}")
-                            Text("Saved outfits: ${profile.savedOutfitCount}")
-                            Text("Planned outfits: ${profile.plannedOutfitCount}")
-                            Text("History entries: ${profile.historyCount}")
+                            Text("Style preferences", style = MaterialTheme.typography.titleMedium)
+                            PreferenceChipSection(
+                                title = "Style",
+                                options = FormOptionCatalog.onboardingStyleOptions,
+                                selected = stylePreferences,
+                                onToggle = { option -> stylePreferences = stylePreferences.toggle(option) }
+                            )
+                            PreferenceChipSection(
+                                title = "Comfort",
+                                options = FormOptionCatalog.onboardingComfortOptions,
+                                selected = comfortPreferences,
+                                onToggle = { option -> comfortPreferences = comfortPreferences.toggle(option) }
+                            )
+                            PreferenceChipSection(
+                                title = "Dressing for",
+                                options = FormOptionCatalog.onboardingDressForOptions,
+                                selected = dressFor,
+                                onToggle = { option -> dressFor = dressFor.toggle(option) }
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            val resolvedSkinTone = skinTone.resolveSelectedValue(skinToneCustom)
+                            val resolvedHairColor = hairColor.resolveSelectedValue(hairColorCustom)
+                            viewModel.updateProfile(
+                                bodyType = bodyTypeLabelToId(bodyTypeSelection),
+                                stylePreferences = stylePreferences,
+                                comfortPreferences = comfortPreferences,
+                                dressFor = dressFor,
+                                gender = genderLabelToValue(genderSelection),
+                                heightCm = heightCm.toIntOrNull(),
+                                onboardingComplete = true
+                            )
+                            scope.launch {
+                                preferencesManager.setLocalProfileDetails(
+                                    skinTone = resolvedSkinTone.orEmpty(),
+                                    hairColor = resolvedHairColor.orEmpty()
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isSavingProfile
+                    ) {
+                        if (isSavingProfile) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.width(18.dp).height(18.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Saving...")
+                            }
+                        } else {
+                            Text("Save Profile")
+                        }
+                    }
+
+                    WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("Summary", style = MaterialTheme.typography.titleMedium)
+                            SummaryMetric("Wardrobe items", profile.wardrobeCount.toString())
+                            SummaryMetric("Active items", profile.activeWardrobeCount.toString())
+                            SummaryMetric("Favorites", profile.favoriteCount.toString())
+                            SummaryMetric("Saved outfits", profile.savedOutfitCount.toString())
+                            SummaryMetric("Planned outfits", profile.plannedOutfitCount.toString())
+                            SummaryMetric("History entries", profile.historyCount.toString())
                         }
                     }
                 }
@@ -359,43 +380,114 @@ fun ProfileScreen(
     }
 }
 
+@Composable
+private fun PreferenceChipSection(
+    title: String,
+    options: List<String>,
+    selected: List<String>,
+    onToggle: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+        options.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { option ->
+                    FilterChip(
+                        selected = selected.contains(option),
+                        onClick = { onToggle(option) },
+                        label = { Text(option) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryMetric(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+    }
+}
+
 private fun readBytes(context: Context, uri: Uri): ByteArray? {
     return context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
 }
 
-private fun com.fitgpt.app.data.model.UserProfile.idHash(): String {
-    return "${id}_${email}_${avatarUrl}_${bodyType}_${lifestyle}_${comfortPreference}_${onboardingComplete}"
+private fun com.fitgpt.app.data.model.UserProfile.profileKey(): String {
+    return buildString {
+        append(id)
+        append('_').append(email)
+        append('_').append(avatarUrl)
+        append('_').append(bodyType)
+        append('_').append(comfortPreference)
+        append('_').append(stylePreferences.joinToString("|"))
+        append('_').append(comfortPreferences.joinToString("|"))
+        append('_').append(dressFor.joinToString("|"))
+        append('_').append(gender)
+        append('_').append(heightCm)
+        append('_').append(onboardingComplete)
+    }
 }
 
-private fun String.resolveSelectedValue(customValue: String): String {
+private fun List<String>.toggle(option: String): List<String> {
+    return if (contains(option)) filterNot { it == option } else this + option
+}
+
+private fun String.resolveSelectedValue(customValue: String): String? {
     val normalized = trim()
+    if (normalized.isBlank()) return null
     if (normalized.equals(FormOptionCatalog.OTHER_OPTION, ignoreCase = true)) {
-        return customValue.trim().ifEmpty { "unspecified" }
+        return customValue.trim().ifBlank { return null }
     }
-    return normalized.ifEmpty { "unspecified" }
+    return normalized
 }
 
 private fun String.toUiSelection(): String {
     val normalized = trim()
     if (normalized.isBlank()) return FormOptionCatalog.OTHER_OPTION
     return normalized.split("_", " ")
-        .joinToString(" ") { token ->
-            token.replaceFirstChar { it.uppercase() }
-        }
+        .joinToString(" ") { token -> token.replaceFirstChar { it.uppercase() } }
 }
 
 private fun String.customValueFallback(): String {
     val normalized = trim()
     if (normalized.isBlank()) return ""
     val knownValues = setOf(
-        "athletic", "slim", "regular", "curvy", "plus-size",
-        "casual", "active", "professional", "streetwear", "minimal",
-        "low", "medium", "high", "fair", "light", "tan", "deep",
+        "fair", "light", "medium", "tan", "deep",
         "black", "brown", "blonde", "red", "gray"
     )
     return if (knownValues.contains(normalized.lowercase())) "" else normalized
 }
 
-private fun String.toBackendProfileValue(): String {
-    return trim().lowercase().replace(" ", "_").ifEmpty { "unspecified" }
+private fun bodyTypeIdToLabel(bodyType: String): String {
+    return FormOptionCatalog.onboardingBodyTypes
+        .firstOrNull { it.id.equals(bodyType.trim(), ignoreCase = true) }
+        ?.label
+        ?: ""
+}
+
+private fun bodyTypeLabelToId(label: String): String {
+    return FormOptionCatalog.onboardingBodyTypes
+        .firstOrNull { it.label.equals(label.trim(), ignoreCase = true) }
+        ?.id
+        ?: "unspecified"
+}
+
+private fun genderValueToLabel(gender: String?): String {
+    return FormOptionCatalog.onboardingGenderOptions
+        .firstOrNull { it.value.equals(gender.orEmpty().trim(), ignoreCase = true) }
+        ?.label
+        ?: "Prefer not to say"
+}
+
+private fun genderLabelToValue(label: String): String? {
+    return FormOptionCatalog.onboardingGenderOptions
+        .firstOrNull { it.label.equals(label.trim(), ignoreCase = true) }
+        ?.value
+        ?.takeIf { it.isNotBlank() }
 }

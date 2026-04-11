@@ -1,28 +1,42 @@
 """Authentication utilities: password hashing, JWT creation, and user resolution."""
 
+import bcrypt
 from datetime import datetime, timedelta
 from typing import Optional
 
-from passlib.context import CryptContext
-from jose import JWTError, jwt
 from fastapi import Depends, Header, HTTPException, status
+from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
+from app import models
 from app.config import SECRET_KEY, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 from app.database.database import get_db
-from app import models
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def _normalize_bcrypt_hash(hashed_password: str) -> bytes:
+    normalized = hashed_password.strip()
+    if normalized.startswith("$2y$"):
+        normalized = normalized.replace("$2y$", "$2b$", 1)
+    return normalized.encode("utf-8")
 
 
 def hash_password(password: str) -> str:
     """Hash a plaintext password using bcrypt."""
-    return pwd_context.hash(password)
+    password_bytes = password.encode("utf-8")
+    return bcrypt.hashpw(password_bytes, bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Validate a plaintext password against a stored hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    if not plain_password or not hashed_password:
+        return False
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8"),
+            _normalize_bcrypt_hash(hashed_password),
+        )
+    except ValueError:
+        return False
 
 
 def _credentials_exception() -> HTTPException:

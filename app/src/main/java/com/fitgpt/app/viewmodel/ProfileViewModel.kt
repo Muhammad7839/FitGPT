@@ -39,8 +39,11 @@ class ProfileViewModel(
 
     fun updateProfile(
         bodyType: String,
-        lifestyle: String,
-        comfortPreference: String,
+        stylePreferences: List<String>,
+        comfortPreferences: List<String>,
+        dressFor: List<String>,
+        gender: String?,
+        heightCm: Int?,
         onboardingComplete: Boolean
     ) {
         _profileSaveState.value = UiState.Loading
@@ -48,8 +51,11 @@ class ProfileViewModel(
             try {
                 val updated = repository.updateProfile(
                     bodyType = bodyType,
-                    lifestyle = lifestyle,
-                    comfortPreference = comfortPreference,
+                    stylePreferences = stylePreferences,
+                    comfortPreferences = comfortPreferences,
+                    dressFor = dressFor,
+                    gender = gender,
+                    heightCm = heightCm,
                     onboardingComplete = onboardingComplete
                 )
                 _profileState.value = UiState.Success(updated)

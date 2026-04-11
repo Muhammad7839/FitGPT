@@ -8,17 +8,16 @@ from itertools import combinations
 from typing import Optional
 from urllib.parse import quote_plus
 
-from passlib.context import CryptContext
 from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.ai import deterministic, history
+from app.auth import hash_password
 from app.config import RESET_TOKEN_EXPIRE_MINUTES
 from app.weather import map_temperature_to_category
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 PROMPT_DEFAULT_COOLDOWN_SECONDS = 24 * 60 * 60
 PROMPT_IGNORE_COOLDOWN_SECONDS = 72 * 60 * 60
 
@@ -47,14 +46,6 @@ def resolve_preferred_seasons(preferred_seasons: Optional[list[str]]) -> list[st
     if normalized:
         return normalized
     return [get_current_season_tag()]
-
-
-# =============================
-# User CRUD
-# =============================
-
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
 
 
 def normalize_email(email: str) -> str:
@@ -325,6 +316,10 @@ def _apply_default_preferences(db_user: models.User) -> None:
     db_user.comfort_preference = (
         _normalize_optional_text(db_user.comfort_preference) or schemas.DEFAULT_COMFORT_PREFERENCE
     )
+    db_user.gender = _normalize_optional_text(db_user.gender) or ""
+    db_user.style_preferences = db_user.style_preferences
+    db_user.comfort_preferences = db_user.comfort_preferences
+    db_user.dress_for = db_user.dress_for
 
 
 def build_profile_summary(db: Session, db_user: models.User) -> dict:
@@ -359,6 +354,11 @@ def build_profile_summary(db: Session, db_user: models.User) -> dict:
         "body_type": db_user.body_type,
         "lifestyle": db_user.lifestyle,
         "comfort_preference": db_user.comfort_preference,
+        "style_preferences": db_user.style_preferences,
+        "comfort_preferences": db_user.comfort_preferences,
+        "dress_for": db_user.dress_for,
+        "gender": db_user.gender or None,
+        "height_cm": db_user.height_cm,
         "onboarding_complete": db_user.onboarding_complete,
         "wardrobe_count": wardrobe_count,
         "active_wardrobe_count": active_wardrobe_count,
@@ -386,6 +386,25 @@ def update_user_profile(
 
     if updated_data.comfort_preference is not None:
         db_user.comfort_preference = updated_data.comfort_preference
+
+    if updated_data.style_preferences is not None:
+        db_user.style_preferences = updated_data.style_preferences
+        if updated_data.style_preferences:
+            db_user.lifestyle = updated_data.style_preferences[0]
+
+    if updated_data.comfort_preferences is not None:
+        db_user.comfort_preferences = updated_data.comfort_preferences
+        if updated_data.comfort_preferences:
+            db_user.comfort_preference = updated_data.comfort_preferences[0]
+
+    if updated_data.dress_for is not None:
+        db_user.dress_for = updated_data.dress_for
+
+    if updated_data.gender is not None:
+        db_user.gender = updated_data.gender
+
+    if updated_data.height_cm is not None:
+        db_user.height_cm = updated_data.height_cm
 
     if updated_data.onboarding_complete is not None:
         db_user.onboarding_complete = updated_data.onboarding_complete

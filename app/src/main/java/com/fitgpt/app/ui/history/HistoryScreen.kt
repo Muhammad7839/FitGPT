@@ -88,7 +88,7 @@ fun HistoryScreen(
     FitGptScaffold(
         navController = navController,
         currentRoute = Routes.HISTORY,
-        title = "History"
+        title = "Insights"
     ) { padding ->
         Column(
             modifier = Modifier
@@ -98,8 +98,12 @@ fun HistoryScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             SectionHeader(
-                title = "Outfit History",
-                subtitle = "Track what you wore and review your style patterns"
+                title = if (activeTab == HistoryTab.HISTORY) "Outfit History" else "Analytics",
+                subtitle = if (activeTab == HistoryTab.HISTORY) {
+                    "Track what you wore and revisit outfit decisions."
+                } else {
+                    "Your style at a glance."
+                }
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

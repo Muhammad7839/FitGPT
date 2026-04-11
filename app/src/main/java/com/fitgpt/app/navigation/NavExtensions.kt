@@ -10,7 +10,8 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 private val topLevelRoutes = setOf(
     Routes.DASHBOARD,
     Routes.WARDROBE,
-    Routes.RECOMMENDATION,
+    Routes.HISTORY,
+    Routes.PLANS,
     Routes.PROFILE
 )
 

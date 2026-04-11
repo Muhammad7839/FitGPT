@@ -122,6 +122,38 @@ def test_ai_chat_fallback_when_provider_unavailable(client, monkeypatch):
     assert body["warning"] == "provider_not_configured"
 
 
+def test_ai_chat_fallback_greets_user_naturally(client, monkeypatch):
+    class FakeProvider:
+        is_available = False
+
+    monkeypatch.setattr("app.routes.ai_service.provider_client", FakeProvider())
+    response = client.post(
+        "/ai/chat",
+        json={"messages": [{"role": "user", "content": "hi"}]},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["fallback_used"] is True
+    assert "hi" in body["reply"].lower()
+    assert "aura" in body["reply"].lower()
+
+
+def test_ai_chat_fallback_redirects_non_style_requests(client, monkeypatch):
+    class FakeProvider:
+        is_available = False
+
+    monkeypatch.setattr("app.routes.ai_service.provider_client", FakeProvider())
+    response = client.post(
+        "/ai/chat",
+        json={"messages": [{"role": "user", "content": "I want to eat"}]},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["fallback_used"] is True
+    assert "sorry" in body["reply"].lower()
+    assert "outfit" in body["reply"].lower()
+
+
 def test_chat_alias_uses_same_response_contract(client, monkeypatch):
     token = register_and_login(client, "ai-chat-alias@example.com", "password123")
     auth = {"Authorization": f"Bearer {token}"}
@@ -230,6 +262,35 @@ def test_ai_recommendations_provider_error_fallback(client, monkeypatch):
     body = response.json()
     assert body["source"] == "fallback"
     assert body["warning"] == "provider_rate_limited"
+
+
+def test_ai_recommendations_fall_back_when_weather_lookup_fails_without_weather_category(client, monkeypatch):
+    token = register_and_login(client, "ai-reco-weather-fallback@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
+    _create_item(client, auth, category="Bottom", color="Blue", name="Blue Jeans", clothing_type="jeans")
+    _create_item(client, auth, category="Shoes", color="White", name="White Sneakers", clothing_type="sneakers")
+
+    class FakeProvider:
+        is_available = False
+
+    def fail_lookup(*_args, **_kwargs):
+        raise WeatherLookupError("service unavailable", status_code=503)
+
+    monkeypatch.setattr("app.routes.ai_service.provider_client", FakeProvider())
+    monkeypatch.setattr("app.routes.fetch_current_temperature_f", fail_lookup)
+    monkeypatch.setattr("app.routes.fetch_current_weather", fail_lookup)
+
+    response = client.post(
+        "/ai/recommendations",
+        headers=auth,
+        json={"weather_city": "Boston"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["weather_category"] == "mild"
+    assert len(body["items"]) >= 3
 
 
 def test_recommendations_ai_alias_requires_auth(client):

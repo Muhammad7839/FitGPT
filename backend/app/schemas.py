@@ -62,7 +62,20 @@ class UserResponse(BaseModel):
     body_type: str
     lifestyle: str
     comfort_preference: str
+    style_preferences: list[str] = Field(default_factory=list)
+    comfort_preferences: list[str] = Field(default_factory=list)
+    dress_for: list[str] = Field(default_factory=list)
+    gender: Optional[str] = None
+    height_cm: Optional[int] = None
     onboarding_complete: bool
+
+    @field_validator("gender", mode="before")
+    @classmethod
+    def normalize_response_gender(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -75,6 +88,11 @@ class UserProfileSummaryResponse(BaseModel):
     body_type: str
     lifestyle: str
     comfort_preference: str
+    style_preferences: list[str] = Field(default_factory=list)
+    comfort_preferences: list[str] = Field(default_factory=list)
+    dress_for: list[str] = Field(default_factory=list)
+    gender: Optional[str] = None
+    height_cm: Optional[int] = None
     onboarding_complete: bool
     wardrobe_count: int
     active_wardrobe_count: int
@@ -83,20 +101,51 @@ class UserProfileSummaryResponse(BaseModel):
     planned_outfit_count: int
     history_count: int
 
+    @field_validator("gender", mode="before")
+    @classmethod
+    def normalize_summary_gender(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
 
 class UserProfileUpdate(BaseModel):
     body_type: Optional[str] = Field(default=None, max_length=64)
     lifestyle: Optional[str] = Field(default=None, max_length=64)
     comfort_preference: Optional[str] = Field(default=None, max_length=64)
+    style_preferences: Optional[list[str]] = Field(default=None, max_length=8)
+    comfort_preferences: Optional[list[str]] = Field(default=None, max_length=8)
+    dress_for: Optional[list[str]] = Field(default=None, max_length=8)
+    gender: Optional[str] = Field(default=None, max_length=32)
+    height_cm: Optional[int] = Field(default=None, ge=80, le=260)
     onboarding_complete: Optional[bool] = None
 
-    @field_validator("body_type", "lifestyle", "comfort_preference")
+    @field_validator("body_type", "lifestyle", "comfort_preference", "gender")
     @classmethod
     def normalize_optional_profile_text(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return value
         cleaned = value.strip()
         return cleaned or None
+
+    @field_validator("style_preferences", "comfort_preferences", "dress_for")
+    @classmethod
+    def normalize_profile_tag_list(cls, value: Optional[list[str]]) -> Optional[list[str]]:
+        if value is None:
+            return value
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            cleaned = raw.strip()
+            if not cleaned:
+                continue
+            key = cleaned.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(cleaned)
+        return normalized
 
 
 # =============================
@@ -770,10 +819,12 @@ class CompatAiRecommendationResponse(BaseModel):
 
 class WeatherCurrentResponse(BaseModel):
     city: str
-    temperature_f: int
-    weather_category: str
-    condition: str
-    description: str
+    temperature_f: Optional[int] = None
+    weather_category: Optional[str] = None
+    condition: Optional[str] = None
+    description: Optional[str] = None
+    available: bool = True
+    detail: Optional[str] = None
 
 
 class TripPackingRequest(BaseModel):

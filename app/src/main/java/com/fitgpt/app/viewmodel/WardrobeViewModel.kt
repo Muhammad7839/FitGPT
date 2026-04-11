@@ -118,6 +118,8 @@ class WardrobeViewModel(
 
     private val _savedOutfitsState = MutableStateFlow<List<SavedOutfit>>(emptyList())
     val savedOutfitsState: StateFlow<List<SavedOutfit>> = _savedOutfitsState
+    private val _saveOutfitState = MutableStateFlow<UiState<Boolean?>>(UiState.Success(null))
+    val saveOutfitState: StateFlow<UiState<Boolean?>> = _saveOutfitState
     private val _wardrobeGapState =
         MutableStateFlow<UiState<WardrobeGapAnalysis?>>(UiState.Success(null))
     val wardrobeGapState: StateFlow<UiState<WardrobeGapAnalysis?>> = _wardrobeGapState
@@ -279,6 +281,10 @@ class WardrobeViewModel(
 
     fun clearBulkItemSaveState() {
         _bulkItemSaveState.value = UiState.Success(null)
+    }
+
+    fun clearSaveOutfitState() {
+        _saveOutfitState.value = UiState.Success(null)
     }
 
     fun suggestTagsForDraft(item: ClothingItem) {
@@ -590,14 +596,24 @@ class WardrobeViewModel(
                     lat = lat,
                     lon = lon
                 )
-                latestWeatherSnapshot = weather
-                _weatherCityState.value = weather.city
-                _weatherState.value = UiState.Success(weather)
-                _weatherUiStatus.value = WeatherUiStatus(
-                    type = WeatherStatusType.AVAILABLE,
-                    message = "Weather ready"
-                )
-                Log.i(weatherLogTag, "weather fetch success city=${weather.city} tempF=${weather.temperatureF}")
+                if (weather.available && weather.temperatureF != null && !weather.weatherCategory.isNullOrBlank()) {
+                    latestWeatherSnapshot = weather
+                    _weatherCityState.value = weather.city
+                    _weatherState.value = UiState.Success(weather)
+                    _weatherUiStatus.value = WeatherUiStatus(
+                        type = WeatherStatusType.AVAILABLE,
+                        message = "Weather ready"
+                    )
+                    Log.i(weatherLogTag, "weather fetch success city=${weather.city} tempF=${weather.temperatureF}")
+                } else {
+                    _weatherCityState.value = weather.city
+                    _weatherState.value = UiState.Success(weather)
+                    _weatherUiStatus.value = WeatherUiStatus(
+                        type = WeatherStatusType.UNAVAILABLE,
+                        message = "Unavailable"
+                    )
+                    Log.w(weatherLogTag, "weather unavailable detail=${weather.detail.orEmpty()}")
+                }
             } catch (exception: Exception) {
                 val safeError = resolveWeatherErrorMessage(exception)
                 when {
@@ -643,6 +659,7 @@ class WardrobeViewModel(
     }
 
     fun saveOutfit(items: List<ClothingItem>) {
+        _saveOutfitState.value = UiState.Loading
         viewModelScope.launch {
             try {
                 repository.saveOutfit(
@@ -650,8 +667,9 @@ class WardrobeViewModel(
                     savedAtTimestamp = System.currentTimeMillis()
                 )
                 refreshSavedOutfits()
+                _saveOutfitState.value = UiState.Success(true)
             } catch (_: Exception) {
-                _wardrobeState.value = UiState.Error("Failed to save outfit")
+                _saveOutfitState.value = UiState.Error("Failed to save outfit")
             }
         }
     }
@@ -724,6 +742,22 @@ class WardrobeViewModel(
                 refreshPlannedOutfits()
             } catch (_: Exception) {
                 _wardrobeState.value = UiState.Error("Failed to plan outfit")
+            }
+        }
+    }
+
+    fun planOutfitFromSaved(items: List<ClothingItem>, planDate: String, occasion: String) {
+        if (items.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                repository.planOutfit(
+                    itemIds = items.map { it.id },
+                    planDate = planDate,
+                    occasion = occasion
+                )
+                refreshPlannedOutfits()
+            } catch (_: Exception) {
+                _wardrobeState.value = UiState.Error("Failed to plan saved outfit")
             }
         }
     }

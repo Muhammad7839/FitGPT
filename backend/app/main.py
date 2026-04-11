@@ -36,9 +36,23 @@ def _ensure_runtime_schema() -> None:
         return
 
     user_columns = {column["name"] for column in inspector.get_columns("users")}
+    pending_user_alters: list[str] = []
     if "avatar_url" not in user_columns:
+        pending_user_alters.append("ALTER TABLE users ADD COLUMN avatar_url VARCHAR")
+    if "style_preferences_json" not in user_columns:
+        pending_user_alters.append("ALTER TABLE users ADD COLUMN style_preferences_json VARCHAR DEFAULT '[]'")
+    if "comfort_preferences_json" not in user_columns:
+        pending_user_alters.append("ALTER TABLE users ADD COLUMN comfort_preferences_json VARCHAR DEFAULT '[]'")
+    if "dress_for_json" not in user_columns:
+        pending_user_alters.append("ALTER TABLE users ADD COLUMN dress_for_json VARCHAR DEFAULT '[]'")
+    if "gender" not in user_columns:
+        pending_user_alters.append("ALTER TABLE users ADD COLUMN gender VARCHAR DEFAULT ''")
+    if "height_cm" not in user_columns:
+        pending_user_alters.append("ALTER TABLE users ADD COLUMN height_cm INTEGER")
+    if pending_user_alters:
         with engine.begin() as connection:
-            connection.execute(text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR"))
+            for sql in pending_user_alters:
+                connection.execute(text(sql))
 
     if "clothing_items" in table_names:
         clothing_columns = {column["name"] for column in inspector.get_columns("clothing_items")}

@@ -310,7 +310,9 @@ class RemoteWardrobeRepository(
             temperatureF = response.temperatureF,
             weatherCategory = response.weatherCategory,
             condition = response.condition,
-            description = response.description
+            description = response.description,
+            available = response.available,
+            detail = response.detail
         )
     }
 
@@ -375,7 +377,8 @@ class RemoteWardrobeRepository(
         return api.getSavedOutfits().outfits.map { outfit ->
             SavedOutfit(
                 id = outfit.id,
-                items = mapItemIds(outfit.itemIds)
+                items = mapItemIds(outfit.itemIds),
+                savedAtTimestamp = outfit.savedAtTimestamp
             )
         }
     }

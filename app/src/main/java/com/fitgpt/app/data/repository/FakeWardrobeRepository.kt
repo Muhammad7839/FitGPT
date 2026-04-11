@@ -439,7 +439,8 @@ class FakeWardrobeRepository : WardrobeRepository {
             0,
             SavedOutfit(
                 id = (savedAtTimestamp ?: System.currentTimeMillis()).toInt(),
-                items = outfitItems
+                items = outfitItems,
+                savedAtTimestamp = savedAtTimestamp ?: System.currentTimeMillis()
             )
         )
     }

@@ -110,7 +110,7 @@ fun PostLoginTutorialScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Image(
-                        painter = painterResource(id = R.drawable.official_logo),
+                        painter = painterResource(id = R.drawable.fitgpt_brand_background),
                         contentDescription = "FitGPT",
                         modifier = Modifier
                             .size(144.dp)
@@ -179,4 +179,3 @@ fun PostLoginTutorialScreen(
         }
     }
 }
-

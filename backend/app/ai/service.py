@@ -70,7 +70,7 @@ class AiService:
     ) -> ChatResult:
         if not self.provider_client.is_available:
             return ChatResult(
-                reply=self._build_chat_fallback_reply(wardrobe_items),
+                reply=self._build_chat_fallback_reply(wardrobe_items, messages),
                 source="fallback",
                 fallback_used=True,
                 warning="provider_not_configured",
@@ -95,7 +95,7 @@ class AiService:
                 exc.retryable,
             )
             return ChatResult(
-                reply=self._build_chat_fallback_reply(wardrobe_items),
+                reply=self._build_chat_fallback_reply(wardrobe_items, messages),
                 source="fallback",
                 fallback_used=True,
                 warning=exc.code,
@@ -334,22 +334,110 @@ class AiService:
             )
 
     @staticmethod
-    def _build_chat_fallback_reply(wardrobe_items: list[models.ClothingItem]) -> str:
+    def _build_chat_fallback_reply(
+        wardrobe_items: list[models.ClothingItem],
+        messages: list[ProviderMessage],
+    ) -> str:
+        latest_user_text = next(
+            (
+                message.content.strip()
+                for message in reversed(messages)
+                if message.role == "user" and message.content.strip()
+            ),
+            "",
+        )
+        if _looks_like_greeting(latest_user_text):
+            if wardrobe_items:
+                return (
+                    "Hi, I’m AURA. Tell me the weather, occasion, or one piece you want to wear, "
+                    "and I’ll help build a look from your wardrobe."
+                )
+            return (
+                "Hi, I’m AURA. I can help with outfits, packing, and wardrobe decisions. "
+                "Add a few items or tell me the occasion you’re dressing for, and we’ll start there."
+            )
+        if latest_user_text and not _looks_style_related(latest_user_text):
+            return (
+                "Sorry, I can help with outfits, wardrobe planning, packing, and style decisions. "
+                "Tell me the weather, the occasion, or what item you want to wear, and I’ll take it from there."
+            )
         if not wardrobe_items:
             return (
-                "I can help you style outfits. First add a few items across top, bottom, and shoes, "
-                "then ask me for a look by weather or occasion."
+                "I can help you style outfits. Start by adding a top, bottom, and shoes, "
+                "then ask for a look by weather, occasion, or mood."
             )
         categories = sorted(
             {_normalize_category(item.category) for item in wardrobe_items if item.category}
         )
         category_text = ", ".join(categories) or "your current items"
         return (
-            "I’m in fallback mode right now, but I can still help. "
             f"You currently have {len(wardrobe_items)} items across {category_text}. "
-            "Ask for an outfit by occasion or weather and I’ll suggest a practical combination."
+            "Tell me the weather or occasion, and I’ll put together a practical outfit from what you already own."
         )
 
 
 def _normalize_category(value: str) -> str:
     return value.strip().lower()
+
+
+def _looks_like_greeting(message: str) -> bool:
+    normalized = message.strip().lower().strip("!?. ,")
+    if not normalized:
+        return False
+    greeting_tokens = {
+        "hi",
+        "hello",
+        "hey",
+        "yo",
+        "hiya",
+        "good morning",
+        "good afternoon",
+        "good evening",
+    }
+    return normalized in greeting_tokens
+
+
+def _looks_style_related(message: str) -> bool:
+    normalized = message.strip().lower()
+    if not normalized:
+        return False
+    style_keywords = {
+        "outfit",
+        "wear",
+        "style",
+        "wardrobe",
+        "closet",
+        "jacket",
+        "shirt",
+        "shoe",
+        "shoes",
+        "jeans",
+        "pants",
+        "dress",
+        "look",
+        "color",
+        "match",
+        "matching",
+        "weather",
+        "temperature",
+        "cold",
+        "warm",
+        "hot",
+        "cool",
+        "rain",
+        "office",
+        "work",
+        "party",
+        "date",
+        "dinner",
+        "event",
+        "trip",
+        "travel",
+        "pack",
+        "packing",
+        "laundry",
+        "formal",
+        "casual",
+        "help",
+    }
+    return any(keyword in normalized for keyword in style_keywords)

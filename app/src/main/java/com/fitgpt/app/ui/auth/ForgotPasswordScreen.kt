@@ -48,7 +48,7 @@ fun ForgotPasswordScreen(
             ) {
                 Text("Forgot Password", style = MaterialTheme.typography.headlineMedium)
                 Text(
-                    "Request a reset token for your account.",
+                    "Request a reset token for your account. In local testing, the token will appear here so you can reset inside the app.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -77,7 +77,7 @@ fun ForgotPasswordScreen(
                         val token = generatedToken
                         if (!token.isNullOrBlank()) {
                             Text(
-                                "Reset token generated.",
+                                "Reset token generated. You can finish the reset here in the app.",
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
@@ -89,7 +89,7 @@ fun ForgotPasswordScreen(
                                 onClick = { navController.navigate("${Routes.RESET_PASSWORD}?token=$token") },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Go to reset screen")
+                                Text("Reset password now")
                             }
                         } else {
                             Text(

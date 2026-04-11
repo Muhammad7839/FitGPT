@@ -52,6 +52,15 @@ data class UserResponse(
     val lifestyle: String,
     @SerializedName("comfort_preference")
     val comfortPreference: String,
+    @SerializedName("style_preferences")
+    val stylePreferences: List<String> = emptyList(),
+    @SerializedName("comfort_preferences")
+    val comfortPreferences: List<String> = emptyList(),
+    @SerializedName("dress_for")
+    val dressFor: List<String> = emptyList(),
+    val gender: String? = null,
+    @SerializedName("height_cm")
+    val heightCm: Int? = null,
     @SerializedName("onboarding_complete")
     val onboardingComplete: Boolean
 )
@@ -66,6 +75,15 @@ data class UserProfileSummaryResponse(
     val lifestyle: String,
     @SerializedName("comfort_preference")
     val comfortPreference: String,
+    @SerializedName("style_preferences")
+    val stylePreferences: List<String> = emptyList(),
+    @SerializedName("comfort_preferences")
+    val comfortPreferences: List<String> = emptyList(),
+    @SerializedName("dress_for")
+    val dressFor: List<String> = emptyList(),
+    val gender: String? = null,
+    @SerializedName("height_cm")
+    val heightCm: Int? = null,
     @SerializedName("onboarding_complete")
     val onboardingComplete: Boolean,
     @SerializedName("wardrobe_count")
@@ -93,6 +111,15 @@ data class UserProfileUpdateRequest(
     val lifestyle: String? = null,
     @SerializedName("comfort_preference")
     val comfortPreference: String? = null,
+    @SerializedName("style_preferences")
+    val stylePreferences: List<String>? = null,
+    @SerializedName("comfort_preferences")
+    val comfortPreferences: List<String>? = null,
+    @SerializedName("dress_for")
+    val dressFor: List<String>? = null,
+    val gender: String? = null,
+    @SerializedName("height_cm")
+    val heightCm: Int? = null,
     @SerializedName("onboarding_complete")
     val onboardingComplete: Boolean? = null
 )

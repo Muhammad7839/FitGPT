@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -150,7 +152,8 @@ fun DashboardScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             SectionHeader(
@@ -182,15 +185,28 @@ fun DashboardScreen(
                         }
                         is UiState.Success -> {
                             state.data?.let { weather ->
-                                Text(
-                                    text = "${weather.city} • ${weather.temperatureF}F • ${weather.condition}",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Text(
-                                    text = weather.description,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                if (weather.available && weather.temperatureF != null) {
+                                    Text(
+                                        text = listOfNotNull(
+                                            weather.city,
+                                            "${weather.temperatureF}F",
+                                            weather.condition
+                                        ).joinToString(" • "),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    weather.description?.let { description ->
+                                        Text(
+                                            text = description,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                } else {
+                                    Text(
+                                        text = "Weather unavailable right now",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
                             }
                         }
                         is UiState.Error -> {
@@ -214,6 +230,14 @@ fun DashboardScreen(
                         WeatherStatusType.MANUAL_CITY_FALLBACK,
                         WeatherStatusType.UNAVAILABLE,
                         WeatherStatusType.IDLE -> {
+                            if (weatherUiStatus.type != WeatherStatusType.IDLE) {
+                                Button(
+                                    onClick = { fetchFromCurrentLocation() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Try current location again")
+                                }
+                            }
                             OutlinedTextField(
                                 value = weatherCity,
                                 onValueChange = { viewModel.setWeatherCityInput(it) },
@@ -468,31 +492,36 @@ fun DashboardScreen(
                         )
                         QuickActionCard(
                             modifier = Modifier.weight(1f),
+                            title = "Outfits",
+                            subtitle = "Reuse saved looks",
+                            onClick = { navController.navigateToSecondary(Routes.SAVED_OUTFITS) }
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        QuickActionCard(
+                            modifier = Modifier.weight(1f),
                             title = "Plans",
                             subtitle = "Schedule looks",
                             onClick = { navController.navigateToSecondary(Routes.PLANS) }
                         )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         QuickActionCard(
                             modifier = Modifier.weight(1f),
-                            title = "Saved",
-                            subtitle = "Reuse outfits",
-                            onClick = { navController.navigateToSecondary(Routes.SAVED_OUTFITS) }
+                            title = "Insights",
+                            subtitle = "Review history",
+                            onClick = { navController.navigateToSecondary(Routes.HISTORY) }
                         )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         QuickActionCard(
                             modifier = Modifier.weight(1f),
                             title = "Chat",
-                            subtitle = "Ask AI stylist",
+                            subtitle = "Ask AURA",
                             onClick = { navController.navigateToSecondary(Routes.CHAT) }
                         )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Spacer(modifier = Modifier.weight(1f))
                         QuickActionCard(
                             modifier = Modifier.weight(1f),
                             title = "More",
-                            subtitle = "History and settings",
+                            subtitle = "Favorites and settings",
                             onClick = { navController.navigateToSecondary(Routes.MORE) }
                         )
                     }

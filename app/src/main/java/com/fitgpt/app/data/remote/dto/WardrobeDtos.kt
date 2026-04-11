@@ -127,11 +127,13 @@ data class RecommendationOptionsResponseDto(
 data class WeatherCurrentResponseDto(
     val city: String,
     @SerializedName("temperature_f")
-    val temperatureF: Int,
+    val temperatureF: Int? = null,
     @SerializedName("weather_category")
-    val weatherCategory: String,
-    val condition: String,
-    val description: String
+    val weatherCategory: String? = null,
+    val condition: String? = null,
+    val description: String? = null,
+    val available: Boolean = true,
+    val detail: String? = null
 )
 
 data class FavoriteToggleRequestDto(
