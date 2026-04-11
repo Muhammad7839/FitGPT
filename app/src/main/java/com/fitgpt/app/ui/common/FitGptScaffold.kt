@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -18,9 +19,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Icon
@@ -76,7 +79,7 @@ fun FitGptScaffold(
     val activeRouteBase = routeBase(activeRoute)
     val shouldShowBottomBar = showBottomBar && isTopLevelRoute(activeRouteBase)
     val shouldShowBackButton = showBackButton ?: !isTopLevelRoute(activeRouteBase)
-    val shouldShowGlobalChatFab = showGlobalChatFab && isTopLevelRoute(activeRouteBase)
+    val shouldShowGlobalChatFab = showGlobalChatFab && activeRouteBase == Routes.DASHBOARD
     val shouldShowBrandedBackground = isTopLevelRoute(activeRouteBase)
     val hasCustomFab = floatingActionButton != null
 
@@ -119,7 +122,7 @@ fun FitGptScaffold(
                         )
                         {
                             Image(
-                                painter = painterResource(id = R.drawable.official_logo),
+                                painter = painterResource(id = R.drawable.fitgpt_brand_background),
                                 contentDescription = "FitGPT",
                                 modifier = Modifier.size(28.dp)
                             )
@@ -128,7 +131,7 @@ fun FitGptScaffold(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = colorScheme.surface.copy(alpha = 0.94f),
+                    containerColor = colorScheme.surface.copy(alpha = 0.78f),
                     titleContentColor = colorScheme.onSurface
                 ),
                 actions = {
@@ -152,7 +155,7 @@ fun FitGptScaffold(
         bottomBar = {
             if (shouldShowBottomBar) {
                 NavigationBar(
-                    containerColor = colorScheme.surface.copy(alpha = 0.95f),
+                    containerColor = colorScheme.surface.copy(alpha = 0.82f),
                     tonalElevation = 8.dp
                 ) {
                     topLevelItems.forEach { item ->
@@ -183,6 +186,7 @@ fun FitGptScaffold(
         floatingActionButton = {
             if (hasCustomFab || shouldShowGlobalChatFab) {
                 Column(
+                    modifier = Modifier.navigationBarsPadding(),
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -193,10 +197,10 @@ fun FitGptScaffold(
                             icon = {
                                 Icon(
                                     imageVector = Icons.Default.Star,
-                                    contentDescription = "AI Chat"
+                                    contentDescription = "AURA"
                                 )
                             },
-                            text = { Text("AI Chat") }
+                            text = { Text("AURA") }
                         )
                     }
                 }
@@ -225,6 +229,7 @@ private data class TopLevelNavItem(
 private val topLevelItems = listOf(
     TopLevelNavItem(Routes.DASHBOARD, "Home", Icons.Default.Home),
     TopLevelNavItem(Routes.WARDROBE, "Wardrobe", Icons.AutoMirrored.Filled.List),
-    TopLevelNavItem(Routes.RECOMMENDATION, "Recommend", Icons.Default.Star),
+    TopLevelNavItem(Routes.HISTORY, "Insights", Icons.Default.Info),
+    TopLevelNavItem(Routes.PLANS, "Plans", Icons.Default.DateRange),
     TopLevelNavItem(Routes.PROFILE, "Profile", Icons.Default.Person)
 )

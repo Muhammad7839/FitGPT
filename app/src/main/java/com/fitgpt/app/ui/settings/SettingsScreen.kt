@@ -45,7 +45,12 @@ private val themeChoices = listOf(
     ThemeChoice(label = "Light", mode = ThemeMode.LIGHT, preset = ThemePreset.CLASSIC),
     ThemeChoice(label = "Dark", mode = ThemeMode.DARK, preset = ThemePreset.CLASSIC),
     ThemeChoice(label = "Ocean", mode = ThemeMode.LIGHT, preset = ThemePreset.OCEAN),
-    ThemeChoice(label = "Midnight", mode = ThemeMode.DARK, preset = ThemePreset.MIDNIGHT)
+    ThemeChoice(label = "Sunset", mode = ThemeMode.LIGHT, preset = ThemePreset.SUNSET),
+    ThemeChoice(label = "Forest", mode = ThemeMode.LIGHT, preset = ThemePreset.FOREST),
+    ThemeChoice(label = "Spring", mode = ThemeMode.LIGHT, preset = ThemePreset.SPRING),
+    ThemeChoice(label = "Midnight", mode = ThemeMode.DARK, preset = ThemePreset.MIDNIGHT),
+    ThemeChoice(label = "Cyberpunk", mode = ThemeMode.DARK, preset = ThemePreset.CYBERPUNK),
+    ThemeChoice(label = "Lavender", mode = ThemeMode.LIGHT, preset = ThemePreset.LAVENDER)
 )
 
 @Composable

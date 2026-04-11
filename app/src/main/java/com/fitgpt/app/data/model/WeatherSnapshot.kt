@@ -5,8 +5,10 @@ package com.fitgpt.app.data.model
  */
 data class WeatherSnapshot(
     val city: String,
-    val temperatureF: Int,
-    val weatherCategory: String,
-    val condition: String,
-    val description: String
+    val temperatureF: Int? = null,
+    val weatherCategory: String? = null,
+    val condition: String? = null,
+    val description: String? = null,
+    val available: Boolean = true,
+    val detail: String? = null
 )

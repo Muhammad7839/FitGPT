@@ -49,7 +49,7 @@ fun MoreScreen(
         ) {
             SectionHeader(
                 title = "More",
-                subtitle = "Favorites, saved outfits, history, plans, and app settings."
+                subtitle = "Extra wardrobe tools and app settings."
             )
 
             WebCard(modifier = Modifier.fillMaxWidth()) {
@@ -69,18 +69,6 @@ fun MoreScreen(
                         title = "Saved Outfits",
                         subtitle = "Reuse generated combinations",
                         onClick = { navController.navigateToSecondary(Routes.SAVED_OUTFITS) }
-                    )
-                    MoreActionRow(
-                        icon = { Icon(Icons.Default.Info, contentDescription = null) },
-                        title = "History",
-                        subtitle = "Track what you wore",
-                        onClick = { navController.navigateToSecondary(Routes.HISTORY) }
-                    )
-                    MoreActionRow(
-                        icon = { Icon(Icons.Default.DateRange, contentDescription = null) },
-                        title = "Plans",
-                        subtitle = "Schedule outfits by date",
-                        onClick = { navController.navigateToSecondary(Routes.PLANS) }
                     )
                 }
             }

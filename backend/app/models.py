@@ -23,6 +23,11 @@ class User(Base):
     body_type = Column(String, default="unspecified")
     lifestyle = Column(String, default="casual")
     comfort_preference = Column(String, default="medium")
+    style_preferences_json = Column(String, nullable=False, default="[]")
+    comfort_preferences_json = Column(String, nullable=False, default="[]")
+    dress_for_json = Column(String, nullable=False, default="[]")
+    gender = Column(String, default="")
+    height_cm = Column(Integer, nullable=True)
 
     is_active = Column(Boolean, default=True)
     onboarding_complete = Column(Boolean, default=False)
@@ -35,6 +40,61 @@ class User(Base):
         back_populates="owner",
         cascade="all, delete-orphan"
     )
+
+    @staticmethod
+    def _decode_json_list(raw: Optional[str]) -> list[str]:
+        if not raw:
+            return []
+        try:
+            value = json.loads(raw)
+        except (TypeError, ValueError):
+            return []
+        if not isinstance(value, list):
+            return []
+        normalized: list[str] = []
+        for entry in value:
+            text = str(entry).strip()
+            if text:
+                normalized.append(text)
+        return normalized
+
+    @staticmethod
+    def _encode_json_list(values: list[str]) -> str:
+        return json.dumps(values, ensure_ascii=False)
+
+    @property
+    def style_preferences(self) -> list[str]:
+        values = self._decode_json_list(self.style_preferences_json)
+        if values:
+            return values
+        if self.lifestyle and self.lifestyle.strip() and self.lifestyle.strip().lower() != "casual":
+            return [self.lifestyle.strip()]
+        return []
+
+    @style_preferences.setter
+    def style_preferences(self, values: list[str]) -> None:
+        self.style_preferences_json = self._encode_json_list(values)
+
+    @property
+    def comfort_preferences(self) -> list[str]:
+        values = self._decode_json_list(self.comfort_preferences_json)
+        if values:
+            return values
+        if self.comfort_preference and self.comfort_preference.strip():
+            return [self.comfort_preference.strip()]
+        return []
+
+    @comfort_preferences.setter
+    def comfort_preferences(self, values: list[str]) -> None:
+        self.comfort_preferences_json = self._encode_json_list(values)
+
+    @property
+    def dress_for(self) -> list[str]:
+        return self._decode_json_list(self.dress_for_json)
+
+    @dress_for.setter
+    def dress_for(self, values: list[str]) -> None:
+        self.dress_for_json = self._encode_json_list(values)
 
 
 class ClothingItem(Base):

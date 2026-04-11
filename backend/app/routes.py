@@ -390,6 +390,7 @@ def _resolve_recommendation_weather_context(
 ) -> tuple[Optional[int], str, Optional[str]]:
     normalized_city = weather_city.strip() if weather_city else None
     normalized_weather_category = _normalize_weather_category(weather_category)
+    fallback_temp = manual_temp if manual_temp is not None else 68
 
     effective_temp = manual_temp
     resolved_weather_city = normalized_city
@@ -399,8 +400,8 @@ def _resolve_recommendation_weather_context(
             effective_temp = fetch_current_temperature_f(normalized_city)
         except WeatherLookupError as exc:
             logger.warning("Weather lookup failed for recommendation city=%s error=%s", normalized_city, exc)
-            if not normalized_weather_category:
-                raise
+            effective_temp = fallback_temp
+            normalized_weather_category = normalized_weather_category or map_temperature_to_category(fallback_temp)
 
     if effective_temp is None and (normalized_city or (weather_lat is not None and weather_lon is not None)):
         try:
@@ -414,8 +415,8 @@ def _resolve_recommendation_weather_context(
             resolved_weather_city = weather.city
         except WeatherLookupError as exc:
             logger.warning("Weather lookup failed for recommendation weather=%s", exc)
-            if not normalized_weather_category:
-                raise
+            effective_temp = fallback_temp
+            normalized_weather_category = normalized_weather_category or map_temperature_to_category(fallback_temp)
 
     if effective_temp is not None and not normalized_weather_category:
         normalized_weather_category = map_temperature_to_category(effective_temp)
@@ -423,6 +424,26 @@ def _resolve_recommendation_weather_context(
         normalized_weather_category = "mild"
 
     return effective_temp, normalized_weather_category, resolved_weather_city
+
+
+def _build_weather_unavailable_response(
+    *,
+    city: Optional[str],
+    lat: Optional[float],
+    lon: Optional[float],
+    detail: str,
+) -> dict:
+    requested_city = city.strip() if city and city.strip() else None
+    fallback_city = requested_city or ("Current location" if lat is not None and lon is not None else "Weather")
+    return {
+        "city": fallback_city,
+        "temperature_f": None,
+        "weather_category": None,
+        "condition": None,
+        "description": None,
+        "available": False,
+        "detail": detail,
+    }
 
 
 def _login_with_credentials(db: Session, *, email: str, password: str) -> schemas.Token:
@@ -1078,6 +1099,14 @@ def get_current_weather(
         else:
             weather = fetch_current_weather(city=city)
     except WeatherLookupError as exc:
+        if getattr(exc, "status_code", 400) >= 500:
+            logger.warning("Weather current lookup unavailable city=%s lat=%s lon=%s error=%s", city, lat, lon, exc)
+            return _build_weather_unavailable_response(
+                city=city,
+                lat=lat,
+                lon=lon,
+                detail=str(exc),
+            )
         raise HTTPException(status_code=getattr(exc, "status_code", 400), detail=str(exc)) from exc
     weather_category = getattr(weather, "weather_category", None)
     if not weather_category:
@@ -1088,6 +1117,8 @@ def get_current_weather(
         "weather_category": weather_category,
         "condition": weather.condition,
         "description": weather.description,
+        "available": True,
+        "detail": None,
     }
 
 

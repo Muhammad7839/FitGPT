@@ -6,6 +6,60 @@ package com.fitgpt.app.ui.common
 object FormOptionCatalog {
     const val OTHER_OPTION = "Other"
 
+    data class BodyTypeOption(
+        val id: String,
+        val label: String,
+        val note: String
+    )
+
+    data class GenderOption(
+        val value: String,
+        val label: String
+    )
+
+    val onboardingStyleOptions = listOf(
+        "Casual",
+        "Professional",
+        "Streetwear",
+        "Athletic",
+        "Minimalist",
+        "Formal"
+    )
+
+    val onboardingComfortOptions = listOf(
+        "Balanced",
+        "Relaxed",
+        "Fitted",
+        "Stretchy",
+        "Layered"
+    )
+
+    val onboardingDressForOptions = listOf(
+        "Class / Campus",
+        "Work",
+        "Gym",
+        "Date Night",
+        "Errands",
+        "Party / Event",
+        "Travel"
+    )
+
+    val onboardingBodyTypes = listOf(
+        BodyTypeOption("pear", "Pear", "Balance with structure on top."),
+        BodyTypeOption("apple", "Apple", "Comfort + clean lines through the middle."),
+        BodyTypeOption("hourglass", "Hourglass", "Highlight waist, keep proportions balanced."),
+        BodyTypeOption("rectangle", "Rectangle", "Add shape with layers and contrast."),
+        BodyTypeOption("inverted", "Inverted Triangle", "Balance shoulders with volume below.")
+    )
+
+    val onboardingGenderOptions = listOf(
+        GenderOption("", "Prefer not to say"),
+        GenderOption("woman", "Woman"),
+        GenderOption("man", "Man"),
+        GenderOption("nonbinary", "Nonbinary"),
+        GenderOption("other", "Other")
+    )
+
     val profileBodyTypes = listOf(
         "Athletic",
         "Slim",
@@ -143,4 +197,3 @@ object FormOptionCatalog {
         OTHER_OPTION
     )
 }
-
