@@ -363,3 +363,18 @@ data class UnderusedAlertsResponseDto(
     @SerializedName("insufficient_data")
     val insufficientData: Boolean
 )
+
+data class DuplicateCandidateDto(
+    @SerializedName("item_id")
+    val itemId: Int,
+    @SerializedName("duplicate_item_id")
+    val duplicateItemId: Int,
+    @SerializedName("similarity_score")
+    val similarityScore: Float,
+    val reasons: List<String> = emptyList()
+)
+
+data class DuplicateCandidatesResponseDto(
+    val threshold: Float,
+    val candidates: List<DuplicateCandidateDto> = emptyList()
+)

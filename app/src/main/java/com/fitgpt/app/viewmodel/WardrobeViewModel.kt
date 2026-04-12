@@ -7,6 +7,8 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.data.model.DuplicateCandidate
+import com.fitgpt.app.data.model.ForecastRecommendationResult
 import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.data.model.PlannedOutfit
@@ -126,6 +128,12 @@ class WardrobeViewModel(
     private val _underusedAlertsState =
         MutableStateFlow<UiState<UnderusedAlertsResult?>>(UiState.Success(null))
     val underusedAlertsState: StateFlow<UiState<UnderusedAlertsResult?>> = _underusedAlertsState
+    private val _duplicateCandidatesState =
+        MutableStateFlow<UiState<List<DuplicateCandidate>>>(UiState.Success(emptyList()))
+    val duplicateCandidatesState: StateFlow<UiState<List<DuplicateCandidate>>> = _duplicateCandidatesState
+    private val _forecastRecommendationState =
+        MutableStateFlow<UiState<ForecastRecommendationResult?>>(UiState.Success(null))
+    val forecastRecommendationState: StateFlow<UiState<ForecastRecommendationResult?>> = _forecastRecommendationState
 
     private val _addItemImageUploadState = MutableStateFlow<UiState<String?>>(UiState.Success(null))
     val addItemImageUploadState: StateFlow<UiState<String?>> = _addItemImageUploadState
@@ -164,6 +172,7 @@ class WardrobeViewModel(
         refreshWardrobe()
         fetchWardrobeGaps()
         fetchUnderusedAlerts()
+        fetchDuplicateCandidates()
         refreshSavedOutfits()
         refreshHistory()
         refreshPlannedOutfits()
@@ -200,6 +209,7 @@ class WardrobeViewModel(
                 _wardrobeState.value = UiState.Success(items)
                 fetchWardrobeGaps()
                 fetchUnderusedAlerts()
+                fetchDuplicateCandidates()
             } catch (_: Exception) {
                 _wardrobeState.value = UiState.Error("Failed to load wardrobe items")
             }
@@ -229,6 +239,21 @@ class WardrobeViewModel(
                 _underusedAlertsState.value = UiState.Success(result)
             } catch (_: Exception) {
                 _underusedAlertsState.value = UiState.Error("Failed to load underused alerts")
+            }
+        }
+    }
+
+    fun fetchDuplicateCandidates(threshold: Float = 0.72f, limit: Int = 20) {
+        _duplicateCandidatesState.value = UiState.Loading
+        viewModelScope.launch {
+            try {
+                val duplicates = repository.getDuplicateCandidates(
+                    threshold = threshold,
+                    limit = limit
+                )
+                _duplicateCandidatesState.value = UiState.Success(duplicates)
+            } catch (_: Exception) {
+                _duplicateCandidatesState.value = UiState.Error("Failed to scan for duplicate items")
             }
         }
     }
@@ -513,6 +538,32 @@ class WardrobeViewModel(
                 )
             } catch (exception: Exception) {
                 Log.w(recommendationLogTag, "failed to submit recommendation feedback", exception)
+            }
+        }
+    }
+
+    fun fetchForecastRecommendation(
+        city: String? = null,
+        hoursAhead: Int = 24,
+        occasion: String? = null,
+        stylePreference: String? = null,
+        preferredSeasons: List<String> = emptyList()
+    ) {
+        _forecastRecommendationState.value = UiState.Loading
+        viewModelScope.launch {
+            try {
+                val result = repository.getForecastRecommendation(
+                    city = city?.trim()?.takeIf { it.isNotEmpty() } ?: _weatherCityState.value.trim().takeIf { it.isNotEmpty() },
+                    hoursAhead = hoursAhead,
+                    manualTemp = latestWeatherSnapshot?.temperatureF,
+                    weatherCategory = latestWeatherSnapshot?.weatherCategory,
+                    occasion = occasion,
+                    stylePreference = stylePreference,
+                    preferredSeasons = preferredSeasons
+                )
+                _forecastRecommendationState.value = UiState.Success(result)
+            } catch (_: Exception) {
+                _forecastRecommendationState.value = UiState.Error("Failed to load forecast planner")
             }
         }
     }

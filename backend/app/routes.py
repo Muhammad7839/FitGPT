@@ -31,6 +31,7 @@ from app.weather import (
     ForecastSnapshot,
     WeatherLookupError,
     fetch_current_weather,
+    fetch_daily_forecast,
     fetch_forecast_weather,
     map_temperature_to_category,
 )
@@ -214,16 +215,30 @@ def _ensure_owned_items(db: Session, user_id: int, item_ids: list[int]) -> None:
         raise HTTPException(status_code=403, detail="Some items do not belong to current user")
 
 
-def _store_uploaded_image(image: UploadFile, user_id: int, *, prefix: str = "item") -> str:
+def _store_uploaded_image(
+    image: UploadFile,
+    user_id: int,
+    *,
+    prefix: str = "item",
+    allow_gif: bool = False,
+) -> str:
     content_type = (image.content_type or "").lower()
-    if content_type not in {"image/jpeg", "image/png", "image/webp"}:
-        raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WEBP images are allowed")
+    allowed_content_types = {"image/jpeg", "image/png", "image/webp"}
+    if allow_gif:
+        allowed_content_types.add("image/gif")
+    if content_type not in allowed_content_types:
+        detail = "Only JPEG, PNG, and WEBP images are allowed"
+        if allow_gif:
+            detail = "Only JPEG, PNG, WEBP, and GIF images are allowed"
+        raise HTTPException(status_code=400, detail=detail)
 
     extension = ".jpg"
     if content_type == "image/png":
         extension = ".png"
     elif content_type == "image/webp":
         extension = ".webp"
+    elif content_type == "image/gif":
+        extension = ".gif"
 
     filename = f"{prefix}_{user_id}_{uuid4().hex}{extension}"
     destination = UPLOADS_DIR / filename
@@ -640,7 +655,11 @@ def upload_my_avatar(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    avatar_url = _store_uploaded_image(image, current_user.id, prefix="avatar")
+    avatar_url = _store_uploaded_image(
+        image,
+        current_user.id,
+        prefix="avatar",
+    )
     current_user.avatar_url = avatar_url
     db.add(current_user)
     db.commit()
@@ -1099,7 +1118,10 @@ def get_current_weather(
         else:
             weather = fetch_current_weather(city=city)
     except WeatherLookupError as exc:
-        if getattr(exc, "status_code", 400) >= 500:
+        status_code = getattr(exc, "status_code", 400)
+        if status_code == 502:
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        if status_code >= 500:
             logger.warning("Weather current lookup unavailable city=%s lat=%s lon=%s error=%s", city, lat, lon, exc)
             return _build_weather_unavailable_response(
                 city=city,
@@ -1107,7 +1129,7 @@ def get_current_weather(
                 lon=lon,
                 detail=str(exc),
             )
-        raise HTTPException(status_code=getattr(exc, "status_code", 400), detail=str(exc)) from exc
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
     weather_category = getattr(weather, "weather_category", None)
     if not weather_category:
         weather_category = map_temperature_to_category(int(weather.temperature_f))
@@ -1119,6 +1141,36 @@ def get_current_weather(
         "description": weather.description,
         "available": True,
         "detail": None,
+    }
+
+
+@router.get("/weather/forecast", response_model=schemas.DailyWeatherForecastResponse)
+def get_daily_weather_forecast(
+    city: Optional[str] = None,
+    lat: Optional[float] = None,
+    lon: Optional[float] = None,
+    days: int = Query(default=6, ge=1, le=10),
+    current_user: models.User = Depends(get_current_user),
+):
+    _ = current_user
+    try:
+        forecast_days = fetch_daily_forecast(city=city, lat=lat, lon=lon, days=days)
+    except WeatherLookupError as exc:
+        raise HTTPException(status_code=getattr(exc, "status_code", 400), detail=str(exc)) from exc
+
+    resolved_city = city.strip() if city and city.strip() else "Current location"
+    return {
+        "city": resolved_city,
+        "days": [
+            {
+                "date": day.date,
+                "temperature_f": day.temperature_f,
+                "weather_category": day.weather_category,
+                "condition": day.condition,
+                "description": day.description,
+            }
+            for day in forecast_days
+        ],
     }
 
 

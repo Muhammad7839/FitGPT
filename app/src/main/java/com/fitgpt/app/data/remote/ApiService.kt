@@ -10,6 +10,7 @@ import com.fitgpt.app.data.remote.dto.ChatResponseDto
 import com.fitgpt.app.data.remote.dto.BulkCreateClothingItemsRequestDto
 import com.fitgpt.app.data.remote.dto.BulkCreateClothingItemsResponseDto
 import com.fitgpt.app.data.remote.dto.FavoriteToggleRequestDto
+import com.fitgpt.app.data.remote.dto.ForecastRecommendationResponseDto
 import com.fitgpt.app.data.remote.dto.ForgotPasswordRequest
 import com.fitgpt.app.data.remote.dto.ForgotPasswordResponse
 import com.fitgpt.app.data.remote.dto.GoogleLoginRequest
@@ -35,6 +36,7 @@ import com.fitgpt.app.data.remote.dto.RecommendationFeedbackResponseDto
 import com.fitgpt.app.data.remote.dto.TagSuggestionResponseDto
 import com.fitgpt.app.data.remote.dto.RejectOutfitRequestDto
 import com.fitgpt.app.data.remote.dto.RejectOutfitResponseDto
+import com.fitgpt.app.data.remote.dto.DuplicateCandidatesResponseDto
 import com.fitgpt.app.data.remote.dto.UnderusedAlertsResponseDto
 import com.fitgpt.app.data.remote.dto.RegisterRequest
 import com.fitgpt.app.data.remote.dto.ResetPasswordRequest
@@ -146,6 +148,12 @@ interface ApiService {
         @Query("max_results") maxResults: Int = 20
     ): UnderusedAlertsResponseDto
 
+    @GET("wardrobe/duplicates")
+    suspend fun getDuplicateCandidates(
+        @Query("threshold") threshold: Float = 0.72f,
+        @Query("limit") limit: Int = 20
+    ): DuplicateCandidatesResponseDto
+
     @POST("wardrobe/items")
     suspend fun addWardrobeItem(
         @Body payload: ClothingItemCreateRequest
@@ -253,6 +261,18 @@ interface ApiService {
     suspend fun submitRecommendationFeedback(
         @Body payload: RecommendationFeedbackRequestDto
     ): RecommendationFeedbackResponseDto
+
+    @GET("recommendations/forecast")
+    suspend fun getForecastRecommendation(
+        @Query("city") city: String? = null,
+        @Query("hours_ahead") hoursAhead: Int = 24,
+        @Query("manual_temp") manualTemp: Int? = null,
+        @Query("weather_category") weatherCategory: String? = null,
+        @Query("occasion") occasion: String? = null,
+        @Query("exclude") exclude: String? = null,
+        @Query("style_preference") stylePreference: String? = null,
+        @Query("preferred_seasons") preferredSeasons: List<String> = emptyList()
+    ): ForecastRecommendationResponseDto
 
     @POST("ai/chat")
     suspend fun sendChatMessage(

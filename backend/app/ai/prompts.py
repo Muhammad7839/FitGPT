@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Optional
 
 from app import models
@@ -15,28 +16,71 @@ def _safe_text(value: Optional[str], fallback: str = "unspecified") -> str:
 def build_chat_system_prompt(
     user: Optional[models.User], wardrobe_items: list[models.ClothingItem]
 ) -> str:
-    """Builds a concise system prompt scoped to the authenticated user's context."""
+    """Build a conversational chat prompt grounded in recent user and wardrobe context."""
     base = (
-        "You are AURA inside FitGPT, a warm and practical personal stylist. "
-        "Sound conversational, specific, and concise. "
-        "Stay focused on clothing, wardrobe planning, and outfit decisions. "
+        "You are AURA inside FitGPT, a warm, stylish, high-taste personal stylist. "
+        "Sound like an intelligent human stylist with real point of view: conversational, observant, friendly, and easy to talk to. "
+        "Give direct answers first, then one or two useful follow-up ideas when helpful. "
+        "Use prior turns in the conversation so the reply feels continuous instead of starting over. "
+        "When the user gives a preference, constraint, mood, event, or item, acknowledge it and build on it. "
+        "Ask at most one clarifying question when you truly need missing information. "
+        "Have taste: talk about shape, balance, contrast, proportion, texture, color harmony, polish, and overall vibe when useful. "
+        "Be encouraging but not syrupy. Be opinionated when it helps, while staying practical, wearable, and relaxed enough for everyday use. "
+        "Avoid robotic phrasing, repetitive disclaimers, bullet spam, generic filler, stiff corporate tone, and overly fancy fashion-editor language. "
+        "Stay focused on clothing, wardrobe planning, packing, outfit decisions, and style advice. "
         "If the user opens with a greeting, greet them back naturally and ask one helpful follow-up. "
+        "Prefer natural prose over lists unless the user asks for options or comparisons. "
+        "When suggesting an outfit, make it feel styled, not randomly assembled. "
         "Never mention model status, provider issues, fallback behavior, warnings, or internal systems.\n\n"
     )
 
     if user is None:
-        return base + "The user is a guest (not signed in). No wardrobe data is available."
+        return (
+            base
+            + "The user is a guest (not signed in). No wardrobe data is available. "
+            "Be helpful with general styling advice and invite them to share occasion, weather, colors, or fit preferences."
+        )
 
     item_preview = ", ".join(
         f"{item.category}:{item.color}" for item in wardrobe_items[:20]
     ) or "No wardrobe items available yet"
+    wardrobe_summary = summarize_wardrobe_for_chat(wardrobe_items)
 
     return (
         base
         + f"User profile: body_type={_safe_text(user.body_type)}, "
         f"lifestyle={_safe_text(user.lifestyle)}, "
         f"comfort_preference={_safe_text(user.comfort_preference)}.\n"
+        f"Wardrobe summary: {wardrobe_summary}\n"
         f"Wardrobe snapshot: {item_preview}."
+    )
+
+
+def summarize_wardrobe_for_chat(wardrobe_items: list[models.ClothingItem]) -> str:
+    """Create a compact wardrobe summary the chat model can reference naturally."""
+    if not wardrobe_items:
+        return "No wardrobe items available yet."
+
+    category_counts = Counter(
+        item.category.strip().lower()
+        for item in wardrobe_items
+        if item.category and item.category.strip()
+    )
+    color_counts = Counter(
+        item.color.strip().lower()
+        for item in wardrobe_items
+        if item.color and item.color.strip()
+    )
+    top_categories = ", ".join(
+        f"{category}({count})"
+        for category, count in category_counts.most_common(5)
+    ) or "unspecified mix"
+    top_colors = ", ".join(color for color, _count in color_counts.most_common(5)) or "mixed colors"
+
+    return (
+        f"{len(wardrobe_items)} active items. "
+        f"Most common categories: {top_categories}. "
+        f"Common colors: {top_colors}."
     )
 
 

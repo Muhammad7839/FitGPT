@@ -54,6 +54,7 @@ import java.time.ZoneId
 
 private enum class PlansTab {
     UPCOMING,
+    FORECAST,
     TRIP_PLANNER
 }
 
@@ -67,11 +68,14 @@ fun PlansScreen(
     val plans by viewModel.plannedState.collectAsState()
     val tripPackingState by viewModel.tripPackingState.collectAsState()
     val recommendationState by viewModel.recommendationState.collectAsState()
+    val forecastRecommendationState by viewModel.forecastRecommendationState.collectAsState()
+    val weatherCity by viewModel.weatherCityState.collectAsState()
     var activeTab by remember { mutableStateOf(PlansTab.UPCOMING) }
     var planDate by remember { mutableStateOf(LocalDate.now().plusDays(1).toString()) }
     var planDatesCsv by remember { mutableStateOf("") }
     var occasion by remember { mutableStateOf("") }
     var destinationCity by remember { mutableStateOf("") }
+    var forecastCity by remember(weatherCity) { mutableStateOf(weatherCity) }
     var tripDaysInput by remember { mutableStateOf("3") }
     var replaceExisting by remember { mutableStateOf(true) }
     var planError by remember { mutableStateOf<String?>(null) }
@@ -122,6 +126,11 @@ fun PlansScreen(
                     selected = activeTab == PlansTab.UPCOMING,
                     onClick = { activeTab = PlansTab.UPCOMING },
                     label = { Text("Upcoming") }
+                )
+                FilterChip(
+                    selected = activeTab == PlansTab.FORECAST,
+                    onClick = { activeTab = PlansTab.FORECAST },
+                    label = { Text("Forecast") }
                 )
                 FilterChip(
                     selected = activeTab == PlansTab.TRIP_PLANNER,
@@ -295,6 +304,57 @@ fun PlansScreen(
                     }
                 }
 
+                PlansTab.FORECAST -> {
+                    WebCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text("Upcoming weather planner", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                text = "Generate an outfit using the next weather window so planning stays aligned with real forecast context.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            OutlinedTextField(
+                                value = forecastCity,
+                                onValueChange = { forecastCity = it },
+                                label = { Text("City (optional)") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = occasion,
+                                onValueChange = { occasion = it },
+                                label = { Text("Occasion (optional)") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Button(
+                                onClick = {
+                                    viewModel.fetchForecastRecommendation(
+                                        city = forecastCity.takeIf { it.isNotBlank() },
+                                        hoursAhead = 24,
+                                        occasion = occasion.takeIf { it.isNotBlank() }
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Load Tomorrow's Outfit")
+                            }
+                        }
+                    }
+
+                    ForecastPlannerCard(
+                        state = forecastRecommendationState,
+                        onSave = { result ->
+                            viewModel.planOutfitFromSaved(
+                                items = result.items,
+                                planDate = LocalDate.now().plusDays(1).toString(),
+                                occasion = result.forecast.condition
+                            )
+                        }
+                    )
+                }
+
                 PlansTab.TRIP_PLANNER -> {
                     WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
                         Column(
@@ -418,6 +478,73 @@ fun PlansScreen(
             }
         ) {
             DatePicker(state = datePickerState)
+        }
+    }
+}
+
+@Composable
+private fun ForecastPlannerCard(
+    state: UiState<com.fitgpt.app.data.model.ForecastRecommendationResult?>,
+    onSave: (com.fitgpt.app.data.model.ForecastRecommendationResult) -> Unit
+) {
+    WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("Forecast outfit", style = MaterialTheme.typography.titleMedium)
+            when (state) {
+                UiState.Loading -> {
+                    Text("Checking the forecast and building a look...", style = MaterialTheme.typography.bodySmall)
+                }
+                is UiState.Error -> {
+                    Text(state.message, color = MaterialTheme.colorScheme.error)
+                }
+                is UiState.Success -> {
+                    val result = state.data
+                    if (result == null) {
+                        Text(
+                            text = "Load a forecast recommendation to see tomorrow's outfit plan.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text(
+                            text = "${result.forecast.city} • ${result.forecast.temperatureF}°F • ${result.forecast.condition}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = result.explanation,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            WebBadge(text = result.forecast.weatherCategory)
+                            WebBadge(text = result.source)
+                            WebBadge(text = if (result.fallbackUsed) "Fallback" else "Forecast")
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            result.items.take(4).forEach { item ->
+                                RemoteImagePreview(
+                                    imageUrl = item.imageUrl,
+                                    contentDescription = item.category,
+                                    modifier = Modifier.size(56.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = result.items.joinToString(" • ") { it.name ?: it.category },
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Button(
+                            onClick = { onSave(result) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Save as Tomorrow's Plan")
+                        }
+                    }
+                }
+            }
         }
     }
 }
