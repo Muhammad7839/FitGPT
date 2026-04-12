@@ -882,6 +882,19 @@ class WeatherForecastResponse(BaseModel):
     source: str = "forecast"
 
 
+class DailyWeatherForecastItem(BaseModel):
+    date: str
+    temperature_f: int
+    weather_category: str
+    condition: str
+    description: str
+
+
+class DailyWeatherForecastResponse(BaseModel):
+    city: str
+    days: list[DailyWeatherForecastItem] = Field(default_factory=list)
+
+
 class ForecastRecommendationResponse(BaseModel):
     items: list[ClothingItemResponse]
     explanation: str

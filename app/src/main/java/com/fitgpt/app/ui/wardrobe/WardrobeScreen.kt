@@ -23,6 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.data.model.DuplicateCandidate
+import com.fitgpt.app.data.model.UnderusedAlertsResult
 import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.navigation.TopLevelReselectBus
 import com.fitgpt.app.navigation.navigateToSecondary
@@ -45,6 +47,8 @@ fun WardrobeScreen(
 ) {
 
     val uiState by viewModel.wardrobeState.collectAsState()
+    val underusedAlertsState by viewModel.underusedAlertsState.collectAsState()
+    val duplicateCandidatesState by viewModel.duplicateCandidatesState.collectAsState()
     var query by remember { mutableStateOf("") }
     var showArchived by remember { mutableStateOf(false) }
     var favoritesOnly by remember { mutableStateOf(false) }
@@ -265,6 +269,43 @@ fun WardrobeScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("All seasons", "Spring", "Summer", "Fall", "Winter").forEach { option ->
+                    val selected = if (option == "All seasons") {
+                        seasonFilter.isBlank()
+                    } else {
+                        seasonFilter.equals(option, ignoreCase = true)
+                    }
+                    FilterChip(
+                        selected = selected,
+                        onClick = {
+                            seasonFilter = if (option == "All seasons") "" else option
+                        },
+                        label = { Text(option) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            RotationVisibilityCard(
+                underusedAlertsState = underusedAlertsState,
+                onRefresh = { viewModel.fetchUnderusedAlerts() }
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            DuplicateReviewCard(
+                duplicateCandidatesState = duplicateCandidatesState,
+                onRefresh = { viewModel.fetchDuplicateCandidates() },
+                onArchiveDuplicate = { candidate -> viewModel.deleteItem(candidate.duplicateItem) }
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             val categoryFilters = listOf("All", "Top", "Bottom", "Shoes", "Outerwear", "Accessories")
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(categoryFilters) { category ->
@@ -353,6 +394,151 @@ fun WardrobeScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun RotationVisibilityCard(
+    underusedAlertsState: UiState<UnderusedAlertsResult?>,
+    onRefresh: () -> Unit
+) {
+    WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Wardrobe rotation", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "Surface underused pieces so your active wardrobe stays in rotation.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(onClick = onRefresh) {
+                    Text("Refresh")
+                }
+            }
+
+            when (underusedAlertsState) {
+                UiState.Loading -> CircularProgressIndicator()
+                is UiState.Error -> Text(
+                    text = underusedAlertsState.message,
+                    color = MaterialTheme.colorScheme.error
+                )
+                is UiState.Success -> {
+                    val alerts = underusedAlertsState.data?.alerts.orEmpty().take(3)
+                    if (alerts.isEmpty()) {
+                        Text(
+                            text = "No rotation alerts right now. Your recently worn pieces look balanced.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        alerts.forEach { alert ->
+                            WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = alert.itemName,
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(
+                                        text = "${alert.category} • ${alert.daysSinceWorn ?: 0} days since last wear",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    WebBadge(text = "Rotation ${alert.alertLevel}")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DuplicateReviewCard(
+    duplicateCandidatesState: UiState<List<DuplicateCandidate>>,
+    onRefresh: () -> Unit,
+    onArchiveDuplicate: (DuplicateCandidate) -> Unit
+) {
+    WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Duplicate review", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "Check near-identical wardrobe items before they clutter recommendations.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(onClick = onRefresh) {
+                    Text("Scan")
+                }
+            }
+
+            when (duplicateCandidatesState) {
+                UiState.Loading -> CircularProgressIndicator()
+                is UiState.Error -> Text(
+                    text = duplicateCandidatesState.message,
+                    color = MaterialTheme.colorScheme.error
+                )
+                is UiState.Success -> {
+                    val duplicates = duplicateCandidatesState.data.take(3)
+                    if (duplicates.isEmpty()) {
+                        Text(
+                            text = "No likely duplicates detected in the current wardrobe snapshot.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        duplicates.forEach { candidate ->
+                            WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "${candidate.item.name ?: candidate.item.category} vs ${candidate.duplicateItem.name ?: candidate.duplicateItem.category}",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(
+                                        text = "Match ${(candidate.similarityScore * 100).toInt()}% • ${candidate.reasons.joinToString().ifBlank { "similar metadata" }}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        WebBadge(text = candidate.item.category)
+                                        WebBadge(text = candidate.duplicateItem.category)
+                                    }
+                                    TextButton(onClick = { onArchiveDuplicate(candidate) }) {
+                                        Text("Archive second item")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

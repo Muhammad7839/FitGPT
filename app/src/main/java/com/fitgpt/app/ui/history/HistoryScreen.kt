@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.ui.common.EmptyStateCard
 import com.fitgpt.app.ui.common.FitGptScaffold
@@ -44,7 +45,8 @@ import java.util.Locale
 
 private enum class HistoryTab {
     HISTORY,
-    ANALYTICS
+    ANALYTICS,
+    LAUNDRY
 }
 
 private enum class HistoryRangeFilter {
@@ -98,11 +100,15 @@ fun HistoryScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             SectionHeader(
-                title = if (activeTab == HistoryTab.HISTORY) "Outfit History" else "Analytics",
-                subtitle = if (activeTab == HistoryTab.HISTORY) {
-                    "Track what you wore and revisit outfit decisions."
-                } else {
-                    "Your style at a glance."
+                title = when (activeTab) {
+                    HistoryTab.HISTORY -> "Outfit History"
+                    HistoryTab.ANALYTICS -> "Analytics"
+                    HistoryTab.LAUNDRY -> "Laundry Insights"
+                },
+                subtitle = when (activeTab) {
+                    HistoryTab.HISTORY -> "Track what you wore and revisit outfit decisions."
+                    HistoryTab.ANALYTICS -> "Your style at a glance."
+                    HistoryTab.LAUNDRY -> "Estimate reuse cycles from outfit history and recent wear patterns."
                 }
             )
 
@@ -116,6 +122,11 @@ fun HistoryScreen(
                     selected = activeTab == HistoryTab.ANALYTICS,
                     onClick = { activeTab = HistoryTab.ANALYTICS },
                     label = { Text("Analytics") }
+                )
+                FilterChip(
+                    selected = activeTab == HistoryTab.LAUNDRY,
+                    onClick = { activeTab = HistoryTab.LAUNDRY },
+                    label = { Text("Laundry") }
                 )
             }
 
@@ -288,10 +299,88 @@ fun HistoryScreen(
                         }
                     }
                 }
+
+                HistoryTab.LAUNDRY -> {
+                    val wardrobeItems = (wardrobeState as? UiState.Success<List<ClothingItem>>)
+                        ?.data
+                        .orEmpty()
+                        .filter { !it.isArchived }
+                    val laundryInsights = remember(history, wardrobeItems) {
+                        buildLaundryInsights(wardrobeItems, history)
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        item {
+                            AnalyticsCard("Needs wash soon", laundryInsights.dueCount.toString())
+                        }
+                        item {
+                            AnalyticsCard("In rotation", laundryInsights.inRotationCount.toString())
+                        }
+                        item {
+                            AnalyticsCard("Tracked items", laundryInsights.items.size.toString())
+                        }
+                        if (laundryInsights.items.isEmpty()) {
+                            item {
+                                EmptyStateCard(
+                                    title = "No laundry insights yet",
+                                    subtitle = "Wear a few outfits so FitGPT can estimate reuse and wash timing."
+                                )
+                            }
+                        } else {
+                            items(laundryInsights.items, key = { insight -> insight.item.id }) { insight ->
+                                WebCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    accentTop = false
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = insight.item.name ?: insight.item.category,
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                        Text(
+                                            text = "${insight.item.category} • ${insight.wearCount} wear${if (insight.wearCount == 1) "" else "s"} tracked",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            WebBadge(text = insight.statusLabel)
+                                            WebBadge(text = "Threshold ${insight.threshold}")
+                                        }
+                                        Text(
+                                            text = "Last worn: ${insight.lastWornLabel}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
+
+private data class LaundryInsightItem(
+    val item: ClothingItem,
+    val wearCount: Int,
+    val threshold: Int,
+    val statusLabel: String,
+    val lastWornLabel: String
+)
+
+private data class LaundryInsightsSummary(
+    val dueCount: Int,
+    val inRotationCount: Int,
+    val items: List<LaundryInsightItem>
+)
 
 @Composable
 private fun AnalyticsCard(label: String, value: String) {
@@ -349,4 +438,56 @@ private fun normalizeTimestamp(timestamp: Long): Long {
     } else {
         timestamp
     }
+}
+
+private fun buildLaundryInsights(
+    wardrobeItems: List<ClothingItem>,
+    history: List<OutfitHistoryEntry>
+): LaundryInsightsSummary {
+    val wearCounts = history
+        .flatMap { entry -> entry.items.map { item -> item.id to entry.wornAtTimestamp } }
+        .groupBy(keySelector = { it.first }, valueTransform = { it.second })
+
+    val items = wardrobeItems
+        .mapNotNull { item ->
+            val timestamps = wearCounts[item.id].orEmpty().sortedDescending()
+            if (timestamps.isEmpty()) {
+                return@mapNotNull null
+            }
+            val threshold = laundryThresholdForCategory(item.category)
+            val wearCount = timestamps.size
+            val statusLabel = when {
+                wearCount >= threshold -> "Wash soon"
+                wearCount == threshold - 1 -> "Almost due"
+                else -> "In rotation"
+            }
+            LaundryInsightItem(
+                item = item,
+                wearCount = wearCount,
+                threshold = threshold,
+                statusLabel = statusLabel,
+                lastWornLabel = formatCardDate(timestamps.first())
+            )
+        }
+        .sortedWith(compareByDescending<LaundryInsightItem> { it.wearCount }.thenBy { it.item.name ?: it.item.category })
+
+    return LaundryInsightsSummary(
+        dueCount = items.count { it.statusLabel == "Wash soon" },
+        inRotationCount = items.count { it.statusLabel == "In rotation" },
+        items = items
+    )
+}
+
+private fun laundryThresholdForCategory(category: String): Int {
+    return when (category.trim().lowercase()) {
+        "top", "tops", "shirt", "t-shirt" -> 3
+        "bottom", "bottoms", "pants", "jeans", "skirt", "shorts" -> 5
+        "shoes", "shoe", "sneakers", "boots" -> 7
+        "outerwear", "jacket", "coat", "hoodie", "sweater" -> 6
+        else -> 4
+    }
+}
+
+private fun formatCardDate(timestamp: Long): String {
+    return SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(normalizeTimestamp(timestamp)))
 }

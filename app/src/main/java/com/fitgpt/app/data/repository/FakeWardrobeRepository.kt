@@ -2,6 +2,9 @@ package com.fitgpt.app.data.repository
 
 import com.fitgpt.app.data.model.AiRecommendationResult
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.data.model.DuplicateCandidate
+import com.fitgpt.app.data.model.ForecastRecommendationResult
+import com.fitgpt.app.data.model.ForecastWeatherContext
 import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.PlannedOutfit
@@ -258,6 +261,34 @@ class FakeWardrobeRepository : WardrobeRepository {
         )
     }
 
+    override suspend fun getDuplicateCandidates(threshold: Float, limit: Int): List<DuplicateCandidate> {
+        val activeItems = wardrobeItems.filter { !it.isArchived }
+        val seenPairs = mutableSetOf<String>()
+        return activeItems.flatMapIndexed { index, item ->
+            activeItems.drop(index + 1).mapNotNull { other ->
+                val sameCategory = item.category.equals(other.category, ignoreCase = true)
+                val sameColor = item.color.equals(other.color, ignoreCase = true)
+                val sameSeason = item.season.equals(other.season, ignoreCase = true)
+                val score = listOf(sameCategory, sameColor, sameSeason).count { it } / 3f
+                val key = listOf(item.id, other.id).sorted().joinToString(":")
+                if (score < threshold || !seenPairs.add(key)) {
+                    null
+                } else {
+                    DuplicateCandidate(
+                        item = item,
+                        duplicateItem = other,
+                        similarityScore = score,
+                        reasons = buildList {
+                            if (sameCategory) add("same-category")
+                            if (sameColor) add("same-color")
+                            if (sameSeason) add("same-season")
+                        }
+                    )
+                }
+            }
+        }.sortedByDescending { it.similarityScore }.take(limit)
+    }
+
     override suspend fun getRecommendations(
         manualTemp: Int?,
         timeContext: String?,
@@ -337,6 +368,50 @@ class FakeWardrobeRepository : WardrobeRepository {
         itemIds: List<Int>?
     ) {
         // No-op in fake repository; recommendation feedback behavior is verified through backend tests.
+    }
+
+    override suspend fun getForecastRecommendation(
+        city: String?,
+        hoursAhead: Int,
+        manualTemp: Int?,
+        weatherCategory: String?,
+        occasion: String?,
+        exclude: String?,
+        stylePreference: String?,
+        preferredSeasons: List<String>
+    ): ForecastRecommendationResult {
+        val items = getRecommendations(
+            manualTemp = manualTemp,
+            timeContext = null,
+            planDate = null,
+            exclude = exclude,
+            weatherCity = city,
+            weatherLat = null,
+            weatherLon = null,
+            weatherCategory = weatherCategory,
+            occasion = occasion
+        )
+        return ForecastRecommendationResult(
+            items = items,
+            explanation = "Forecast planner used the upcoming weather context to keep this outfit practical.",
+            outfitScore = 0.76f,
+            source = "fake_repository",
+            fallbackUsed = false,
+            warning = null,
+            suggestionId = "forecast-${hoursAhead}-${items.joinToString("-") { it.id.toString() }}",
+            forecast = ForecastWeatherContext(
+                city = city ?: "Current location",
+                forecastTimestamp = System.currentTimeMillis() + (hoursAhead * 60L * 60L * 1000L),
+                temperatureF = manualTemp ?: 68,
+                weatherCategory = weatherCategory ?: "mild",
+                condition = "Partly Cloudy",
+                description = "Cooler weather later today",
+                windMph = 8f,
+                rainMm = 0f,
+                snowMm = 0f,
+                source = "forecast"
+            )
+        )
     }
 
     override suspend fun getRecommendationOptions(

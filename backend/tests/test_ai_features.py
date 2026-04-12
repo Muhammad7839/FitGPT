@@ -102,6 +102,44 @@ def test_ai_chat_success(client, monkeypatch):
     assert "neutral top" in body["reply"].lower()
 
 
+def test_ai_chat_system_prompt_uses_continuity_and_wardrobe_context(client, monkeypatch):
+    token = register_and_login(client, "ai-chat-context@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+    _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
+    _create_item(client, auth, category="Outerwear", color="Olive", name="Olive Jacket", clothing_type="jacket")
+
+    captured = {}
+
+    class FakeProvider:
+        is_available = True
+
+        @staticmethod
+        def chat(messages):
+            captured["messages"] = messages
+            return "I’d keep the black tee and bring in the olive jacket for structure."
+
+    monkeypatch.setattr("app.routes.ai_service.provider_client", FakeProvider())
+    response = client.post(
+        "/ai/chat",
+        headers=auth,
+        json={
+            "messages": [
+                {"role": "user", "content": "I want something casual tonight"},
+                {"role": "assistant", "content": "Got it, do you want layers?"},
+                {"role": "user", "content": "Yes, but not too heavy"},
+            ]
+        },
+    )
+    assert response.status_code == 200
+    system_prompt = captured["messages"][0].content
+    assert "use prior turns in the conversation" in system_prompt.lower()
+    assert "wardrobe summary:" in system_prompt.lower()
+    assert "outerwear" in system_prompt.lower()
+    assert "high-taste personal stylist" in system_prompt.lower()
+    assert "shape, balance, contrast, proportion" in system_prompt.lower()
+    assert "overly fancy fashion-editor language" in system_prompt.lower()
+
+
 def test_ai_chat_fallback_when_provider_unavailable(client, monkeypatch):
     token = register_and_login(client, "ai-chat-fallback@example.com", "password123")
     auth = {"Authorization": f"Bearer {token}"}
@@ -136,6 +174,7 @@ def test_ai_chat_fallback_greets_user_naturally(client, monkeypatch):
     assert body["fallback_used"] is True
     assert "hi" in body["reply"].lower()
     assert "aura" in body["reply"].lower()
+    assert "thoughtful" in body["reply"].lower() or "vibe" in body["reply"].lower()
 
 
 def test_ai_chat_fallback_redirects_non_style_requests(client, monkeypatch):
@@ -150,8 +189,38 @@ def test_ai_chat_fallback_redirects_non_style_requests(client, monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["fallback_used"] is True
-    assert "sorry" in body["reply"].lower()
-    assert "outfit" in body["reply"].lower()
+    assert "style help" in body["reply"].lower() or "outfit" in body["reply"].lower()
+    assert "occasion" in body["reply"].lower() or "weather" in body["reply"].lower()
+
+
+def test_ai_chat_fallback_builds_on_previous_turn_with_wardrobe_context(client, monkeypatch):
+    token = register_and_login(client, "ai-chat-follow-up@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+    _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
+    _create_item(client, auth, category="Bottom", color="Blue", name="Blue Jeans", clothing_type="jeans")
+    _create_item(client, auth, category="Outerwear", color="Olive", name="Olive Jacket", clothing_type="jacket")
+
+    class FakeProvider:
+        is_available = False
+
+    monkeypatch.setattr("app.routes.ai_service.provider_client", FakeProvider())
+    response = client.post(
+        "/ai/chat",
+        headers=auth,
+        json={
+            "messages": [
+                {"role": "user", "content": "I want something casual tonight"},
+                {"role": "assistant", "content": "Do you want layers?"},
+                {"role": "user", "content": "Yes, but not too heavy"},
+            ]
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["fallback_used"] is True
+    assert "building on what you just said" in body["reply"].lower()
+    assert "wardrobe" in body["reply"].lower() or "items" in body["reply"].lower()
+    assert "temperature" in body["reply"].lower() or "setting" in body["reply"].lower()
 
 
 def test_chat_alias_uses_same_response_contract(client, monkeypatch):

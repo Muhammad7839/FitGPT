@@ -35,6 +35,7 @@ import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SelectableField
 import com.fitgpt.app.ui.common.SectionHeader
 import com.fitgpt.app.ui.common.WebCard
+import com.fitgpt.app.ui.common.WebBadge
 import com.fitgpt.app.ui.common.weatherStatusMessage
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
@@ -298,6 +299,42 @@ fun RecommendationScreen(
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                     }
+
+                    WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "Recommendation context",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                WebBadge(text = "Source: ${recommendationMeta.source}")
+                                WebBadge(text = "Score: ${String.format("%.2f", recommendationMeta.outfitScore)}")
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                recommendationMeta.weatherCategory?.takeIf { it.isNotBlank() }?.let {
+                                    WebBadge(text = "Weather: $it")
+                                }
+                                recommendationMeta.occasion?.takeIf { it.isNotBlank() }?.let {
+                                    WebBadge(text = "Occasion: $it")
+                                }
+                                if (recommendationMeta.fallbackUsed) {
+                                    WebBadge(text = "Fallback")
+                                }
+                            }
+                            recommendationMeta.warning?.takeIf { it.isNotBlank() }?.let { warning ->
+                                Text(
+                                    text = warning,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     recommendationMeta.promptFeedback?.takeIf { it.shouldPrompt }?.let { promptMeta ->
                         WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {

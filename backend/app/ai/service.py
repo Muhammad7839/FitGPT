@@ -338,46 +338,70 @@ class AiService:
         wardrobe_items: list[models.ClothingItem],
         messages: list[ProviderMessage],
     ) -> str:
-        latest_user_text = next(
-            (
-                message.content.strip()
-                for message in reversed(messages)
-                if message.role == "user" and message.content.strip()
-            ),
-            "",
+        latest_user_text = _latest_message_content(messages, role="user")
+        previous_user_text = _previous_user_message_content(messages)
+        style_context_active = _looks_style_related(latest_user_text) or (
+            previous_user_text and _looks_style_related(previous_user_text)
         )
         if _looks_like_greeting(latest_user_text):
             if wardrobe_items:
                 return (
-                    "Hi, I’m AURA. Tell me the weather, occasion, or one piece you want to wear, "
-                    "and I’ll help build a look from your wardrobe."
+                    "Hi, I’m AURA. I can help you put together something that feels styled without making it feel overdone. "
+                    "Tell me the occasion, weather, or one piece you want to wear, and I’ll build the look around it."
                 )
             return (
-                "Hi, I’m AURA. I can help with outfits, packing, and wardrobe decisions. "
-                "Add a few items or tell me the occasion you’re dressing for, and we’ll start there."
+                "Hi, I’m AURA. I can help with outfits, packing, and style decisions in a way that feels a little more thoughtful than generic fashion advice. "
+                "Tell me where you’re going, the vibe you want, or one piece you want to build around."
             )
-        if latest_user_text and not _looks_style_related(latest_user_text):
+        if latest_user_text and not style_context_active:
             return (
-                "Sorry, I can help with outfits, wardrobe planning, packing, and style decisions. "
-                "Tell me the weather, the occasion, or what item you want to wear, and I’ll take it from there."
+                "I’m best at outfit, wardrobe, packing, and style help. "
+                "Tell me the occasion, weather, or a piece you feel like wearing and I’ll help you style it."
             )
         if not wardrobe_items:
             return (
-                "I can help you style outfits. Start by adding a top, bottom, and shoes, "
-                "then ask for a look by weather, occasion, or mood."
+                "I can absolutely help with that. Start by adding a few basics like tops, bottoms, and shoes, "
+                "or tell me the occasion, weather, and vibe you want so I can guide you in a more styled direction."
             )
-        categories = sorted(
-            {_normalize_category(item.category) for item in wardrobe_items if item.category}
-        )
-        category_text = ", ".join(categories) or "your current items"
+        wardrobe_summary = prompts.summarize_wardrobe_for_chat(wardrobe_items)
+        style_seed = _style_seed_from_text(latest_user_text, wardrobe_items)
+        if previous_user_text:
+            return (
+                f"Got it. Building on what you just said, I’d lean {style_seed}. "
+                f"From your wardrobe, I’m seeing {wardrobe_summary.lower()} "
+                "Tell me the setting or the temperature and I’ll turn that into a more finished outfit."
+            )
         return (
-            f"You currently have {len(wardrobe_items)} items across {category_text}. "
-            "Tell me the weather or occasion, and I’ll put together a practical outfit from what you already own."
+            f"I can work with that. I’m seeing {wardrobe_summary.lower()} "
+            f"A strong next step would be to start {style_seed}. "
+            "Tell me the occasion, weather, or item you want to center and I’ll make it feel more pulled together."
         )
 
 
 def _normalize_category(value: str) -> str:
     return value.strip().lower()
+
+
+def _latest_message_content(messages: list[ProviderMessage], *, role: str) -> str:
+    return next(
+        (
+            message.content.strip()
+            for message in reversed(messages)
+            if message.role == role and message.content.strip()
+        ),
+        "",
+    )
+
+
+def _previous_user_message_content(messages: list[ProviderMessage]) -> str:
+    user_messages = [
+        message.content.strip()
+        for message in messages
+        if message.role == "user" and message.content.strip()
+    ]
+    if len(user_messages) < 2:
+        return ""
+    return user_messages[-2]
 
 
 def _looks_like_greeting(message: str) -> bool:
@@ -439,5 +463,25 @@ def _looks_style_related(message: str) -> bool:
         "formal",
         "casual",
         "help",
+        "vibe",
+        "smart casual",
+        "interview",
+        "wedding",
+        "cute",
+        "stylish",
     }
     return any(keyword in normalized for keyword in style_keywords)
+
+
+def _style_seed_from_text(message: str, wardrobe_items: list[models.ClothingItem]) -> str:
+    normalized = message.strip().lower()
+    if any(token in normalized for token in {"dress up", "dressy", "formal", "elegant", "wedding", "date"}):
+        return "toward a cleaner, more polished combination"
+    if any(token in normalized for token in {"casual", "relaxed", "comfortable", "comfy", "weekend"}):
+        return "toward an easy, relaxed combination"
+    if any(token in normalized for token in {"work", "office", "meeting", "interview"}):
+        return "toward something sharp but still comfortable enough for the day"
+    categories = {_normalize_category(item.category) for item in wardrobe_items if item.category}
+    if "outerwear" in categories or "jacket" in categories:
+        return "with a strong base layer and an easy outer layer"
+    return "with a balanced top, bottom, and shoes"

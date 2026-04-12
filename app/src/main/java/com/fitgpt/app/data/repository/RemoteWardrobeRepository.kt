@@ -5,6 +5,9 @@ package com.fitgpt.app.data.repository
 
 import com.fitgpt.app.data.model.AiRecommendationResult
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.data.model.DuplicateCandidate
+import com.fitgpt.app.data.model.ForecastRecommendationResult
+import com.fitgpt.app.data.model.ForecastWeatherContext
 import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.data.model.PlannedOutfit
@@ -178,6 +181,28 @@ class RemoteWardrobeRepository(
         ).toDomain()
     }
 
+    override suspend fun getDuplicateCandidates(threshold: Float, limit: Int): List<DuplicateCandidate> {
+        val activeItems = if (cachedItemsById.isEmpty()) {
+            getWardrobeItems(includeArchived = true)
+        } else {
+            cachedItemsById.values.toList()
+        }
+        val itemsById = activeItems.associateBy { it.id }
+        return api.getDuplicateCandidates(
+            threshold = threshold,
+            limit = limit
+        ).candidates.mapNotNull { candidate ->
+            val primary = itemsById[candidate.itemId] ?: return@mapNotNull null
+            val duplicate = itemsById[candidate.duplicateItemId] ?: return@mapNotNull null
+            DuplicateCandidate(
+                item = primary,
+                duplicateItem = duplicate,
+                similarityScore = candidate.similarityScore,
+                reasons = candidate.reasons
+            )
+        }
+    }
+
     override suspend fun getRecommendations(
         manualTemp: Int?,
         timeContext: String?,
@@ -299,6 +324,49 @@ class RemoteWardrobeRepository(
                 suggestionId = suggestionId,
                 signal = signal,
                 itemIds = itemIds
+            )
+        )
+    }
+
+    override suspend fun getForecastRecommendation(
+        city: String?,
+        hoursAhead: Int,
+        manualTemp: Int?,
+        weatherCategory: String?,
+        occasion: String?,
+        exclude: String?,
+        stylePreference: String?,
+        preferredSeasons: List<String>
+    ): ForecastRecommendationResult {
+        val response = api.getForecastRecommendation(
+            city = city?.trim()?.takeIf { it.isNotEmpty() },
+            hoursAhead = hoursAhead,
+            manualTemp = manualTemp,
+            weatherCategory = weatherCategory,
+            occasion = occasion,
+            exclude = exclude,
+            stylePreference = stylePreference,
+            preferredSeasons = preferredSeasons
+        )
+        return ForecastRecommendationResult(
+            items = response.items.map { dto -> dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl)) },
+            explanation = response.explanation,
+            outfitScore = response.outfitScore,
+            source = response.source,
+            fallbackUsed = response.fallbackUsed,
+            warning = response.warning,
+            suggestionId = response.suggestionId,
+            forecast = ForecastWeatherContext(
+                city = response.forecast.city,
+                forecastTimestamp = response.forecast.forecastTimestamp,
+                temperatureF = response.forecast.temperatureF,
+                weatherCategory = response.forecast.weatherCategory,
+                condition = response.forecast.condition,
+                description = response.forecast.description,
+                windMph = response.forecast.windMph,
+                rainMm = response.forecast.rainMm,
+                snowMm = response.forecast.snowMm,
+                source = response.forecast.source
             )
         )
     }

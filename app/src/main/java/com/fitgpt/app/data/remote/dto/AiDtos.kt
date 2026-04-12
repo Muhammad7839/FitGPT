@@ -124,3 +124,39 @@ data class RecommendationFeedbackResponseDto(
     val suggestionId: String,
     val signal: String
 )
+
+data class ForecastWeatherDto(
+    val city: String,
+    @SerializedName("forecast_timestamp")
+    val forecastTimestamp: Long,
+    @SerializedName("temperature_f")
+    val temperatureF: Int,
+    @SerializedName("weather_category")
+    val weatherCategory: String,
+    val condition: String,
+    val description: String,
+    @SerializedName("wind_mph")
+    val windMph: Float,
+    @SerializedName("rain_mm")
+    val rainMm: Float,
+    @SerializedName("snow_mm")
+    val snowMm: Float,
+    val source: String
+)
+
+data class ForecastRecommendationResponseDto(
+    val items: List<ClothingItemDto>,
+    val explanation: String,
+    @SerializedName("outfit_score")
+    val outfitScore: Float = 0f,
+    @SerializedName("weather_category")
+    val weatherCategory: String?,
+    val occasion: String?,
+    val source: String,
+    @SerializedName("fallback_used")
+    val fallbackUsed: Boolean,
+    val warning: String?,
+    @SerializedName("suggestion_id")
+    val suggestionId: String?,
+    val forecast: ForecastWeatherDto
+)

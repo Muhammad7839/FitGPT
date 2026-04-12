@@ -2,6 +2,8 @@ package com.fitgpt.app.data.repository
 
 import com.fitgpt.app.data.model.AiRecommendationResult
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.data.model.DuplicateCandidate
+import com.fitgpt.app.data.model.ForecastRecommendationResult
 import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.PlannedOutfit
@@ -46,6 +48,7 @@ interface WardrobeRepository {
     suspend fun getFavoriteItems(): List<ClothingItem>
     suspend fun getWardrobeGaps(): WardrobeGapAnalysis
     suspend fun getUnderusedAlerts(analysisWindowDays: Int = 21, maxResults: Int = 20): UnderusedAlertsResult
+    suspend fun getDuplicateCandidates(threshold: Float = 0.72f, limit: Int = 20): List<DuplicateCandidate>
     suspend fun getRecommendations(
         manualTemp: Int? = null,
         timeContext: String? = null,
@@ -90,6 +93,16 @@ interface WardrobeRepository {
         signal: String,
         itemIds: List<Int>? = null
     )
+    suspend fun getForecastRecommendation(
+        city: String? = null,
+        hoursAhead: Int = 24,
+        manualTemp: Int? = null,
+        weatherCategory: String? = null,
+        occasion: String? = null,
+        exclude: String? = null,
+        stylePreference: String? = null,
+        preferredSeasons: List<String> = emptyList()
+    ): ForecastRecommendationResult
     suspend fun getCurrentWeather(city: String? = null, lat: Double? = null, lon: Double? = null): WeatherSnapshot
     suspend fun markOutfitAsWorn(items: List<ClothingItem>, wornAtTimestamp: Long)
 
