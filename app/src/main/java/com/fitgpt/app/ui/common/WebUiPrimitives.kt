@@ -1,6 +1,7 @@
 package com.fitgpt.app.ui.common
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,6 +37,8 @@ fun WebCard(
     content: @Composable () -> Unit
 ) {
     val shape = RoundedCornerShape(22.dp)
+    val isDarkTheme = isSystemInDarkTheme()
+    val cardAlpha = if (isDarkTheme) 0.72f else 0.6f
     val cardContent: @Composable () -> Unit = {
         Column {
             if (accentTop) {
@@ -64,7 +67,7 @@ fun WebCard(
             shape = shape,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.26f)),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = cardAlpha)
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
         ) {
@@ -77,7 +80,7 @@ fun WebCard(
             shape = shape,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.26f)),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = cardAlpha)
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
         ) {

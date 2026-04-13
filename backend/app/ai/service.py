@@ -48,10 +48,24 @@ class RecommendationContext:
     manual_temp: Optional[int]
     weather_category: Optional[str]
     occasion: Optional[str]
+    time_context: Optional[str]
     exclude: Optional[str]
     style_preference: Optional[str]
     preferred_seasons: list[str]
     request_id: str
+
+
+@dataclass(frozen=True)
+class ChatFallbackContext:
+    """Derived context used to keep fallback chat replies conversational."""
+
+    latest_user_text: str
+    previous_user_text: str
+    latest_intent: str
+    last_style_intent: str
+    style_seed: str
+    context_label: str
+    variation_seed: int
 
 
 class AiService:
@@ -109,7 +123,8 @@ class AiService:
         context: RecommendationContext,
     ) -> RecommendationResult:
         all_items = crud.get_clothing_items_for_user(db, user.id, include_archived=False)
-        recent_fingerprints = set(history.get_recent_fingerprints(db, user.id))
+        recent_fingerprints = history.get_recent_fingerprints(db, user.id)
+        recent_fingerprint_set = set(recent_fingerprints)
         item_map = {item.id: item for item in all_items}
         effective_preferred_seasons = crud.resolve_preferred_seasons(context.preferred_seasons)
         feedback_signals = crud.get_recommendation_feedback_signals_for_user(db, user.id)
@@ -120,6 +135,7 @@ class AiService:
             manual_temp=context.manual_temp,
             weather_category=context.weather_category,
             occasion=context.occasion,
+            time_context=context.time_context,
             exclude=context.exclude,
             style_preference=context.style_preference,
             preferred_seasons=effective_preferred_seasons,
@@ -139,6 +155,7 @@ class AiService:
                 manual_temp=context.manual_temp,
                 weather_category=context.weather_category,
                 occasion=context.occasion,
+                time_context=context.time_context,
                 exclude=context.exclude,
                 style_preference=context.style_preference,
                 preferred_seasons=effective_preferred_seasons,
@@ -188,6 +205,7 @@ class AiService:
             wardrobe_items=all_items,
             weather_category=deterministic_pick.weather_category,
             occasion=context.occasion,
+            time_context=context.time_context,
             exclude=context.exclude,
             style_preference=context.style_preference,
             preferred_seasons=effective_preferred_seasons,
@@ -208,7 +226,7 @@ class AiService:
                 raise ValueError("AI recommendation returned too few valid items")
 
             ai_fingerprint = ",".join(str(item.id) for item in sorted(ai_items, key=lambda item: item.id))
-            if ai_fingerprint in recent_fingerprints:
+            if ai_fingerprint in recent_fingerprint_set:
                 logger.info(
                     "request_id=%s ai_recommendation_repeat_detected fingerprint=%s",
                     context.request_id,
@@ -285,6 +303,7 @@ class AiService:
                 user=user,
                 weather_category=deterministic_pick.weather_category,
                 occasion=context.occasion,
+                time_context=context.time_context,
                 style_preference=context.style_preference,
                 preferred_seasons=effective_preferred_seasons,
             )
@@ -302,7 +321,13 @@ class AiService:
             )
             return RecommendationResult(
                 items=ai_items,
-                explanation=parsed.explanation,
+                explanation=_merge_recommendation_explanations(
+                    ai_explanation=parsed.explanation,
+                    deterministic_explanation=ai_candidate.explanation,
+                    weather_category=deterministic_pick.weather_category,
+                    occasion=context.occasion,
+                    time_context=context.time_context,
+                ),
                 outfit_score=ai_candidate.score + crud.recommendation_feedback_delta(ai_feedback_signal),
                 source="ai",
                 fallback_used=False,
@@ -340,45 +365,185 @@ class AiService:
     ) -> str:
         latest_user_text = _latest_message_content(messages, role="user")
         previous_user_text = _previous_user_message_content(messages)
-        style_context_active = _looks_style_related(latest_user_text) or (
-            previous_user_text and _looks_style_related(previous_user_text)
+        context = _build_chat_fallback_context(
+            latest_user_text=latest_user_text,
+            previous_user_text=previous_user_text,
+            messages=messages,
+            wardrobe_items=wardrobe_items,
         )
-        if _looks_like_greeting(latest_user_text):
+
+        if context.latest_intent == "greeting":
             if wardrobe_items:
-                return (
-                    "Hi, I’m AURA. I can help you put together something that feels styled without making it feel overdone. "
-                    "Tell me the occasion, weather, or one piece you want to wear, and I’ll build the look around it."
+                return _pick_variant(
+                    (
+                        "Hi, I’m AURA. I can help you make this feel styled without overthinking it. A good place to start is the piece you already want to wear. Want me to build a quick outfit around it?",
+                        "Hi, I’m AURA. Start with the piece you already feel like wearing and I’ll shape the rest around it. Want me to turn that into a quick outfit?",
+                        "Hi. Keep this easy: pick the piece you already want on, and I can make the rest feel intentional. Want me to build around it?",
+                    ),
+                    context.variation_seed,
                 )
             return (
-                "Hi, I’m AURA. I can help with outfits, packing, and style decisions in a way that feels a little more thoughtful than generic fashion advice. "
-                "Tell me where you’re going, the vibe you want, or one piece you want to build around."
-            )
-        if latest_user_text and not style_context_active:
-            return (
-                "I’m best at outfit, wardrobe, packing, and style help. "
-                "Tell me the occasion, weather, or a piece you feel like wearing and I’ll help you style it."
+                _pick_variant(
+                    (
+                        "Hi, I’m AURA. I can help you make outfit decisions faster and make them feel more pulled together. We can start with where you’re going, the vibe you want, or one piece you feel like wearing. Want me to build a quick outfit?",
+                        "Hi, I’m AURA. We can keep this simple: tell me where you’re headed, the vibe, or one piece you want to wear, and I’ll shape it. Want a quick outfit?",
+                        "Hi. I can help you get to an outfit faster. Give me the plan, the mood, or one item you want in the mix, and I’ll take it from there. Want me to build one now?",
+                    ),
+                    context.variation_seed,
+                )
             )
         if not wardrobe_items:
-            return (
-                "I can absolutely help with that. Start by adding a few basics like tops, bottoms, and shoes, "
-                "or tell me the occasion, weather, and vibe you want so I can guide you in a more styled direction."
+            if _is_recommendation_intent(context.latest_intent):
+                return _compose_chat_reply(
+                    context=context,
+                    suggestion=f"If you’re {context.context_label}, start with {context.style_seed}.",
+                    question="Do you want to keep it casual, clean it up a bit, or build it around the weather?",
+                    acknowledge=(
+                        "Makes sense.",
+                        "That gives me enough to start.",
+                        "Honestly, I’d keep this simple.",
+                    ),
+                    opinion=(
+                        "",
+                        "No need to overdo it here.",
+                        "A clean base is usually the right move.",
+                    ),
+                )
+            if _has_style_context(context):
+                return _compose_chat_reply(
+                    context=context,
+                    suggestion=f"Since you mentioned {context.context_label}, I’d lean {context.style_seed}. I don’t have your wardrobe yet, but I can still shape this.",
+                    question="Want to give me the weather or one piece you want to wear?",
+                    acknowledge=(
+                        "That helps.",
+                        "Alright, that gives me the shape of it.",
+                        "Good, that points it in the right direction.",
+                    ),
+                    opinion=(
+                        "",
+                        "I wouldn’t make this too complicated.",
+                        "Simple usually looks better here.",
+                    ),
+                )
+            return _compose_chat_reply(
+                context=context,
+                suggestion="Start with something easy and wearable, then sharpen it once the plan is clearer.",
+                question="Want me to keep it casual, make it cleaner, or just build a quick outfit?",
+                acknowledge=(
+                    "I can help with that.",
+                    "Sure.",
+                    "Alright.",
+                ),
+                opinion=(
+                    "",
+                    "I’d keep the first pass straightforward.",
+                    "Better to keep this clean than overstyled.",
+                ),
             )
         wardrobe_summary = prompts.summarize_wardrobe_for_chat(wardrobe_items)
-        style_seed = _style_seed_from_text(latest_user_text, wardrobe_items)
-        if previous_user_text:
-            return (
-                f"Got it. Building on what you just said, I’d lean {style_seed}. "
-                f"From your wardrobe, I’m seeing {wardrobe_summary.lower()} "
-                "Tell me the setting or the temperature and I’ll turn that into a more finished outfit."
+        if _is_recommendation_intent(context.latest_intent):
+            return _compose_chat_reply(
+                context=context,
+                suggestion=(
+                    f"If you’re {context.context_label}, I’d start with {context.style_seed}. "
+                    f"From your wardrobe, I’m seeing {wardrobe_summary.lower()}"
+                ),
+                question="Do you want me to keep it easy, make it cleaner, or pull one full outfit together?",
+                acknowledge=(
+                    "Makes sense.",
+                    "Alright.",
+                    "That’s easy to work with.",
+                ),
+                opinion=(
+                    "",
+                    "Honestly, this one is better kept clean.",
+                    "You do not need to overthink this.",
+                ),
             )
-        return (
-            f"I can work with that. I’m seeing {wardrobe_summary.lower()} "
-            f"A strong next step would be to start {style_seed}. "
-            "Tell me the occasion, weather, or item you want to center and I’ll make it feel more pulled together."
+        if _has_style_context(context):
+            return _compose_chat_reply(
+                context=context,
+                suggestion=(
+                    f"Since you mentioned {context.context_label}, I’d lean {context.style_seed}. "
+                    f"From your wardrobe, I’m seeing {wardrobe_summary.lower()}"
+                ),
+                question="Want me to refine it around the temperature or build it around one piece?",
+                acknowledge=(
+                    "That gives me enough to work with.",
+                    "Good, that helps.",
+                    "Alright, now we have direction.",
+                ),
+                opinion=(
+                    "",
+                    "I’d rather refine this than add more noise.",
+                    "This should feel considered, not fussy.",
+                ),
+            )
+        return _compose_chat_reply(
+            context=context,
+            suggestion=f"I can turn that into something more styled. From your wardrobe, I’m seeing {wardrobe_summary.lower()}",
+            question="Want me to make it more casual, a little cleaner, or build a quick outfit now?",
+            acknowledge=(
+                "Sure.",
+                "Alright.",
+                "Makes sense.",
+            ),
+            opinion=(
+                "",
+                "I’d keep the direction clean.",
+                "The best move here is usually the simpler one.",
+            ),
         )
+
+
+def _merge_recommendation_explanations(
+    *,
+    ai_explanation: str,
+    deterministic_explanation: str,
+    weather_category: Optional[str],
+    occasion: Optional[str],
+    time_context: Optional[str],
+) -> str:
+    cleaned_ai = (ai_explanation or "").strip()
+    cleaned_deterministic = (deterministic_explanation or "").strip()
+    if not cleaned_ai:
+        return cleaned_deterministic
+    if not cleaned_deterministic:
+        return cleaned_ai
+    if _explanation_mentions_context(
+        cleaned_ai,
+        weather_category=weather_category,
+        occasion=occasion,
+        time_context=time_context,
+    ):
+        return cleaned_ai
+    if cleaned_deterministic.lower() in cleaned_ai.lower():
+        return cleaned_ai
+    return f"{cleaned_ai.rstrip('.')} {cleaned_deterministic}".strip()
+
+
+def _explanation_mentions_context(
+    explanation: str,
+    *,
+    weather_category: Optional[str],
+    occasion: Optional[str],
+    time_context: Optional[str],
+) -> bool:
+    normalized = explanation.strip().lower()
+    if not normalized:
+        return False
+    mentions_color = "color" in normalized or "tone" in normalized or "contrast" in normalized
+    mentions_weather = bool(weather_category and weather_category.lower() in normalized) or "weather" in normalized
+    mentions_occasion = bool(occasion and occasion.lower() in normalized)
+    mentions_time = bool(time_context and time_context.lower() in normalized)
+    return mentions_color and mentions_weather and (mentions_occasion or mentions_time)
 
 
 def _normalize_category(value: str) -> str:
+    return value.strip().lower()
+
+
+def _normalize_message(value: str) -> str:
     return value.strip().lower()
 
 
@@ -405,7 +570,7 @@ def _previous_user_message_content(messages: list[ProviderMessage]) -> str:
 
 
 def _looks_like_greeting(message: str) -> bool:
-    normalized = message.strip().lower().strip("!?. ,")
+    normalized = _normalize_message(message).strip("!?. ,")
     if not normalized:
         return False
     greeting_tokens = {
@@ -421,8 +586,51 @@ def _looks_like_greeting(message: str) -> bool:
     return normalized in greeting_tokens
 
 
+def _detect_chat_intent(message: str) -> str:
+    normalized = _normalize_message(message)
+    if not normalized:
+        return "unknown"
+    if _looks_like_greeting(normalized):
+        return "greeting"
+
+    vague_recommendation_phrases = {
+        "what should i wear",
+        "help me choose",
+        "help me pick",
+        "help me decide",
+        "pick something",
+        "choose something",
+        "something casual",
+        "not sure what to wear",
+        "what do i wear",
+    }
+    if any(phrase in normalized for phrase in vague_recommendation_phrases):
+        return "vague_recommendation"
+
+    lifestyle_phrases = {
+        "going outside",
+        "go outside",
+        "going out",
+        "going somewhere",
+        "headed out",
+        "heading out",
+        "hanging out",
+        "hang out",
+        "out and about",
+        "just a walk",
+        "for a walk",
+        "taking a walk",
+    }
+    if any(phrase in normalized for phrase in lifestyle_phrases):
+        return "lifestyle"
+
+    if _looks_style_related(normalized):
+        return "explicit_style"
+    return "unknown"
+
+
 def _looks_style_related(message: str) -> bool:
-    normalized = message.strip().lower()
+    normalized = _normalize_message(message)
     if not normalized:
         return False
     style_keywords = {
@@ -457,11 +665,30 @@ def _looks_style_related(message: str) -> bool:
         "event",
         "trip",
         "travel",
+        "outside",
+        "outside?",
+        "outdoor",
+        "outdoors",
+        "outside today",
+        "go outside",
+        "going outside",
+        "going out",
+        "going somewhere",
+        "step out",
+        "walk",
+        "walking",
+        "park",
+        "brunch",
+        "coffee",
+        "lunch",
+        "hangout",
+        "hang out",
+        "hanging out",
+        "casual",
         "pack",
         "packing",
         "laundry",
         "formal",
-        "casual",
         "help",
         "vibe",
         "smart casual",
@@ -469,19 +696,142 @@ def _looks_style_related(message: str) -> bool:
         "wedding",
         "cute",
         "stylish",
+        "choose",
+        "pick",
+        "decide",
     }
     return any(keyword in normalized for keyword in style_keywords)
 
 
 def _style_seed_from_text(message: str, wardrobe_items: list[models.ClothingItem]) -> str:
-    normalized = message.strip().lower()
+    normalized = _normalize_message(message)
+    if any(
+        token in normalized
+        for token in {"outside", "going out", "go outside", "walk", "outdoor", "park", "coffee", "brunch"}
+    ):
+        return "an easy, weather-ready base with comfortable shoes"
     if any(token in normalized for token in {"dress up", "dressy", "formal", "elegant", "wedding", "date"}):
-        return "toward a cleaner, more polished combination"
+        return "a cleaner, more polished mix"
     if any(token in normalized for token in {"casual", "relaxed", "comfortable", "comfy", "weekend"}):
-        return "toward an easy, relaxed combination"
+        return "a relaxed base with one piece that adds shape"
     if any(token in normalized for token in {"work", "office", "meeting", "interview"}):
-        return "toward something sharp but still comfortable enough for the day"
+        return "something sharp but still comfortable enough for the day"
     categories = {_normalize_category(item.category) for item in wardrobe_items if item.category}
     if "outerwear" in categories or "jacket" in categories:
-        return "with a strong base layer and an easy outer layer"
-    return "with a balanced top, bottom, and shoes"
+        return "a clean base with an easy outer layer"
+    return "a balanced top, bottom, and shoes"
+
+
+def _last_style_intent(messages: list[ProviderMessage]) -> str:
+    for message in reversed(messages):
+        if message.role != "user" or not message.content.strip():
+            continue
+        intent = _detect_chat_intent(message.content)
+        if _is_recommendation_intent(intent) or intent == "explicit_style":
+            return intent
+    return "unknown"
+
+
+def _context_label_from_messages(latest_user_text: str, previous_user_text: str) -> str:
+    combined = f"{previous_user_text} {latest_user_text}".strip().lower()
+    if not combined:
+        return "getting dressed"
+    context_map = (
+        ("walk", "heading outside for a walk"),
+        ("coffee", "heading out for coffee"),
+        ("brunch", "heading out for brunch"),
+        ("errand", "running errands"),
+        ("office", "getting dressed for work"),
+        ("work", "getting dressed for work"),
+        ("meeting", "getting dressed for work"),
+        ("interview", "getting dressed for an interview"),
+        ("date", "getting dressed for a date"),
+        ("dinner", "going out for dinner"),
+        ("party", "going out"),
+        ("event", "going out"),
+        ("formal", "getting dressed for something more formal"),
+        ("casual", "keeping it casual"),
+        ("outside", "heading outside"),
+        ("going somewhere", "heading out"),
+        ("going out", "heading out"),
+        ("hanging out", "hanging out"),
+        ("hang out", "hanging out"),
+    )
+    for token, label in context_map:
+        if token in combined:
+            return label
+    return "getting dressed"
+
+
+def _build_chat_fallback_context(
+    *,
+    latest_user_text: str,
+    previous_user_text: str,
+    messages: list[ProviderMessage],
+    wardrobe_items: list[models.ClothingItem],
+) -> ChatFallbackContext:
+    combined_user_text = " ".join(
+        part for part in [previous_user_text, latest_user_text] if part
+    ).strip()
+    latest_intent = _detect_chat_intent(latest_user_text)
+    return ChatFallbackContext(
+        latest_user_text=latest_user_text,
+        previous_user_text=previous_user_text,
+        latest_intent=latest_intent,
+        last_style_intent=_last_style_intent(messages),
+        style_seed=_style_seed_from_text(combined_user_text or latest_user_text, wardrobe_items),
+        context_label=_context_label_from_messages(latest_user_text, previous_user_text),
+        variation_seed=_chat_variation_seed(messages, latest_user_text),
+    )
+
+
+def _has_style_context(context: ChatFallbackContext) -> bool:
+    if _is_recommendation_intent(context.latest_intent) or context.latest_intent == "explicit_style":
+        return True
+    previous_intent = _detect_chat_intent(context.previous_user_text)
+    return previous_intent == "explicit_style" or _is_recommendation_intent(previous_intent) or (
+        context.last_style_intent == "explicit_style" or _is_recommendation_intent(context.last_style_intent)
+    )
+
+
+def _is_recommendation_intent(intent: str) -> bool:
+    return intent in {"vague_recommendation", "lifestyle"}
+
+
+def _pick_variant(options: tuple[str, ...], seed: int) -> str:
+    if not options:
+        return ""
+    return options[seed % len(options)]
+
+
+def _compose_chat_reply(
+    *,
+    context: ChatFallbackContext,
+    suggestion: str,
+    question: str,
+    acknowledge: tuple[str, ...],
+    opinion: tuple[str, ...],
+) -> str:
+    ack = _pick_variant(acknowledge, context.variation_seed).strip()
+    aside = _pick_variant(opinion, context.variation_seed + 1).strip()
+    suggestion = suggestion.strip()
+    question = question.strip()
+    pattern = context.variation_seed % 3
+
+    if pattern == 0:
+        parts = [ack, suggestion, aside, question]
+    elif pattern == 1:
+        parts = [suggestion, aside, question]
+    else:
+        parts = [question, ack, suggestion, aside]
+    return " ".join(part for part in parts if part).strip()
+
+
+def _chat_variation_seed(messages: list[ProviderMessage], latest_user_text: str) -> int:
+    normalized_latest = _normalize_message(latest_user_text)
+    repeated_prompt_count = sum(
+        1
+        for message in messages
+        if message.role == "user" and _normalize_message(message.content) == normalized_latest
+    )
+    return max(0, (len(messages) * 3) + repeated_prompt_count - 1)

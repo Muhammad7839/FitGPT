@@ -97,8 +97,10 @@ fun DashboardScreen(
     }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val granted = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (granted) {
             fetchFromCurrentLocation()
         } else {
@@ -221,13 +223,22 @@ fun DashboardScreen(
                     when (weatherUiStatus.type) {
                         WeatherStatusType.PERMISSION_NEEDED -> {
                             Button(
-                                onClick = { locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION) },
+                                onClick = {
+                                    locationPermissionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                        )
+                                    )
+                                },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Enable Location Weather")
+                                Text("Enable Location")
                             }
                         }
                         WeatherStatusType.MANUAL_CITY_FALLBACK,
+                        WeatherStatusType.LOCATION_READY_WEATHER_UNAVAILABLE,
+                        WeatherStatusType.STALE_WEATHER,
                         WeatherStatusType.UNAVAILABLE,
                         WeatherStatusType.IDLE -> {
                             if (weatherUiStatus.type != WeatherStatusType.IDLE) {

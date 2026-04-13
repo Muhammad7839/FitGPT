@@ -402,13 +402,14 @@ def _resolve_recommendation_weather_context(
     weather_lat: Optional[float],
     weather_lon: Optional[float],
     weather_category: Optional[str],
-) -> tuple[Optional[int], str, Optional[str]]:
+) -> tuple[Optional[int], str, Optional[str], bool]:
     normalized_city = weather_city.strip() if weather_city else None
     normalized_weather_category = _normalize_weather_category(weather_category)
     fallback_temp = manual_temp if manual_temp is not None else 68
 
     effective_temp = manual_temp
     resolved_weather_city = normalized_city
+    weather_available = True
 
     if effective_temp is None and normalized_city and weather_lat is None and weather_lon is None:
         try:
@@ -417,6 +418,7 @@ def _resolve_recommendation_weather_context(
             logger.warning("Weather lookup failed for recommendation city=%s error=%s", normalized_city, exc)
             effective_temp = fallback_temp
             normalized_weather_category = normalized_weather_category or map_temperature_to_category(fallback_temp)
+            weather_available = False
 
     if effective_temp is None and (normalized_city or (weather_lat is not None and weather_lon is not None)):
         try:
@@ -432,13 +434,14 @@ def _resolve_recommendation_weather_context(
             logger.warning("Weather lookup failed for recommendation weather=%s", exc)
             effective_temp = fallback_temp
             normalized_weather_category = normalized_weather_category or map_temperature_to_category(fallback_temp)
+            weather_available = False
 
     if effective_temp is not None and not normalized_weather_category:
         normalized_weather_category = map_temperature_to_category(effective_temp)
     if not normalized_weather_category:
         normalized_weather_category = "mild"
 
-    return effective_temp, normalized_weather_category, resolved_weather_city
+    return effective_temp, normalized_weather_category, resolved_weather_city, weather_available
 
 
 def _build_weather_unavailable_response(
@@ -1262,6 +1265,7 @@ def get_forecast_recommendations(
             manual_temp=forecast.temperature_f,
             weather_category=forecast.weather_category,
             occasion=occasion,
+            time_context=None,
             exclude=exclude,
             style_preference=style_preference,
             preferred_seasons=preferred_seasons,
@@ -1313,7 +1317,7 @@ def get_recommendations(
     current_user: models.User = Depends(get_current_user),
 ):
     try:
-        effective_temp, normalized_weather_category, resolved_weather_city = _resolve_recommendation_weather_context(
+        effective_temp, normalized_weather_category, resolved_weather_city, weather_available = _resolve_recommendation_weather_context(
             manual_temp=manual_temp,
             weather_city=weather_city,
             weather_lat=weather_lat,
@@ -1329,6 +1333,7 @@ def get_recommendations(
         manual_temp=effective_temp,
         weather_category=normalized_weather_category,
         occasion=occasion,
+        time_context=time_context,
         exclude=exclude,
         limit=1,
     )
@@ -1366,6 +1371,7 @@ def get_recommendations(
         "outfit_score": top_option["outfit_score"],
         "confidence_score": top_option["outfit_score"],
         "weather_category": normalized_weather_category,
+        "weather_available": weather_available,
         "occasion": occasion,
         "prompt_feedback": prompt_feedback,
     }
@@ -1386,10 +1392,9 @@ def get_recommendation_options(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    _ = time_context
     _ = plan_date
     try:
-        effective_temp, normalized_weather_category, _ = _resolve_recommendation_weather_context(
+        effective_temp, normalized_weather_category, _, weather_available = _resolve_recommendation_weather_context(
             manual_temp=manual_temp,
             weather_city=weather_city,
             weather_lat=weather_lat,
@@ -1405,6 +1410,7 @@ def get_recommendation_options(
         manual_temp=effective_temp,
         weather_category=normalized_weather_category,
         occasion=occasion,
+        time_context=time_context,
         exclude=exclude,
         limit=limit,
     )
@@ -1419,6 +1425,7 @@ def get_recommendation_options(
             for option in options
         ],
         "weather_category": normalized_weather_category,
+        "weather_available": weather_available,
         "occasion": occasion,
     }
 
@@ -1550,7 +1557,7 @@ def get_ai_recommendations(
 ):
     request_id = uuid4().hex[:12]
     try:
-        effective_temp, normalized_weather_category, _ = _resolve_recommendation_weather_context(
+        effective_temp, normalized_weather_category, _, weather_available = _resolve_recommendation_weather_context(
             manual_temp=payload.manual_temp,
             weather_city=payload.weather_city,
             weather_lat=payload.weather_lat,
@@ -1567,6 +1574,7 @@ def get_ai_recommendations(
             manual_temp=effective_temp,
             weather_category=normalized_weather_category,
             occasion=payload.occasion,
+            time_context=payload.time_context,
             exclude=payload.exclude,
             style_preference=payload.style_preference,
             preferred_seasons=payload.preferred_seasons,
@@ -1597,6 +1605,7 @@ def get_ai_recommendations(
         "outfit_score": result.outfit_score,
         "confidence_score": result.outfit_score,
         "weather_category": result.weather_category,
+        "weather_available": weather_available,
         "occasion": payload.occasion,
         "source": result.source,
         "fallback_used": result.fallback_used,
@@ -1641,6 +1650,7 @@ def get_ai_recommendations_compat(
             manual_temp=None,
             weather_category=context.weather_category,
             occasion=context.occasion,
+            time_context=context.time_category,
             exclude=None,
             style_preference=style_preference,
             preferred_seasons=[],

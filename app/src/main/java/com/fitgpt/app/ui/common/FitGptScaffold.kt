@@ -4,6 +4,8 @@
 package com.fitgpt.app.ui.common
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,11 +42,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.fitgpt.app.R
 import com.fitgpt.app.navigation.isTopLevelRoute
@@ -74,6 +84,7 @@ fun FitGptScaffold(
     content: @Composable (PaddingValues) -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val density = LocalDensity.current
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val activeRoute = navBackStackEntry?.destination?.route ?: currentRoute
     val activeRouteBase = routeBase(activeRoute)
@@ -118,20 +129,40 @@ fun FitGptScaffold(
                             modifier = Modifier
                                 .shadow(8.dp, RoundedCornerShape(12.dp))
                                 .clip(RoundedCornerShape(12.dp))
-                                .padding(2.dp)
+                                .background(colorScheme.surface.copy(alpha = 0.42f), RoundedCornerShape(12.dp))
+                                .border(
+                                    width = 1.dp,
+                                    color = colorScheme.primary.copy(alpha = 0.22f),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .drawBehind {
+                                    val strokeWidth = 1.5.dp.toPx()
+                                    drawRoundRect(
+                                        color = colorScheme.primary.copy(alpha = 0.55f),
+                                        cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
+                                        style = Stroke(
+                                            width = strokeWidth,
+                                            cap = StrokeCap.Round,
+                                            pathEffect = PathEffect.dashPathEffect(
+                                                floatArrayOf(8.dp.toPx(), 6.dp.toPx())
+                                            )
+                                        )
+                                    )
+                                }
+                                .padding(4.dp)
                         )
                         {
                             Image(
-                                painter = painterResource(id = R.drawable.fitgpt_brand_background),
+                                painter = painterResource(id = R.drawable.fitgpt_header_logo),
                                 contentDescription = "FitGPT",
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(30.dp)
                             )
                         }
                         Text(title)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = colorScheme.surface.copy(alpha = 0.78f),
+                    containerColor = colorScheme.surface.copy(alpha = 0.64f),
                     titleContentColor = colorScheme.onSurface
                 ),
                 actions = {
@@ -155,7 +186,7 @@ fun FitGptScaffold(
         bottomBar = {
             if (shouldShowBottomBar) {
                 NavigationBar(
-                    containerColor = colorScheme.surface.copy(alpha = 0.82f),
+                    containerColor = colorScheme.surface.copy(alpha = 0.66f),
                     tonalElevation = 8.dp
                 ) {
                     topLevelItems.forEach { item ->

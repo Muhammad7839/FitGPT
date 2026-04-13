@@ -22,6 +22,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDatePickerState
@@ -593,16 +594,28 @@ private fun PlannedOutfitCard(
                 text = plan.items.joinToString(" • ") { it.name ?: it.category },
                 style = MaterialTheme.typography.bodySmall
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onWear) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onWear,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Text("Wear This")
                 }
-                Button(onClick = onAddToCalendar) {
+                Button(
+                    onClick = onAddToCalendar,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Text("Add to Calendar")
                 }
-                Button(onClick = onRemove) {
-                    Text("Remove")
-                }
+            }
+            OutlinedButton(
+                onClick = onRemove,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Remove")
             }
         }
     }

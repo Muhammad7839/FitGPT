@@ -79,4 +79,39 @@ class ChatViewModelTest {
         assertTrue(state.error != null)
         assertFalse(state.isLoading)
     }
+
+    @Test
+    fun retryLastMessage_doesNotDuplicatePendingUserMessage() = runTest {
+        var attemptCount = 0
+        var retriedPayloadSize = 0
+        val viewModel = ChatViewModel(
+            repository = object : ChatRepository {
+                override suspend fun sendChat(messages: List<AiChatMessage>): AiChatResponse {
+                    attemptCount += 1
+                    if (attemptCount == 1) {
+                        error("temporary failure")
+                    }
+                    retriedPayloadSize = messages.size
+                    return AiChatResponse(
+                        reply = "Try the black tee with relaxed trousers.",
+                        source = "fallback",
+                        fallbackUsed = true,
+                        warning = null
+                    )
+                }
+            }
+        )
+
+        viewModel.sendUserMessage("I want to go outside")
+        assertEquals(1, viewModel.uiState.value.messages.size)
+
+        viewModel.retryLastMessage()
+        val state = viewModel.uiState.value
+
+        assertEquals(2, attemptCount)
+        assertEquals(1, retriedPayloadSize)
+        assertEquals(2, state.messages.size)
+        assertEquals("assistant", state.messages.last().role)
+        assertTrue(state.error == null)
+    }
 }

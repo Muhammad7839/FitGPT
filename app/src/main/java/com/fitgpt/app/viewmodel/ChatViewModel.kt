@@ -42,22 +42,52 @@ class ChatViewModel(
             return
         }
 
-        val updatedMessages = _uiState.value.messages + ChatUiMessage(
-            role = "user",
-            content = normalized
-        )
-        _uiState.value = _uiState.value.copy(
-            messages = updatedMessages,
-            isLoading = true,
-            error = null,
+        submitConversation(
+            messages = _uiState.value.messages + ChatUiMessage(
+                role = "user",
+                content = normalized
+            ),
             pendingInput = normalized
         )
-        runCatching { Log.i(CHAT_LOG_TAG, "send message count=${updatedMessages.size}") }
+    }
+
+    fun retryLastMessage() {
+        val lastInput = _uiState.value.pendingInput ?: return
+        val currentMessages = _uiState.value.messages
+        val messagesForRetry = if (
+            currentMessages.lastOrNull()?.role == "user" &&
+            currentMessages.lastOrNull()?.content == lastInput
+        ) {
+            currentMessages
+        } else {
+            currentMessages + ChatUiMessage(role = "user", content = lastInput)
+        }
+        submitConversation(
+            messages = messagesForRetry,
+            pendingInput = lastInput
+        )
+    }
+
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    private fun submitConversation(
+        messages: List<ChatUiMessage>,
+        pendingInput: String
+    ) {
+        _uiState.value = _uiState.value.copy(
+            messages = messages,
+            isLoading = true,
+            error = null,
+            pendingInput = pendingInput
+        )
+        runCatching { Log.i(CHAT_LOG_TAG, "send message count=${messages.size}") }
 
         viewModelScope.launch {
             try {
                 val response = repository.sendChat(
-                    updatedMessages.map { message ->
+                    messages.map { message ->
                         AiChatMessage(
                             role = message.role,
                             content = message.content
@@ -65,7 +95,7 @@ class ChatViewModel(
                     }
                 )
                 _uiState.value = _uiState.value.copy(
-                    messages = updatedMessages + ChatUiMessage(
+                    messages = messages + ChatUiMessage(
                         role = "assistant",
                         content = response.reply
                     ),
@@ -78,19 +108,11 @@ class ChatViewModel(
             } catch (exception: Exception) {
                 runCatching { Log.w(CHAT_LOG_TAG, "send failed ${exception::class.simpleName}") }
                 _uiState.value = _uiState.value.copy(
+                    messages = messages,
                     isLoading = false,
                     error = "Unable to send message. Please retry."
                 )
             }
         }
-    }
-
-    fun retryLastMessage() {
-        val lastInput = _uiState.value.pendingInput ?: return
-        sendUserMessage(lastInput)
-    }
-
-    fun clearError() {
-        _uiState.value = _uiState.value.copy(error = null)
     }
 }

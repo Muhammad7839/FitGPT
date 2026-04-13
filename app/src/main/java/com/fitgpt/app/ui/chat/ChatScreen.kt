@@ -5,6 +5,7 @@ package com.fitgpt.app.ui.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,8 +20,9 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -63,6 +67,13 @@ fun ChatScreen(
     val state by viewModel.uiState.collectAsState()
     var input by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val starterPrompts = remember {
+        listOf(
+            "I want to go outside. What should I wear?",
+            "Build me a casual dinner outfit",
+            "Style my black tee for today"
+        )
+    }
 
     LaunchedEffect(state.messages.size, state.isLoading) {
         val trailingItems = if (state.isLoading) 1 else 0
@@ -136,8 +147,14 @@ fun ChatScreen(
                             input = ""
                         },
                         onRetry = { viewModel.retryLastMessage() },
+                        starterPrompts = starterPrompts,
+                        onUsePrompt = { prompt ->
+                            input = prompt
+                            viewModel.sendUserMessage(prompt)
+                        },
                         isLoading = state.isLoading,
-                        canRetry = state.pendingInput != null
+                        canRetry = state.pendingInput != null,
+                        showStarterPrompts = state.messages.isEmpty()
                     )
                 }
             }
@@ -279,8 +296,11 @@ private fun ComposerPanel(
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
     onRetry: () -> Unit,
+    starterPrompts: List<String>,
+    onUsePrompt: (String) -> Unit,
     isLoading: Boolean,
-    canRetry: Boolean
+    canRetry: Boolean,
+    showStarterPrompts: Boolean
 ) {
     Column(
         modifier = Modifier.padding(14.dp),
@@ -291,6 +311,26 @@ private fun ComposerPanel(
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold
         )
+        Text(
+            text = "AURA keeps the context from this live session, so you can keep refining the same conversation.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        if (showStarterPrompts) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                starterPrompts.forEach { prompt ->
+                    FilterChip(
+                        selected = false,
+                        onClick = { if (!isLoading) onUsePrompt(prompt) },
+                        label = { Text(prompt) }
+                    )
+                }
+            }
+        }
 
         OutlinedTextField(
             value = input,

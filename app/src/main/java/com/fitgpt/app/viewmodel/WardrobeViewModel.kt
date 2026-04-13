@@ -50,6 +50,8 @@ enum class WeatherStatusType {
     USING_LOCATION,
     PERMISSION_NEEDED,
     MANUAL_CITY_FALLBACK,
+    LOCATION_READY_WEATHER_UNAVAILABLE,
+    STALE_WEATHER,
     UNAVAILABLE,
     AVAILABLE
 }
@@ -72,10 +74,18 @@ data class RecommendationMeta(
     val fallbackUsed: Boolean = true,
     val warning: String? = null,
     val weatherCategory: String? = null,
+    val weatherAvailable: Boolean = true,
     val occasion: String? = null,
     val suggestionId: String? = null,
     val itemExplanations: Map<Int, String> = emptyMap(),
     val promptFeedback: PromptFeedbackUiMeta? = null
+)
+
+private data class WeatherRequestContext(
+    val city: String?,
+    val lat: Double?,
+    val lon: Double?,
+    val source: WeatherRequestSource
 )
 
 data class PromptFeedbackUiMeta(
@@ -98,6 +108,8 @@ class WardrobeViewModel(
     private val allItems = mutableListOf<ClothingItem>()
     private var currentFilters = WardrobeFilters()
     private var latestWeatherSnapshot: WeatherSnapshot? = null
+    private var lastSuccessfulWeatherCity: String? = null
+    private var lastWeatherRequestContext: WeatherRequestContext? = null
 
     private val _wardrobeState = MutableStateFlow<UiState<List<ClothingItem>>>(UiState.Loading)
     val wardrobeState: StateFlow<UiState<List<ClothingItem>>> = _wardrobeState
@@ -421,7 +433,7 @@ class WardrobeViewModel(
     ) {
         _recommendationState.value = UiState.Loading
         viewModelScope.launch {
-            val sharedWeatherCity = _weatherCityState.value.trim().takeIf { it.isNotEmpty() }
+            val sharedWeatherCity = resolvePreferredWeatherCity()
             try {
                 val resolvedTemp = manualTemp ?: latestWeatherSnapshot?.temperatureF
                 val resolvedWeatherCategory = weatherCategory ?: latestWeatherSnapshot?.weatherCategory
@@ -445,6 +457,7 @@ class WardrobeViewModel(
                     fallbackUsed = aiResult.fallbackUsed,
                     warning = aiResult.warning,
                     weatherCategory = aiResult.weatherCategory,
+                    weatherAvailable = aiResult.weatherAvailable,
                     occasion = aiResult.occasion,
                     suggestionId = aiResult.suggestionId,
                     itemExplanations = aiResult.itemExplanations,
@@ -466,6 +479,12 @@ class WardrobeViewModel(
                     )
                 }
                 _recommendationState.value = UiState.Success(aiResult.items)
+                if (!aiResult.weatherAvailable && latestWeatherSnapshot == null && sharedWeatherCity != null) {
+                    _weatherUiStatus.value = WeatherUiStatus(
+                        type = WeatherStatusType.UNAVAILABLE,
+                        message = "Unavailable"
+                    )
+                }
                 Log.i(
                     recommendationLogTag,
                     "source=${aiResult.source} fallback=${aiResult.fallbackUsed} warning=${aiResult.warning.orEmpty()}"
@@ -491,6 +510,7 @@ class WardrobeViewModel(
                         fallbackUsed = true,
                         warning = "legacy_endpoint_fallback",
                         weatherCategory = weatherCategory ?: latestWeatherSnapshot?.weatherCategory,
+                        weatherAvailable = latestWeatherSnapshot?.available ?: true,
                         occasion = occasion,
                         promptFeedback = null
                     )
@@ -607,6 +627,29 @@ class WardrobeViewModel(
         _weatherCityState.value = city.trimStart()
     }
 
+    fun getCachedWeatherCity(): String? {
+        return resolvePreferredWeatherCity()
+    }
+
+    fun retryWeather() {
+        val cachedRequest = lastWeatherRequestContext
+        if (cachedRequest != null) {
+            val preferredCity = cachedRequest.city ?: resolvePreferredWeatherCity()
+            fetchWeather(
+                city = preferredCity,
+                lat = if (preferredCity == null) cachedRequest.lat else null,
+                lon = if (preferredCity == null) cachedRequest.lon else null,
+                source = cachedRequest.source
+            )
+            return
+        }
+        resolvePreferredWeatherCity()?.let { cachedCity ->
+            fetchWeather(city = cachedCity, source = WeatherRequestSource.MANUAL_CITY)
+            return
+        }
+        markWeatherManualFallback()
+    }
+
     fun fetchWeather(
         city: String? = null,
         lat: Double? = null,
@@ -615,6 +658,15 @@ class WardrobeViewModel(
     ) {
         city?.trim()?.takeIf { it.isNotEmpty() }?.let { enteredCity ->
             _weatherCityState.value = enteredCity
+        }
+        val requestedCity = city?.trim()?.takeIf { it.isNotEmpty() } ?: resolvePreferredWeatherCity()
+        if (requestedCity != null || (lat != null && lon != null)) {
+            lastWeatherRequestContext = WeatherRequestContext(
+                city = requestedCity,
+                lat = if (requestedCity == null) lat else null,
+                lon = if (requestedCity == null) lon else null,
+                source = source
+            )
         }
         if ((city == null || city.isBlank()) && (lat == null || lon == null)) {
             _weatherState.value = UiState.Success(latestWeatherSnapshot)
@@ -643,12 +695,13 @@ class WardrobeViewModel(
         viewModelScope.launch {
             try {
                 val weather = repository.getCurrentWeather(
-                    city = city?.trim()?.takeIf { it.isNotEmpty() },
-                    lat = lat,
-                    lon = lon
+                    city = requestedCity,
+                    lat = if (requestedCity == null) lat else null,
+                    lon = if (requestedCity == null) lon else null
                 )
                 if (weather.available && weather.temperatureF != null && !weather.weatherCategory.isNullOrBlank()) {
                     latestWeatherSnapshot = weather
+                    lastSuccessfulWeatherCity = weather.city
                     _weatherCityState.value = weather.city
                     _weatherState.value = UiState.Success(weather)
                     _weatherUiStatus.value = WeatherUiStatus(
@@ -660,7 +713,11 @@ class WardrobeViewModel(
                     _weatherCityState.value = weather.city
                     _weatherState.value = UiState.Success(weather)
                     _weatherUiStatus.value = WeatherUiStatus(
-                        type = WeatherStatusType.UNAVAILABLE,
+                        type = when (source) {
+                            WeatherRequestSource.LOCATION,
+                            WeatherRequestSource.AUTO_DASHBOARD -> WeatherStatusType.LOCATION_READY_WEATHER_UNAVAILABLE
+                            WeatherRequestSource.MANUAL_CITY -> WeatherStatusType.UNAVAILABLE
+                        },
                         message = "Unavailable"
                     )
                     Log.w(weatherLogTag, "weather unavailable detail=${weather.detail.orEmpty()}")
@@ -671,16 +728,23 @@ class WardrobeViewModel(
                     latestWeatherSnapshot != null -> {
                         _weatherState.value = UiState.Success(latestWeatherSnapshot)
                         _weatherUiStatus.value = WeatherUiStatus(
-                            type = WeatherStatusType.UNAVAILABLE,
+                            type = WeatherStatusType.STALE_WEATHER,
                             message = "Unavailable"
                         )
                     }
                     source == WeatherRequestSource.LOCATION || source == WeatherRequestSource.AUTO_DASHBOARD -> {
                         _weatherState.value = UiState.Success(null)
-                        _weatherUiStatus.value = WeatherUiStatus(
-                            type = WeatherStatusType.MANUAL_CITY_FALLBACK,
-                            message = "City detection unavailable"
-                        )
+                        _weatherUiStatus.value = if (requestedCity != null || (lat != null && lon != null)) {
+                            WeatherUiStatus(
+                                type = WeatherStatusType.LOCATION_READY_WEATHER_UNAVAILABLE,
+                                message = "Weather unavailable for detected location"
+                            )
+                        } else {
+                            WeatherUiStatus(
+                                type = WeatherStatusType.MANUAL_CITY_FALLBACK,
+                                message = "City detection unavailable"
+                            )
+                        }
                     }
                     else -> {
                         _weatherState.value = UiState.Error(safeError)
@@ -737,7 +801,7 @@ class WardrobeViewModel(
                 fetchRecommendations(
                     manualTemp = latestWeatherSnapshot?.temperatureF,
                     weatherCategory = latestWeatherSnapshot?.weatherCategory,
-                    weatherCity = weatherCityState.value.trim().takeIf { it.isNotEmpty() }
+                    weatherCity = resolvePreferredWeatherCity()
                 )
             } catch (_: Exception) {
                 _recommendationState.value = UiState.Error("Failed to submit feedback")
@@ -986,5 +1050,9 @@ class WardrobeViewModel(
             }
             else -> "Weather unavailable"
         }
+    }
+
+    private fun resolvePreferredWeatherCity(): String? {
+        return _weatherCityState.value.trim().takeIf { it.isNotEmpty() } ?: lastSuccessfulWeatherCity
     }
 }

@@ -1,6 +1,8 @@
 /**
  * Login UI that authenticates users and navigates on successful token persistence.
  */
+@file:Suppress("DEPRECATION")
+
 package com.fitgpt.app.ui.auth
 
 import android.app.Activity
