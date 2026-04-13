@@ -471,6 +471,7 @@ class RecommendationResponse(BaseModel):
     outfit_score: float = 0.0
     confidence_score: float = 0.0
     weather_category: Optional[str] = None
+    weather_available: bool = True
     occasion: Optional[str] = None
     prompt_feedback: Optional["FeedbackPromptMetadata"] = None
 
@@ -485,6 +486,7 @@ class OutfitOptionResponse(BaseModel):
 class RecommendationOptionsResponse(BaseModel):
     outfits: list[OutfitOptionResponse]
     weather_category: str
+    weather_available: bool = True
     occasion: Optional[str] = None
 
 
@@ -644,6 +646,7 @@ class AiRecommendationResponse(BaseModel):
     outfit_score: float = 0.0
     confidence_score: float = 0.0
     weather_category: str
+    weather_available: bool = True
     occasion: Optional[str] = None
     source: str
     fallback_used: bool = False

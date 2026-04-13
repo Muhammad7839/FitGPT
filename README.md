@@ -17,7 +17,7 @@ The backend follows a layered, production-oriented structure:
 - `backend/app/auth.py`: JWT auth helpers and current-user dependency.
 - `backend/app/weather.py`: OpenWeather integration, caching, and normalized weather snapshots.
 - `backend/app/ai/*`: deterministic recommender, AI provider integration (Groq), parsing, prompts, and orchestration service.
-- `backend/tests/*`: integration and behavior tests (current suite: 110 passing tests).
+- `backend/tests/*`: integration and behavior tests (current suite: 125 passing tests).
 
 ## Features
 ### Core (Sprints 1-4)
@@ -124,16 +124,22 @@ cd backend
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 4) Run test suite
+### 4) Run backend test suite
 ```bash
 cd backend
-pytest -q
+./.venv/bin/pytest -q
 ```
 
-### 5) Basic validation gate used in finalization
+### 5) Run Android and web validation gates
+```bash
+./gradlew test
+cd web && npm run test:ci
+```
+
+### 6) Basic validation gate used in finalization
 ```bash
 python3 -m compileall backend/app
-pytest -q
+cd backend && ./.venv/bin/pytest -q
 ```
 
 ## Future Improvements

@@ -23,6 +23,7 @@ data class AiRecommendationResult(
     val fallbackUsed: Boolean,
     val warning: String?,
     val weatherCategory: String?,
+    val weatherAvailable: Boolean = true,
     val occasion: String?,
     val suggestionId: String?,
     val itemExplanations: Map<Int, String>,

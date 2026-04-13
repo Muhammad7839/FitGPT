@@ -26,7 +26,7 @@ fun BrandingBackgroundLayer(
     modifier: Modifier = Modifier,
     logoOpacity: Float = 0.06f
 ) {
-    val clampedOpacity = logoOpacity.coerceIn(0.04f, 0.08f)
+    val clampedOpacity = logoOpacity.coerceIn(0.05f, 0.11f)
     val colors = MaterialTheme.colorScheme
     val isDarkTheme = isSystemInDarkTheme()
     Box(
@@ -45,9 +45,9 @@ fun BrandingBackgroundLayer(
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            colors.background.copy(alpha = if (isDarkTheme) 0.18f else 0.32f),
-                            colors.background.copy(alpha = if (isDarkTheme) 0.26f else 0.42f),
-                            colors.surface.copy(alpha = if (isDarkTheme) 0.28f else 0.48f)
+                            colors.background.copy(alpha = if (isDarkTheme) 0.14f else 0.16f),
+                            colors.background.copy(alpha = if (isDarkTheme) 0.2f else 0.24f),
+                            colors.surface.copy(alpha = if (isDarkTheme) 0.22f else 0.3f)
                         )
                     )
                 )
@@ -57,9 +57,9 @@ fun BrandingBackgroundLayer(
             contentDescription = null,
             modifier = Modifier
                 .align(Alignment.Center)
-                .size(420.dp)
-                .blur(34.dp)
-                .alpha(clampedOpacity + 0.02f),
+                .size(if (isDarkTheme) 430.dp else 470.dp)
+                .blur(if (isDarkTheme) 28.dp else 20.dp)
+                .alpha(if (isDarkTheme) clampedOpacity + 0.01f else clampedOpacity + 0.03f),
             contentScale = ContentScale.Fit
         )
         Image(
@@ -67,8 +67,8 @@ fun BrandingBackgroundLayer(
             contentDescription = null,
             modifier = Modifier
                 .align(Alignment.Center)
-                .size(340.dp)
-                .alpha(if (isDarkTheme) clampedOpacity + 0.035f else clampedOpacity + 0.02f),
+                .size(if (isDarkTheme) 340.dp else 390.dp)
+                .alpha(if (isDarkTheme) clampedOpacity + 0.03f else clampedOpacity + 0.045f),
             contentScale = ContentScale.Fit
         )
     }

@@ -72,7 +72,7 @@ import kotlinx.coroutines.withContext
 
 private const val UPLOAD_LOG_TAG = "FitGPTUpload"
 private const val AUTO_FILL_UNKNOWN = "Unknown"
-private const val CATEGORY_CONFIRMATION_THRESHOLD = 0.82f
+private const val CATEGORY_CONFIRMATION_THRESHOLD = 0.9f
 
 private enum class PhotoFlowState {
     IDLE,
@@ -146,14 +146,15 @@ fun AddItemScreen(
 
     fun applyImageAutoFill(bytes: ByteArray, sourceName: String) {
         val inferredFromName = inferFromFileName(sourceName)
+        val inferredColor = inferDominantColorName(bytes) ?: inferColorFromFileName(sourceName)
         detectedCategory = inferredFromName.category
         detectionConfidence = inferredFromName.confidence
-        if (inferredFromName.confidence < CATEGORY_CONFIRMATION_THRESHOLD) {
+        if (inferredFromName.category.isNullOrBlank() || inferredFromName.confidence < CATEGORY_CONFIRMATION_THRESHOLD) {
             needsCategoryConfirmation = true
-            categorySuggestionNotice = "Detected category may be inaccurate. Review if needed before saving."
+            categorySuggestionNotice = "Auto-detected category is only a draft. Confirm it before saving."
         } else {
             needsCategoryConfirmation = false
-            categorySuggestionNotice = null
+            categorySuggestionNotice = "Auto-detected details look strong, but you can still change them before saving."
         }
         category = category.ifBlank { inferredFromName.category.orEmpty() }
         if (clothingType.isBlank()) {
@@ -166,7 +167,10 @@ fun AddItemScreen(
             season = inferredFromName.season ?: "All"
         }
         if (color.isBlank()) {
-            color = inferColorFromFileName(sourceName) ?: inferDominantColorName(bytes) ?: AUTO_FILL_UNKNOWN
+            color = inferredColor ?: AUTO_FILL_UNKNOWN
+        }
+        if (colors.isBlank() && inferredColor != null) {
+            colors = inferredColor
         }
         if (comfort.isBlank()) {
             comfort = inferredFromName.comfortLevel?.toString().orEmpty()
@@ -673,6 +677,11 @@ fun AddItemScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Text(
+                        text = "Tip: if the photo guess looks wrong, change the category or color here before saving.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
                     SelectableField(
                         label = "Clothing Type",
@@ -1037,7 +1046,7 @@ private fun String.resolveSelectedValue(customValue: String): String {
     return normalized
 }
 
-private fun inferLayerTypeFromCategory(category: String?): String {
+internal fun inferLayerTypeFromCategory(category: String?): String {
     val normalized = category?.trim()?.lowercase().orEmpty()
     return when {
         normalized.contains("outer") || normalized.contains("jacket") || normalized.contains("coat") -> "outer"
@@ -1046,7 +1055,7 @@ private fun inferLayerTypeFromCategory(category: String?): String {
     }
 }
 
-private data class InferredNameHint(
+internal data class InferredNameHint(
     val category: String?,
     val clothingType: String?,
     val fitTag: String? = null,
@@ -1055,7 +1064,7 @@ private data class InferredNameHint(
     val confidence: Float = 0.4f
 )
 
-private data class ImageAutoFillHint(
+internal data class ImageAutoFillHint(
     val category: String?,
     val clothingType: String?,
     val color: String?,
@@ -1064,7 +1073,7 @@ private data class ImageAutoFillHint(
     val comfortLevel: Int?
 )
 
-private fun inferFromFileName(fileName: String): InferredNameHint {
+internal fun inferFromFileName(fileName: String): InferredNameHint {
     val normalized = fileName.lowercase()
     val searchableTokens = normalized
         .split(Regex("[^a-z0-9]+"))
@@ -1135,7 +1144,7 @@ private fun inferFromFileName(fileName: String): InferredNameHint {
     return baseHint.copy(fitTag = baseHint.fitTag ?: inferredFitTag)
 }
 
-private fun inferColorFromFileName(fileName: String): String? {
+internal fun inferColorFromFileName(fileName: String): String? {
     val normalized = fileName.lowercase()
     val colorMap = linkedMapOf(
         "black" to "Black",
@@ -1160,7 +1169,7 @@ private fun inferColorFromFileName(fileName: String): String? {
     }?.value
 }
 
-private fun inferDominantColorName(bytes: ByteArray): String? {
+internal fun inferDominantColorName(bytes: ByteArray): String? {
     val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
     val width = bitmap.width
     val height = bitmap.height
@@ -1172,7 +1181,13 @@ private fun inferDominantColorName(bytes: ByteArray): String? {
     val endY = (height * 0.9f).toInt().coerceAtLeast(startY + 1)
     val stepX = ((endX - startX) / 24).coerceAtLeast(1)
     val stepY = ((endY - startY) / 24).coerceAtLeast(1)
-    val colorCounts = linkedMapOf<String, Int>()
+    val centerX = (startX + endX) / 2f
+    val centerY = (startY + endY) / 2f
+    val maxDistance = kotlin.math.sqrt(
+        ((endX - startX).toFloat() * (endX - startX).toFloat()) +
+            ((endY - startY).toFloat() * (endY - startY).toFloat())
+    ).coerceAtLeast(1f)
+    val colorScores = linkedMapOf<String, Float>()
     var countedPixels = 0
 
     var y = startY
@@ -1181,10 +1196,21 @@ private fun inferDominantColorName(bytes: ByteArray): String? {
         while (x < endX) {
             val pixel = bitmap.getPixel(x, y)
             if (Color.alpha(pixel) >= 24) {
-                val colorName = mapRgbToColorName(Color.red(pixel), Color.green(pixel), Color.blue(pixel))
-                if (colorName != null) {
-                    colorCounts[colorName] = (colorCounts[colorName] ?: 0) + 1
-                    countedPixels += 1
+                val red = Color.red(pixel)
+                val green = Color.green(pixel)
+                val blue = Color.blue(pixel)
+                val hsv = rgbToHsv(red, green, blue)
+                if (!(hsv[1] < 0.08f && hsv[2] > 0.95f)) {
+                    val colorName = mapRgbToColorName(red, green, blue)
+                    if (colorName != null) {
+                        val distance = kotlin.math.sqrt(
+                            ((x - centerX) * (x - centerX)) + ((y - centerY) * (y - centerY))
+                        )
+                        val centerWeight = 1f - (distance / maxDistance).coerceIn(0f, 1f)
+                        val score = 1f + centerWeight + (hsv[1] * 0.8f)
+                        colorScores[colorName] = (colorScores[colorName] ?: 0f) + score
+                        countedPixels += 1
+                    }
                 }
             }
             x += stepX
@@ -1193,21 +1219,20 @@ private fun inferDominantColorName(bytes: ByteArray): String? {
     }
 
     if (countedPixels == 0) return null
-    val colorfulMatch = colorCounts
+    val colorfulMatch = colorScores
         .filterKeys { it !in setOf("White", "Gray", "Beige") }
         .maxByOrNull { it.value }
     if (colorfulMatch != null) {
-        val whiteCount = colorCounts["White"] ?: 0
-        if (colorfulMatch.value >= whiteCount) {
+        val whiteCount = colorScores["White"] ?: 0f
+        if (colorfulMatch.value >= (whiteCount * 0.7f)) {
             return colorfulMatch.key
         }
     }
-    return colorCounts.maxByOrNull { it.value }?.key
+    return colorScores.maxByOrNull { it.value }?.key
 }
 
-private fun mapRgbToColorName(red: Int, green: Int, blue: Int): String? {
-    val hsv = FloatArray(3)
-    Color.RGBToHSV(red, green, blue, hsv)
+internal fun mapRgbToColorName(red: Int, green: Int, blue: Int): String? {
+    val hsv = rgbToHsv(red, green, blue)
     val hue = hsv[0]
     val saturation = hsv[1]
     val value = hsv[2]
@@ -1228,4 +1253,22 @@ private fun mapRgbToColorName(red: Int, green: Int, blue: Int): String? {
     if (hue < 330f) return "Pink"
 
     return null
+}
+
+private fun rgbToHsv(red: Int, green: Int, blue: Int): FloatArray {
+    val r = (red.coerceIn(0, 255) / 255f)
+    val g = (green.coerceIn(0, 255) / 255f)
+    val b = (blue.coerceIn(0, 255) / 255f)
+    val max = maxOf(r, g, b)
+    val min = minOf(r, g, b)
+    val delta = max - min
+
+    val hue = when {
+        delta == 0f -> 0f
+        max == r -> ((g - b) / delta).let { if (it < 0f) it + 6f else it } * 60f
+        max == g -> (((b - r) / delta) + 2f) * 60f
+        else -> (((r - g) / delta) + 4f) * 60f
+    }
+    val saturation = if (max == 0f) 0f else delta / max
+    return floatArrayOf(hue, saturation, max)
 }

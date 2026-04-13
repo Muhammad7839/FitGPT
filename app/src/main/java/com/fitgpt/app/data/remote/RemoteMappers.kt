@@ -125,6 +125,7 @@ fun AiRecommendationResponseDto.toDomain(): AiRecommendationResult {
         fallbackUsed = fallbackUsed,
         warning = warning,
         weatherCategory = weatherCategory,
+        weatherAvailable = weatherAvailable,
         occasion = occasion,
         suggestionId = suggestionId,
         itemExplanations = itemExplanations.associate { it.itemId to it.explanation },

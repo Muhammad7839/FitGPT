@@ -321,7 +321,7 @@ private fun IntroStep() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Image(
-                painter = painterResource(id = R.drawable.fitgpt_brand_background),
+                painter = painterResource(id = R.drawable.fitgpt_splash_brand),
                 contentDescription = "FitGPT",
                 modifier = Modifier.size(76.dp)
             )

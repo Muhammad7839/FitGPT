@@ -407,7 +407,166 @@ def test_recommendation_option_explanations_vary_for_different_outfits(client):
 
     explanations = {outfit["explanation"] for outfit in outfits}
     assert len(explanations) >= 2
-    assert all("color" in explanation.lower() for explanation in explanations)
+    assert all(
+        any(
+            phrase in explanation.lower()
+            for phrase in {
+                "color",
+                "clean but elevated",
+                "slightly styled",
+                "colors work well together",
+                "color mix stays balanced",
+                "color contrast",
+                "bit more styled than usual",
+                "leans a little more into style",
+                "a little extra edge",
+                "not the safest combo",
+                "gives it more character",
+                "slightly past basic",
+                "i’d go with this",
+                "this would work really well",
+                "honestly, this combo just works",
+                "this one feels balanced",
+                "simple, clean",
+            }
+        )
+        for explanation in explanations
+    )
+
+
+def test_recommendation_options_surface_grounded_creative_combo(client):
+    token = register_and_login(client, "card-grounded-creativity@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    _create(client, auth, _item_payload(name="White Tee", category="Top", clothing_type="t-shirt", color="White"))
+    _create(client, auth, _item_payload(name="Black Tee", category="Top", clothing_type="t-shirt", color="Black"))
+    _create(
+        client,
+        auth,
+        _item_payload(
+            name="Beige Overshirt",
+            category="Top",
+            clothing_type="overshirt",
+            color="Beige",
+            colors=["beige", "cream"],
+        ),
+    )
+    _create(client, auth, _item_payload(name="Black Trouser", category="Bottom", clothing_type="pants", color="Black"))
+    _create(
+        client,
+        auth,
+        _item_payload(
+            name="Olive Chino",
+            category="Bottom",
+            clothing_type="chino",
+            color="Olive",
+            colors=["olive"],
+        ),
+    )
+    _create(client, auth, _item_payload(name="White Sneaker", category="Shoes", clothing_type="sneakers", color="White"))
+    _create(client, auth, _item_payload(name="Brown Loafer", category="Shoes", clothing_type="loafer", color="Brown"))
+
+    response = client.get("/recommendations/options", headers=auth, params={"weather_category": "mild", "limit": 3})
+    assert response.status_code == 200
+    outfits = response.json()["outfits"]
+    assert len(outfits) == 3
+
+    grounded_creative = [
+        outfit
+        for outfit in outfits
+        if {"beige", "olive"}.issubset(
+            {
+                (item.get("color") or "").strip().lower()
+                for item in outfit["items"]
+            }
+        )
+    ]
+    assert grounded_creative
+    assert any(
+        (
+            "bit more styled than usual" in outfit["explanation"].lower()
+            or "leans a little more into style" in outfit["explanation"].lower()
+            or "a little extra edge" in outfit["explanation"].lower()
+            or "not the safest combo" in outfit["explanation"].lower()
+            or "gives it more character" in outfit["explanation"].lower()
+            or "slightly past basic" in outfit["explanation"].lower()
+            or "slightly styled:" in outfit["explanation"].lower()
+            or "clean but elevated:" in outfit["explanation"].lower()
+            or "honestly, this combo just works" in outfit["explanation"].lower()
+            or "this one feels balanced" in outfit["explanation"].lower()
+            or "simple, clean" in outfit["explanation"].lower()
+        )
+        for outfit in grounded_creative
+    )
+
+
+def test_recommendation_options_repeat_requests_vary_creative_explanation_wording(client):
+    token = register_and_login(client, "card-creative-wording-repeat@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    _create(client, auth, _item_payload(name="White Tee", category="Top", clothing_type="t-shirt", color="White"))
+    _create(
+        client,
+        auth,
+        _item_payload(
+            name="Beige Overshirt",
+            category="Top",
+            clothing_type="overshirt",
+            color="Beige",
+            colors=["beige", "cream"],
+        ),
+    )
+    _create(
+        client,
+        auth,
+        _item_payload(
+            name="Olive Chino",
+            category="Bottom",
+            clothing_type="chino",
+            color="Olive",
+            colors=["olive"],
+        ),
+    )
+    _create(client, auth, _item_payload(name="White Sneaker", category="Shoes", clothing_type="sneakers", color="White"))
+
+    explanations = []
+    fingerprints = []
+    for _ in range(3):
+        response = client.get(
+            "/recommendations/options",
+            headers=auth,
+            params={"weather_category": "mild", "occasion": "daily", "limit": 1},
+        )
+        assert response.status_code == 200
+        outfit = response.json()["outfits"][0]
+        explanation = outfit["explanation"].lower()
+        explanations.append(explanation)
+        fingerprints.append(",".join(str(item["id"]) for item in sorted(outfit["items"], key=lambda item: item["id"])))
+        assert "mild weather" in explanation or "weather" in explanation
+        assert "daily" in explanation
+        assert any(
+            phrase in explanation
+            for phrase in {
+                "beige",
+                "olive",
+                "clean but elevated",
+                "slightly styled",
+                "bit more styled than usual",
+                "leans a little more into style",
+                "a little extra edge",
+                "not the safest combo",
+                "gives it more character",
+                "slightly past basic",
+                "i’d go with this",
+                "this would work really well",
+                "honestly, this combo just works",
+                "this one feels balanced",
+                "simple, clean",
+            }
+        )
+
+    assert len(set(explanations)) >= 2
+    assert len(set(fingerprints)) == 1
 
 
 def test_occasion_tags_influence_top_recommendation_choice(client):

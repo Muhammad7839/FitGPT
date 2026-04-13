@@ -91,9 +91,15 @@ class GpsLocationProvider(context: Context) {
                 @Suppress("DEPRECATION")
                 val address = geocoder.getFromLocation(lat, lon, 1)
                     ?.firstOrNull()
-                address?.locality
-                    ?: address?.subAdminArea
-                    ?: address?.adminArea
+                listOfNotNull(
+                    address?.locality,
+                    address?.subLocality,
+                    address?.subAdminArea,
+                    address?.adminArea,
+                    address?.featureName
+                ).firstOrNull { candidate ->
+                    candidate.isNotBlank()
+                }
             }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
         }
     }

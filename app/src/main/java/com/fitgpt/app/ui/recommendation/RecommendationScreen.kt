@@ -40,6 +40,7 @@ import com.fitgpt.app.ui.common.weatherStatusMessage
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import com.fitgpt.app.viewmodel.WeatherRequestSource
+import com.fitgpt.app.viewmodel.WeatherStatusType
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -95,12 +96,19 @@ fun RecommendationScreen(
             listOf(resolvedSeason.lowercase())
         }
 
-        city?.trim()?.takeIf { it.isNotEmpty() }?.let { viewModel.setWeatherCityInput(it) }
+        val resolvedCity = city?.trim()?.takeIf { it.isNotEmpty() } ?: viewModel.getCachedWeatherCity()
+        val resolvedLat = if (resolvedCity == null) lat else null
+        val resolvedLon = if (resolvedCity == null) lon else null
 
-        if (lat != null && lon != null) {
-            viewModel.fetchWeather(lat = lat, lon = lon, source = WeatherRequestSource.LOCATION)
-        } else if (city != null) {
-            viewModel.fetchWeather(city = city, source = WeatherRequestSource.MANUAL_CITY)
+        resolvedCity?.let { viewModel.setWeatherCityInput(it) }
+
+        if (resolvedCity != null) {
+            viewModel.fetchWeather(
+                city = resolvedCity,
+                source = if (lat != null && lon != null) WeatherRequestSource.LOCATION else WeatherRequestSource.MANUAL_CITY
+            )
+        } else if (resolvedLat != null && resolvedLon != null) {
+            viewModel.fetchWeather(lat = resolvedLat, lon = resolvedLon, source = WeatherRequestSource.LOCATION)
         }
 
         viewModel.fetchRecommendations(
@@ -108,9 +116,9 @@ fun RecommendationScreen(
             timeContext = timeContext.nullIfBlank(),
             planDate = planDate.nullIfBlank(),
             exclude = exclude.nullIfBlank(),
-            weatherCity = city,
-            weatherLat = lat,
-            weatherLon = lon,
+            weatherCity = resolvedCity,
+            weatherLat = resolvedLat,
+            weatherLon = resolvedLon,
             weatherCategory = resolvedWeatherCategory,
             occasion = resolvedOccasion,
             stylePreference = resolvedStylePreference,
@@ -130,10 +138,21 @@ fun RecommendationScreen(
                 return@launch
             }
             val cityLabel = locationContext.city?.takeIf { it.isNotBlank() }
-            locationMessage = cityLabel?.let { "Using current location: $it" } ?: "Using current location weather."
+            locationMessage = cityLabel?.let { "Using current location: $it" } ?: "Location found. Using coordinates while city resolves."
             cityLabel?.let { viewModel.setWeatherCityInput(it) }
             Log.i(LOCATION_LOG_TAG, "recommendation location resolved")
             applyContextRequest(city = cityLabel, lat = locationContext.lat, lon = locationContext.lon)
+        }
+    }
+
+    fun retryLocationWeather() {
+        val cachedCity = viewModel.getCachedWeatherCity()?.takeIf { it.isNotBlank() }
+        if (cachedCity != null) {
+            locationMessage = "Retrying weather for $cachedCity..."
+            applyContextRequest(city = cachedCity, lat = null, lon = null)
+        } else {
+            locationMessage = "Retrying location..."
+            loadUsingCurrentLocation()
         }
     }
 
@@ -502,6 +521,21 @@ fun RecommendationScreen(
                                 Icon(Icons.Default.LocationOn, contentDescription = null)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Use Current Location")
+                            }
+
+                            if (
+                                weatherUiStatus.type == WeatherStatusType.LOCATION_READY_WEATHER_UNAVAILABLE ||
+                                weatherUiStatus.type == WeatherStatusType.UNAVAILABLE ||
+                                weatherUiStatus.type == WeatherStatusType.STALE_WEATHER
+                            ) {
+                                OutlinedButton(
+                                    onClick = { retryLocationWeather() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Retry Weather")
+                                }
                             }
 
                             locationMessage?.let { message ->

@@ -60,6 +60,8 @@ data class AiRecommendationResponseDto(
     val confidenceScore: Float? = null,
     @SerializedName("weather_category")
     val weatherCategory: String?,
+    @SerializedName("weather_available")
+    val weatherAvailable: Boolean = true,
     val occasion: String?,
     val source: String,
     @SerializedName("fallback_used")

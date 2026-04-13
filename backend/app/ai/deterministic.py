@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from hashlib import sha1
+from itertools import count
 from typing import Optional
 
 from app import models
@@ -37,12 +39,48 @@ _ANALOGOUS_GROUPS = [
     {"blue", "purple", "indigo"},
     {"purple", "pink", "magenta"},
 ]
-_EXPLANATION_TEMPLATES = (
-    "Built for {weather} weather with {color_phrase}, this outfit keeps the structure practical for {occasion}.",
-    "This combination is tuned for {weather} conditions and uses {color_phrase} to keep the look cohesive for {occasion}.",
-    "Selected with {weather} in mind, the pieces follow a balanced structure and use {color_phrase} for {occasion}.",
-    "A weather-aware pick for {occasion}: it keeps outfit structure logical and relies on {color_phrase}.",
+_GROUNDING_COLORS = {
+    "olive",
+    "sage",
+    "green",
+    "teal",
+    "beige",
+    "camel",
+    "tan",
+    "khaki",
+    "brown",
+    "rust",
+    "terracotta",
+    "burgundy",
+    "maroon",
+    "cream",
+    "ivory",
+}
+_CONTROLLED_CREATIVE_COLORS = {
+    "olive",
+    "sage",
+    "teal",
+    "green",
+    "khaki",
+    "beige",
+    "camel",
+    "tan",
+    "rust",
+    "terracotta",
+    "burgundy",
+    "maroon",
+}
+_CREATIVE_COLOR_REASON_TEMPLATES = (
+    "this one is a bit more styled than usual, and the {first} with {second} still feels easy to wear",
+    "the {first} and {second} mix leans a little more into style without feeling like too much",
+    "the {first} and {second} pairing keeps it clean, just with a little extra edge",
+    "this is not the safest combo, but the {first} and {second} really work together",
+    "it starts from a simple base, and the {first} with {second} gives it more character",
+    "the {first} and {second} pull it slightly past basic, but it still looks grounded",
 )
+_CREATIVE_TEXT_LABELS = ("", "Slightly styled", "Clean but elevated")
+_REASONING_MODES = ("direct_stylist", "casual", "opinionated", "observational", "minimal")
+_EXPLANATION_VARIATION_SEQUENCE = count()
 
 
 @dataclass(frozen=True)
@@ -76,16 +114,20 @@ def recommend_many(
     manual_temp: Optional[int],
     weather_category: Optional[str],
     occasion: Optional[str],
+    time_context: Optional[str],
     exclude: Optional[str],
     style_preference: Optional[str],
     preferred_seasons: Optional[list[str]],
-    recent_fingerprints: set[str],
+    recent_fingerprints: list[str],
     max_options: int = 3,
 ) -> list[RecommendationCandidate]:
     """Returns ranked deterministic options while avoiding recent repeats when possible."""
     normalized_weather = normalize_weather_category(weather_category, manual_temp)
     eligible_items = _filter_eligible_items(items=items, exclude=exclude)
     combos = _build_candidate_combos(eligible_items, normalized_weather)
+    item_map = {item.id: item for item in items}
+    recent_combos = _recent_combos_from_fingerprints(recent_fingerprints, item_map)
+    wardrobe_limitation = _wardrobe_limitation_note(eligible_items, combos)
 
     if not combos:
         fallback_ids = [item.id for item in eligible_items[:3]]
@@ -106,8 +148,11 @@ def recommend_many(
                 user=user,
                 weather_category=normalized_weather,
                 occasion=occasion,
+                time_context=time_context,
                 style_preference=style_preference,
                 preferred_seasons=preferred_seasons,
+                recent_combos=recent_combos,
+                wardrobe_limitation=wardrobe_limitation,
             )
             for combo in combos
         ),
@@ -115,8 +160,9 @@ def recommend_many(
         reverse=True,
     )
 
-    preferred = [candidate for candidate in ranked if candidate.fingerprint not in recent_fingerprints]
-    fallback = [candidate for candidate in ranked if candidate.fingerprint in recent_fingerprints]
+    recent_fingerprint_set = set(recent_fingerprints)
+    preferred = [candidate for candidate in ranked if candidate.fingerprint not in recent_fingerprint_set]
+    fallback = [candidate for candidate in ranked if candidate.fingerprint in recent_fingerprint_set]
     merged = preferred + fallback
     return merged[: max(1, min(max_options, 10))]
 
@@ -128,10 +174,11 @@ def recommend(
     manual_temp: Optional[int],
     weather_category: Optional[str],
     occasion: Optional[str],
+    time_context: Optional[str],
     exclude: Optional[str],
     style_preference: Optional[str],
     preferred_seasons: Optional[list[str]],
-    recent_fingerprints: set[str],
+    recent_fingerprints: list[str],
 ) -> RecommendationCandidate:
     """Returns the best deterministic candidate."""
     return recommend_many(
@@ -140,6 +187,7 @@ def recommend(
         manual_temp=manual_temp,
         weather_category=weather_category,
         occasion=occasion,
+        time_context=time_context,
         exclude=exclude,
         style_preference=style_preference,
         preferred_seasons=preferred_seasons,
@@ -154,6 +202,7 @@ def score_existing_combo(
     user: models.User,
     weather_category: str,
     occasion: Optional[str],
+    time_context: Optional[str],
     style_preference: Optional[str],
     preferred_seasons: Optional[list[str]],
 ) -> RecommendationCandidate:
@@ -163,8 +212,11 @@ def score_existing_combo(
         user=user,
         weather_category=weather_category,
         occasion=occasion,
+        time_context=time_context,
         style_preference=style_preference,
         preferred_seasons=preferred_seasons,
+        recent_combos=[],
+        wardrobe_limitation=None,
     )
 
 
@@ -396,8 +448,11 @@ def _score_candidate(
     user: models.User,
     weather_category: str,
     occasion: Optional[str],
+    time_context: Optional[str],
     style_preference: Optional[str],
     preferred_seasons: Optional[list[str]],
+    recent_combos: list[list[models.ClothingItem]],
+    wardrobe_limitation: Optional[str],
 ) -> RecommendationCandidate:
     comfort_target = _resolve_comfort_target(user.comfort_preference)
     style_target = (style_preference or user.lifestyle or "casual").strip().lower()
@@ -424,6 +479,14 @@ def _score_candidate(
     diversity_bonus = _category_diversity_bonus(combo)
     structure_bonus = _structure_bonus(combo, weather_category)
     set_bonus = _set_bonus(combo)
+    novelty_bonus = _novelty_bonus(combo, recent_combos)
+    creativity_bonus = _controlled_creativity_bonus(
+        combo=combo,
+        weather_category=weather_category,
+        occasion=occasion_text,
+        color_bonus=color_bonus,
+    )
+    repeat_penalty = _repeat_penalty(combo, recent_combos)
     temp_penalty = sum(_temperature_penalty(item, weather_category) for item in combo) / len(combo)
 
     score = (
@@ -432,13 +495,19 @@ def _score_candidate(
         + (diversity_bonus * 0.10)
         + (structure_bonus * 0.10)
         + (set_bonus * 0.08)
+        + (novelty_bonus * 0.10)
+        + (creativity_bonus * 0.08)
         - (temp_penalty * 0.12)
+        - (repeat_penalty * 0.16)
     )
     explanation = _build_combo_explanation(
         combo=combo,
         weather_category=weather_category,
         occasion=occasion_text,
+        time_context=time_context,
         color_bonus=color_bonus,
+        creativity_bonus=creativity_bonus,
+        wardrobe_limitation=wardrobe_limitation,
     )
     item_explanations = {
         item.id: _build_item_explanation(item, weather_category, style_target, comfort_target, occasion_text)
@@ -641,28 +710,308 @@ def _color_harmony_bonus(combo: list[models.ClothingItem]) -> float:
     return 0.5
 
 
-def _build_combo_explanation(
+def _controlled_creativity_bonus(
     *,
     combo: list[models.ClothingItem],
     weather_category: str,
     occasion: str,
     color_bonus: float,
+) -> float:
+    if color_bonus < 0.82:
+        return 0.0
+
+    unique_colors = _unique_combo_colors(combo)
+    if len(unique_colors) < 2:
+        return 0.0
+
+    accent_colors = [color for color in unique_colors if color not in _NEUTRAL_COLORS]
+    if not accent_colors or len(accent_colors) > 2:
+        return 0.0
+
+    grounded_colors = [color for color in unique_colors if color in _GROUNDING_COLORS]
+    if not grounded_colors:
+        return 0.0
+
+    neutral_count = sum(1 for color in unique_colors if color in _NEUTRAL_COLORS)
+    if neutral_count == 0:
+        return 0.0
+
+    controlled_colors = [color for color in unique_colors if color in _CONTROLLED_CREATIVE_COLORS]
+    if not controlled_colors:
+        return 0.0
+
+    if weather_category == "cold" and any(color in {"cream", "ivory", "beige"} for color in unique_colors):
+        weather_fit_bonus = 0.08
+    elif weather_category in {"mild", "warm"} and any(color in {"olive", "sage", "khaki", "tan"} for color in unique_colors):
+        weather_fit_bonus = 0.08
+    else:
+        weather_fit_bonus = 0.0
+
+    occasion_bonus = 0.08 if occasion in {"daily", "casual", "social", "weekend"} else 0.0
+    accent_bonus = 0.12 if len(accent_colors) == 1 else 0.06
+    grounding_bonus = 0.16 if any(color in {"olive", "sage", "beige", "camel", "khaki", "tan"} for color in grounded_colors) else 0.08
+    paired_bonus = 0.1 if len(controlled_colors) >= 2 else 0.0
+    return min(0.58, grounding_bonus + accent_bonus + weather_fit_bonus + occasion_bonus + paired_bonus)
+
+
+def _recent_combos_from_fingerprints(
+    recent_fingerprints: list[str],
+    item_map: dict[int, models.ClothingItem],
+) -> list[list[models.ClothingItem]]:
+    recent_combos: list[list[models.ClothingItem]] = []
+    for fingerprint in recent_fingerprints:
+        item_ids = []
+        for token in fingerprint.split(","):
+            cleaned = token.strip()
+            if not cleaned:
+                continue
+            try:
+                item_ids.append(int(cleaned))
+            except ValueError:
+                continue
+        combo = [item_map[item_id] for item_id in item_ids if item_id in item_map]
+        if combo:
+            recent_combos.append(combo)
+    return recent_combos
+
+
+def _core_combo_items(combo: list[models.ClothingItem]) -> list[models.ClothingItem]:
+    return [item for item in combo if not _is_accessory(item)]
+
+
+def _unique_combo_colors(combo: list[models.ClothingItem]) -> list[str]:
+    unique_colors: list[str] = []
+    for item in combo:
+        for color in _item_colors(item):
+            if color not in unique_colors:
+                unique_colors.append(color)
+    return unique_colors
+
+
+def _anchor_items(combo: list[models.ClothingItem]) -> list[models.ClothingItem]:
+    anchors = [item for item in combo if _normalize_category(item.category) == "top"]
+    if anchors:
+        return anchors
+    one_pieces = [item for item in combo if _is_one_piece(item)]
+    if one_pieces:
+        return one_pieces
+    return _core_combo_items(combo)[:1]
+
+
+def _style_palette(items: list[models.ClothingItem]) -> set[str]:
+    palette: set[str] = set()
+    for item in items:
+        palette.update(_style_values(item))
+    return palette
+
+
+def _novelty_bonus(combo: list[models.ClothingItem], recent_combos: list[list[models.ClothingItem]]) -> float:
+    if not recent_combos:
+        return 0.0
+
+    candidate_anchor_items = _anchor_items(combo)
+    candidate_anchor_colors = {color for item in candidate_anchor_items for color in _item_colors(item)}
+    candidate_anchor_styles = _style_palette(candidate_anchor_items)
+    candidate_core_ids = {item.id for item in _core_combo_items(combo)}
+    latest_combo = recent_combos[0]
+    latest_core_ids = {item.id for item in _core_combo_items(latest_combo)}
+    latest_anchor_items = _anchor_items(latest_combo)
+    latest_anchor_colors = {color for item in latest_anchor_items for color in _item_colors(item)}
+    latest_anchor_styles = _style_palette(latest_anchor_items)
+
+    bonus = 0.0
+    if candidate_anchor_colors and candidate_anchor_colors.isdisjoint(latest_anchor_colors):
+        bonus += 0.65
+    if candidate_anchor_styles and candidate_anchor_styles.isdisjoint(latest_anchor_styles):
+        bonus += 0.45
+    if len(candidate_core_ids - latest_core_ids) >= 2:
+        bonus += 0.35
+    return min(bonus, 1.2)
+
+
+def _repeat_penalty(combo: list[models.ClothingItem], recent_combos: list[list[models.ClothingItem]]) -> float:
+    if not recent_combos:
+        return 0.0
+
+    candidate_core_ids = {item.id for item in _core_combo_items(combo)}
+    candidate_anchor_ids = {item.id for item in _anchor_items(combo)}
+    if not candidate_core_ids:
+        return 0.0
+
+    penalty = 0.0
+    for index, recent_combo in enumerate(recent_combos[:5]):
+        recent_core_ids = {item.id for item in _core_combo_items(recent_combo)}
+        if not recent_core_ids:
+            continue
+        recency_weight = max(0.35, 1 - (index * 0.16))
+        if candidate_core_ids == recent_core_ids:
+            penalty += 1.6 * recency_weight
+            continue
+        overlap = len(candidate_core_ids.intersection(recent_core_ids)) / len(candidate_core_ids.union(recent_core_ids))
+        penalty += overlap * 0.45 * recency_weight
+        if candidate_anchor_ids.intersection(recent_core_ids):
+            penalty += 0.6 * recency_weight
+    return min(penalty, 2.2)
+
+
+def _wardrobe_limitation_note(
+    eligible_items: list[models.ClothingItem],
+    combos: list[list[models.ClothingItem]],
+) -> Optional[str]:
+    category_counts = Counter(_normalize_category(item.category) for item in eligible_items if item.category)
+    top_count = category_counts.get("top", 0) + category_counts.get("one_piece", 0)
+    bottom_count = category_counts.get("bottom", 0)
+    shoes_count = category_counts.get("shoes", 0)
+    distinct_core_colors = {
+        color
+        for item in eligible_items
+        if _normalize_category(item.category) in {"top", "bottom", "shoes", "outerwear"} or _is_one_piece(item)
+        for color in _item_colors(item)
+    }
+    if top_count <= 1 or bottom_count <= 1 or shoes_count <= 1:
+        return "Your wardrobe options are a little tight here, so I kept the recommendation practical."
+    if len(combos) <= 2 or len(distinct_core_colors) <= 2:
+        return "There is not a lot of rotation in this part of your wardrobe yet, so I leaned on the strongest mix."
+    return None
+
+
+def _build_combo_explanation(
+    *,
+    combo: list[models.ClothingItem],
+    weather_category: str,
+    occasion: str,
+    time_context: Optional[str],
+    color_bonus: float,
+    creativity_bonus: float,
+    wardrobe_limitation: Optional[str],
 ) -> str:
     fingerprint = ",".join(str(item.id) for item in sorted(combo, key=lambda item: item.id))
-    template_index = int(sha1(fingerprint.encode("utf-8")).hexdigest(), 16) % len(_EXPLANATION_TEMPLATES)
-    color_phrase = (
-        "cohesive color harmony"
-        if color_bonus >= 0.9
-        else "balanced color coordination"
-        if color_bonus >= 0.75
-        else "a bold color contrast"
+    variation_seed = next(_EXPLANATION_VARIATION_SEQUENCE)
+    reasoning_mode = _REASONING_MODES[_seeded_index(fingerprint, variation_seed, len(_REASONING_MODES))]
+    weather_reason = _weather_reason(combo, weather_category)
+    color_reason = _color_reason(combo, color_bonus, creativity_bonus, variation_seed)
+    occasion_reason = _occasion_reason(occasion, time_context)
+    creativity_label = _creativity_label(fingerprint, creativity_bonus, variation_seed)
+    explanation = _render_reasoning_mode(
+        mode=reasoning_mode,
+        weather_reason=weather_reason,
+        color_reason=color_reason,
+        occasion_reason=occasion_reason,
     )
-    template = _EXPLANATION_TEMPLATES[template_index]
-    return template.format(
-        weather=weather_category,
-        color_phrase=color_phrase,
-        occasion=occasion or "daily wear",
+    if creativity_label:
+        explanation = f"{creativity_label}: {explanation}"
+    if wardrobe_limitation:
+        explanation = f"{explanation} {wardrobe_limitation}"
+    return explanation
+
+
+def _seeded_index(fingerprint: str, variation_seed: int, size: int) -> int:
+    if size <= 0:
+        return 0
+    keyed = f"{fingerprint}:{variation_seed}"
+    return int(sha1(keyed.encode("utf-8")).hexdigest(), 16) % size
+
+
+def _capitalize_reason(text: str) -> str:
+    cleaned = text.strip()
+    if not cleaned:
+        return cleaned
+    return cleaned[0].upper() + cleaned[1:]
+
+
+def _render_reasoning_mode(
+    *,
+    mode: str,
+    weather_reason: str,
+    color_reason: str,
+    occasion_reason: str,
+) -> str:
+    if mode == "direct_stylist":
+        return f"I’d go with this for {occasion_reason} because it is right for {weather_reason}, and {color_reason}."
+    if mode == "casual":
+        return (
+            f"This would work really well for {occasion_reason}. "
+            f"It stays right for {weather_reason}, and {color_reason}."
+        )
+    if mode == "opinionated":
+        return (
+            f"Honestly, this combo just works for {occasion_reason}. "
+            f"It is right for {weather_reason}, and {color_reason}."
+        )
+    if mode == "observational":
+        return (
+            f"This one feels balanced for {occasion_reason}. "
+            f"It is right for {weather_reason}, and {color_reason}."
+        )
+    return (
+        f"Simple, clean, right for {weather_reason}. "
+        f"{_capitalize_reason(color_reason)}. "
+        f"Works for {occasion_reason}."
     )
+
+
+def _weather_reason(combo: list[models.ClothingItem], weather_category: str) -> str:
+    core_blob = " ".join(
+        f"{item.name or ''} {item.clothing_type or ''} {item.category or ''}".lower()
+        for item in combo
+    )
+    if weather_category == "hot":
+        return "hot weather because the layers stay light and breathable"
+    if weather_category == "warm":
+        return "warm weather because it stays light without feeling too bare"
+    if weather_category == "cool":
+        return "cool weather because it keeps a little coverage without getting heavy"
+    if weather_category == "cold":
+        if "coat" in core_blob or "jacket" in core_blob or "sweater" in core_blob:
+            return "cold weather because the extra layer keeps the outfit grounded"
+        return "cold weather because it keeps more coverage in the mix"
+    return "mild weather because the layering stays easy"
+
+
+def _color_reason(
+    combo: list[models.ClothingItem],
+    color_bonus: float,
+    creativity_bonus: float,
+    variation_seed: int,
+) -> str:
+    featured = _unique_combo_colors(combo)[:3]
+    if not featured:
+        return "the color balance stays clean and easy"
+    if len(featured) == 1:
+        return f"the {featured[0]} color keeps everything clean"
+    if creativity_bonus >= 0.3:
+        first = featured[0]
+        second = featured[1] if len(featured) > 1 else featured[0]
+        template = _CREATIVE_COLOR_REASON_TEMPLATES[
+            _seeded_index(",".join(featured), variation_seed, len(_CREATIVE_COLOR_REASON_TEMPLATES))
+        ]
+        return template.format(first=first, second=second)
+    if color_bonus >= 0.9:
+        return f"the {featured[0]} and {featured[1]} colors work well together"
+    if color_bonus >= 0.75:
+        return f"the {', '.join(featured[:-1])} and {featured[-1]} color mix stays balanced"
+    return f"the color contrast between {featured[0]} and {featured[1]} gives it some life"
+
+
+def _creativity_label(fingerprint: str, creativity_bonus: float, variation_seed: int) -> str:
+    if creativity_bonus < 0.3:
+        return ""
+    return _CREATIVE_TEXT_LABELS[_seeded_index(fingerprint, variation_seed + 7, len(_CREATIVE_TEXT_LABELS))]
+
+
+def _occasion_reason(occasion: str, time_context: Optional[str]) -> str:
+    cleaned_occasion = (occasion or "daily wear").strip().lower()
+    cleaned_time_context = (time_context or "").strip().lower()
+    time_phrase = (
+        f"an {cleaned_time_context} plan"
+        if cleaned_time_context.startswith(("a", "e", "i", "o", "u"))
+        else f"a {cleaned_time_context} plan"
+    ) if cleaned_time_context else ""
+    if cleaned_time_context and cleaned_occasion and cleaned_occasion not in {"daily", "daily wear"}:
+        return f"{cleaned_occasion} and {time_phrase}"
+    if cleaned_time_context:
+        return time_phrase
+    return cleaned_occasion or "daily wear"
 
 
 def _build_item_explanation(

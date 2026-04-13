@@ -341,6 +341,7 @@ class FakeWardrobeRepository : WardrobeRepository {
             fallbackUsed = true,
             warning = "fake_repository",
             weatherCategory = weatherCategory ?: "mild",
+            weatherAvailable = true,
             occasion = occasion,
             suggestionId = items.map { it.id }.sorted().joinToString(","),
             itemExplanations = emptyMap(),

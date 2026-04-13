@@ -1488,6 +1488,7 @@ def get_recommendation_options_for_user(
     manual_temp: Optional[int] = None,
     weather_category: Optional[str] = None,
     occasion: Optional[str] = None,
+    time_context: Optional[str] = None,
     exclude: Optional[str] = None,
     limit: int = 3,
     preferred_seasons: Optional[list[str]] = None,
@@ -1495,7 +1496,7 @@ def get_recommendation_options_for_user(
     normalized_limit = max(1, min(limit, 10))
     all_items = get_clothing_items_for_user(db, user.id)
     item_map = {item.id: item for item in all_items}
-    recent_fingerprints = set(history.get_recent_fingerprints(db, user.id))
+    recent_fingerprints = history.get_recent_fingerprints(db, user.id)
     implicit_feedback_signals = _build_feedback_signals(
         db,
         user_id=user.id,
@@ -1511,6 +1512,7 @@ def get_recommendation_options_for_user(
         manual_temp=manual_temp,
         weather_category=weather_category,
         occasion=occasion,
+        time_context=time_context,
         exclude=exclude,
         style_preference=user.lifestyle,
         preferred_seasons=effective_preferred_seasons,

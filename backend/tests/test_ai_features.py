@@ -138,6 +138,8 @@ def test_ai_chat_system_prompt_uses_continuity_and_wardrobe_context(client, monk
     assert "high-taste personal stylist" in system_prompt.lower()
     assert "shape, balance, contrast, proportion" in system_prompt.lower()
     assert "overly fancy fashion-editor language" in system_prompt.lower()
+    assert "what should i wear" in system_prompt.lower()
+    assert "going outside" in system_prompt.lower()
 
 
 def test_ai_chat_fallback_when_provider_unavailable(client, monkeypatch):
@@ -174,7 +176,7 @@ def test_ai_chat_fallback_greets_user_naturally(client, monkeypatch):
     assert body["fallback_used"] is True
     assert "hi" in body["reply"].lower()
     assert "aura" in body["reply"].lower()
-    assert "thoughtful" in body["reply"].lower() or "vibe" in body["reply"].lower()
+    assert "want me to build a quick outfit" in body["reply"].lower()
 
 
 def test_ai_chat_fallback_redirects_non_style_requests(client, monkeypatch):
@@ -189,8 +191,9 @@ def test_ai_chat_fallback_redirects_non_style_requests(client, monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["fallback_used"] is True
-    assert "style help" in body["reply"].lower() or "outfit" in body["reply"].lower()
-    assert "occasion" in body["reply"].lower() or "weather" in body["reply"].lower()
+    assert "i can help with that" in body["reply"].lower()
+    assert "want me" in body["reply"].lower()
+    assert "?" in body["reply"]
 
 
 def test_ai_chat_fallback_builds_on_previous_turn_with_wardrobe_context(client, monkeypatch):
@@ -218,9 +221,50 @@ def test_ai_chat_fallback_builds_on_previous_turn_with_wardrobe_context(client, 
     assert response.status_code == 200
     body = response.json()
     assert body["fallback_used"] is True
-    assert "building on what you just said" in body["reply"].lower()
+    assert "keeping it casual" in body["reply"].lower()
     assert "wardrobe" in body["reply"].lower() or "items" in body["reply"].lower()
-    assert "temperature" in body["reply"].lower() or "setting" in body["reply"].lower()
+    assert "want me" in body["reply"].lower()
+
+
+def test_ai_chat_fallback_varies_tone_for_repeated_same_input(client, monkeypatch):
+    token = register_and_login(client, "ai-chat-variation@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+    _create_item(client, auth, category="Top", color="White", name="White Tee", clothing_type="tee")
+    _create_item(client, auth, category="Bottom", color="Olive", name="Olive Chino", clothing_type="chino")
+    _create_item(client, auth, category="Shoes", color="White", name="White Sneakers", clothing_type="sneakers")
+
+    class FakeProvider:
+        is_available = False
+
+    monkeypatch.setattr("app.routes.ai_service.provider_client", FakeProvider())
+
+    replies = []
+    message_sets = [
+        [{"role": "user", "content": "what should i wear"}],
+        [
+            {"role": "user", "content": "what should i wear"},
+            {"role": "assistant", "content": "Sure, I can build from that."},
+            {"role": "user", "content": "what should i wear"},
+        ],
+        [
+            {"role": "user", "content": "what should i wear"},
+            {"role": "assistant", "content": "Sure, I can build from that."},
+            {"role": "user", "content": "what should i wear"},
+            {"role": "assistant", "content": "Do you want it cleaner or more relaxed?"},
+            {"role": "user", "content": "what should i wear"},
+        ],
+    ]
+
+    for messages in message_sets:
+        response = client.post("/ai/chat", headers=auth, json={"messages": messages})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["fallback_used"] is True
+        assert "?" in body["reply"]
+        replies.append(body["reply"])
+
+    assert len(set(replies)) == 3
+    assert any("honestly" in reply.lower() for reply in replies)
 
 
 def test_chat_alias_uses_same_response_contract(client, monkeypatch):
@@ -283,6 +327,8 @@ def test_ai_recommendations_ai_success(client, monkeypatch):
     assert body["fallback_used"] is False
     assert len(body["items"]) >= 3
     assert body["suggestion_id"]
+    assert "office" in body["explanation"].lower()
+    assert "color" in body["explanation"].lower()
 
 
 def test_ai_recommendations_malformed_provider_payload_fallback(client, monkeypatch):
@@ -359,7 +405,114 @@ def test_ai_recommendations_fall_back_when_weather_lookup_fails_without_weather_
     assert response.status_code == 200
     body = response.json()
     assert body["weather_category"] == "mild"
+    assert body["weather_available"] is False
     assert len(body["items"]) >= 3
+
+
+def test_ai_recommendations_return_structured_weather_fallback_when_service_not_configured(client, monkeypatch):
+    token = register_and_login(client, "ai-reco-weather-config@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
+    _create_item(client, auth, category="Bottom", color="Blue", name="Blue Jeans", clothing_type="jeans")
+    _create_item(client, auth, category="Shoes", color="White", name="White Sneakers", clothing_type="sneakers")
+
+    class FakeProvider:
+        is_available = False
+
+    def not_configured(*_args, **_kwargs):
+        raise WeatherLookupError("Weather service is not configured", status_code=503)
+
+    monkeypatch.setattr("app.routes.ai_service.provider_client", FakeProvider())
+    monkeypatch.setattr("app.routes.fetch_current_temperature_f", not_configured)
+    monkeypatch.setattr("app.routes.fetch_current_weather", not_configured)
+
+    response = client.post(
+        "/ai/recommendations",
+        headers=auth,
+        json={"weather_city": "Boston"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["items"]
+    assert body["weather_category"] == "mild"
+    assert body["weather_available"] is False
+
+
+def test_ai_recommendations_explanation_uses_weather_time_and_occasion(client, monkeypatch):
+    token = register_and_login(client, "ai-reco-context@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    _create_item(client, auth, category="Top", color="White", name="White Linen Shirt", clothing_type="shirt")
+    _create_item(client, auth, category="Top", color="Blue", name="Blue Polo", clothing_type="polo")
+    _create_item(client, auth, category="Bottom", color="Khaki", name="Khaki Chino", clothing_type="chino")
+    _create_item(client, auth, category="Shoes", color="Brown", name="Brown Loafers", clothing_type="loafers")
+
+    class FakeProvider:
+        is_available = False
+
+    monkeypatch.setattr("app.routes.ai_service.provider_client", FakeProvider())
+    response = client.post(
+        "/ai/recommendations",
+        headers=auth,
+        json={
+            "weather_category": "warm",
+            "occasion": "office",
+            "time_context": "Evening",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    explanation = body["explanation"].lower()
+    assert body["fallback_used"] is True
+    assert "warm" in explanation
+    assert "office" in explanation
+    assert "evening" in explanation
+    assert any(
+        phrase in explanation
+        for phrase in {
+            "color",
+            "clean but elevated",
+            "slightly styled",
+            "colors work well together",
+            "color mix stays balanced",
+            "color contrast",
+            "bit more styled than usual",
+            "leans a little more into style",
+            "a little extra edge",
+            "not the safest combo",
+            "gives it more character",
+            "slightly past basic",
+            "i’d go with this",
+            "this would work really well",
+            "honestly, this combo just works",
+            "this one feels balanced",
+            "simple, clean",
+        }
+    )
+
+
+def test_ai_recommendations_weak_wardrobe_still_returns_outfit_with_limitation(client, monkeypatch):
+    token = register_and_login(client, "ai-reco-weak-wardrobe@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    _create_item(client, auth, category="Top", color="Black", name="Only Tee", clothing_type="tee")
+    _create_item(client, auth, category="Bottom", color="Black", name="Only Pants", clothing_type="pants")
+    _create_item(client, auth, category="Shoes", color="Black", name="Only Sneakers", clothing_type="sneakers")
+
+    class FakeProvider:
+        is_available = False
+
+    monkeypatch.setattr("app.routes.ai_service.provider_client", FakeProvider())
+    response = client.post(
+        "/ai/recommendations",
+        headers=auth,
+        json={"weather_category": "mild", "occasion": "daily"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["items"]
+    assert "wardrobe" in body["explanation"].lower() or "rotation" in body["explanation"].lower()
 
 
 def test_recommendations_ai_alias_requires_auth(client):
@@ -462,7 +615,9 @@ def test_ai_recommendations_repeat_prevention_avoids_same_fingerprint(client, mo
 
     _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
     _create_item(client, auth, category="Top", color="White", name="White Shirt", clothing_type="shirt")
+    _create_item(client, auth, category="Top", color="Olive", name="Olive Overshirt", clothing_type="overshirt")
     _create_item(client, auth, category="Bottom", color="Blue", name="Blue Jeans", clothing_type="jeans")
+    _create_item(client, auth, category="Bottom", color="Khaki", name="Khaki Chino", clothing_type="chino")
     _create_item(client, auth, category="Shoes", color="White", name="White Sneakers", clothing_type="sneakers")
     _create_item(client, auth, category="Shoes", color="Black", name="Black Loafers", clothing_type="loafers")
 
@@ -480,6 +635,15 @@ def test_ai_recommendations_repeat_prevention_avoids_same_fingerprint(client, mo
     assert first_body["source"] == "fallback"
     assert second_body["source"] == "fallback"
     assert first_body["suggestion_id"] != second_body["suggestion_id"]
+    first_top_ids = {
+        item["id"] for item in first_body["items"] if item["category"].strip().lower() == "top"
+    }
+    second_top_ids = {
+        item["id"] for item in second_body["items"] if item["category"].strip().lower() == "top"
+    }
+    assert first_top_ids
+    assert second_top_ids
+    assert first_top_ids != second_top_ids
 
 
 def test_recommendation_feedback_endpoint_upserts_signal(client):
