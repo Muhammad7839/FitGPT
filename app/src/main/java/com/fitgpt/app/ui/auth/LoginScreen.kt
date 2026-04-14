@@ -6,6 +6,7 @@
 package com.fitgpt.app.ui.auth
 
 import android.app.Activity
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -44,6 +45,8 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 
+private const val GOOGLE_AUTH_LOG_TAG = "FitGPTGoogleAuth"
+
 /**
  * Simple auth entry screen that saves JWT token via AuthViewModel on success.
  */
@@ -78,21 +81,39 @@ fun LoginScreen(
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode != Activity.RESULT_OK) {
-            googleErrorMessage = "Google sign-in cancelled"
-            return@rememberLauncherForActivityResult
-        }
         val signInTask = GoogleSignIn.getSignedInAccountFromIntent(result.data)
         try {
             val account = signInTask.getResult(ApiException::class.java)
-            val idToken = account?.idToken
-            if (idToken.isNullOrBlank()) {
-                googleErrorMessage = "Google sign-in did not return an ID token"
-            } else {
-                googleErrorMessage = null
-                viewModel.loginWithGoogleToken(idToken)
+            when (
+                val outcome = resolveGoogleSignInOutcome(
+                    resultCode = result.resultCode,
+                    accountPresent = account != null,
+                    email = account?.email,
+                    idToken = account?.idToken
+                )
+            ) {
+                is GoogleSignInOutcome.Success -> {
+                    Log.i(
+                        GOOGLE_AUTH_LOG_TAG,
+                        "Google success: resultCode=${result.resultCode}, email=${outcome.email.orEmpty()}, token=present"
+                    )
+                    googleErrorMessage = null
+                    viewModel.loginWithGoogleToken(outcome.idToken)
+                }
+
+                is GoogleSignInOutcome.Failure -> {
+                    Log.w(
+                        GOOGLE_AUTH_LOG_TAG,
+                        "Google failed: resultCode=${result.resultCode}, email=${outcome.email.orEmpty()}, tokenPresent=${outcome.tokenPresent}, reason=${outcome.reason}"
+                    )
+                    googleErrorMessage = outcome.userMessage
+                }
             }
-        } catch (_: ApiException) {
+        } catch (exception: ApiException) {
+            Log.w(
+                GOOGLE_AUTH_LOG_TAG,
+                "Google failed: resultCode=${result.resultCode}, reason=api_exception_${exception.statusCode}"
+            )
             googleErrorMessage = "Google sign-in failed"
         }
     }

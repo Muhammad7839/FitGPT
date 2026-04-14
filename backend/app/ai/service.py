@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from dataclasses import dataclass
 from typing import Optional
 
@@ -66,6 +67,7 @@ class ChatFallbackContext:
     style_seed: str
     context_label: str
     variation_seed: int
+    style_variant: str
 
 
 class AiService:
@@ -82,15 +84,24 @@ class AiService:
         messages: list[ProviderMessage],
         request_id: str,
     ) -> ChatResult:
+        style_variant = _select_chat_style_variant(messages, request_id)
         if not self.provider_client.is_available:
             return ChatResult(
-                reply=self._build_chat_fallback_reply(wardrobe_items, messages),
+                reply=self._build_chat_fallback_reply(
+                    wardrobe_items,
+                    messages,
+                    request_id=request_id,
+                ),
                 source="fallback",
                 fallback_used=True,
                 warning="provider_not_configured",
             )
 
-        system_prompt = prompts.build_chat_system_prompt(user=user, wardrobe_items=wardrobe_items)
+        system_prompt = prompts.build_chat_system_prompt(
+            user=user,
+            wardrobe_items=wardrobe_items,
+            style_variant=style_variant,
+        )
         try:
             reply = self.provider_client.chat(
                 [ProviderMessage(role="system", content=system_prompt)] + messages
@@ -109,7 +120,11 @@ class AiService:
                 exc.retryable,
             )
             return ChatResult(
-                reply=self._build_chat_fallback_reply(wardrobe_items, messages),
+                reply=self._build_chat_fallback_reply(
+                    wardrobe_items,
+                    messages,
+                    request_id=request_id,
+                ),
                 source="fallback",
                 fallback_used=True,
                 warning=exc.code,
@@ -362,6 +377,8 @@ class AiService:
     def _build_chat_fallback_reply(
         wardrobe_items: list[models.ClothingItem],
         messages: list[ProviderMessage],
+        *,
+        request_id: str,
     ) -> str:
         latest_user_text = _latest_message_content(messages, role="user")
         previous_user_text = _previous_user_message_content(messages)
@@ -370,129 +387,60 @@ class AiService:
             previous_user_text=previous_user_text,
             messages=messages,
             wardrobe_items=wardrobe_items,
+            request_id=request_id,
         )
 
         if context.latest_intent == "greeting":
-            if wardrobe_items:
-                return _pick_variant(
-                    (
-                        "Hi, I’m AURA. I can help you make this feel styled without overthinking it. A good place to start is the piece you already want to wear. Want me to build a quick outfit around it?",
-                        "Hi, I’m AURA. Start with the piece you already feel like wearing and I’ll shape the rest around it. Want me to turn that into a quick outfit?",
-                        "Hi. Keep this easy: pick the piece you already want on, and I can make the rest feel intentional. Want me to build around it?",
-                    ),
-                    context.variation_seed,
-                )
-            return (
-                _pick_variant(
-                    (
-                        "Hi, I’m AURA. I can help you make outfit decisions faster and make them feel more pulled together. We can start with where you’re going, the vibe you want, or one piece you feel like wearing. Want me to build a quick outfit?",
-                        "Hi, I’m AURA. We can keep this simple: tell me where you’re headed, the vibe, or one piece you want to wear, and I’ll shape it. Want a quick outfit?",
-                        "Hi. I can help you get to an outfit faster. Give me the plan, the mood, or one item you want in the mix, and I’ll take it from there. Want me to build one now?",
-                    ),
-                    context.variation_seed,
-                )
+            return _compose_chat_reply(
+                context=context,
+                suggestion=(
+                    "Hi, I’m AURA. Start with the piece you already want to wear and I’ll shape the rest around it."
+                    if wardrobe_items
+                    else "Hi, I’m AURA. Give me the plan, the mood, or one piece you want in the mix and I’ll shape the outfit."
+                ),
+                follow_up="Want a quick outfit?",
             )
         if not wardrobe_items:
             if _is_recommendation_intent(context.latest_intent):
                 return _compose_chat_reply(
                     context=context,
                     suggestion=f"If you’re {context.context_label}, start with {context.style_seed}.",
-                    question="Do you want to keep it casual, clean it up a bit, or build it around the weather?",
-                    acknowledge=(
-                        "Makes sense.",
-                        "That gives me enough to start.",
-                        "Honestly, I’d keep this simple.",
-                    ),
-                    opinion=(
-                        "",
-                        "No need to overdo it here.",
-                        "A clean base is usually the right move.",
-                    ),
+                    follow_up="If you want it tighter, give me the weather or one piece to build around.",
                 )
             if _has_style_context(context):
                 return _compose_chat_reply(
                     context=context,
                     suggestion=f"Since you mentioned {context.context_label}, I’d lean {context.style_seed}. I don’t have your wardrobe yet, but I can still shape this.",
-                    question="Want to give me the weather or one piece you want to wear?",
-                    acknowledge=(
-                        "That helps.",
-                        "Alright, that gives me the shape of it.",
-                        "Good, that points it in the right direction.",
-                    ),
-                    opinion=(
-                        "",
-                        "I wouldn’t make this too complicated.",
-                        "Simple usually looks better here.",
-                    ),
+                    follow_up="Give me the weather or one piece if you want the next pass tighter.",
                 )
             return _compose_chat_reply(
                 context=context,
                 suggestion="Start with something easy and wearable, then sharpen it once the plan is clearer.",
-                question="Want me to keep it casual, make it cleaner, or just build a quick outfit?",
-                acknowledge=(
-                    "I can help with that.",
-                    "Sure.",
-                    "Alright.",
-                ),
-                opinion=(
-                    "",
-                    "I’d keep the first pass straightforward.",
-                    "Better to keep this clean than overstyled.",
-                ),
+                follow_up="Tell me where you’re going or what piece you want to wear and I’ll take it from there.",
             )
-        wardrobe_summary = prompts.summarize_wardrobe_for_chat(wardrobe_items)
+        wardrobe_summary = _wardrobe_hint(wardrobe_items)
         if _is_recommendation_intent(context.latest_intent):
             return _compose_chat_reply(
                 context=context,
                 suggestion=(
                     f"If you’re {context.context_label}, I’d start with {context.style_seed}. "
-                    f"From your wardrobe, I’m seeing {wardrobe_summary.lower()}"
+                    f"From your wardrobe, I’m seeing {wardrobe_summary}."
                 ),
-                question="Do you want me to keep it easy, make it cleaner, or pull one full outfit together?",
-                acknowledge=(
-                    "Makes sense.",
-                    "Alright.",
-                    "That’s easy to work with.",
-                ),
-                opinion=(
-                    "",
-                    "Honestly, this one is better kept clean.",
-                    "You do not need to overthink this.",
-                ),
+                follow_up="I’d keep it clean instead of overworking it.",
             )
         if _has_style_context(context):
             return _compose_chat_reply(
                 context=context,
                 suggestion=(
                     f"Since you mentioned {context.context_label}, I’d lean {context.style_seed}. "
-                    f"From your wardrobe, I’m seeing {wardrobe_summary.lower()}"
+                    f"From your wardrobe, I’m seeing {wardrobe_summary}."
                 ),
-                question="Want me to refine it around the temperature or build it around one piece?",
-                acknowledge=(
-                    "That gives me enough to work with.",
-                    "Good, that helps.",
-                    "Alright, now we have direction.",
-                ),
-                opinion=(
-                    "",
-                    "I’d rather refine this than add more noise.",
-                    "This should feel considered, not fussy.",
-                ),
+                follow_up="If you want the next pass tighter, give me the temperature or the hero piece.",
             )
         return _compose_chat_reply(
             context=context,
-            suggestion=f"I can turn that into something more styled. From your wardrobe, I’m seeing {wardrobe_summary.lower()}",
-            question="Want me to make it more casual, a little cleaner, or build a quick outfit now?",
-            acknowledge=(
-                "Sure.",
-                "Alright.",
-                "Makes sense.",
-            ),
-            opinion=(
-                "",
-                "I’d keep the direction clean.",
-                "The best move here is usually the simpler one.",
-            ),
+            suggestion=f"I’d turn that into something more styled. From your wardrobe, I’m seeing {wardrobe_summary}.",
+            follow_up="I’d keep the direction clean and easy.",
         )
 
 
@@ -769,11 +717,13 @@ def _build_chat_fallback_context(
     previous_user_text: str,
     messages: list[ProviderMessage],
     wardrobe_items: list[models.ClothingItem],
+    request_id: str,
 ) -> ChatFallbackContext:
     combined_user_text = " ".join(
         part for part in [previous_user_text, latest_user_text] if part
     ).strip()
     latest_intent = _detect_chat_intent(latest_user_text)
+    style_variant = _select_chat_style_variant(messages, request_id)
     return ChatFallbackContext(
         latest_user_text=latest_user_text,
         previous_user_text=previous_user_text,
@@ -782,6 +732,7 @@ def _build_chat_fallback_context(
         style_seed=_style_seed_from_text(combined_user_text or latest_user_text, wardrobe_items),
         context_label=_context_label_from_messages(latest_user_text, previous_user_text),
         variation_seed=_chat_variation_seed(messages, latest_user_text),
+        style_variant=style_variant,
     )
 
 
@@ -808,22 +759,24 @@ def _compose_chat_reply(
     *,
     context: ChatFallbackContext,
     suggestion: str,
-    question: str,
-    acknowledge: tuple[str, ...],
-    opinion: tuple[str, ...],
+    follow_up: Optional[str] = None,
 ) -> str:
-    ack = _pick_variant(acknowledge, context.variation_seed).strip()
-    aside = _pick_variant(opinion, context.variation_seed + 1).strip()
-    suggestion = suggestion.strip()
-    question = question.strip()
-    pattern = context.variation_seed % 3
-
-    if pattern == 0:
-        parts = [ack, suggestion, aside, question]
-    elif pattern == 1:
-        parts = [suggestion, aside, question]
+    suggestion_text = suggestion.strip()
+    follow_up_text = (follow_up or "").strip()
+    if context.style_variant == "direct":
+        parts = [suggestion_text, follow_up_text]
+    elif context.style_variant == "casual":
+        opener = _pick_variant(("Keep it easy:", "Honestly,", "Easy move:"), context.variation_seed)
+        parts = [f"{opener} {suggestion_text}", follow_up_text]
+    elif context.style_variant == "confident stylist":
+        opener = _pick_variant(
+            ("I’d go here:", "Best move here:", "This is the cleaner call:"),
+            context.variation_seed,
+        )
+        parts = [f"{opener} {suggestion_text}", follow_up_text]
     else:
-        parts = [question, ack, suggestion, aside]
+        opener = _pick_variant(("I’d start here:", "What I’d do:", "I’d lean this way:"), context.variation_seed)
+        parts = [f"{opener} {suggestion_text}", follow_up_text]
     return " ".join(part for part in parts if part).strip()
 
 
@@ -835,3 +788,31 @@ def _chat_variation_seed(messages: list[ProviderMessage], latest_user_text: str)
         if message.role == "user" and _normalize_message(message.content) == normalized_latest
     )
     return max(0, (len(messages) * 3) + repeated_prompt_count - 1)
+
+
+def _select_chat_style_variant(messages: list[ProviderMessage], request_id: str) -> str:
+    variants = ("direct", "casual", "confident stylist", "conversational")
+    seed_source = (
+        f"{len(messages)}:"
+        f"{_latest_message_content(messages, role='user')}:"
+        f"{_previous_user_message_content(messages)}"
+    )
+    seed_value = sum(ord(char) for char in seed_source)
+    return variants[seed_value % len(variants)]
+
+
+def _wardrobe_hint(wardrobe_items: list[models.ClothingItem]) -> str:
+    if not wardrobe_items:
+        return "a workable mix"
+    categories = [
+        item.category.strip().lower()
+        for item in wardrobe_items
+        if item.category and item.category.strip()
+    ]
+    if not categories:
+        return "a workable mix"
+    counts = Counter(categories)
+    top_categories = [category for category, _count in counts.most_common(2)]
+    if len(top_categories) == 1:
+        return f"enough in the {top_categories[0]} lane to build from"
+    return f"a solid mix of {top_categories[0]} and {top_categories[1]} pieces"

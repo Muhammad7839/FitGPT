@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -6,9 +7,12 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
 from app.database.database import engine, Base
 from app import models
+from app.config import log_optional_config_warnings
 from app.routes import router
 
+logger = logging.getLogger(__name__)
 app = FastAPI()
+log_optional_config_warnings(logger)
 
 origins = [
     "http://localhost:3000",

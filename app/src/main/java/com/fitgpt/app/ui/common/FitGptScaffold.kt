@@ -3,6 +3,7 @@
  */
 package com.fitgpt.app.ui.common
 
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -63,6 +64,8 @@ import com.fitgpt.app.navigation.navigateToTopLevel
 import com.fitgpt.app.navigation.routeBase
 import com.fitgpt.app.navigation.TopLevelReselectBus
 import com.fitgpt.app.navigation.Routes
+
+private const val SCAFFOLD_NAV_LOG_TAG = "FitGPTNav"
 
 /**
  * Shared shell used by top-level screens to mirror the web app IA.
@@ -194,6 +197,10 @@ fun FitGptScaffold(
                         NavigationBarItem(
                             selected = isSelected,
                             onClick = {
+                                Log.i(
+                                    SCAFFOLD_NAV_LOG_TAG,
+                                    "top-level click target=${item.route} current=$activeRouteBase reselect=$isSelected"
+                                )
                                 if (isSelected) {
                                     TopLevelReselectBus.dispatch(item.route)
                                 } else {

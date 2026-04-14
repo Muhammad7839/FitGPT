@@ -138,6 +138,10 @@ def test_ai_chat_system_prompt_uses_continuity_and_wardrobe_context(client, monk
     assert "high-taste personal stylist" in system_prompt.lower()
     assert "shape, balance, contrast, proportion" in system_prompt.lower()
     assert "overly fancy fashion-editor language" in system_prompt.lower()
+    assert "do not force a rigid structure" in system_prompt.lower()
+    assert "most replies should be one or two sentences" in system_prompt.lower()
+    assert "current reply style for this turn" in system_prompt.lower()
+    assert "never say 'based on your request' or 'i can help you'" in system_prompt.lower()
     assert "what should i wear" in system_prompt.lower()
     assert "going outside" in system_prompt.lower()
 
@@ -176,7 +180,7 @@ def test_ai_chat_fallback_greets_user_naturally(client, monkeypatch):
     assert body["fallback_used"] is True
     assert "hi" in body["reply"].lower()
     assert "aura" in body["reply"].lower()
-    assert "want me to build a quick outfit" in body["reply"].lower()
+    assert "outfit" in body["reply"].lower()
 
 
 def test_ai_chat_fallback_redirects_non_style_requests(client, monkeypatch):
@@ -191,9 +195,8 @@ def test_ai_chat_fallback_redirects_non_style_requests(client, monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["fallback_used"] is True
-    assert "i can help with that" in body["reply"].lower()
-    assert "want me" in body["reply"].lower()
-    assert "?" in body["reply"]
+    assert "i can help with that" not in body["reply"].lower()
+    assert "wear" in body["reply"].lower() or "piece" in body["reply"].lower()
 
 
 def test_ai_chat_fallback_builds_on_previous_turn_with_wardrobe_context(client, monkeypatch):
@@ -223,7 +226,7 @@ def test_ai_chat_fallback_builds_on_previous_turn_with_wardrobe_context(client, 
     assert body["fallback_used"] is True
     assert "keeping it casual" in body["reply"].lower()
     assert "wardrobe" in body["reply"].lower() or "items" in body["reply"].lower()
-    assert "want me" in body["reply"].lower()
+    assert "i can help you" not in body["reply"].lower()
 
 
 def test_ai_chat_fallback_varies_tone_for_repeated_same_input(client, monkeypatch):
@@ -260,11 +263,14 @@ def test_ai_chat_fallback_varies_tone_for_repeated_same_input(client, monkeypatc
         assert response.status_code == 200
         body = response.json()
         assert body["fallback_used"] is True
-        assert "?" in body["reply"]
         replies.append(body["reply"])
 
     assert len(set(replies)) == 3
-    assert any("honestly" in reply.lower() for reply in replies)
+    assert any(
+        marker in reply.lower()
+        for reply in replies
+        for marker in {"honestly", "best move here", "i’d start here", "easy move"}
+    )
 
 
 def test_chat_alias_uses_same_response_contract(client, monkeypatch):

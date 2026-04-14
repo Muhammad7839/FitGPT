@@ -306,17 +306,6 @@ private fun ComposerPanel(
         modifier = Modifier.padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = "Ask AURA",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
-        )
-        Text(
-            text = "AURA keeps the context from this live session, so you can keep refining the same conversation.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
         if (showStarterPrompts) {
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),

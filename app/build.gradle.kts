@@ -36,7 +36,11 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
-        val googleWebClientId = projectPropertyOrLocal(project, "GOOGLE_WEB_CLIENT_ID")
+        val googleWebClientId = projectPropertyOrLocal(
+            project,
+            "GOOGLE_CLIENT_ID",
+            projectPropertyOrLocal(project, "GOOGLE_WEB_CLIENT_ID")
+        )
         val apiBaseUrlRaw = projectPropertyOrLocal(project, "API_BASE_URL", "http://10.0.2.2:8000/")
         val apiBaseUrl = if (apiBaseUrlRaw.endsWith("/")) apiBaseUrlRaw else "$apiBaseUrlRaw/"
         val apiLanBaseUrlRaw = projectPropertyOrLocal(project, "API_LAN_BASE_URL")
