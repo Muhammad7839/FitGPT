@@ -1,30 +1,27 @@
 """Centralized runtime configuration for backend environment variables."""
 
+import logging
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
+_OPTIONAL_CONFIG_WARNINGS_LOGGED = False
+_ENV_LOADED = False
 
 
-def _load_local_env_file() -> None:
-    """Load key=value pairs from backend/.env into process env if missing."""
+def load_environment() -> Path:
+    """Load backend/.env into process env once without overriding exported values."""
+    global _ENV_LOADED
     env_path = BACKEND_ROOT / ".env"
-    if not env_path.exists():
-        return
-
-    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip().strip("\"'")
-        if key and key not in os.environ:
-            os.environ[key] = value
+    if not _ENV_LOADED:
+        load_dotenv(dotenv_path=env_path, override=False)
+        _ENV_LOADED = True
+    return env_path
 
 
-_load_local_env_file()
+load_environment()
 
 
 def get_env(name: str, default: str) -> str:
@@ -86,3 +83,23 @@ AI_TEMPERATURE = get_float_env("AI_TEMPERATURE", 0.4)
 
 if ENVIRONMENT in {"prod", "production"} and SECRET_KEY == "dev-only-change-me":
     raise RuntimeError("SECRET_KEY must be set in production")
+
+
+def collect_optional_config_warnings() -> list[str]:
+    warnings: list[str] = []
+    if not OPENWEATHER_API_KEY:
+        warnings.append("OPENWEATHER_API_KEY missing — using fallback weather mode")
+    if not GROQ_API_KEY:
+        warnings.append("GROQ_API_KEY missing — using fallback AURA mode")
+    if not GOOGLE_CLIENT_ID:
+        warnings.append("GOOGLE_CLIENT_ID missing — Google sign-in token verification is disabled")
+    return warnings
+
+
+def log_optional_config_warnings(logger: logging.Logger) -> None:
+    global _OPTIONAL_CONFIG_WARNINGS_LOGGED
+    if _OPTIONAL_CONFIG_WARNINGS_LOGGED:
+        return
+    for warning in collect_optional_config_warnings():
+        logger.warning(warning)
+    _OPTIONAL_CONFIG_WARNINGS_LOGGED = True

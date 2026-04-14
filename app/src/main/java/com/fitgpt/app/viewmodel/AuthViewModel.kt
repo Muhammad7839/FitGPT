@@ -75,7 +75,9 @@ class AuthViewModel(
 
     fun loginWithGoogleToken(idToken: String) {
         if (idToken.isBlank()) {
-            _loginState.value = AuthState.Error("Google ID token is required")
+            _loginState.value = AuthState.Error(
+                "Google sign-in is misconfigured. Check GOOGLE_CLIENT_ID, Firebase SHA-1, and OAuth setup."
+            )
             return
         }
 

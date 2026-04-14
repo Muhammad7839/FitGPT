@@ -127,6 +127,28 @@ class FitGptScaffoldNavigationTest {
         assertNodeWithTextExists("Screen:profile")
     }
 
+    @Test
+    fun repeatedTabSwitching_keepsWardrobeTabBoundToRootDestination() {
+        composeRule.setContent {
+            ScaffoldNavigationTestHost(trackDashboardReselect = false)
+        }
+
+        repeat(12) {
+            composeRule.onNodeWithText("Wardrobe").performClick()
+            assertNodeWithTextExists("Screen:wardrobe")
+            composeRule.onNodeWithText("Open Wardrobe Sub").performClick()
+            assertNodeWithTextExists("Screen:wardrobe_sub")
+            composeRule.onNodeWithText("Home").performClick()
+            assertNodeWithTextExists("Screen:dashboard")
+            composeRule.onNodeWithText("Wardrobe").performClick()
+            assertNodeWithTextExists("Screen:wardrobe")
+            composeRule.onNodeWithText("Plans").performClick()
+            assertNodeWithTextExists("Screen:plans")
+            composeRule.onNodeWithText("Wardrobe").performClick()
+            assertNodeWithTextExists("Screen:wardrobe")
+        }
+    }
+
     private fun assertNodeWithTextExists(text: String) {
         assertTrue(
             "Expected node with text '$text' to exist",

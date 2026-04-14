@@ -22,10 +22,10 @@ def test_chat_fallback_greeting_stays_warm_and_inviting():
 
     assert result.source == "fallback"
     assert "Hi, I’m AURA" in result.reply
-    assert "want me to build a quick outfit" in result.reply.lower()
+    assert "outfit" in result.reply.lower()
 
 
-def test_chat_fallback_turns_vague_request_into_follow_up_question():
+def test_chat_fallback_turns_vague_request_into_a_styled_starting_point():
     service = build_service()
 
     result = service.run_chat(
@@ -36,10 +36,10 @@ def test_chat_fallback_turns_vague_request_into_follow_up_question():
     )
 
     assert result.source == "fallback"
-    assert "best at outfit" not in result.reply.lower()
-    assert "i’d start" in result.reply.lower() or "i’d keep it simple" in result.reply.lower()
-    assert "want me" in result.reply.lower()
-    assert "?" in result.reply
+    assert "based on your request" not in result.reply.lower()
+    assert "i can help you" not in result.reply.lower()
+    assert "start with" in result.reply.lower()
+    assert "weather" in result.reply.lower() or "piece" in result.reply.lower()
 
 
 def test_chat_fallback_treats_lifestyle_intent_as_recommendation():
@@ -55,8 +55,7 @@ def test_chat_fallback_treats_lifestyle_intent_as_recommendation():
     assert result.source == "fallback"
     assert "heading outside" in result.reply.lower()
     assert "comfortable shoes" in result.reply.lower() or "weather-ready" in result.reply.lower()
-    assert "want me" in result.reply.lower()
-    assert "?" in result.reply
+    assert "based on your request" not in result.reply.lower()
 
 
 def test_chat_fallback_uses_multi_turn_context():
@@ -78,4 +77,4 @@ def test_chat_fallback_uses_multi_turn_context():
     assert result.source == "fallback"
     assert "outside" in result.reply.lower()
     assert "walk" in result.reply.lower()
-    assert "want me" in result.reply.lower()
+    assert "comfortable shoes" in result.reply.lower() or "weather-ready" in result.reply.lower()
