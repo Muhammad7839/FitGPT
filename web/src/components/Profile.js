@@ -1,5 +1,5 @@
 // web/src/components/Profile.js
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import ReactDOM from "react-dom";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
@@ -14,6 +14,7 @@ import {
   setRotationReminderPace,
 } from "../utils/rotationAlertPreferences";
 import GuestModeNotice from "./GuestModeNotice";
+import BodyTypeFigure from "./BodyTypeFigure";
 
 const DEFAULT_PREFS = { style: [], comfort: [], dressFor: [], bodyType: null, gender: "", heightCm: "" };
 
@@ -22,7 +23,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
   const { hash } = useLocation();
   const { user, setUser } = useAuth();
 
-  const demoUser = useMemo(() => readDemoAuth(), []);
+  const demoUser = readDemoAuth();
   const effectiveUser = user || demoUser;
 
   const email = effectiveUser?.email || effectiveUser?.user?.email || effectiveUser?.demoEmail || "";
@@ -243,10 +244,8 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 onClick={openPicMenu}
                 title="Upload profile picture"
               >
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
+                <span className="profileAvatarPlaceholderBadge">Profile</span>
+                <span className="profileAvatarPlaceholderText">Add Photo</span>
               </div>
             )}
           </div>
@@ -278,8 +277,8 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 >
                   Change Password
                 </button>
-                <button className="btn primary" type="button" onClick={handleLogout}>
-                  Logout
+                <button className="btn primary profileLogoutBtn" type="button" onClick={handleLogout}>
+                  Log out
                 </button>
               </div>
             </div>
@@ -350,11 +349,16 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                     <button
                       key={opt.id}
                       type="button"
-                      className={prefs.bodyType === opt.id ? "optionCard selected" : "optionCard"}
+                      className={prefs.bodyType === opt.id ? "optionCard selected profileBodyTypeCard" : "optionCard profileBodyTypeCard"}
                       onClick={() => setBodyType(opt.id)}
                     >
-                      <div className="optionTitle">{opt.label}</div>
-                      <div className="optionNote">{opt.note}</div>
+                      <div className="profileBodyTypeRow">
+                        <BodyTypeFigure bodyTypeId={opt.id} compact />
+                        <div className="profileBodyTypeCopy">
+                          <div className="optionTitle">{opt.label}</div>
+                          <div className="optionNote">{opt.note}</div>
+                        </div>
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -519,11 +523,16 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                     <button
                       key={opt.id}
                       type="button"
-                      className={prefs.bodyType === opt.id ? "optionCard selected" : "optionCard"}
+                      className={prefs.bodyType === opt.id ? "optionCard selected profileBodyTypeCard" : "optionCard profileBodyTypeCard"}
                       onClick={() => setBodyType(opt.id)}
                     >
-                      <div className="optionTitle">{opt.label}</div>
-                      <div className="optionNote">{opt.note}</div>
+                      <div className="profileBodyTypeRow">
+                        <BodyTypeFigure bodyTypeId={opt.id} compact />
+                        <div className="profileBodyTypeCopy">
+                          <div className="optionTitle">{opt.label}</div>
+                          <div className="optionNote">{opt.note}</div>
+                        </div>
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -669,10 +678,8 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 <img src={pendingPic !== null ? pendingPic : profilePic} alt="Preview" className="profileAvatar" style={{ cursor: "default" }} />
               ) : (
                 <div className="profileAvatar profileAvatarPlaceholder" style={{ cursor: "default" }}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
+                  <span className="profileAvatarPlaceholderBadge">Profile</span>
+                  <span className="profileAvatarPlaceholderText">Preview</span>
                 </div>
               )}
             </div>

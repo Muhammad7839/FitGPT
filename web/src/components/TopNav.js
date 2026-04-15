@@ -1,5 +1,5 @@
 // web/src/components/TopNav.js
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import ThemePicker from "./ThemePicker";
 import { useAuth } from "../auth/AuthProvider";
@@ -20,7 +20,7 @@ const HIDDEN_ROUTES = ["/", "/login", "/signup", "/onboarding"];
 export default function TopNav() {
   const { pathname } = useLocation();
   const { user } = useAuth();
-  const demoUser = useMemo(() => readDemoAuth(), []);
+  const demoUser = readDemoAuth();
   const effectiveUser = user || demoUser;
   const visibleNavItems = user ? NAV_ITEMS : NAV_ITEMS.filter((item) => item.to === "/dashboard" || item.to === "/wardrobe");
   const [profilePic, setProfilePic] = useState(() => loadProfilePic(effectiveUser));
@@ -96,6 +96,11 @@ export default function TopNav() {
           ))}
         </div>
         <div className="topNavRight">
+          {!user ? (
+            <NavLink to="/login" className="topNavAuthBtn">
+              Sign in
+            </NavLink>
+          ) : null}
           <ThemePicker inline />
         </div>
       </nav>

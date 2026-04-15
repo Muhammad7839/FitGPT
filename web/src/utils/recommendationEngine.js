@@ -1449,12 +1449,69 @@ export function generateThreeOutfits(
 
   candidates.sort((a, b) => b.score - a.score);
 
-  const results = candidates.slice(0, requestedLimit).map((entry) => entry.outfit);
+  const diversityThreshold = requestedLimit <= 2 ? 0.58 : 0.48;
+  const selectedEntries = [];
+  const deferredEntries = [];
+
+  for (const candidate of candidates) {
+    const maxSimilarity = selectedEntries.reduce((highest, entry) => {
+      const similarity = recommendationSimilarity(entry.outfit, candidate.outfit);
+      return similarity > highest ? similarity : highest;
+    }, 0);
+
+    if (maxSimilarity <= diversityThreshold) {
+      selectedEntries.push(candidate);
+      if (selectedEntries.length >= requestedLimit) break;
+      continue;
+    }
+
+    deferredEntries.push(candidate);
+  }
+
+  for (const candidate of deferredEntries) {
+    if (selectedEntries.length >= requestedLimit) break;
+    selectedEntries.push(candidate);
+  }
+
+  const results = selectedEntries.slice(0, requestedLimit).map((entry) => entry.outfit);
   if (!results.length) return [];
   if (requestedLimit <= 3) {
     while (results.length < requestedLimit) results.push(results[results.length - 1]);
   }
   return results.slice(0, requestedLimit);
+}
+
+function recommendationSimilarity(outfitA, outfitB) {
+  const itemSimilarity = outfitSimilarity(outfitA, outfitB);
+
+  const tokenSet = (outfit, selector) => {
+    const values = new Set();
+    for (const item of Array.isArray(outfit) ? outfit : []) {
+      const normalized = (selector(item) || "").toString().trim().toLowerCase();
+      if (normalized) values.add(normalized);
+    }
+    return values;
+  };
+
+  const overlapRatio = (setA, setB) => {
+    if (!setA.size || !setB.size) return 0;
+    let shared = 0;
+    for (const value of setA) {
+      if (setB.has(value)) shared += 1;
+    }
+    return shared / Math.max(setA.size, setB.size);
+  };
+
+  const typeSimilarity = overlapRatio(
+    tokenSet(outfitA, (item) => item?.clothing_type || item?.type || item?.name),
+    tokenSet(outfitB, (item) => item?.clothing_type || item?.type || item?.name)
+  );
+  const colorSimilarity = overlapRatio(
+    tokenSet(outfitA, (item) => normalizeColorName(item?.color || "")),
+    tokenSet(outfitB, (item) => normalizeColorName(item?.color || ""))
+  );
+
+  return itemSimilarity * 0.6 + typeSimilarity * 0.25 + colorSimilarity * 0.15;
 }
 
 export function scoreOutfitForDisplay(

@@ -21,12 +21,17 @@ function buildTripRecord(payload) {
     summary: payload?.summary || {},
     created_at: now,
     updated_at: now,
+    archived_at: payload?.archived_at || "",
   };
 }
 
 export const tripPackingApi = {
   async listTrips(user) {
-    return { trips: store.read(user) };
+    const allTrips = store.read(user);
+    return {
+      trips: allTrips.filter((trip) => !trip?.archived_at),
+      archivedTrips: allTrips.filter((trip) => !!trip?.archived_at),
+    };
   },
 
   async createTrip(payload, user) {
@@ -54,7 +59,24 @@ export const tripPackingApi = {
 
   async removeTrip(tripId, user) {
     const current = store.read(user);
-    store.write(current.filter((trip) => (trip?.trip_id || "") !== tripId), user);
+    const next = current.map((trip) =>
+      (trip?.trip_id || "") !== tripId
+        ? trip
+        : { ...trip, archived_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+    );
+    store.write(next, user);
     return { deleted: true };
+  },
+
+  async restoreTrip(tripId, user) {
+    const current = store.read(user);
+    let restoredTrip = null;
+    const next = current.map((trip) => {
+      if ((trip?.trip_id || "") !== tripId) return trip;
+      restoredTrip = { ...trip, archived_at: "", updated_at: new Date().toISOString() };
+      return restoredTrip;
+    });
+    store.write(next, user);
+    return { restored: !!restoredTrip, trip: restoredTrip };
   },
 };

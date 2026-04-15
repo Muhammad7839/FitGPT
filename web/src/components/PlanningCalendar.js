@@ -100,6 +100,10 @@ function CalendarDayButton({
 }) {
   const planCount = plans.length;
   const historyCount = historyEntries.length;
+  const previewItems = [
+    ...plans.flatMap((plan) => plan?.previewItems || []),
+    ...historyEntries.flatMap((entry) => entry?.previewItems || []),
+  ].filter(Boolean).slice(0, 2);
 
   return (
     <button
@@ -118,10 +122,32 @@ function CalendarDayButton({
       <span className="planningCalendarDayNumber">{date.getDate()}</span>
 
       {(planCount || historyCount) ? (
-        <span className="planningCalendarDayCounts">
-          {planCount ? <span className="planningCalendarChip planned">{planCount} planned</span> : null}
-          {historyCount ? <span className="planningCalendarChip worn">{historyCount} worn</span> : null}
-        </span>
+        <>
+          {previewItems.length ? (
+            <span className="planningCalendarDayPreview" aria-hidden="true">
+              {previewItems.map((item, index) => (
+                item?.image_url ? (
+                  <img
+                    key={`${toDateKey(date)}-${item?.id || index}`}
+                    className="planningCalendarDayThumb"
+                    src={item.image_url}
+                    alt=""
+                  />
+                ) : (
+                  <span
+                    key={`${toDateKey(date)}-${item?.id || index}`}
+                    className="planningCalendarDayThumb planningCalendarDayThumbPh"
+                  />
+                )
+              ))}
+            </span>
+          ) : null}
+
+          <span className="planningCalendarDayCounts">
+            {planCount ? <span className="planningCalendarChip planned">{planCount} planned</span> : null}
+            {historyCount ? <span className="planningCalendarChip worn">{historyCount} worn</span> : null}
+          </span>
+        </>
       ) : (
         <span className="planningCalendarDot" aria-hidden="true" />
       )}
@@ -132,7 +158,9 @@ function CalendarDayButton({
 export default function PlanningCalendar({
   plans,
   history,
+  wardrobe,
   wardrobeById,
+  onCreatePlan = async () => ({ created: false, message: "Could not save this plan." }),
   onWearThis = () => {},
   onRemovePlan = () => {},
   onAddToGoogleCalendar = () => {},
@@ -143,6 +171,11 @@ export default function PlanningCalendar({
   const [selectedDateKey, setSelectedDateKey] = useState(todayKey);
   const [displayDate, setDisplayDate] = useState(() => startOfMonth(today));
   const [openHistoryEntry, setOpenHistoryEntry] = useState(null);
+  const [planModalOpen, setPlanModalOpen] = useState(false);
+  const [planOccasion, setPlanOccasion] = useState("");
+  const [planSelection, setPlanSelection] = useState([]);
+  const [planSaving, setPlanSaving] = useState(false);
+  const [planMessage, setPlanMessage] = useState("");
 
   const plansByDate = useMemo(() => {
     const grouped = new Map();
@@ -175,25 +208,23 @@ export default function PlanningCalendar({
     return grouped;
   }, [history, wardrobeById]);
 
-  const populatedDateKeys = useMemo(() => {
-    const keys = new Set([todayKey]);
-    for (const key of plansByDate.keys()) keys.add(key);
-    for (const key of historyByDate.keys()) keys.add(key);
-    return [...keys].sort((a, b) => a.localeCompare(b));
-  }, [historyByDate, plansByDate, todayKey]);
+  useEffect(() => {
+    if (selectedDateKey && parseDateKey(selectedDateKey)) return;
+    setSelectedDateKey(todayKey);
+    setDisplayDate(startOfMonth(today));
+  }, [selectedDateKey, today, todayKey]);
 
   useEffect(() => {
-    const hasSelectedData = plansByDate.has(selectedDateKey) || historyByDate.has(selectedDateKey) || selectedDateKey === todayKey;
-    if (hasSelectedData) return;
-
-    const fallbackFuture = populatedDateKeys.find((key) => key >= todayKey) || populatedDateKeys[0] || todayKey;
-    setSelectedDateKey(fallbackFuture);
-    setDisplayDate(startOfMonth(parseDateKey(fallbackFuture) || today));
-  }, [historyByDate, plansByDate, populatedDateKeys, selectedDateKey, today, todayKey]);
+    if (!planMessage) return undefined;
+    const timeoutId = window.setTimeout(() => setPlanMessage(""), 2400);
+    return () => window.clearTimeout(timeoutId);
+  }, [planMessage]);
 
   const selectedDate = parseDateKey(selectedDateKey) || today;
   const selectedPlans = plansByDate.get(selectedDateKey) || [];
   const selectedHistory = historyByDate.get(selectedDateKey) || [];
+  const selectedDateIsUpcoming = selectedDateKey >= todayKey;
+  const wardrobeItems = Array.isArray(wardrobe) ? wardrobe.filter((item) => item && item.is_active !== false) : [];
 
   const monthCells = useMemo(() => {
     const firstOfMonth = startOfMonth(displayDate);
@@ -205,6 +236,63 @@ export default function PlanningCalendar({
     selectedPlans.length ? `${selectedPlans.length} planned` : "",
     selectedHistory.length ? `${selectedHistory.length} worn` : "",
   ].filter(Boolean).join(" | ");
+
+  const openPlanModal = (date) => {
+    const nextKey = toDateKey(date);
+    setSelectedDateKey(nextKey);
+    setDisplayDate(startOfMonth(date));
+    setPlanOccasion("");
+    setPlanSelection([]);
+    setPlanMessage("");
+    setPlanModalOpen(true);
+  };
+
+  const togglePlanItem = (itemId) => {
+    const normalizedId = (itemId ?? "").toString().trim();
+    if (!normalizedId) return;
+    setPlanSelection((current) =>
+      current.includes(normalizedId)
+        ? current.filter((entry) => entry !== normalizedId)
+        : [...current, normalizedId]
+    );
+  };
+
+  const handleSavePlan = async () => {
+    if (!planSelection.length) {
+      setPlanMessage("Pick at least one outfit item to plan this day.");
+      return;
+    }
+
+    setPlanSaving(true);
+    try {
+      const itemDetails = planSelection
+        .map((itemId) => wardrobeById.get(itemId))
+        .filter(Boolean)
+        .map((item) => ({
+          id: (item?.id ?? "").toString(),
+          name: item?.name || "",
+          category: item?.category || "",
+          color: item?.color || "",
+          image_url: item?.image_url || "",
+        }));
+
+      const result = await onCreatePlan({
+        plannedDate: selectedDateKey,
+        itemIds: planSelection,
+        occasion: planOccasion.trim(),
+        itemDetails,
+      });
+
+      setPlanMessage((result?.message || "").toString().trim() || "Outfit planned!");
+      setPlanModalOpen(false);
+      setPlanOccasion("");
+      setPlanSelection([]);
+    } catch {
+      setPlanMessage("Could not save a plan for that day.");
+    } finally {
+      setPlanSaving(false);
+    }
+  };
 
   return (
     <section className="card dashWide planningCalendarCard" aria-labelledby="planning-calendar-title">
@@ -259,11 +347,7 @@ export default function PlanningCalendar({
               isToday={dateKey === todayKey}
               plans={plansByDate.get(dateKey) || []}
               historyEntries={historyByDate.get(dateKey) || []}
-              onSelect={(nextDate) => {
-                const nextKey = toDateKey(nextDate);
-                setSelectedDateKey(nextKey);
-                setDisplayDate(startOfMonth(nextDate));
-              }}
+              onSelect={openPlanModal}
             />
           );
         })}
@@ -275,14 +359,23 @@ export default function PlanningCalendar({
             <div className="planningCalendarDetailsEyebrow">Selected date</div>
             <div className="planningCalendarDetailsTitle">{formatDetailHeading(selectedDate)}</div>
           </div>
-          <div className="planningCalendarDetailsCount">
-            {selectedSummary || "Nothing planned or worn"}
+          <div className="planningCalendarDetailsHeaderActions">
+            <div className="planningCalendarDetailsCount">
+              {selectedSummary || "Nothing planned or worn"}
+            </div>
+            <button type="button" className="btn planningCalendarAddBtn" onClick={() => openPlanModal(selectedDate)}>
+              Add outfit plan
+            </button>
           </div>
         </div>
 
+        {planMessage ? <div className="noteBox" style={{ marginTop: 12 }}>{planMessage}</div> : null}
+
         <div className="planningCalendarColumns">
           <div className="planningCalendarColumn">
-            <div className="planningCalendarSectionTitle">Upcoming outfits</div>
+            <div className="planningCalendarSectionTitle">
+              {selectedDateIsUpcoming ? "Upcoming outfits" : "Planned outfits"}
+            </div>
 
             {selectedPlans.length ? (
               <div className="planningCalendarEntryList">
@@ -325,7 +418,9 @@ export default function PlanningCalendar({
               </div>
             ) : (
               <div className="plannedCalendarEmpty">
-                No upcoming outfit is planned for this day yet.
+                {selectedDateIsUpcoming
+                  ? "No upcoming outfit is planned for this day yet."
+                  : "No saved plan is attached to this date yet."}
               </div>
             )}
           </div>
@@ -422,6 +517,81 @@ export default function PlanningCalendar({
               </button>
               <button type="button" className="btn primary" onClick={() => onWearAgain(openHistoryEntry)}>
                 Wear Again
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {planModalOpen ? (
+        <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="planning-calendar-add-title">
+          <div className="modalCard planningCalendarModal">
+            <div className="historyCalendarModalTop">
+              <div>
+                <div className="historyCalendarDetailsEyebrow">Add outfit plan</div>
+                <div id="planning-calendar-add-title" className="modalTitle">
+                  {formatDetailHeading(selectedDate)}
+                </div>
+                <div className="modalSub">
+                  Pick the wardrobe pieces you want to save for this day.
+                </div>
+              </div>
+
+              <button type="button" className="btn" onClick={() => setPlanModalOpen(false)}>
+                Close
+              </button>
+            </div>
+
+            <label className="wardrobeLabel">
+              Occasion
+              <input
+                className="wardrobeInput"
+                type="text"
+                value={planOccasion}
+                onChange={(event) => setPlanOccasion(event.target.value)}
+                placeholder="Class, work, dinner, travel..."
+              />
+            </label>
+
+            <div className="planningCalendarModalLabel">Choose outfit items</div>
+            <div className="planningCalendarItemGrid">
+              {wardrobeItems.map((item) => {
+                const itemId = (item?.id ?? "").toString().trim();
+                const selected = planSelection.includes(itemId);
+                return (
+                  <button
+                    key={itemId}
+                    type="button"
+                    className={`planningCalendarItemCard${selected ? " selected" : ""}`}
+                    onClick={() => togglePlanItem(itemId)}
+                    aria-pressed={selected}
+                  >
+                    {item?.image_url ? (
+                      <img className="planningCalendarItemImg" src={item.image_url} alt={item?.name || "Wardrobe item"} />
+                    ) : (
+                      <div className="planningCalendarItemImg planningCalendarItemImgPh" />
+                    )}
+                    <div className="planningCalendarItemName">{item?.name || "Wardrobe item"}</div>
+                    <div className="planningCalendarItemMeta">
+                      {[item?.category, item?.color].filter(Boolean).join(" | ") || "Item"}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {!wardrobeItems.length ? (
+              <div className="plannedCalendarEmpty" style={{ marginTop: 12 }}>
+                Add wardrobe items first so you can plan an outfit from the calendar.
+              </div>
+            ) : null}
+
+            <div className="modalActions">
+              <button type="button" className="btn" onClick={() => setPlanModalOpen(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn primary" onClick={handleSavePlan} disabled={planSaving || !wardrobeItems.length}>
+                {planSaving ? "Saving..." : "Save plan"}
               </button>
             </div>
           </div>
