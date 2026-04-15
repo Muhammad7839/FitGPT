@@ -106,6 +106,14 @@ function formatTripDay(date) {
   };
 }
 
+function normalizeTripActivityLabel(value) {
+  return (value || "")
+    .toString()
+    .replace(/\b(?=[A-Z0-9]{4,}\b)(?=.*\d)[A-Z0-9]+\b/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function formatCalendarTile(date) {
   const parsed = new Date(`${date}T12:00:00`);
   if (Number.isNaN(parsed.getTime())) {
@@ -590,10 +598,32 @@ function TripGenerationState({ destination, startDate, endDate }) {
   );
 }
 
+function ConfirmActionModal({ title, message, confirmLabel, onCancel, onConfirm }) {
+  return (
+    <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="trip-confirm-title">
+      <div className="modalCard tripConfirmModal">
+        <div className="modalTitle" id="trip-confirm-title">{title}</div>
+        <div className="modalSub">{message}</div>
+        <div className="modalActions">
+          <button type="button" className="btn" onClick={onCancel}>
+            No
+          </button>
+          <button type="button" className="btn primary" onClick={onConfirm}>
+            {confirmLabel || "Yes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TripPackingPlanner({ wardrobe, user, answers }) {
   const [trips, setTrips] = useState([]);
+  const [archivedTrips, setArchivedTrips] = useState([]);
   const [selectedTripId, setSelectedTripId] = useState("");
   const [showBuilder, setShowBuilder] = useState(false);
+  const [builderStep, setBuilderStep] = useState(1);
+  const [showTripHistory, setShowTripHistory] = useState(false);
   const [editingTripId, setEditingTripId] = useState("");
   const [destination, setDestination] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -606,6 +636,7 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
   const [loadingTrips, setLoadingTrips] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [tripMsg, setTripMsg] = useState("");
+  const [confirmState, setConfirmState] = useState(null);
   const [activeAddGroup, setActiveAddGroup] = useState("");
   const [customItemName, setCustomItemName] = useState("");
   const [customItemQty, setCustomItemQty] = useState("1");
@@ -615,13 +646,16 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
     try {
       const result = await tripPackingApi.listTrips(user);
       const list = Array.isArray(result?.trips) ? result.trips : [];
+      const archived = Array.isArray(result?.archivedTrips) ? result.archivedTrips : [];
       setTrips(list);
+      setArchivedTrips(archived);
       setSelectedTripId((current) => {
         if (current && list.some((trip) => trip.trip_id === current)) return current;
         return "";
       });
     } catch {
       setTrips([]);
+      setArchivedTrips([]);
       setSelectedTripId("");
     } finally {
       setLoadingTrips(false);
@@ -697,6 +731,7 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
     setActivities([]);
     setActivityDraft("");
     setOpenDateField("");
+    setBuilderStep(1);
     setShowBuilder(true);
   };
 
@@ -715,7 +750,14 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
     setActivities(Array.isArray(trip.activities) ? trip.activities : []);
     setActivityDraft("");
     setOpenDateField("");
+    setBuilderStep(2);
     setShowBuilder(true);
+  };
+
+  const closeBuilder = () => {
+    setShowBuilder(false);
+    setOpenDateField("");
+    setBuilderStep(1);
   };
 
   const saveTripLocally = async (tripId, patch) => {
@@ -725,7 +767,7 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
   };
 
   const addActivity = (value) => {
-    const next = (value || "").toString().trim();
+    const next = normalizeTripActivityLabel(value);
     if (!next) return;
     setActivities((current) => (current.includes(next) ? current : [...current, next]));
     setActivityDraft("");
@@ -804,8 +846,7 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
         setTripMsg("Your packing list is ready.");
       }
 
-      setShowBuilder(false);
-      setOpenDateField("");
+      closeBuilder();
       setEditingTripId("");
       await refreshTrips();
     } catch {
@@ -818,7 +859,7 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
   const handleRemoveTrip = async (tripId) => {
     await tripPackingApi.removeTrip(tripId, user);
     setSelectedTripId((current) => (current === tripId ? "" : current));
-    setTripMsg("Trip removed.");
+    setTripMsg("Trip moved to trip history.");
     await refreshTrips();
   };
 
@@ -860,6 +901,33 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
 
   const handleRemoveItem = async (groupKey, itemId) => {
     await updateTripGroups(groupKey, (items) => items.filter((item) => item.item_id !== itemId));
+  };
+
+  const requestConfirm = (next) => setConfirmState(next);
+
+  const handleConfirmAction = async () => {
+    if (!confirmState) return;
+
+    if (confirmState.type === "trip") {
+      await handleRemoveTrip(confirmState.tripId);
+    }
+
+    if (confirmState.type === "activity") {
+      removeActivity(confirmState.activity);
+    }
+
+    if (confirmState.type === "item") {
+      await handleRemoveItem(confirmState.groupKey, confirmState.itemId);
+    }
+
+    setConfirmState(null);
+  };
+
+  const handleRestoreTrip = async (tripId) => {
+    await tripPackingApi.restoreTrip(tripId, user);
+    setSelectedTripId(tripId);
+    setTripMsg("Trip restored to your active plans.");
+    await refreshTrips();
   };
 
   const handleAddCustomItem = async (groupKey, groupLabel) => {
@@ -939,22 +1007,42 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
       {tripMsg ? <div className="noteBox" style={{ marginTop: 12 }}>{tripMsg}</div> : null}
 
       {showBuilder ? (
-        <section className="card dashWide tripPlannerBuilder">
+        <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="trip-builder-title">
+          <div className="modalCard tripBuilderModalCard">
+        <section className="tripPlannerBuilder tripBuilderModalPanel">
           <div className="tripBuilderTop">
             <div>
               <div className="tripPlannerEyebrow">{editingTripId ? "Update your trip" : "Your next trip"}</div>
-              <div className="tripBuilderTitle">Tell FitGPT where you are going</div>
+              <div id="trip-builder-title" className="tripBuilderTitle">
+                {builderStep === 1 ? "Start with your destination and dates" : "Add the details that shape the trip"}
+              </div>
               <div className="tripBuilderSub">
-                Add your destination and dates first. Everything else is optional.
+                {builderStep === 1
+                  ? "The first step should feel quick. Once the basics are set, we will bring up the rest of the planning details."
+                  : "These extras help FitGPT tailor the packing list, but you can keep them flexible."}
               </div>
             </div>
 
-            <button type="button" className="btn" onClick={() => setShowBuilder(false)}>
+            <button type="button" className="btn" onClick={closeBuilder}>
               Close
             </button>
           </div>
 
-          <div className="tripBuilderShowcase">
+          <div className="tripBuilderStepRow" aria-live="polite">
+            <div className={"tripBuilderStepPill" + (builderStep === 1 ? " active" : " complete")}>
+              <span className="tripBuilderStepNumber">1</span>
+              <span>Trip basics</span>
+            </div>
+            <div className={"tripBuilderStepDivider" + (builderStep === 2 ? " active" : "")} />
+            <div className={"tripBuilderStepPill" + (builderStep === 2 ? " active" : "")}>
+              <span className="tripBuilderStepNumber">2</span>
+              <span>Trip details</span>
+            </div>
+          </div>
+
+          {builderStep === 1 ? (
+            <>
+          <div className="tripBuilderShowcase tripBuilderShowcaseBasics">
             <TripBuilderPreview
               destination={destination}
               startDate={startDate}
@@ -964,31 +1052,31 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
             />
 
             <div className="tripBuilderInfoCard">
-              <div className="tripBuilderInfoTitle">This list uses</div>
+              <div className="tripBuilderInfoTitle">Step one keeps it simple</div>
               <div className="tripBuilderInfoList">
                 <div className="tripBuilderInfoItem">
                   <span className="tripBuilderInfoDot" />
-                  <span>Weather for your exact dates</span>
+                  <span>Pick where you are going</span>
                 </div>
                 <div className="tripBuilderInfoItem">
                   <span className="tripBuilderInfoDot" />
-                  <span>Your wardrobe first</span>
+                  <span>Choose departure and return dates</span>
                 </div>
                 <div className="tripBuilderInfoItem">
                   <span className="tripBuilderInfoDot" />
-                  <span>Trip-length quantities</span>
+                  <span>Then continue to the fun details</span>
                 </div>
               </div>
               <div className="tripBuilderInfoFooter">
-                {draftDuration ? `${draftDuration} day${draftDuration === 1 ? "" : "s"} planned` : "Add dates to preview length"}
+                {draftDuration ? `${draftDuration} day${draftDuration === 1 ? "" : "s"} planned` : "Trip length will appear here"}
               </div>
             </div>
           </div>
 
-          <div className="tripBuilderSection">
+          <div className="tripBuilderSection tripBuilderSectionPrimary">
             <div className="tripBuilderSectionHeader">
               <div>
-                <div className="tripBuilderSectionEyebrow">Required to generate</div>
+                <div className="tripBuilderSectionEyebrow">Step 1 of 2</div>
                 <div className="tripBuilderSectionTitle">Destination and travel dates</div>
                 <div className="tripBuilderSectionSub">
                   Needed to calculate trip length and weather.
@@ -1047,11 +1135,44 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
               </span>
             </div>
           </div>
+            </>
+          ) : (
+            <>
+          <div className="tripBuilderShowcase">
+            <TripBuilderPreview
+              destination={destination}
+              startDate={startDate}
+              endDate={endDate}
+              tripPurpose={tripPurpose}
+              luggageMode={luggageMode}
+            />
+
+            <div className="tripBuilderInfoCard">
+              <div className="tripBuilderInfoTitle">This list uses</div>
+              <div className="tripBuilderInfoList">
+                <div className="tripBuilderInfoItem">
+                  <span className="tripBuilderInfoDot" />
+                  <span>Weather for your exact dates</span>
+                </div>
+                <div className="tripBuilderInfoItem">
+                  <span className="tripBuilderInfoDot" />
+                  <span>Your wardrobe first</span>
+                </div>
+                <div className="tripBuilderInfoItem">
+                  <span className="tripBuilderInfoDot" />
+                  <span>Trip-length quantities</span>
+                </div>
+              </div>
+              <div className="tripBuilderInfoFooter">
+                {draftDuration ? `${draftDuration} day${draftDuration === 1 ? "" : "s"} planned` : "Add dates to preview length"}
+              </div>
+            </div>
+          </div>
 
           <div className="tripBuilderSection">
             <div className="tripBuilderSectionHeader">
               <div>
-                <div className="tripBuilderSectionEyebrow">Optional trip context</div>
+                <div className="tripBuilderSectionEyebrow">Step 2 of 2</div>
                 <div className="tripBuilderSectionTitle">Shape the vibe of the trip</div>
                 <div className="tripBuilderSectionSub">
                   Add a quick note if you want the list to feel more polished, active, or relaxed.
@@ -1117,7 +1238,15 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
                   key={suggestion}
                   type="button"
                   className={"tripActivityChip" + (activities.includes(suggestion) ? " active" : "")}
-                  onClick={() => (activities.includes(suggestion) ? removeActivity(suggestion) : addActivity(suggestion))}
+                  onClick={() => (activities.includes(suggestion)
+                    ? requestConfirm({
+                        type: "activity",
+                        activity: suggestion,
+                        title: "Remove this activity?",
+                        message: `Do you want to remove ${suggestion} from this trip plan?`,
+                        confirmLabel: "Yes, remove it",
+                      })
+                    : addActivity(suggestion))}
                 >
                   {suggestion}
                 </button>
@@ -1143,22 +1272,30 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
               </button>
             </div>
 
-            {activities.length ? (
-              <div className="tripActivityList">
+              {activities.length ? (
+                <div className="tripActivityList">
                 {activities.map((activity) => (
                   <button
                     key={activity}
                     type="button"
                     className="tripActivityToken"
-                    onClick={() => removeActivity(activity)}
+                    onClick={() => requestConfirm({
+                      type: "activity",
+                      activity,
+                      title: "Remove this activity?",
+                      message: `Do you want to remove ${activity} from this trip plan?`,
+                      confirmLabel: "Yes, remove it",
+                    })}
                   >
-                    {activity}
+                    {normalizeTripActivityLabel(activity)}
                     <span aria-hidden="true"> \u00D7</span>
                   </button>
                 ))}
               </div>
-            ) : null}
+              ) : null}
           </div>
+            </>
+          )}
 
           {generating ? (
             <TripGenerationState
@@ -1169,14 +1306,34 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
           ) : null}
 
           <div className="tripBuilderActions">
-            <button type="button" className="btn" onClick={() => setShowBuilder(false)}>
-              Cancel
-            </button>
-            <button type="button" className="btn primary" onClick={() => handleGenerateTrip()} disabled={generating}>
-              {generating ? "Generating..." : editingTripId ? "Update packing list" : "Generate packing list"}
-            </button>
+            {builderStep === 1 ? (
+              <>
+                <button type="button" className="btn" onClick={closeBuilder}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn primary"
+                  onClick={() => setBuilderStep(2)}
+                  disabled={!hasRequiredTripInputs}
+                >
+                  Continue to trip details
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="btn" onClick={() => setBuilderStep(1)}>
+                  Back
+                </button>
+                <button type="button" className="btn primary" onClick={() => handleGenerateTrip()} disabled={generating}>
+                  {generating ? "Generating..." : editingTripId ? "Update packing list" : "Generate packing list"}
+                </button>
+              </>
+            )}
           </div>
         </section>
+          </div>
+        </div>
       ) : null}
 
       {trips.length > 0 ? (
@@ -1207,6 +1364,36 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
             </button>
           ))}
         </div>
+      ) : null}
+
+      {archivedTrips.length > 0 ? (
+        <section className="tripPlannerHistorySection">
+          <div className="tripPlannerHistoryHeader">
+            <div>
+              <div className="tripPlannerEyebrow">Trip history</div>
+              <div className="tripPlannerHistoryTitle">Saved trip history</div>
+            </div>
+            <button type="button" className="btn" onClick={() => setShowTripHistory((current) => !current)}>
+              {showTripHistory ? "Hide trip history" : "See trip history"}
+            </button>
+          </div>
+
+          {showTripHistory ? (
+            <div className="tripPlannerHistoryList">
+              {archivedTrips.map((trip) => (
+                <article key={trip.trip_id} className="tripPlannerHistoryCard">
+                  <div>
+                    <div className="tripPlannerHistoryDestination">{trip.destination_label || trip.destination}</div>
+                    <div className="tripPlannerHistoryDates">{formatTripDates(trip.start_date, trip.end_date)}</div>
+                  </div>
+                  <button type="button" className="btn" onClick={() => handleRestoreTrip(trip.trip_id)}>
+                    Restore trip
+                  </button>
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       {selectedTrip ? (
@@ -1274,7 +1461,7 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
           {Array.isArray(selectedTrip.activities) && selectedTrip.activities.length ? (
             <div className="tripPlannerActivityRow">
               {selectedTrip.activities.map((activity) => (
-                <span key={activity} className="tripPlannerActivityPill">{activity}</span>
+                <span key={activity} className="tripPlannerActivityPill">{normalizeTripActivityLabel(activity)}</span>
               ))}
             </div>
           ) : null}
@@ -1304,7 +1491,17 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
             >
               Refresh packing list
             </button>
-            <button type="button" className="btn" onClick={() => handleRemoveTrip(selectedTrip.trip_id)}>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => requestConfirm({
+                type: "trip",
+                tripId: selectedTrip.trip_id,
+                title: "Remove this trip from your packing plans?",
+                message: "This trip will move to your trip history so you can restore it later if you need it again.",
+                confirmLabel: "Yes, remove trip",
+              })}
+            >
               Remove trip
             </button>
           </div>
@@ -1378,7 +1575,18 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
                           </div>
                         </div>
 
-                        <button type="button" className="tripPackingRemoveBtn" onClick={() => handleRemoveItem(group.key, item.item_id)}>
+                        <button
+                          type="button"
+                          className="tripPackingRemoveBtn"
+                          onClick={() => requestConfirm({
+                            type: "item",
+                            groupKey: group.key,
+                            itemId: item.item_id,
+                            title: "Remove this packing item?",
+                            message: `Do you want to remove ${item.name || "this item"} from the trip packing list?`,
+                            confirmLabel: "Yes, remove item",
+                          })}
+                        >
                           Remove
                         </button>
                       </div>
@@ -1423,6 +1631,16 @@ export default function TripPackingPlanner({ wardrobe, user, answers }) {
             )}
           </div>
         </section>
+      ) : null}
+
+      {confirmState ? (
+        <ConfirmActionModal
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          onCancel={() => setConfirmState(null)}
+          onConfirm={handleConfirmAction}
+        />
       ) : null}
     </section>
   );

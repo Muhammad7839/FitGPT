@@ -18,7 +18,7 @@ import SuggestedTagsPanel from "./SuggestedTagsPanel";
 function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, isSaving, error }) {
   return (
     <div className="modalOverlay" role="dialog" aria-modal="true">
-      <div className="modalCard" style={{ maxHeight: "85vh", overflow: "auto", width: "min(780px, 96vw)" }}>
+      <div className="modalCard bulkUploadModalCard" style={{ maxHeight: "85vh", overflow: "auto", width: "min(780px, 96vw)" }}>
         <div className="modalTitle">Add {items.length} item{items.length > 1 ? "s" : ""}</div>
 
         <div style={{ display: "grid", gap: 14, marginTop: 12 }}>
@@ -38,10 +38,10 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
                 <img
                   src={entry.preview}
                   alt={entry.name}
-                  style={{ width: 80, height: 80, borderRadius: 12, objectFit: "cover" }}
+                  className="bulkUploadItemPreview"
                 />
 
-                <div style={{ display: "grid", gap: 8 }}>
+                <div className="bulkUploadFieldStack">
                   <SuggestedTagsPanel
                     status={entry.taggingState}
                     message={entry.taggingMessage}
@@ -56,8 +56,8 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
                     onChange={(e) => onUpdateItem(entry._key, "name", e.target.value)}
                   />
 
-                  <div style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr" }}>
-                    <div style={{ position: "relative" }}>
+                  <div className="bulkUploadTwoColumn">
+                    <div className="bulkUploadRelative">
                       <select
                         className="wardrobeInput"
                         value={entry.category}
@@ -85,7 +85,7 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
 
                   <ColorPickerField value={entry.color} onChange={(v) => onUpdateItem(entry._key, "color", v)} />
 
-                  <div style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr" }}>
+                  <div className="bulkUploadTwoColumn">
                     <select
                       className="wardrobeInput"
                       value={entry.fitTag}
@@ -107,14 +107,14 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
                     </select>
                   </div>
 
-                  <div style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr auto", alignItems: "center" }}>
+                  <div className="bulkUploadSetRow">
                     <input
                       className="wardrobeInput"
                       placeholder="Matching set ID"
                       value={entry.setId || ""}
                       onChange={(e) => onUpdateItem(entry._key, "setId", e.target.value)}
                     />
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                    <label className="bulkUploadCheckboxLabel">
                       <input
                         type="checkbox"
                         checked={!!entry.isOnePiece}

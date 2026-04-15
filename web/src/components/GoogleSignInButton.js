@@ -66,13 +66,25 @@ export default function GoogleSignInButton() {
     }
   }
 
-  if (!GOOGLE_CLIENT_ID) return null;
+  if (!GOOGLE_CLIENT_ID) {
+    return (
+      <div className="authGoogleSection">
+        <div className="authGoogleTitle">Sign in with Google</div>
+        <div className="authGoogleUnavailable">
+          Google sign-in is not configured for this environment yet.
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <>
+    <div className="authGoogleSection">
+      <div className="authGoogleTitle">Sign in with Google</div>
       {loading && <div className="authHint">Signing in with Google...</div>}
-      <div ref={btnRef} style={{ width: "100%" }} />
+      <div className="authGoogleButtonWrap">
+        <div ref={btnRef} style={{ width: "100%" }} />
+      </div>
       {error && <div className="authError">{error}</div>}
-    </>
+    </div>
   );
 }

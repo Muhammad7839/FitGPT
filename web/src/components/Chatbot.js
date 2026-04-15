@@ -471,7 +471,7 @@ function TypewriterMessage({ text, onDone }) {
 
 export default function Chatbot() {
   const { user } = useAuth();
-  const demoUser = useMemo(() => readDemoAuth(), []);
+  const demoUser = readDemoAuth();
   const effectiveUser = user || demoUser;
   const remoteChatUser = user || null;
   const storageKey = getChatStorageKey(effectiveUser);

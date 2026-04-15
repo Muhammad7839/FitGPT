@@ -126,8 +126,46 @@ export function formatPlanDate(iso) {
   }
 }
 
+function extractCalendarPhotoReferences(itemDetails) {
+  const details = Array.isArray(itemDetails) ? itemDetails : [];
+  const namedPhotos = details
+    .map((item) => ({
+      name: (item?.name || "Outfit photo").toString().trim(),
+      hasLocalPhoto: Boolean((item?.image_url || "").toString().trim()),
+    }))
+    .filter((item) => item.hasLocalPhoto);
+  const absoluteHttpLinks = details
+    .map((item) => ({
+      name: (item?.name || "Outfit photo").toString().trim(),
+      imageUrl: (item?.image_url || "").toString().trim(),
+    }))
+    .filter((item) => /^https?:\/\//i.test(item.imageUrl));
+
+  if (!absoluteHttpLinks.length) {
+    return {
+      lines: [
+        namedPhotos.length
+          ? `Outfit photos saved in FitGPT: ${namedPhotos.map((item) => item.name).join(", ")}.`
+          : "Outfit photos stay available inside FitGPT.",
+        "This quick Google Calendar link can include text and shareable web image URLs, but it cannot embed local FitGPT photos directly in the calendar event.",
+      ],
+      hasShareableLinks: false,
+    };
+  }
+
+  return {
+    lines: [
+      namedPhotos.length ? `Photos available in FitGPT: ${namedPhotos.map((item) => item.name).join(", ")}.` : "",
+      "Photo references:",
+      ...absoluteHttpLinks.map((item) => `- ${item.name}: ${item.imageUrl}`),
+      "Google Calendar will keep these as links/details rather than embedded event images.",
+    ],
+    hasShareableLinks: true,
+  };
+}
+
 /** Build a Google Calendar event creation URL for a planned outfit. */
-export function buildGoogleCalendarUrl({ date, occasion, itemNames }) {
+export function buildGoogleCalendarUrl({ date, occasion, itemNames, itemDetails }) {
   const names = Array.isArray(itemNames) ? itemNames.filter(Boolean) : [];
   const leadItems = names.slice(0, 2);
   const summary = leadItems.length >= 2 ? `${leadItems[0]} + ${leadItems[1]}` : "";
@@ -135,11 +173,13 @@ export function buildGoogleCalendarUrl({ date, occasion, itemNames }) {
     ? (summary ? `FitGPT: ${occasion} - ${summary}` : `FitGPT: ${occasion}`)
     : (summary ? `FitGPT: Outfit Plan - ${summary}` : "FitGPT: Outfit Plan");
   const displayDate = date || new Date().toISOString().slice(0, 10);
+  const photoReferences = extractCalendarPhotoReferences(itemDetails);
   const details = [
     "Planned with FitGPT",
     `Date: ${displayDate}`,
     occasion ? `Occasion: ${occasion}` : "",
     names.length > 0 ? `Outfit:\n- ${names.join("\n- ")}` : "Outfit: Planned outfit from FitGPT",
+    photoReferences.lines.join("\n"),
   ].filter(Boolean).join("\n\n");
 
   // Google Calendar uses all-day format: YYYYMMDD/YYYYMMDD (next day for end)
