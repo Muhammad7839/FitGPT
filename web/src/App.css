@@ -17607,3 +17607,125 @@ select:focus-visible {
 [data-theme="dark"] .outfitBuilderSelectedSlot {
   color: rgba(232, 230, 227, 0.6);
 }
+
+/* ─── Accessibility: Large text mode ───
+   Scales up text in AI-surfaced content, chat, and buttons so dense
+   generated paragraphs become readable. Ordinary chrome (small labels,
+   status text) scales lightly to keep layout stable. */
+html[data-text-size="large"] body,
+html[data-text-size="large"] .btn,
+html[data-text-size="large"] button,
+html[data-text-size="large"] input,
+html[data-text-size="large"] select,
+html[data-text-size="large"] textarea {
+  font-size: 16.5px;
+}
+
+html[data-text-size="xlarge"] body,
+html[data-text-size="xlarge"] .btn,
+html[data-text-size="xlarge"] button,
+html[data-text-size="xlarge"] input,
+html[data-text-size="xlarge"] select,
+html[data-text-size="xlarge"] textarea {
+  font-size: 18.5px;
+}
+
+/* AI-generated and long-form text — most important to scale clearly */
+html[data-text-size="large"] .dashWhyText,
+html[data-text-size="large"] .dashAiReveal,
+html[data-text-size="large"] .chatMessageBubble,
+html[data-text-size="large"] .chatMessageText,
+html[data-text-size="large"] .outfitBuilderSub,
+html[data-text-size="large"] .dashExplanationBody,
+html[data-text-size="large"] .outfitBuilderConflictList {
+  font-size: 16.5px;
+  line-height: 1.6;
+  letter-spacing: 0.05px;
+}
+
+html[data-text-size="xlarge"] .dashWhyText,
+html[data-text-size="xlarge"] .dashAiReveal,
+html[data-text-size="xlarge"] .chatMessageBubble,
+html[data-text-size="xlarge"] .chatMessageText,
+html[data-text-size="xlarge"] .outfitBuilderSub,
+html[data-text-size="xlarge"] .dashExplanationBody,
+html[data-text-size="xlarge"] .outfitBuilderConflictList {
+  font-size: 19px;
+  line-height: 1.7;
+  letter-spacing: 0.1px;
+}
+
+/* Chat composer text — must scale too */
+html[data-text-size="large"] .chatInput,
+html[data-text-size="large"] .chatSend {
+  font-size: 16px;
+}
+
+html[data-text-size="xlarge"] .chatInput,
+html[data-text-size="xlarge"] .chatSend {
+  font-size: 18px;
+}
+
+/* Ensure paragraphs wrap comfortably even on dense cards */
+html[data-text-size="large"] .chatMessageBubble,
+html[data-text-size="xlarge"] .chatMessageBubble {
+  max-width: min(78vw, 560px);
+  padding: 12px 16px;
+}
+
+/* Accessibility settings panel in Profile */
+.profileAccessibilitySection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="dark"] .profileAccessibilitySection {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.profileAccessibilityOptions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.profileAccessibilityOption {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+  color: var(--text);
+}
+
+.profileAccessibilityOption.active {
+  background: rgba(139, 30, 30, 0.14);
+  border-color: rgba(139, 30, 30, 0.5);
+}
+
+[data-theme="dark"] .profileAccessibilityOption {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+[data-theme="dark"] .profileAccessibilityOption.active {
+  background: rgba(196, 60, 60, 0.22);
+  border-color: rgba(255, 170, 170, 0.45);
+}
+
+.profileAccessibilityHint {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+[data-theme="dark"] .profileAccessibilityHint {
+  color: rgba(232, 230, 227, 0.68);
+}

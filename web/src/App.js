@@ -1,5 +1,5 @@
 // web/src/App.js
-import React, { createContext, useCallback, useContext, useLayoutEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState } from "react";
 import "./App.css";
 
 import AppRoutes from "./routes/AppRoutes";
@@ -8,7 +8,8 @@ import { getPresetTheme, PRESET_THEMES } from "./theme/themeDefinitions";
 import { applyTheme } from "./theme/themeEngine";
 import TopNav from "./components/TopNav";
 import Chatbot from "./components/Chatbot";
-import { LEGACY_THEME_KEY, THEME_KEY, CUSTOM_THEMES_KEY, STALE_CLEANUP_KEY, TOKEN_KEY, WARDROBE_KEY } from "./utils/constants";
+import { LEGACY_THEME_KEY, THEME_KEY, CUSTOM_THEMES_KEY, STALE_CLEANUP_KEY, TOKEN_KEY, WARDROBE_KEY, EVT_ACCESSIBILITY_CHANGED } from "./utils/constants";
+import { readAccessibilityPrefs, applyAccessibilityToDocument } from "./utils/accessibilityPrefs";
 if (!localStorage.getItem(STALE_CLEANUP_KEY)) {
   localStorage.removeItem(WARDROBE_KEY);
   localStorage.setItem(STALE_CLEANUP_KEY, "1");
@@ -71,6 +72,13 @@ export default function App() {
       localStorage.setItem(THEME_KEY, JSON.stringify({ activeThemeId: activeTheme.id }));
     }
   }, [activeTheme]);
+
+  useEffect(() => {
+    applyAccessibilityToDocument(readAccessibilityPrefs(null));
+    const onChange = () => applyAccessibilityToDocument(readAccessibilityPrefs(null));
+    window.addEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
+    return () => window.removeEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
+  }, []);
 
   const setTheme = useCallback(
     (themeOrId) => {
