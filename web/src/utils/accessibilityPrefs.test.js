@@ -4,6 +4,7 @@ import {
   writeAccessibilityPrefs,
   applyAccessibilityToDocument,
   adaptAiText,
+  effectiveAccessibilityPrefs,
 } from "./accessibilityPrefs";
 
 beforeEach(() => {
@@ -83,5 +84,32 @@ describe("adaptAiText", () => {
     const out = adaptAiText(text, { textSize: "large" });
     expect(out).toContain("First paragraph.");
     expect(out).toContain("Second paragraph.");
+  });
+});
+
+describe("effectiveAccessibilityPrefs", () => {
+  test("returns default when no HC theme and no text-size override", () => {
+    const eff = effectiveAccessibilityPrefs({ textSize: "default" }, { highContrast: false });
+    expect(eff.textSize).toBe("default");
+  });
+
+  test("escalates to large when HC theme is active and pref is default", () => {
+    const eff = effectiveAccessibilityPrefs({ textSize: "default" }, { highContrast: true });
+    expect(eff.textSize).toBe("large");
+  });
+
+  test("preserves xlarge when user already picked it, even with HC", () => {
+    const eff = effectiveAccessibilityPrefs({ textSize: "xlarge" }, { highContrast: true });
+    expect(eff.textSize).toBe("xlarge");
+  });
+
+  test("preserves large when user already picked it, even with HC", () => {
+    const eff = effectiveAccessibilityPrefs({ textSize: "large" }, { highContrast: true });
+    expect(eff.textSize).toBe("large");
+  });
+
+  test("handles null theme safely", () => {
+    const eff = effectiveAccessibilityPrefs({ textSize: "default" }, null);
+    expect(eff.textSize).toBe("default");
   });
 });

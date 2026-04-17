@@ -22,6 +22,13 @@ export function applyTheme(themeObj) {
   // 1. Set the base (light/dark) so all existing component selectors work
   el.setAttribute("data-theme", themeObj.base);
 
+  // 1b. Mark high-contrast themes so accessibility-specific CSS can target them
+  if (themeObj.highContrast) {
+    el.setAttribute("data-hc", "true");
+  } else {
+    el.removeAttribute("data-hc");
+  }
+
   // 2. Clear any previous inline overrides
   clearThemeOverrides();
 

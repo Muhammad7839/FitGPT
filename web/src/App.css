@@ -17729,3 +17729,67 @@ html[data-text-size="xlarge"] .chatMessageBubble {
 [data-theme="dark"] .profileAccessibilityHint {
   color: rgba(232, 230, 227, 0.68);
 }
+
+/* ─── Accessibility: High-contrast theme overrides ───
+   The HC preset themes supply pure black/white palettes. These rules
+   layer on top to strengthen borders where subtle dividers normally
+   rely on low-opacity whites/blacks, so cards and chat bubbles stay
+   clearly separated against the page background. */
+html[data-hc="true"] .dashOutfitOption,
+html[data-hc="true"] .dashSquareTile,
+html[data-hc="true"] .outfitBuilderItem,
+html[data-hc="true"] .outfitBuilderSelectedTile,
+html[data-hc="true"] .outfitBuilderCanvas,
+html[data-hc="true"] .outfitBuilderWardrobe,
+html[data-hc="true"] .chatbot-bubble,
+html[data-hc="true"] .mannequinViewerContainer,
+html[data-hc="true"] .profileAccessibilitySection,
+html[data-hc="true"] .profileSection {
+  border-width: 2px !important;
+  border-style: solid;
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+}
+
+html[data-hc="true"] .btn,
+html[data-hc="true"] button,
+html[data-hc="true"] .profileAccessibilityOption,
+html[data-hc="true"] .dashViewToggleBtn,
+html[data-hc="true"] .outfitBuilderItem,
+html[data-hc="true"] .styledSaveBtn {
+  border-width: 2px !important;
+  border-style: solid;
+  border-color: var(--border) !important;
+}
+
+html[data-hc="true"] .btn.primary,
+html[data-hc="true"] button.primary,
+html[data-hc="true"] .profileAccessibilityOption.active,
+html[data-hc="true"] .dashViewToggleBtn.active {
+  background: var(--accent) !important;
+  color: var(--bg) !important;
+  border-color: var(--accent) !important;
+}
+
+html[data-hc="true"] .chatbot-bubble {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+}
+
+html[data-hc="true"] .chatMessageBubble,
+html[data-hc="true"] .dashAiReveal,
+html[data-hc="true"] .dashWhyText {
+  line-height: 1.7;
+  letter-spacing: 0.1px;
+}
+
+html[data-hc="true"] a,
+html[data-hc="true"] .link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+html[data-hc="true"] *:focus-visible {
+  outline: 3px solid var(--accent) !important;
+  outline-offset: 2px !important;
+}
