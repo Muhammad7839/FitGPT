@@ -47,6 +47,20 @@ export function adaptAiText(text, prefs) {
     .trim();
 }
 
+/**
+ * Returns the effective accessibility prefs, escalating the text-size
+ * to "large" when a high-contrast theme is active so AI output is
+ * structurally simplified alongside the stronger visual contrast.
+ */
+export function effectiveAccessibilityPrefs(prefs, theme) {
+  const safe = normalize(prefs);
+  const hcActive = !!(theme && theme.highContrast);
+  if (hcActive && safe.textSize === "default") {
+    return { ...safe, textSize: "large" };
+  }
+  return safe;
+}
+
 function splitLongSentences(block, maxChars) {
   const normalized = block.replace(/\s+/g, " ").trim();
   if (!normalized) return "";

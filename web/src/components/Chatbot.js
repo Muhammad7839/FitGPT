@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
+import { useTheme } from "../App";
 import { listChatConversations, sendChatMessage, syncChatConversations } from "../api/chatApi";
 import {
   CHAT_HISTORY_KEY,
@@ -17,7 +18,7 @@ import {
   readWeatherOverride,
   userKey,
 } from "../utils/userStorage";
-import { readAccessibilityPrefs, adaptAiText } from "../utils/accessibilityPrefs";
+import { readAccessibilityPrefs, adaptAiText, effectiveAccessibilityPrefs } from "../utils/accessibilityPrefs";
 
 const GREETING =
   "Hi! I'm AURA. Ask me about outfits, styling, color pairing, or what to wear for any occasion.";
@@ -477,6 +478,7 @@ function TypewriterMessage({ text, onDone }) {
 
 export default function Chatbot() {
   const { user } = useAuth();
+  const { theme } = useTheme() || {};
   const demoUser = readDemoAuth();
   const effectiveUser = user || demoUser;
   const remoteChatUser = user || null;
@@ -998,8 +1000,9 @@ export default function Chatbot() {
                 aria-relevant="additions text"
               >
                 {messages.map((message, index) => {
+                  const effectivePrefs = effectiveAccessibilityPrefs(accessibilityPrefs, theme);
                   const display = message.role === "assistant"
-                    ? adaptAiText(message.content, accessibilityPrefs)
+                    ? adaptAiText(message.content, effectivePrefs)
                     : message.content;
                   return (
                     <div key={index} className={`chatbot-row chatbot-row-${message.role}`}>
