@@ -3,11 +3,13 @@ import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthProvider";
+import { useTheme } from "../App";
 import { savedOutfitsApi } from "../api/savedOutfitsApi";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
 import useWardrobe from "../hooks/useWardrobe";
 import { fetchAIRecommendations } from "../api/recommendationsApi";
 import { submitRecommendationFeedback } from "../api/recommendationFeedbackApi";
+import { readAccessibilityPrefs, adaptAiText, effectiveAccessibilityPrefs } from "../utils/accessibilityPrefs";
 import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 import ClothCard from "./ClothCard";
 import MannequinViewer from "./MannequinViewer";
@@ -22,6 +24,7 @@ import {
   EVT_OUTFIT_HISTORY_CHANGED,
   EVT_RECOMMENDATION_FEEDBACK_CHANGED,
   EVT_RECOMMENDATION_PERSONALIZATION_CHANGED,
+  EVT_ACCESSIBILITY_CHANGED,
   UNDERUSED_ALERTS_KEY,
 } from "../utils/constants";
 import {
@@ -978,6 +981,20 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [viewMode, setViewMode] = useState("grid");
+  const { theme } = useTheme() || {};
+  const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(user));
+
+  useEffect(() => {
+    setAccessibilityPrefs(readAccessibilityPrefs(user));
+    const onChange = () => setAccessibilityPrefs(readAccessibilityPrefs(user));
+    window.addEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
+    return () => window.removeEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
+  }, [user]);
+
+  const effectivePrefs = useMemo(
+    () => effectiveAccessibilityPrefs(accessibilityPrefs, theme),
+    [accessibilityPrefs, theme]
+  );
 
   useEffect(() => {
     if (selectedIdx != null && selectedIdx >= outfits.length) {
@@ -2416,13 +2433,21 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             <div className="dashWhyContent">
               <div className="dashWhyLead">
                 <span key={`${selectedIdx}-${aiRefreshToken}-${recSeed}`} className="dashAiReveal">
-                  {(explanationSummaryText || explanationText).split(" ").map((word, i) => (
-                    <React.Fragment key={i}>
-                      <span className="dashAiWord" style={{ animationDelay: `${i * 28}ms` }}>
-                        {word}
-                      </span>{" "}
-                    </React.Fragment>
-                  ))}
+                  {adaptAiText(explanationSummaryText || explanationText, effectivePrefs)
+                    .split(/\n{2,}/)
+                    .filter(Boolean)
+                    .map((paragraph, pi, arr) => (
+                      <span key={pi} className="dashAiParagraph">
+                        {paragraph.split(" ").map((word, i) => (
+                          <React.Fragment key={i}>
+                            <span className="dashAiWord" style={{ animationDelay: `${(pi * 40 + i) * 28}ms` }}>
+                              {word}
+                            </span>{" "}
+                          </React.Fragment>
+                        ))}
+                        {pi < arr.length - 1 ? "\n" : null}
+                      </span>
+                    ))}
                 </span>
               </div>
 
@@ -2431,7 +2456,9 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                   {explanationDetails.map((detail) => (
                     <div key={detail.title} className="dashWhyCard">
                       <div className="dashWhyCardTitle">{detail.title}</div>
-                      <div className="dashWhyCardText">{detail.body}</div>
+                      <div className="dashWhyCardText" style={{ whiteSpace: "pre-line" }}>
+                        {adaptAiText(detail.body, effectivePrefs)}
+                      </div>
                     </div>
                   ))}
                   {outfitSummaries[selectedIdx]?.confidence && (
