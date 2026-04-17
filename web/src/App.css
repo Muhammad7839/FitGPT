@@ -17177,3 +17177,53 @@ select:focus-visible {
 [data-theme="dark"] .mannequinLegendCat {
   color: rgba(255, 255, 255, 0.4);
 }
+
+.mannequinConflictBanner {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  max-width: 60%;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 12px;
+  background: rgba(255, 237, 200, 0.94);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 10px;
+  border: 1px solid rgba(196, 130, 40, 0.26);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: rgba(90, 60, 10, 0.92);
+  pointer-events: none;
+}
+
+[data-theme="dark"] .mannequinConflictBanner {
+  background: rgba(40, 32, 22, 0.92);
+  border-color: rgba(255, 196, 120, 0.22);
+  color: rgba(255, 222, 180, 0.92);
+}
+
+.mannequinConflictIcon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(196, 130, 40, 0.9);
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.mannequinConflictList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

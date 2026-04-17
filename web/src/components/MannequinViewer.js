@@ -4,6 +4,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { colorToCss } from "../utils/recommendationEngine";
+import { validateOutfit } from "../utils/outfitLayering";
 
 /* ─── colour helper: reuse the app's CSS_COLOR_MAP via colorToCss ─── */
 function itemColor(str) {
@@ -711,6 +712,7 @@ function DressedMannequin({ bodyType, outfit }) {
    ═══════════════════════════════════════════════ */
 export default function MannequinViewer({ outfit = [], bodyType = "rectangle" }) {
   const [panelDragging, setPanelDragging] = useState(false);
+  const validation = useMemo(() => validateOutfit(outfit), [outfit]);
 
   return (
     <div className="mannequinViewerContainer" style={{ cursor: panelDragging ? "grabbing" : undefined }}>
@@ -746,6 +748,20 @@ export default function MannequinViewer({ outfit = [], bodyType = "rectangle" })
           maxPolarAngle={Math.PI / 1.8}
         />
       </Canvas>
+
+      {!validation.valid && validation.conflicts.length > 0 && (
+        <div className="mannequinConflictBanner" role="status">
+          <span className="mannequinConflictIcon" aria-hidden="true">!</span>
+          <ul className="mannequinConflictList">
+            {validation.conflicts.slice(0, 2).map((c, i) => (
+              <li key={i}>{c.message}</li>
+            ))}
+            {validation.conflicts.length > 2 && (
+              <li>&plus; {validation.conflicts.length - 2} more</li>
+            )}
+          </ul>
+        </div>
+      )}
 
       <div className="mannequinHint">
         Drag images to reposition &middot; Drag background to rotate &middot; Scroll to zoom
