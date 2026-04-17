@@ -44,6 +44,9 @@ export const STALE_CLEANUP_KEY = "fitgpt_stale_cleanup_v2";
 export const TUTORIAL_DONE_KEY = "fitgpt_tutorial_done_v1";
 export const CHAT_HISTORY_KEY = "fitgpt_chat_history_v1";
 
+// Accessibility
+export const ACCESSIBILITY_PREFS_KEY = "fitgpt_accessibility_prefs_v1";
+
 // Custom events
 export const EVT_WARDROBE_CHANGED = "fitgpt:guest-wardrobe-changed";
 export const EVT_SAVED_OUTFITS_CHANGED = "fitgpt:saved-outfits-changed";
@@ -54,6 +57,7 @@ export const EVT_PROFILE_PIC_CHANGED = "fitgpt:profile-pic-changed";
 export const EVT_LAUNDRY_CHANGED = "fitgpt:laundry-changed";
 export const EVT_RECOMMENDATION_FEEDBACK_CHANGED = "fitgpt:recommendation-feedback-changed";
 export const EVT_RECOMMENDATION_PERSONALIZATION_CHANGED = "fitgpt:recommendation-personalization-changed";
+export const EVT_ACCESSIBILITY_CHANGED = "fitgpt:accessibility-changed";
 
 // Fit tags (canonical set — used by Wardrobe form + recommendation scoring)
 export const FIT_TAGS = ["unknown", "slim", "regular", "relaxed", "oversized", "tailored", "athletic", "petite", "plus"];

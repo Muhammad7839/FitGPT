@@ -13,8 +13,20 @@ import {
   setRotationAlertsEnabled,
   setRotationReminderPace,
 } from "../utils/rotationAlertPreferences";
+import {
+  TEXT_SIZES,
+  readAccessibilityPrefs,
+  writeAccessibilityPrefs,
+  applyAccessibilityToDocument,
+} from "../utils/accessibilityPrefs";
 import GuestModeNotice from "./GuestModeNotice";
 import BodyTypeFigure from "./BodyTypeFigure";
+
+const TEXT_SIZE_LABELS = {
+  default: "Default",
+  large: "Large",
+  xlarge: "Extra Large",
+};
 
 const DEFAULT_PREFS = { style: [], comfort: [], dressFor: [], bodyType: null, gender: "", heightCm: "" };
 
@@ -95,6 +107,13 @@ export default function Profile({ onResetOnboarding = () => {} }) {
   const [alertsSaved, setAlertsSaved] = useState(false);
   const smartAlertsRef = useRef(null);
   const alertsSavedTimerRef = useRef(null);
+  const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(effectiveUser));
+
+  const updateTextSize = useCallback((next) => {
+    const safe = writeAccessibilityPrefs({ ...accessibilityPrefs, textSize: next }, effectiveUser);
+    setAccessibilityPrefs(safe);
+    applyAccessibilityToDocument(safe);
+  }, [accessibilityPrefs, effectiveUser]);
 
   // ── Account settings state ──
   const [showEmailEdit, setShowEmailEdit] = useState(false);
@@ -114,6 +133,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
 
   useEffect(() => {
     setRotationPrefs(readRotationAlertPreferences(effectiveUser));
+    setAccessibilityPrefs(readAccessibilityPrefs(effectiveUser));
   }, [effectiveUser]);
 
   useEffect(() => {
@@ -442,6 +462,39 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                       Less often keeps alerts quiet longer after dismissal. Balanced is the default. More often brings items back sooner.
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="profileSection profileSettingsSection">
+              <div className="profileSectionTop">
+                <div className="dashCardTitle" style={{ marginBottom: 0 }}>
+                  Accessibility
+                </div>
+              </div>
+
+              <div className="profileSettingsIntro">
+                Adjust how FitGPT displays AI-generated recommendations, explanations, and chat replies.
+              </div>
+
+              <div className="profileAccessibilitySection">
+                <div className="profilePrefLabel">Text size</div>
+                <div className="profileAccessibilityOptions" role="radiogroup" aria-label="Text size">
+                  {TEXT_SIZES.map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      role="radio"
+                      aria-checked={accessibilityPrefs.textSize === size}
+                      className={"profileAccessibilityOption" + (accessibilityPrefs.textSize === size ? " active" : "")}
+                      onClick={() => updateTextSize(size)}
+                    >
+                      {TEXT_SIZE_LABELS[size]}
+                    </button>
+                  ))}
+                </div>
+                <div className="profileAccessibilityHint">
+                  Large and Extra Large also split long AI replies into shorter paragraphs so dense blocks remain readable.
                 </div>
               </div>
             </div>
