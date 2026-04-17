@@ -17028,3 +17028,152 @@ select:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+/* ─── 3D Mannequin Viewer ─── */
+.mannequinViewerContainer {
+  width: 100%;
+  height: 480px;
+  border-radius: 16px;
+  background: linear-gradient(160deg, #faf8f5 0%, #f0ebe4 50%, #e8e0d8 100%);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  box-shadow: 0 10px 32px rgba(17, 24, 39, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+[data-theme="dark"] .mannequinViewerContainer {
+  background: linear-gradient(160deg, #2a2520 0%, #1e1a16 50%, #161210 100%);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.mannequinHint {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(100, 80, 60, 0.5);
+  letter-spacing: 0.5px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .mannequinHint {
+  color: rgba(200, 180, 160, 0.4);
+}
+
+.dashViewToggle {
+  display: flex;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+[data-theme="dark"] .dashViewToggle {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dashViewToggleBtn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  transition: all 160ms ease;
+  letter-spacing: 0.3px;
+}
+
+[data-theme="dark"] .dashViewToggleBtn {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.dashViewToggleBtn.active {
+  background: #fff;
+  color: rgba(0, 0, 0, 0.85);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .dashViewToggleBtn.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.mannequinSaveBtnRow {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.mannequinLegend {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.mannequinLegendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 10px;
+  padding: 6px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="dark"] .mannequinLegendItem {
+  background: rgba(30, 26, 22, 0.85);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.mannequinLegendThumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.mannequinLegendPlaceholder {
+  background: linear-gradient(135deg, rgba(139, 30, 30, 0.12), rgba(0, 0, 0, 0.06));
+}
+
+.mannequinLegendInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.mannequinLegendName {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: rgba(0, 0, 0, 0.8);
+}
+
+[data-theme="dark"] .mannequinLegendName {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.mannequinLegendCat {
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+[data-theme="dark"] .mannequinLegendCat {
+  color: rgba(255, 255, 255, 0.4);
+}
