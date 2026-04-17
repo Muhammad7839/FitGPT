@@ -13,25 +13,25 @@ import kotlinx.coroutines.flow.map
 
 class TokenStore(
     private val context: Context
-) {
+) : AuthSessionStore {
     private val accessTokenKey = stringPreferencesKey("access_token")
     private val tokenTypeKey = stringPreferencesKey("token_type")
 
-    suspend fun saveToken(token: TokenResponse) {
+    override suspend fun saveToken(token: TokenResponse) {
         context.dataStore.edit { preferences ->
             preferences[accessTokenKey] = token.accessToken
             preferences[tokenTypeKey] = token.tokenType
         }
     }
 
-    suspend fun clearToken() {
+    override suspend fun clearToken() {
         context.dataStore.edit { preferences ->
             preferences.remove(accessTokenKey)
             preferences.remove(tokenTypeKey)
         }
     }
 
-    suspend fun getAccessToken(): String? {
+    override suspend fun getAccessToken(): String? {
         return context.dataStore.data
             .map { preferences -> preferences[accessTokenKey] }
             .first()

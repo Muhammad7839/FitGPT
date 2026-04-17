@@ -1,6 +1,7 @@
 package com.fitgpt.app.ui.auth
 
 import android.app.Activity
+import com.google.android.gms.common.api.CommonStatusCodes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -33,9 +34,9 @@ class GoogleSignInRulesTest {
     }
 
     @Test
-    fun resolveGoogleSignInOutcome_returnsCancelledWhenAccountMissing() {
+    fun resolveGoogleSignInOutcome_returnsCancelledWhenResultIsNotOk() {
         val outcome = resolveGoogleSignInOutcome(
-            resultCode = Activity.RESULT_OK,
+            resultCode = Activity.RESULT_CANCELED,
             accountPresent = false,
             email = null,
             idToken = null
@@ -43,6 +44,7 @@ class GoogleSignInRulesTest {
 
         assertTrue(outcome is GoogleSignInOutcome.Failure)
         assertEquals("Google sign-in cancelled", (outcome as GoogleSignInOutcome.Failure).userMessage)
+        assertFalse(outcome.shouldClearClientSession)
     }
 
     @Test
@@ -57,6 +59,28 @@ class GoogleSignInRulesTest {
         assertTrue(outcome is GoogleSignInOutcome.Failure)
         val failure = outcome as GoogleSignInOutcome.Failure
         assertEquals("missing_id_token", failure.reason)
-        assertTrue(failure.userMessage.contains("Google sign-in is misconfigured"))
+        assertEquals(
+            "Google Sign-In failed: ID token missing (check client ID / SHA-1 config)",
+            failure.userMessage
+        )
+        assertTrue(failure.shouldClearClientSession)
+    }
+
+    @Test
+    fun resolveGoogleSignInApiException_returnsConfigErrorForDeveloperError() {
+        val outcome = resolveGoogleSignInApiException(CommonStatusCodes.DEVELOPER_ERROR)
+
+        assertEquals("developer_error", outcome.reason)
+        assertTrue(outcome.userMessage.contains("configuration error"))
+        assertTrue(outcome.shouldClearClientSession)
+    }
+
+    @Test
+    fun resolveGoogleSignInApiException_doesNotRelabelCancelledAsConfigError() {
+        val outcome = resolveGoogleSignInApiException(CommonStatusCodes.CANCELED)
+
+        assertEquals("api_cancelled", outcome.reason)
+        assertEquals("Google sign-in cancelled", outcome.userMessage)
+        assertFalse(outcome.shouldClearClientSession)
     }
 }

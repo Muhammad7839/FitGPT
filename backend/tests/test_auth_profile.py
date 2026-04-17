@@ -389,22 +389,43 @@ def test_google_login_callback_alias_uses_same_flow(client, monkeypatch):
     assert me.json()["email"] == "google-callback@example.com"
 
 
-def test_google_login_invalid_or_expired_token_handling(client, monkeypatch):
+def test_google_login_invalid_or_expired_token_handling(client, monkeypatch, caplog):
+    caplog.set_level("INFO")
+
     def invalid_verify(_: str):
-        raise GoogleTokenValidationError("Invalid Google token")
+        raise GoogleTokenValidationError(
+            "Invalid Google token audience",
+            category="invalid_audience",
+        )
 
     monkeypatch.setattr("app.routes.verify_google_id_token", invalid_verify)
     invalid_response = client.post("/login/google", json={"id_token": "bad-token-value-2222222222"})
     assert invalid_response.status_code == 400
-    assert invalid_response.json()["detail"] == "Invalid Google token"
+    assert invalid_response.json()["detail"] == "Invalid Google token audience"
+    assert "category=invalid_audience" in caplog.text
 
     def expired_verify(_: str):
-        raise GoogleTokenValidationError("Google token has expired", is_expired=True)
+        raise GoogleTokenValidationError(
+            "Google token has expired",
+            is_expired=True,
+            category="expired_token",
+        )
 
     monkeypatch.setattr("app.routes.verify_google_id_token", expired_verify)
     expired_response = client.post("/login/google", json={"id_token": "expired-token-value-33333333"})
     assert expired_response.status_code == 401
     assert expired_response.json()["detail"] == "Google token has expired"
+    assert "category=expired_token" in caplog.text
+
+
+def test_google_login_missing_token_returns_400_with_explicit_category(client, caplog):
+    caplog.set_level("INFO")
+
+    response = client.post("/login/google", json={"id_token": "   "})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Google ID token is required"
+    assert "category=missing_token" in caplog.text
 
 
 def test_forgot_and_reset_password_flow(client, monkeypatch):
