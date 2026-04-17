@@ -17227,3 +17227,383 @@ select:focus-visible {
   flex-direction: column;
   gap: 2px;
 }
+
+/* ─── Outfit Builder ─── */
+.outfitBuilder {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px 22px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.outfitBuilderHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.outfitBuilderTitle {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  color: var(--text);
+}
+
+.outfitBuilderSub {
+  margin: 6px 0 0;
+  color: var(--text-muted, rgba(0,0,0,0.6));
+  font-size: 13.5px;
+  max-width: 640px;
+  line-height: 1.5;
+}
+
+[data-theme="dark"] .outfitBuilderSub {
+  color: rgba(232, 230, 227, 0.74);
+}
+
+.outfitBuilderActions {
+  display: flex;
+  gap: 8px;
+}
+
+.outfitBuilderMsg {
+  align-self: flex-start;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(139, 30, 30, 0.08);
+  border: 1px solid rgba(139, 30, 30, 0.2);
+  color: rgba(90, 20, 20, 0.9);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .outfitBuilderMsg {
+  background: rgba(255, 120, 120, 0.12);
+  border-color: rgba(255, 120, 120, 0.28);
+  color: rgba(255, 205, 205, 0.95);
+}
+
+.outfitBuilderGrid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.4fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .outfitBuilderGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.outfitBuilderWardrobe {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px;
+  border-radius: 14px;
+  background: var(--surface, #fff);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  max-height: 720px;
+  overflow-y: auto;
+}
+
+[data-theme="dark"] .outfitBuilderWardrobe {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+.outfitBuilderEmpty {
+  padding: 22px 8px;
+  text-align: center;
+  color: rgba(0, 0, 0, 0.55);
+  font-size: 13px;
+}
+
+[data-theme="dark"] .outfitBuilderEmpty {
+  color: rgba(232, 230, 227, 0.7);
+}
+
+.outfitBuilderGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.outfitBuilderGroupTitle {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+[data-theme="dark"] .outfitBuilderGroupTitle {
+  color: rgba(232, 230, 227, 0.72);
+}
+
+.outfitBuilderGroupItems {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.outfitBuilderItem {
+  all: unset;
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.02);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.outfitBuilderItem:hover {
+  transform: translateY(-1px);
+  border-color: rgba(139, 30, 30, 0.26);
+  box-shadow: 0 4px 12px rgba(139, 30, 30, 0.08);
+}
+
+.outfitBuilderItem:active {
+  cursor: grabbing;
+}
+
+.outfitBuilderItem.selected {
+  border-color: rgba(139, 30, 30, 0.6);
+  background: rgba(139, 30, 30, 0.08);
+}
+
+[data-theme="dark"] .outfitBuilderItem {
+  border-color: rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .outfitBuilderItem:hover {
+  border-color: rgba(255, 170, 170, 0.3);
+}
+
+[data-theme="dark"] .outfitBuilderItem.selected {
+  border-color: rgba(255, 170, 170, 0.5);
+  background: rgba(196, 60, 60, 0.18);
+}
+
+.outfitBuilderItemImg {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.outfitBuilderItemPlaceholder {
+  background: linear-gradient(135deg, rgba(139, 30, 30, 0.1), rgba(0, 0, 0, 0.04));
+}
+
+.outfitBuilderItemInfo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+
+.outfitBuilderItemName {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outfitBuilderItemColor {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  flex-shrink: 0;
+}
+
+.outfitBuilderCanvas {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 14px;
+  background: var(--surface, #fff);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  min-height: 560px;
+}
+
+[data-theme="dark"] .outfitBuilderCanvas {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+.outfitBuilderCanvasHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.outfitBuilderCanvasLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.outfitBuilderConflicts {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255, 237, 200, 0.9);
+  border: 1px solid rgba(196, 130, 40, 0.3);
+  color: rgba(90, 60, 10, 0.94);
+}
+
+[data-theme="dark"] .outfitBuilderConflicts {
+  background: rgba(40, 32, 22, 0.8);
+  border-color: rgba(255, 196, 120, 0.3);
+  color: rgba(255, 222, 180, 0.95);
+}
+
+.outfitBuilderConflictTitle {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.outfitBuilderConflictList {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.outfitBuilderDropZone {
+  flex: 1;
+  display: flex;
+  padding: 14px;
+  border-radius: 12px;
+  border: 2px dashed rgba(0, 0, 0, 0.12);
+  min-height: 420px;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.outfitBuilderDropZone.dragOver {
+  border-color: rgba(139, 30, 30, 0.55);
+  background: rgba(139, 30, 30, 0.05);
+}
+
+[data-theme="dark"] .outfitBuilderDropZone {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+[data-theme="dark"] .outfitBuilderDropZone.dragOver {
+  border-color: rgba(255, 170, 170, 0.45);
+  background: rgba(196, 60, 60, 0.1);
+}
+
+.outfitBuilderDropHint {
+  margin: auto;
+  text-align: center;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+[data-theme="dark"] .outfitBuilderDropHint {
+  color: rgba(232, 230, 227, 0.55);
+}
+
+.outfitBuilderSelectedGrid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  align-content: flex-start;
+}
+
+.outfitBuilderSelectedTile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="dark"] .outfitBuilderSelectedTile {
+  border-color: rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.outfitBuilderSelectedRemove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 160ms ease;
+}
+
+.outfitBuilderSelectedRemove:hover {
+  background: rgba(139, 30, 30, 0.85);
+}
+
+.outfitBuilderSelectedImg {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.outfitBuilderSelectedMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.outfitBuilderSelectedName {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outfitBuilderSelectedSlot {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .outfitBuilderSelectedSlot {
+  color: rgba(232, 230, 227, 0.6);
+}

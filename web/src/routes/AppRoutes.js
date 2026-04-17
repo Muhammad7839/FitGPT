@@ -16,6 +16,7 @@ import Profile from "../components/Profile";
 import HistoryAnalytics from "../components/HistoryAnalytics";
 import Plans from "../components/Plans";
 import SavedOutfits from "../components/SavedOutfits";
+import OutfitBuilder from "../components/OutfitBuilder";
 
 function OnboardingWrapper({ onComplete, savedAnswers }) {
   const navigate = useNavigate();
@@ -159,6 +160,14 @@ export default function AppRoutes() {
             element={
               <ErrorBoundary resetKey={pathname}>
                 <SavedOutfits />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/builder"
+            element={
+              <ErrorBoundary resetKey={pathname}>
+                <OutfitBuilder />
               </ErrorBoundary>
             }
           />
