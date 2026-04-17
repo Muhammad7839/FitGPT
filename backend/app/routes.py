@@ -539,22 +539,58 @@ def login_user_alias(
 @router.post("/login/google", response_model=schemas.Token)
 def login_with_google(
     payload: schemas.GoogleLoginRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ):
+    attempt_id = request.headers.get("X-Auth-Attempt-Id") or str(uuid4())
+    token_present = bool(payload.id_token and payload.id_token.strip())
+    logger.info(
+        "GOOGLE_AUTH attempt_id=%s received Google login request token_present=%s",
+        attempt_id,
+        token_present,
+    )
+    if not token_present:
+        logger.warning(
+            "GOOGLE_AUTH attempt_id=%s token verification failure category=missing_token",
+            attempt_id,
+        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google ID token is required")
     try:
         identity = verify_google_id_token(payload.id_token)
     except GoogleTokenValidationError as exc:
         status_code = status.HTTP_401_UNAUTHORIZED if exc.is_expired else status.HTTP_400_BAD_REQUEST
+        logger.warning(
+            "GOOGLE_AUTH attempt_id=%s token verification failure category=%s detail=%s",
+            attempt_id,
+            exc.category,
+            str(exc),
+        )
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    logger.info(
+        "GOOGLE_AUTH attempt_id=%s token verification success email=%s",
+        attempt_id,
+        identity.email,
+    )
 
     user = crud.get_or_create_google_user(
         db=db,
         email=identity.email,
         full_name=identity.full_name,
     )
+    logger.info(
+        "GOOGLE_AUTH attempt_id=%s user lookup/create success user_id=%s email=%s",
+        attempt_id,
+        user.id,
+        user.email,
+    )
     access_token = create_access_token(
         data={"sub": str(user.id)},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    logger.info(
+        "GOOGLE_AUTH attempt_id=%s response status returned=%s",
+        attempt_id,
+        status.HTTP_200_OK,
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -562,10 +598,11 @@ def login_with_google(
 @router.post("/auth/google/callback", response_model=schemas.Token)
 def login_with_google_alias(
     payload: schemas.GoogleLoginRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Compatibility alias for web clients expecting /auth/google/callback."""
-    return login_with_google(payload=payload, db=db)
+    return login_with_google(payload=payload, request=request, db=db)
 
 
 @router.post("/forgot-password", response_model=schemas.ForgotPasswordResponse)

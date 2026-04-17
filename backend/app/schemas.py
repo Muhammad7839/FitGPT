@@ -162,7 +162,7 @@ class TokenData(BaseModel):
 
 
 class GoogleLoginRequest(BaseModel):
-    id_token: str = Field(min_length=20, max_length=4096)
+    id_token: str = Field(min_length=1, max_length=4096)
 
 
 class ForgotPasswordRequest(BaseModel):

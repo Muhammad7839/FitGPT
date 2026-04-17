@@ -6,6 +6,7 @@
 package com.fitgpt.app.ui.auth
 
 import android.app.Activity
+import android.content.Context
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,6 +31,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,10 +44,31 @@ import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.AuthState
 import com.fitgpt.app.viewmodel.AuthViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.tasks.Tasks
+import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-private const val GOOGLE_AUTH_LOG_TAG = "FitGPTGoogleAuth"
+private const val GOOGLE_AUTH_LOG_TAG = "GOOGLE_AUTH"
+private const val GOOGLE_AUTH_DEBUG_LOG_TAG = "GOOGLE_AUTH_DEBUG"
+
+fun debugGoogleConfig(context: Context) {
+    val account = GoogleSignIn.getLastSignedInAccount(context)
+    Log.d(GOOGLE_AUTH_DEBUG_LOG_TAG, "last_account=${account?.email}")
+}
+
+private suspend fun clearGoogleSignInSession(client: GoogleSignInClient): Boolean {
+    return withContext(Dispatchers.IO) {
+        runCatching {
+            Tasks.await(client.signOut())
+            true
+        }.getOrDefault(false)
+    }
+}
 
 /**
  * Simple auth entry screen that saves JWT token via AuthViewModel on success.
@@ -53,7 +76,7 @@ private const val GOOGLE_AUTH_LOG_TAG = "FitGPTGoogleAuth"
 @Composable
 fun LoginScreen(
     viewModel: AuthViewModel,
-    onLoginSuccess: () -> Unit,
+    onLoginSuccess: (String?) -> Unit,
     onCreateAccountClick: () -> Unit,
     onForgotPasswordClick: () -> Unit,
     onContinueAsGuestClick: () -> Unit,
@@ -64,63 +87,121 @@ fun LoginScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var googleErrorMessage by remember { mutableStateOf<String?>(null) }
+    var currentGoogleAttemptId by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
-    val googleClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID
+    val scope = rememberCoroutineScope()
+    val googleClientId = BuildConfig.GOOGLE_CLIENT_ID
     val showGoogleSignIn = shouldShowGoogleSignInButton(googleClientId)
 
     val googleSignInClient = remember(context, googleClientId) {
-        val optionsBuilder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
-        if (showGoogleSignIn) {
-            optionsBuilder.requestIdToken(googleClientId)
-        }
-        val options = optionsBuilder.build()
-        GoogleSignIn.getClient(context, options)
+            .requestIdToken(BuildConfig.GOOGLE_CLIENT_ID)
+            .build()
+
+        GoogleSignIn.getClient(context, gso)
+    }
+
+    LaunchedEffect(context) {
+        debugGoogleConfig(context)
     }
 
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        val signInTask = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        val attemptId = currentGoogleAttemptId ?: UUID.randomUUID().toString()
+        currentGoogleAttemptId = attemptId
+        Log.d(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId callback triggered")
+        Log.d(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId resultCode=${result.resultCode}")
+        val data = result.data
+
+        if (result.resultCode != Activity.RESULT_OK) {
+            val failure = resolveGoogleSignInOutcome(
+                resultCode = result.resultCode,
+                accountPresent = false,
+                email = null,
+                idToken = null
+            ) as GoogleSignInOutcome.Failure
+            Log.w(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId result handling failure=${failure.reason}")
+            googleErrorMessage = failure.userMessage
+            currentGoogleAttemptId = null
+            return@rememberLauncherForActivityResult
+        }
+
+        val task = GoogleSignIn.getSignedInAccountFromIntent(data)
+
         try {
-            val account = signInTask.getResult(ApiException::class.java)
-            when (
-                val outcome = resolveGoogleSignInOutcome(
-                    resultCode = result.resultCode,
-                    accountPresent = account != null,
-                    email = account?.email,
-                    idToken = account?.idToken
-                )
-            ) {
+            val account = task.getResult(ApiException::class.java)
+            val outcome = resolveGoogleSignInOutcome(
+                resultCode = result.resultCode,
+                accountPresent = account != null,
+                email = account?.email,
+                idToken = account?.idToken
+            )
+
+            when (outcome) {
                 is GoogleSignInOutcome.Success -> {
-                    Log.i(
-                        GOOGLE_AUTH_LOG_TAG,
-                        "Google success: resultCode=${result.resultCode}, email=${outcome.email.orEmpty()}, token=present"
-                    )
+                    Log.d(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId account email=${outcome.email}")
+                    Log.d(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId idToken_present=true")
                     googleErrorMessage = null
-                    viewModel.loginWithGoogleToken(outcome.idToken)
+                    viewModel.loginWithGoogleToken(
+                        idToken = outcome.idToken,
+                        attemptId = attemptId
+                    )
                 }
 
                 is GoogleSignInOutcome.Failure -> {
+                    Log.d(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId account email=${outcome.email}")
+                    Log.d(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId idToken_present=${outcome.tokenPresent}")
                     Log.w(
                         GOOGLE_AUTH_LOG_TAG,
-                        "Google failed: resultCode=${result.resultCode}, email=${outcome.email.orEmpty()}, tokenPresent=${outcome.tokenPresent}, reason=${outcome.reason}"
+                        "attempt_id=$attemptId result handling failure=${outcome.reason}"
                     )
                     googleErrorMessage = outcome.userMessage
+                    currentGoogleAttemptId = null
+                    if (outcome.shouldClearClientSession) {
+                        scope.launch {
+                            val cleared = clearGoogleSignInSession(googleSignInClient)
+                            Log.i(
+                                GOOGLE_AUTH_LOG_TAG,
+                                "attempt_id=$attemptId cleared stale Google session=$cleared reason=${outcome.reason}"
+                            )
+                        }
+                    }
                 }
             }
-        } catch (exception: ApiException) {
-            Log.w(
+        } catch (e: ApiException) {
+            val failure = resolveGoogleSignInApiException(e.statusCode)
+            Log.e(
                 GOOGLE_AUTH_LOG_TAG,
-                "Google failed: resultCode=${result.resultCode}, reason=api_exception_${exception.statusCode}"
+                "attempt_id=$attemptId Google Sign-In ApiException status=${e.statusCode} message=${e.message.orEmpty()}"
             )
-            googleErrorMessage = "Google sign-in failed"
+            googleErrorMessage = failure.userMessage
+            currentGoogleAttemptId = null
+            if (failure.shouldClearClientSession) {
+                scope.launch {
+                    val cleared = clearGoogleSignInSession(googleSignInClient)
+                    Log.i(
+                        GOOGLE_AUTH_LOG_TAG,
+                        "attempt_id=$attemptId cleared stale Google session=$cleared reason=${failure.reason}"
+                    )
+                }
+            }
         }
     }
 
-    LaunchedEffect(state) {
+    LaunchedEffect(state, currentGoogleAttemptId) {
+        val attemptId = currentGoogleAttemptId
         if (state is AuthState.Success) {
-            onLoginSuccess()
+            currentGoogleAttemptId = null
+            onLoginSuccess(attemptId)
+        } else if (state is AuthState.Error && attemptId != null) {
+            currentGoogleAttemptId = null
+            val cleared = clearGoogleSignInSession(googleSignInClient)
+            Log.i(
+                GOOGLE_AUTH_LOG_TAG,
+                "attempt_id=$attemptId cleared stale Google session=$cleared after backend failure"
+            )
         }
     }
 
@@ -204,8 +285,19 @@ fun LoginScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
                             onClick = {
+                                val attemptId = UUID.randomUUID().toString()
+                                currentGoogleAttemptId = attemptId
+                                Log.d(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId button clicked")
+                                if (BuildConfig.GOOGLE_CLIENT_ID.isBlank()) {
+                                    Log.e(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId CONFIG_ERROR: CLIENT_ID_EMPTY")
+                                }
+                                if (!BuildConfig.GOOGLE_CLIENT_ID.endsWith(".apps.googleusercontent.com")) {
+                                    Log.e(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId CONFIG_ERROR: INVALID_CLIENT_ID_FORMAT")
+                                }
                                 googleErrorMessage = null
-                                googleSignInLauncher.launch(googleSignInClient.signInIntent)
+                                val signInIntent = googleSignInClient.signInIntent
+                                Log.d(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId launcher triggered")
+                                googleSignInLauncher.launch(signInIntent)
                             },
                             modifier = Modifier.fillMaxWidth(),
                             enabled = state !is AuthState.Loading

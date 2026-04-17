@@ -60,6 +60,7 @@ import com.fitgpt.app.viewmodel.WardrobeViewModelFactory
 import kotlinx.coroutines.launch
 
 private const val NAV_LOG_TAG = "FitGPTNav"
+private const val GOOGLE_AUTH_LOG_TAG = "GOOGLE_AUTH"
 
 object Routes {
     const val ONBOARDING_WELCOME = "onboarding_welcome"
@@ -259,11 +260,17 @@ fun AppNavHost(
         composable(Routes.LOGIN) {
             LoginScreen(
                 viewModel = authViewModel,
-                onLoginSuccess = {
+                onLoginSuccess = { googleAttemptId ->
                     loginInfoMessage = null
                     loginPrefillEmail = ""
                     appScope.launch {
                         val target = resolveSessionRoute()
+                        if (googleAttemptId != null) {
+                            Log.i(
+                                GOOGLE_AUTH_LOG_TAG,
+                                "attempt_id=$googleAttemptId post-login navigation target=$target"
+                            )
+                        }
                         startDestination = target
                         navController.navigate(target) {
                             popUpTo(Routes.LOGIN) { inclusive = true }

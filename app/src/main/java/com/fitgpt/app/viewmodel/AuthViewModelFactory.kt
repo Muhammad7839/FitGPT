@@ -5,7 +5,7 @@ package com.fitgpt.app.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.fitgpt.app.data.auth.TokenStore
+import com.fitgpt.app.data.auth.AuthSessionStore
 import com.fitgpt.app.data.repository.AuthRepository
 
 /**
@@ -13,7 +13,7 @@ import com.fitgpt.app.data.repository.AuthRepository
  */
 class AuthViewModelFactory(
     private val repository: AuthRepository,
-    private val tokenStore: TokenStore
+    private val tokenStore: AuthSessionStore
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(AuthViewModel::class.java)) {

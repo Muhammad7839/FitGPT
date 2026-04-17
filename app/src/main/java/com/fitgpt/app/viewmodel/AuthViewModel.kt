@@ -3,9 +3,10 @@
  */
 package com.fitgpt.app.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.fitgpt.app.data.auth.TokenStore
+import com.fitgpt.app.data.auth.AuthSessionStore
 import com.fitgpt.app.data.repository.AuthRepository
 import java.io.IOException
 import java.net.ConnectException
@@ -15,6 +16,7 @@ import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import retrofit2.HttpException
 
 /**
@@ -29,8 +31,9 @@ sealed class AuthState {
 
 class AuthViewModel(
     private val repository: AuthRepository,
-    private val tokenStore: TokenStore
+    private val tokenStore: AuthSessionStore
 ) : ViewModel() {
+    private val authLogTag = "GOOGLE_AUTH"
 
     private val _loginState = MutableStateFlow<AuthState>(AuthState.Idle)
     val loginState: StateFlow<AuthState> = _loginState
@@ -58,8 +61,11 @@ class AuthViewModel(
         viewModelScope.launch {
             try {
                 val token = repository.login(email = normalizedEmail, password = password)
-                tokenStore.saveToken(token)
-                _loginState.value = AuthState.Success
+                if (persistSession(token)) {
+                    _loginState.value = AuthState.Success
+                } else {
+                    _loginState.value = AuthState.Error("Unable to save your session. Please try again.")
+                }
             } catch (e: HttpException) {
                 val message = if (e.code() == 401) {
                     "Incorrect email or password. If this account already exists, try resetting your password."
@@ -73,10 +79,19 @@ class AuthViewModel(
         }
     }
 
-    fun loginWithGoogleToken(idToken: String) {
+    fun loginWithGoogleToken(idToken: String, attemptId: String) {
+        Log.d(authLogTag, "attempt_id=$attemptId idToken_present=${idToken.isNotBlank()}")
         if (idToken.isBlank()) {
+            Log.e(
+                authLogTag,
+                "attempt_id=$attemptId CONFIG_ERROR: ID_TOKEN_NULL"
+            )
+            Log.e(
+                authLogTag,
+                "attempt_id=$attemptId Google ID token missing before backend call"
+            )
             _loginState.value = AuthState.Error(
-                "Google sign-in is misconfigured. Check GOOGLE_CLIENT_ID, Firebase SHA-1, and OAuth setup."
+                "Google Sign-In failed: ID token missing (check client ID / SHA-1 config)"
             )
             return
         }
@@ -84,17 +99,35 @@ class AuthViewModel(
         _loginState.value = AuthState.Loading
         viewModelScope.launch {
             try {
-                val token = repository.loginWithGoogle(idToken)
-                tokenStore.saveToken(token)
-                _loginState.value = AuthState.Success
+                Log.i(authLogTag, "attempt_id=$attemptId sending token to backend")
+                val token = repository.loginWithGoogle(idToken = idToken, attemptId = attemptId)
+                Log.i(authLogTag, "attempt_id=$attemptId backend login success")
+                val persisted = persistSession(token)
+                Log.i(authLogTag, "attempt_id=$attemptId session persisted=$persisted")
+                if (persisted) {
+                    _loginState.value = AuthState.Success
+                } else {
+                    _loginState.value = AuthState.Error("Unable to save your session. Please try again.")
+                }
             } catch (e: HttpException) {
-                val message = when (e.code()) {
-                    400 -> "Google sign-in is unavailable right now. Please use email sign-in."
-                    401 -> "Google sign-in expired. Please try again."
+                val responseDetail = extractHttpDetail(e)
+                Log.w(
+                    authLogTag,
+                    "attempt_id=$attemptId backend login failure code=${e.code()} detail=${responseDetail.orEmpty()}"
+                )
+                val message = when {
+                    e.code() == 401 && !responseDetail.isNullOrBlank() -> responseDetail
+                    e.code() == 401 -> "Google sign-in expired. Please try again."
+                    !responseDetail.isNullOrBlank() -> responseDetail
+                    e.code() == 400 -> "Google sign-in failed. Please try again."
                     else -> "Google sign-in failed. Please try again."
                 }
                 _loginState.value = AuthState.Error(message)
             } catch (e: Exception) {
+                Log.e(
+                    authLogTag,
+                    "attempt_id=$attemptId backend login failure ${e::class.java.simpleName}: ${e.message.orEmpty()}"
+                )
                 _loginState.value = AuthState.Error(resolveNetworkAuthError(e, action = "Google login"))
             }
         }
@@ -188,6 +221,24 @@ class AuthViewModel(
             is IOException -> "Network I/O error during $action"
             else -> "Unexpected network error during $action"
         }
+    }
+
+    private suspend fun persistSession(token: com.fitgpt.app.data.remote.dto.TokenResponse): Boolean {
+        tokenStore.saveToken(token)
+        return !tokenStore.getAccessToken().isNullOrBlank()
+    }
+
+    private fun extractHttpDetail(exception: HttpException): String? {
+        val payload = runCatching {
+            exception.response()?.errorBody()?.string().orEmpty()
+        }.getOrNull().orEmpty()
+        if (payload.isBlank()) {
+            return null
+        }
+        val detail = runCatching {
+            JSONObject(payload).optString("detail")
+        }.getOrNull().orEmpty().trim()
+        return detail.ifBlank { null }
     }
 
     private fun normalizeEmail(email: String): String {
