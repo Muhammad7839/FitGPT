@@ -91,8 +91,9 @@ class FakeWardrobeRepository : WardrobeRepository {
             .toList()
     }
 
-    override suspend fun addItem(item: ClothingItem) {
+    override suspend fun addItem(item: ClothingItem): ClothingItem {
         wardrobeItems.add(item)
+        return item
     }
 
     override suspend fun addItemWithPhoto(item: ClothingItem, photo: UploadImagePayload): ClothingItem {
@@ -170,11 +171,12 @@ class FakeWardrobeRepository : WardrobeRepository {
         }
     }
 
-    override suspend fun updateItem(item: ClothingItem) {
+    override suspend fun updateItem(item: ClothingItem): ClothingItem {
         val index = wardrobeItems.indexOfFirst { it.id == item.id }
         if (index != -1) {
             wardrobeItems[index] = item
         }
+        return item
     }
 
     override suspend fun setFavorite(itemId: Int, isFavorite: Boolean): ClothingItem {

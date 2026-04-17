@@ -15,8 +15,6 @@ app = FastAPI()
 log_optional_config_warnings(logger)
 
 origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
     "https://fit-gpt-i3co.vercel.app",
     "https://www.fitgpt.tech"
 ]

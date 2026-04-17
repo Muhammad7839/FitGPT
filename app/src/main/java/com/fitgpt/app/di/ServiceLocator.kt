@@ -7,8 +7,10 @@ import android.content.Context
 import android.util.Log
 import com.fitgpt.app.BuildConfig
 import com.fitgpt.app.data.auth.AuthInterceptor
+import com.fitgpt.app.data.network.BackendEnvironmentResolver
 import com.fitgpt.app.data.network.BackendEndpointRegistry
 import com.fitgpt.app.data.network.BackendFailoverInterceptor
+import com.fitgpt.app.data.network.WardrobeDebugInterceptor
 import com.fitgpt.app.data.auth.TokenStore
 import com.fitgpt.app.data.remote.ApiService
 import com.fitgpt.app.data.repository.AuthRepository
@@ -26,7 +28,6 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object ServiceLocator {
-    private const val EMULATOR_BASE_URL = "http://10.0.2.2:8000/"
     private const val NETWORK_LOG_TAG = "FitGPTNetwork"
 
     @Volatile
@@ -87,12 +88,8 @@ object ServiceLocator {
 
     private fun provideApiService(context: Context): ApiService {
         return apiService ?: synchronized(this) {
-            // Temporary stabilization mode: force emulator backend and bypass environment routing.
-            // Re-enable later by restoring BackendEnvironmentResolver.resolveBaseUrl(...).
-            val baseUrl = EMULATOR_BASE_URL
-            Log.d("Backend", "Using emulator base URL: http://10.0.2.2:8000/")
+            val baseUrl = resolveActiveBaseUrl()
             BackendEndpointRegistry.initialize(baseUrl)
-            Log.i(NETWORK_LOG_TAG, "Retrofit baseUrl=$baseUrl")
             apiService ?: Retrofit.Builder()
                 .baseUrl(baseUrl)
                 .client(buildHttpClient(context))
@@ -101,6 +98,15 @@ object ServiceLocator {
                 .create(ApiService::class.java)
                 .also { apiService = it }
         }
+    }
+
+    fun logActiveBaseUrl() {
+        val baseUrl = resolveActiveBaseUrl()
+        Log.i(NETWORK_LOG_TAG, "NETWORK_DEBUG: baseUrl=$baseUrl")
+    }
+
+    private fun resolveActiveBaseUrl(): String {
+        return BackendEnvironmentResolver.resolveBaseUrl(BuildConfig.API_BASE_URL)
     }
 
     private fun buildHttpClient(context: Context): OkHttpClient {
@@ -115,6 +121,7 @@ object ServiceLocator {
         return OkHttpClient.Builder()
             .addInterceptor(BackendFailoverInterceptor())
             .addInterceptor(AuthInterceptor(provideTokenStore(context)))
+            .addInterceptor(WardrobeDebugInterceptor())
             .addInterceptor(logger)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)

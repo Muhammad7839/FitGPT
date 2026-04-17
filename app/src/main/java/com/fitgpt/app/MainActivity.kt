@@ -14,12 +14,14 @@ import com.fitgpt.app.data.model.CustomThemePalette
 import com.fitgpt.app.data.PreferencesManager
 import com.fitgpt.app.data.model.ThemeMode
 import com.fitgpt.app.data.model.ThemePreset
+import com.fitgpt.app.di.ServiceLocator
 import com.fitgpt.app.navigation.AppNavHost
 import com.fitgpt.app.ui.theme.FitGPTTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ServiceLocator.logActiveBaseUrl()
         enableEdgeToEdge()
         setContent {
             val preferencesManager = remember { PreferencesManager(applicationContext) }

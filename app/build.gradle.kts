@@ -3,19 +3,22 @@ import java.io.File
 import java.util.Properties
 
 fun projectPropertyOrLocal(project: Project, key: String, defaultValue: String = ""): String {
+    val localPropertiesFile = project.rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        val properties = Properties()
+        localPropertiesFile.inputStream().use(properties::load)
+        val localValue = properties.getProperty(key)?.trim().orEmpty()
+        if (localValue.isNotBlank()) {
+            return localValue
+        }
+    }
+
     val directValue = (project.findProperty(key) as String?)?.trim().orEmpty()
     if (directValue.isNotBlank()) {
         return directValue
     }
 
-    val localPropertiesFile = project.rootProject.file("local.properties")
-    if (!localPropertiesFile.exists()) {
-        return defaultValue
-    }
-
-    val properties = Properties()
-    localPropertiesFile.inputStream().use(properties::load)
-    return properties.getProperty(key)?.trim().takeUnless { it.isNullOrBlank() } ?: defaultValue
+    return defaultValue
 }
 
 plugins {
@@ -41,15 +44,15 @@ android {
             "GOOGLE_CLIENT_ID",
             projectPropertyOrLocal(project, "GOOGLE_WEB_CLIENT_ID")
         )
-        val apiBaseUrlRaw = projectPropertyOrLocal(project, "API_BASE_URL", "http://10.0.2.2:8000/")
+        val apiBaseUrlRaw = projectPropertyOrLocal(
+            project,
+            "API_BASE_URL",
+            "https://fitgpt-backend-tiiq.onrender.com/"
+        )
         val apiBaseUrl = if (apiBaseUrlRaw.endsWith("/")) apiBaseUrlRaw else "$apiBaseUrlRaw/"
-        val apiLanBaseUrlRaw = projectPropertyOrLocal(project, "API_LAN_BASE_URL")
-        val apiLanBaseUrl = apiLanBaseUrlRaw.trim().let { value ->
-            if (value.isBlank()) "" else if (value.endsWith("/")) value else "$value/"
-        }
+        buildConfigField("String", "GOOGLE_CLIENT_ID", "\"$googleWebClientId\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
-        buildConfigField("String", "API_LAN_BASE_URL", "\"$apiLanBaseUrl\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -199,3 +202,4 @@ tasks.matching { task ->
 }.configureEach {
     dependsOn("setupAdbReverseDebug")
 }
+apply(plugin = "com.google.gms.google-services")
