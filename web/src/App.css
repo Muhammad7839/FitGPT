@@ -17793,3 +17793,14 @@ html[data-hc="true"] *:focus-visible {
   outline: 3px solid var(--accent) !important;
   outline-offset: 2px !important;
 }
+
+.dashAiParagraph {
+  display: inline;
+}
+
+html[data-text-size="large"] .dashAiParagraph,
+html[data-text-size="xlarge"] .dashAiParagraph,
+html[data-hc="true"] .dashAiParagraph {
+  display: block;
+  margin-bottom: 0.6em;
+}
