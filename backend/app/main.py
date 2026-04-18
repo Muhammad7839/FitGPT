@@ -1,29 +1,23 @@
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
 from app.database.database import engine, Base
 from app import models
-from app.config import log_optional_config_warnings
+from app.config import CORS_ORIGINS, log_optional_config_warnings
 from app.routes import router
 
 logger = logging.getLogger(__name__)
 app = FastAPI()
 log_optional_config_warnings(logger)
 
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://fit-gpt-i3co.vercel.app",
-    "https://www.fitgpt.tech"
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -94,6 +88,31 @@ def _ensure_runtime_schema() -> None:
                 for sql in pending_alters:
                     connection.execute(text(sql))
 
+    index_statements: list[str] = []
+    if "clothing_items" in table_names:
+        index_statements.extend(
+            [
+                "CREATE INDEX IF NOT EXISTS ix_clothing_items_owner_archived ON clothing_items (owner_id, is_archived)",
+                "CREATE INDEX IF NOT EXISTS ix_clothing_items_owner_last_worn ON clothing_items (owner_id, last_worn_timestamp)",
+            ]
+        )
+    if "outfit_history" in table_names:
+        index_statements.append(
+            "CREATE INDEX IF NOT EXISTS ix_outfit_history_owner_worn_at ON outfit_history (owner_id, worn_at_timestamp)"
+        )
+    if "saved_outfits" in table_names:
+        index_statements.append(
+            "CREATE INDEX IF NOT EXISTS ix_saved_outfits_owner_saved_at ON saved_outfits (owner_id, saved_at_timestamp)"
+        )
+    if "planned_outfits" in table_names:
+        index_statements.append(
+            "CREATE INDEX IF NOT EXISTS ix_planned_outfits_owner_date ON planned_outfits (owner_id, planned_date)"
+        )
+    if index_statements:
+        with engine.begin() as connection:
+            for sql in index_statements:
+                connection.execute(text(sql))
+
 
 _ensure_runtime_schema()
 
@@ -101,6 +120,28 @@ app.include_router(router)
 uploads_dir = Path("uploads")
 uploads_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
+
+@app.get("/health")
+def health_check():
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except Exception:
+        logger.exception("Health check database probe failed")
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "status": "degraded",
+                "database": "unavailable",
+            },
+        )
+
+    return {
+        "status": "ok",
+        "database": "ok",
+    }
+
 
 @app.get("/")
 def root():

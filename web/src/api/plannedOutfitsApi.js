@@ -4,8 +4,9 @@ import { EVT_PLANNED_OUTFITS_CHANGED } from "../utils/constants";
 import { makeId, normalizeItems, idsSignature } from "../utils/helpers";
 
 const PATHS = {
-  list: "/planned-outfits",
-  create: "/planned-outfits",
+  list: "/outfits/planned",
+  create: "/outfits/planned",
+  remove: (id) => `/outfits/planned/${id}`,
 };
 
 const { read: readLocal, write: writeLocal } = makeLocalStore(PLANNED_OUTFITS_KEY, EVT_PLANNED_OUTFITS_CHANGED);
@@ -26,6 +27,36 @@ function buildLocalRecord(payload, normalized) {
     source: payload?.source || "planner",
     outfit_signature: idsSignature(normalized),
   };
+}
+
+function timestampToIso(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return "";
+  return new Date(numeric * 1000).toISOString();
+}
+
+function normalizePlannedOutfit(outfit) {
+  const itemIds = normalizeItems(Array.isArray(outfit?.item_ids) ? outfit.item_ids : []);
+  return {
+    planned_id: (outfit?.planned_id ?? outfit?.id ?? "").toString(),
+    item_ids: itemIds,
+    item_details: Array.isArray(outfit?.item_details) ? outfit.item_details : [],
+    planned_date: (outfit?.planned_date || "").toString(),
+    occasion: (outfit?.occasion || "").toString(),
+    notes: (outfit?.notes || "").toString(),
+    created_at: (outfit?.created_at || "").toString() || timestampToIso(outfit?.created_at_timestamp),
+    source: (outfit?.source || "planner").toString(),
+    outfit_signature: (outfit?.outfit_signature || idsSignature(itemIds)).toString(),
+  };
+}
+
+function readPlannedOutfitsFromResponse(res) {
+  const records = Array.isArray(res?.outfits)
+    ? res.outfits
+    : Array.isArray(res?.planned_outfits)
+      ? res.planned_outfits
+      : [];
+  return records.map(normalizePlannedOutfit);
 }
 
 function plannedOutfitKey(outfit) {
@@ -57,6 +88,14 @@ function mergePlannedOutfits(remoteList, localList) {
   return merged;
 }
 
+function buildSyncFallback(result, error) {
+  return {
+    ...result,
+    localOnly: true,
+    syncError: error instanceof Error ? error.message : "Remote sync failed.",
+  };
+}
+
 export const plannedOutfitsApi = {
   async listPlanned(user) {
     if (!user) {
@@ -69,7 +108,7 @@ export const plannedOutfitsApi = {
 
     try {
       const res = await apiFetch(PATHS.list, { method: "GET" });
-      const remote = Array.isArray(res?.planned_outfits) ? res.planned_outfits : [];
+      const remote = readPlannedOutfitsFromResponse(res);
       const merged = mergePlannedOutfits(remote, readLocal(user));
       writeLocal(merged, user);
       return { planned_outfits: merged };
@@ -96,11 +135,29 @@ export const plannedOutfitsApi = {
           method: "POST",
           body: JSON.stringify({ ...payload, item_ids: normalized }),
         });
-        if (res?.planned_outfit) {
-          writeLocal([res.planned_outfit, ...readLocal(user)], user);
+        const remote = readPlannedOutfitsFromResponse(res);
+        if (remote.length > 0) {
+          const merged = mergePlannedOutfits(remote, readLocal(user));
+          writeLocal(merged, user);
+          const createdRecord = remote.find((entry) =>
+            entry.planned_date === (payload?.planned_date || "") &&
+            entry.outfit_signature === idsSignature(normalized)
+          ) || remote[0];
+          return {
+            created: true,
+            message: "Outfit planned!",
+            planned_outfit: createdRecord,
+            planned_outfits: merged,
+          };
         }
-        return res;
-      } catch {}
+      } catch (error) {
+        const record = buildLocalRecord(payload, normalized);
+        writeLocal([record, ...readLocal(user)], user);
+        return buildSyncFallback(
+          { created: true, message: "Outfit planned!", planned_outfit: record },
+          error
+        );
+      }
     }
 
     const record = buildLocalRecord(payload, normalized);
@@ -125,9 +182,14 @@ export const plannedOutfitsApi = {
     }
 
     try {
-      return await apiFetch(`${PATHS.list}/${numericId}`, { method: "DELETE" });
-    } catch {
-      return { deleted: true };
+      const res = await apiFetch(PATHS.remove(numericId), { method: "DELETE" });
+      const remote = readPlannedOutfitsFromResponse(res);
+      if (remote.length > 0) {
+        writeLocal(mergePlannedOutfits(remote, readLocal(user)), user);
+      }
+      return { deleted: true, planned_outfits: remote };
+    } catch (error) {
+      return buildSyncFallback({ deleted: true }, error);
     }
   },
 };

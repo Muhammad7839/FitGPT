@@ -195,11 +195,67 @@ export const PRESET_THEMES = [
       "--wardrobe-blue-soft": "rgba(196, 181, 253, 0.12)",
     }),
   },
+  {
+    id: "contrast-light",
+    name: "High Contrast Light",
+    base: "light",
+    category: "accessibility",
+    icon: "\u25D1",
+    highContrast: true,
+    vars: {
+      ...buildVars("light", "#000000", {
+        "--bg": "#ffffff",
+        "--pageBg1": "#ffffff",
+        "--pageBg2": "#ffffff",
+        "--surface": "#ffffff",
+        "--surface-input": "#ffffff",
+        "--text": "#000000",
+        "--muted": "#1a1a1a",
+        "--border": "#000000",
+        "--bgSoft": "#f5f5f5",
+        "--surface-border": "#000000",
+        "--shadow": "0 0 0 2px #000000",
+        "--shadow-hover": "0 0 0 3px #000000",
+        "--wardrobe-blue": "#0037ff",
+        "--wardrobe-blue-soft": "rgba(0, 55, 255, 0.14)",
+      }),
+    },
+  },
+  {
+    id: "contrast-dark",
+    name: "High Contrast Dark",
+    base: "dark",
+    category: "accessibility",
+    icon: "\u25D0",
+    highContrast: true,
+    vars: {
+      ...buildVars("dark", "#ffff00", {
+        "--bg": "#000000",
+        "--pageBg1": "#000000",
+        "--pageBg2": "#000000",
+        "--surface": "#050505",
+        "--surface-input": "#050505",
+        "--text": "#ffffff",
+        "--muted": "#f0f0f0",
+        "--border": "#ffffff",
+        "--bgSoft": "#1a1a1a",
+        "--surface-border": "#ffffff",
+        "--shadow": "0 0 0 2px #ffffff",
+        "--shadow-hover": "0 0 0 3px #ffffff",
+        "--wardrobe-blue": "#80e0ff",
+        "--wardrobe-blue-soft": "rgba(128, 224, 255, 0.18)",
+      }),
+    },
+  },
 ];
 
 /** Lookup a preset theme by ID */
 export function getPresetTheme(id) {
   return PRESET_THEMES.find((t) => t.id === id) || PRESET_THEMES[0];
+}
+
+export function isHighContrast(theme) {
+  return !!(theme && theme.highContrast);
 }
 
 /** Get themes grouped by category */

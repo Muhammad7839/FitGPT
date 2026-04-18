@@ -93,6 +93,58 @@ class AuthViewModelTest {
         assertTrue(!(viewModel.loginState.value as AuthState.Error).message.contains("cancelled"))
     }
 
+    @Test
+    fun login_http401_returnsPasswordResetHint() = runTest(dispatcher) {
+        val repository = FakeAuthRepository().apply {
+            loginFailure = httpException(401, "Incorrect email or password")
+        }
+        val viewModel = AuthViewModel(repository, FakeSessionStore())
+
+        viewModel.login("user@example.com", "wrong-password")
+        advanceUntilIdle()
+
+        assertEquals(
+            "Incorrect email or password. If this account already exists, try resetting your password.",
+            (viewModel.loginState.value as AuthState.Error).message
+        )
+    }
+
+    @Test
+    fun forgotPassword_http429_surfacesFailureCode() = runTest(dispatcher) {
+        val repository = FakeAuthRepository().apply {
+            forgotPasswordFailure = httpException(429, "Too many password reset requests")
+        }
+        val viewModel = AuthViewModel(repository, FakeSessionStore())
+
+        viewModel.forgotPassword("user@example.com")
+        advanceUntilIdle()
+
+        assertEquals(
+            "Forgot password failed (429)",
+            (viewModel.forgotPasswordState.value as AuthState.Error).message
+        )
+    }
+
+    @Test
+    fun resetPassword_http400_surfacesFailureCode() = runTest(dispatcher) {
+        val repository = FakeAuthRepository().apply {
+            resetPasswordFailure = httpException(400, "Invalid reset token")
+        }
+        val viewModel = AuthViewModel(repository, FakeSessionStore())
+
+        viewModel.resetPassword(
+            token = "reset-token-12345678901234567890",
+            newPassword = "newpass456",
+            confirmPassword = "newpass456"
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            "Reset failed (400)",
+            (viewModel.resetPasswordState.value as AuthState.Error).message
+        )
+    }
+
     private fun httpException(code: Int, detail: String): HttpException {
         val body = """{"detail":"$detail"}"""
             .toResponseBody("application/json".toMediaType())
@@ -101,11 +153,15 @@ class AuthViewModelTest {
 }
 
 private class FakeAuthRepository : AuthRepository {
+    var loginFailure: Exception? = null
     var lastGoogleToken: String? = null
     var lastAttemptId: String? = null
     var googleFailure: Exception? = null
+    var forgotPasswordFailure: Exception? = null
+    var resetPasswordFailure: Exception? = null
 
     override suspend fun login(email: String, password: String): TokenResponse {
+        loginFailure?.let { throw it }
         return TokenResponse(accessToken = "email-token", tokenType = "bearer")
     }
 
@@ -119,10 +175,12 @@ private class FakeAuthRepository : AuthRepository {
     }
 
     override suspend fun forgotPassword(email: String): Pair<String, String?> {
+        forgotPasswordFailure?.let { throw it }
         return "ok" to null
     }
 
     override suspend fun resetPassword(token: String, newPassword: String): String {
+        resetPasswordFailure?.let { throw it }
         return "ok"
     }
 

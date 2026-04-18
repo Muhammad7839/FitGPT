@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
+import { useTheme } from "../App";
 import { listChatConversations, sendChatMessage, syncChatConversations } from "../api/chatApi";
 import {
   CHAT_HISTORY_KEY,
   OUTFIT_HISTORY_KEY,
   PLANNED_OUTFITS_KEY,
   SAVED_OUTFITS_KEY,
+  EVT_ACCESSIBILITY_CHANGED,
 } from "../utils/constants";
 import {
   loadAnswers,
@@ -16,6 +18,7 @@ import {
   readWeatherOverride,
   userKey,
 } from "../utils/userStorage";
+import { adaptAiText, effectiveAccessibilityPrefs, readAccessibilityPrefs } from "../utils/accessibilityPrefs";
 
 const GREETING =
   "Hi! I'm AURA. Ask me about outfits, styling, color pairing, or how to get the most out of FitGPT.";
@@ -449,6 +452,10 @@ function TypewriterMessage({ text, onDone }) {
   const done = charIndex >= text.length;
 
   useEffect(() => {
+    setCharIndex(0);
+  }, [text]);
+
+  useEffect(() => {
     if (done) {
       if (onDone) onDone();
       return;
@@ -471,6 +478,7 @@ function TypewriterMessage({ text, onDone }) {
 
 export default function Chatbot() {
   const { user } = useAuth();
+  const { theme } = useTheme() || {};
   const demoUser = useMemo(() => readDemoAuth(), []);
   const effectiveUser = user || demoUser;
   const remoteChatUser = user || null;
@@ -485,6 +493,7 @@ export default function Chatbot() {
   const [loading, setLoading] = useState(false);
   const [typingIdx, setTypingIdx] = useState(-1);
   const [composerStatus, setComposerStatus] = useState("");
+  const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(null));
   const submitLockRef = useRef(false);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
@@ -500,6 +509,17 @@ export default function Chatbot() {
 
   const [chats, setChats] = useState(initialChatStateRef.current.chats);
   const [activeChatId, setActiveChatId] = useState(initialChatStateRef.current.activeChatId);
+  const effectiveAccessibility = useMemo(
+    () => effectiveAccessibilityPrefs(accessibilityPrefs, theme),
+    [accessibilityPrefs, theme]
+  );
+
+  useEffect(() => {
+    setAccessibilityPrefs(readAccessibilityPrefs(null));
+    const onChange = () => setAccessibilityPrefs(readAccessibilityPrefs(null));
+    window.addEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
+    return () => window.removeEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -983,29 +1003,36 @@ export default function Chatbot() {
                 aria-live="polite"
                 aria-relevant="additions text"
               >
-                {messages.map((message, index) => (
-                  <div key={index} className={`chatbot-row chatbot-row-${message.role}`}>
-                    <div className="chatbot-avatar">
-                      {message.role === "assistant" ? (
-                        <img src="/fitgpt-logo.png" alt="FitGPT" className="chatbot-avatar-logo" />
-                      ) : (
-                        <div className="chatbot-avatar-user">You</div>
-                      )}
-                    </div>
-                    <div className="chatbot-bubble">
-                      <div className="chatbot-sender">
-                        {message.role === "assistant" ? "AURA" : "You"}
-                      </div>
-                      <div className="chatbot-text">
-                        {index === typingIdx ? (
-                          <TypewriterMessage text={message.content} onDone={handleTypeDone} />
+                {messages.map((message, index) => {
+                  const display =
+                    message.role === "assistant"
+                      ? adaptAiText(message.content, effectiveAccessibility)
+                      : message.content;
+
+                  return (
+                    <div key={index} className={`chatbot-row chatbot-row-${message.role}`}>
+                      <div className="chatbot-avatar">
+                        {message.role === "assistant" ? (
+                          <img src="/fitgpt-logo.png" alt="FitGPT" className="chatbot-avatar-logo" />
                         ) : (
-                          <MessageContent text={message.content} />
+                          <div className="chatbot-avatar-user">You</div>
                         )}
                       </div>
+                      <div className="chatbot-bubble">
+                        <div className="chatbot-sender">
+                          {message.role === "assistant" ? "AURA" : "You"}
+                        </div>
+                        <div className="chatbot-text">
+                          {index === typingIdx ? (
+                            <TypewriterMessage text={display} onDone={handleTypeDone} />
+                          ) : (
+                            <MessageContent text={display} />
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {loading && (
                   <div className="chatbot-row chatbot-row-assistant">
                     <div className="chatbot-avatar">

@@ -20,6 +20,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key")
 
 from app.database.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
+from app import routes as routes_module  # noqa: E402
 
 
 TEST_DB_URL = "sqlite:///./fitgpt_test.db"
@@ -41,6 +42,7 @@ def reset_db():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     app.dependency_overrides[get_db] = override_get_db
+    routes_module._reset_forgot_password_throttle_state()
     yield
     app.dependency_overrides.clear()
 

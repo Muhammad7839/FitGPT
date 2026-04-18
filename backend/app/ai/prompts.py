@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 from collections import Counter
+import re
 from typing import Optional
 
 from app import models
 
 
 def _safe_text(value: Optional[str], fallback: str = "unspecified") -> str:
-    cleaned = (value or "").strip()
+    cleaned = re.sub(r"[\r\n\t]+", " ", (value or ""))
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if len(cleaned) > 120:
+        cleaned = cleaned[:120].rstrip()
     return cleaned or fallback
 
 

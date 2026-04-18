@@ -14,7 +14,19 @@ import {
   setRotationAlertsEnabled,
   setRotationReminderPace,
 } from "../utils/rotationAlertPreferences";
+import {
+  TEXT_SIZES,
+  applyAccessibilityToDocument,
+  readAccessibilityPrefs,
+  writeAccessibilityPrefs,
+} from "../utils/accessibilityPrefs";
 import GuestModeNotice from "./GuestModeNotice";
+
+const TEXT_SIZE_LABELS = {
+  default: "Default",
+  large: "Large",
+  xlarge: "Extra Large",
+};
 
 const DEFAULT_PREFS = { style: [], comfort: [], dressFor: [], bodyType: null, gender: "", heightCm: "" };
 
@@ -99,6 +111,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
   const [alertsSaved, setAlertsSaved] = useState(false);
   const smartAlertsRef = useRef(null);
   const alertsSavedTimerRef = useRef(null);
+  const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(null));
 
   // ── Account settings state ──
   const [showEmailEdit, setShowEmailEdit] = useState(false);
@@ -118,6 +131,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
 
   useEffect(() => {
     setRotationPrefs(readRotationAlertPreferences(effectiveUser));
+    setAccessibilityPrefs(readAccessibilityPrefs(null));
   }, [effectiveUser]);
 
   useEffect(() => {
@@ -181,6 +195,12 @@ export default function Profile({ onResetOnboarding = () => {} }) {
     setRotationPrefs(next);
     flashAlertsSaved();
   }, [effectiveUser, flashAlertsSaved]);
+
+  const updateTextSize = useCallback((nextSize) => {
+    const safe = writeAccessibilityPrefs({ ...accessibilityPrefs, textSize: nextSize }, null);
+    setAccessibilityPrefs(safe);
+    applyAccessibilityToDocument(safe);
+  }, [accessibilityPrefs]);
 
   const handleLogout = async () => {
     try {
@@ -444,6 +464,39 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                       Less often keeps alerts quiet longer after dismissal. Balanced is the default. More often brings items back sooner.
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="profileSection profileSettingsSection">
+              <div className="profileSectionTop">
+                <div className="dashCardTitle" style={{ marginBottom: 0 }}>
+                  Accessibility
+                </div>
+              </div>
+
+              <div className="profileSettingsIntro">
+                Adjust how FitGPT renders AI-generated recommendations, explanation cards, and AURA replies.
+              </div>
+
+              <div className="profileAccessibilitySection">
+                <div className="profilePrefLabel">Text size</div>
+                <div className="profileAccessibilityOptions" role="radiogroup" aria-label="Text size">
+                  {TEXT_SIZES.map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      role="radio"
+                      aria-checked={accessibilityPrefs.textSize === size}
+                      className={`profileAccessibilityOption${accessibilityPrefs.textSize === size ? " active" : ""}`}
+                      onClick={() => updateTextSize(size)}
+                    >
+                      {TEXT_SIZE_LABELS[size]}
+                    </button>
+                  ))}
+                </div>
+                <div className="profileAccessibilityHint">
+                  Large and Extra Large also split long AI replies into shorter paragraphs so dense text stays readable.
                 </div>
               </div>
             </div>

@@ -90,8 +90,12 @@ export default function Plans() {
 
   const handleRemove = async (plannedId) => {
     try {
-      await plannedOutfitsApi.removePlanned(plannedId, user);
+      const result = await plannedOutfitsApi.removePlanned(plannedId, user);
       refresh();
+      if (result?.localOnly) {
+        setMsg("Plan removed locally only. Backend sync failed.");
+        window.setTimeout(() => setMsg(""), 2500);
+      }
     } catch {
       setMsg("Could not remove plan.");
       window.setTimeout(() => setMsg(""), 2500);

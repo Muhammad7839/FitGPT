@@ -3,7 +3,7 @@
 import json
 from typing import Optional
 
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, UniqueConstraint
+from sqlalchemy import Boolean, Column, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.database.database import Base
@@ -99,6 +99,10 @@ class User(Base):
 
 class ClothingItem(Base):
     __tablename__ = "clothing_items"
+    __table_args__ = (
+        Index("ix_clothing_items_owner_archived", "owner_id", "is_archived"),
+        Index("ix_clothing_items_owner_last_worn", "owner_id", "last_worn_timestamp"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 
@@ -232,6 +236,9 @@ class ClothingItem(Base):
 
 class OutfitHistory(Base):
     __tablename__ = "outfit_history"
+    __table_args__ = (
+        Index("ix_outfit_history_owner_worn_at", "owner_id", "worn_at_timestamp"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -241,6 +248,9 @@ class OutfitHistory(Base):
 
 class SavedOutfit(Base):
     __tablename__ = "saved_outfits"
+    __table_args__ = (
+        Index("ix_saved_outfits_owner_saved_at", "owner_id", "saved_at_timestamp"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -250,6 +260,9 @@ class SavedOutfit(Base):
 
 class PlannedOutfit(Base):
     __tablename__ = "planned_outfits"
+    __table_args__ = (
+        Index("ix_planned_outfits_owner_date", "owner_id", "planned_date"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)

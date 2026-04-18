@@ -1,6 +1,7 @@
 """API route definitions for auth, wardrobe, profile, planning, and recommendation flows."""
 
 import logging
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -42,6 +43,55 @@ router = APIRouter()
 UPLOADS_DIR = Path("uploads")
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 ai_service = AiService()
+FORGOT_PASSWORD_WINDOW_SECONDS = 60 * 60
+FORGOT_PASSWORD_EMAIL_LIMIT = 5
+FORGOT_PASSWORD_IP_LIMIT = 20
+_forgot_password_email_hits: dict[str, list[float]] = {}
+_forgot_password_ip_hits: dict[str, list[float]] = {}
+_forgot_password_lock = threading.Lock()
+
+
+def _reset_forgot_password_throttle_state() -> None:
+    with _forgot_password_lock:
+        _forgot_password_email_hits.clear()
+        _forgot_password_ip_hits.clear()
+
+
+def _get_request_ip(request: Request) -> str:
+    forwarded_for = (request.headers.get("x-forwarded-for") or "").strip()
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip() or "unknown"
+    return request.client.host if request.client and request.client.host else "unknown"
+
+
+def _record_rate_limit_hit(bucket: dict[str, list[float]], key: str, now: float) -> int:
+    recent_hits = [value for value in bucket.get(key, []) if now - value < FORGOT_PASSWORD_WINDOW_SECONDS]
+    recent_hits.append(now)
+    bucket[key] = recent_hits
+    return len(recent_hits)
+
+
+def _enforce_forgot_password_throttle(email: str, request: Request) -> None:
+    normalized_email = email.strip().lower()
+    request_ip = _get_request_ip(request)
+    now = datetime.utcnow().timestamp()
+
+    with _forgot_password_lock:
+        email_hit_count = _record_rate_limit_hit(_forgot_password_email_hits, normalized_email, now)
+        ip_hit_count = _record_rate_limit_hit(_forgot_password_ip_hits, request_ip, now)
+
+    if email_hit_count > FORGOT_PASSWORD_EMAIL_LIMIT or ip_hit_count > FORGOT_PASSWORD_IP_LIMIT:
+        logger.warning(
+            "Forgot-password rate limit exceeded email=%s ip=%s email_hits=%s ip_hits=%s",
+            normalized_email,
+            request_ip,
+            email_hit_count,
+            ip_hit_count,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many password reset requests. Please try again later.",
+        )
 
 
 def _serialize_saved_outfits(saved_outfits: list[models.SavedOutfit]) -> list[dict]:
@@ -608,8 +658,10 @@ def login_with_google_alias(
 @router.post("/forgot-password", response_model=schemas.ForgotPasswordResponse)
 def forgot_password(
     payload: schemas.ForgotPasswordRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ):
+    _enforce_forgot_password_throttle(payload.email, request)
     user = crud.get_user_by_email(db, payload.email)
     detail = "If the account exists, reset instructions were issued"
     if not user:
@@ -626,11 +678,12 @@ def forgot_password(
 @router.post("/auth/forgot-password", response_model=schemas.ForgotPasswordResponse)
 def forgot_password_alias(
     payload: schemas.ForgotPasswordRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Compatibility alias for web clients expecting /auth/forgot-password."""
     logger.info("Compatibility auth route hit path=/auth/forgot-password")
-    return forgot_password(payload=payload, db=db)
+    return forgot_password(payload=payload, request=request, db=db)
 
 
 @router.post("/reset-password", response_model=schemas.ResetPasswordResponse)
@@ -806,7 +859,10 @@ async def create_wardrobe_item(
     try:
         item = schemas.ClothingItemCreate.model_validate(payload)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        raise HTTPException(
+            status_code=422,
+            detail=exc.errors(include_context=False, include_url=False),
+        ) from exc
 
     created = crud.create_clothing_item(db, item, current_user.id)
     _log_duplicate_candidates_after_create(db, current_user.id, created.id)
