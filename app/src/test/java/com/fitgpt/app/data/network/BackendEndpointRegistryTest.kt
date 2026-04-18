@@ -8,40 +8,44 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class BackendEndpointRegistryTest {
+    private val renderBaseUrl = "https://fitgpt-backend-tiiq.onrender.com/"
 
     @Test
     fun candidateListReturnsOnlyConfiguredHost() {
-        BackendEndpointRegistry.initialize("http://127.0.0.1:8000/")
+        BackendEndpointRegistry.initialize(renderBaseUrl)
 
         val candidates = BackendEndpointRegistry.candidateBaseUrls(
-            currentUrl = "http://127.0.0.1:8000/login".toHttpUrl(),
+            currentUrl = "https://fitgpt-backend-tiiq.onrender.com/login".toHttpUrl(),
             allowFallback = true
         )
 
-        assertEquals(listOf("http://127.0.0.1:8000/"), candidates)
+        assertEquals(listOf(renderBaseUrl), candidates)
     }
 
     @Test
     fun candidateListIgnoresAlternateCurrentUrlHost() {
-        BackendEndpointRegistry.initialize("http://127.0.0.1:8000/")
+        BackendEndpointRegistry.initialize(renderBaseUrl)
 
         val candidates = BackendEndpointRegistry.candidateBaseUrls(
-            currentUrl = "http://10.0.2.2:8000/me".toHttpUrl(),
+            currentUrl = "https://example.com/me".toHttpUrl(),
             allowFallback = true
         )
 
-        assertEquals(listOf("http://127.0.0.1:8000/"), candidates)
+        assertEquals(listOf(renderBaseUrl), candidates)
     }
 
     @Test
     fun rewriteKeepsPathAndQueryWithPinnedHost() {
-        val original = "http://127.0.0.1:8000/wardrobe/items?limit=10".toHttpUrl()
+        val original = "https://fitgpt-backend-tiiq.onrender.com/wardrobe/items?limit=10".toHttpUrl()
 
         val rewritten = BackendEndpointRegistry.rewrite(
             url = original,
-            baseUrl = "http://127.0.0.1:8000/"
+            baseUrl = renderBaseUrl
         )
 
-        assertEquals("http://127.0.0.1:8000/wardrobe/items?limit=10", rewritten.toString())
+        assertEquals(
+            "https://fitgpt-backend-tiiq.onrender.com/wardrobe/items?limit=10",
+            rewritten.toString()
+        )
     }
 }

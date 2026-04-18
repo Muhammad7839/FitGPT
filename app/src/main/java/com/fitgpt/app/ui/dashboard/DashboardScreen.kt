@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,7 +56,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 private const val WEATHER_LOG_TAG = "FitGPTWeather"
-private const val LOCATION_LOG_TAG = "FitGPTLocation"
+private const val LOCATION_LOG_TAG = "LOCATION_DEBUG"
 
 @Composable
 fun DashboardScreen(
@@ -68,6 +69,7 @@ fun DashboardScreen(
     val weatherState by viewModel.weatherState.collectAsState()
     val weatherCity by viewModel.weatherCityState.collectAsState()
     val weatherUiStatus by viewModel.weatherUiStatus.collectAsState()
+    val locationDebugInfo by viewModel.locationDebugInfo.collectAsState()
     val wardrobeGapState by viewModel.wardrobeGapState.collectAsState()
     val underusedAlertsState by viewModel.underusedAlertsState.collectAsState()
     var autoFetchAttempted by rememberSaveable { mutableStateOf(false) }
@@ -78,21 +80,27 @@ fun DashboardScreen(
 
     fun fetchFromCurrentLocation() {
         scope.launch {
-            Log.i(LOCATION_LOG_TAG, "location weather fetch requested")
+            Log.d(LOCATION_LOG_TAG, "location weather fetch requested")
             val locationContext = locationProvider.getCurrentLocationContext()
             if (locationContext == null) {
                 viewModel.markWeatherManualFallback()
                 Log.w(LOCATION_LOG_TAG, "location unavailable for weather fetch")
                 return@launch
             }
+            Log.d(LOCATION_LOG_TAG, "lat=${locationContext.lat} lon=${locationContext.lon}")
             locationContext.city?.let { viewModel.setWeatherCityInput(it) }
+            viewModel.updateLocationDebugInfo(
+                lat = locationContext.lat,
+                lon = locationContext.lon,
+                city = locationContext.city
+            )
             viewModel.fetchWeather(
                 city = locationContext.city,
                 lat = locationContext.lat,
                 lon = locationContext.lon,
                 source = WeatherRequestSource.LOCATION
             )
-            Log.i(LOCATION_LOG_TAG, "location weather fetch started with coordinates")
+            Log.d(LOCATION_LOG_TAG, "location weather fetch started with coordinates")
         }
     }
 
@@ -122,11 +130,11 @@ fun DashboardScreen(
         ) == PackageManager.PERMISSION_GRANTED
 
         if (hasPermission) {
-            Log.i(LOCATION_LOG_TAG, "dashboard auto weather fetch with location permission")
+            Log.d(LOCATION_LOG_TAG, "dashboard auto weather fetch with location permission")
             fetchFromCurrentLocation()
         } else {
             viewModel.markWeatherPermissionNeeded()
-            Log.i(LOCATION_LOG_TAG, "dashboard location permission missing")
+            Log.d(LOCATION_LOG_TAG, "dashboard location permission missing")
         }
     }
 
@@ -173,6 +181,16 @@ fun DashboardScreen(
                     WebBadge(text = weatherStatusBadge(weatherUiStatus.type))
                     Text(
                         text = weatherStatusMessage(weatherUiStatus.type, resolvedWeatherCity),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "City: ${(locationDebugInfo.city ?: resolvedWeatherCity).orEmpty()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Coords: ${locationDebugInfo.lat?.let { String.format("%.5f", it) } ?: "-"}, ${locationDebugInfo.lon?.let { String.format("%.5f", it) } ?: "-"}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -444,6 +462,76 @@ fun DashboardScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    Text("Recommendation Status", style = MaterialTheme.typography.titleMedium)
+                    when (val state = recommendationState) {
+                        UiState.Loading -> {
+                            Text(
+                                text = "Refreshing recommendation...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        is UiState.Error -> {
+                            Text(
+                                text = state.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Button(
+                                onClick = {
+                                    val weather = (weatherState as? UiState.Success)?.data
+                                    viewModel.fetchRecommendations(
+                                        manualTemp = weather?.temperatureF,
+                                        weatherCategory = weather?.weatherCategory
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Refresh Recommendation")
+                            }
+                        }
+                        is UiState.Success -> {
+                            if (state.data.isEmpty()) {
+                                Text(
+                                    text = "No recommendation yet.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Button(
+                                    onClick = {
+                                        val weather = (weatherState as? UiState.Success)?.data
+                                        viewModel.fetchRecommendations(
+                                            manualTemp = weather?.temperatureF,
+                                            weatherCategory = weather?.weatherCategory
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Refresh Recommendation")
+                                }
+                                OutlinedButton(
+                                    onClick = { navController.navigateToSecondary(Routes.RECOMMENDATION) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Open Recommendations")
+                                }
+                            } else {
+                                Text(
+                                    text = "Latest recommendation ready.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text("Underused Items", style = MaterialTheme.typography.titleMedium)
                     when (val state = underusedAlertsState) {
                         UiState.Loading -> {
@@ -539,21 +627,6 @@ fun DashboardScreen(
                 }
             }
 
-            when (val state = recommendationState) {
-                is UiState.Success -> {
-                    if (state.data.isNotEmpty()) {
-                        Text(
-                            text = "Latest recommendation ready.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                is UiState.Error -> {
-                    Log.w(WEATHER_LOG_TAG, "recommendation state error visible=${state.message.isNotBlank()}")
-                }
-                UiState.Loading -> Unit
-            }
         }
     }
 }

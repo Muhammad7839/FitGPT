@@ -3,17 +3,16 @@
  */
 package com.fitgpt.app.data.network
 
+import com.fitgpt.app.BuildConfig
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 object BackendEndpointRegistry {
-    private const val DEFAULT_EMULATOR_BASE_URL = "http://10.0.2.2:8000/"
+    @Volatile
+    private var configuredBaseUrl: String = defaultBaseUrl()
 
     @Volatile
-    private var configuredBaseUrl: String = DEFAULT_EMULATOR_BASE_URL
-
-    @Volatile
-    private var activeBaseUrl: String = DEFAULT_EMULATOR_BASE_URL
+    private var activeBaseUrl: String = defaultBaseUrl()
 
     fun initialize(baseUrl: String) {
         val normalized = normalize(baseUrl)
@@ -44,8 +43,13 @@ object BackendEndpointRegistry {
 
     private fun normalize(baseUrl: String): String {
         val trimmed = baseUrl.trim()
-        if (trimmed.isBlank()) return DEFAULT_EMULATOR_BASE_URL
+        if (trimmed.isBlank()) return defaultBaseUrl()
         return if (trimmed.endsWith("/")) trimmed else "$trimmed/"
     }
 
+    private fun defaultBaseUrl(): String {
+        val configured = BuildConfig.API_BASE_URL.trim()
+        if (configured.isBlank()) return ""
+        return if (configured.endsWith("/")) configured else "$configured/"
+    }
 }

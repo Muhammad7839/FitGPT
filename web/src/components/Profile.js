@@ -202,6 +202,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
           <div className="profileHeaderRow">
             <div>
               <h1 className="heroTitle profileTitle">Profile</h1>
+              <p className="heroSub profileSub">Sign in to save and manage your profile.</p>
             </div>
           </div>
           <GuestModeNotice compact />
@@ -453,6 +454,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
             <div className="profileSignInCard">
               <div className="profileSignInIcon">&#x1F464;</div>
               <div className="profileSignInTitle">You're browsing as a guest</div>
+              <div className="profileSignInSub">Sign in to save outfits, sync your wardrobe, and access your full profile.</div>
               <button className="btn primary" type="button" onClick={() => navigate("/login")}>
                 Sign in
               </button>

@@ -11,7 +11,7 @@ function resolveBaseUrl() {
     }
   }
 
-  return "https://fitgpt-backend-tdiq.onrender.com";
+  return "";
 }
 
 const AUTH_STRATEGY = (process.env.REACT_APP_AUTH_STRATEGY || "token").toLowerCase();
@@ -24,7 +24,7 @@ export function setUnauthorizedHandler(fn) {
 
 export function hasApi() {
   const base = resolveBaseUrl();
-  return base.length > 0;
+  return base.length > 0 || typeof window !== "undefined";
 }
 
 function getToken() {

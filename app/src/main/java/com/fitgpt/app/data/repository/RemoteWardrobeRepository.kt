@@ -3,6 +3,7 @@
  */
 package com.fitgpt.app.data.repository
 
+import android.util.Log
 import com.fitgpt.app.data.model.AiRecommendationResult
 import com.fitgpt.app.data.model.ClothingItem
 import com.fitgpt.app.data.model.DuplicateCandidate
@@ -42,6 +43,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 class RemoteWardrobeRepository(
     private val api: ApiService
 ) : WardrobeRepository {
+    private val logTag = "WARDROBE_DEBUG"
     private var cachedItemsById = emptyMap<Int, ClothingItem>()
 
     override suspend fun getWardrobeItems(
@@ -84,8 +86,12 @@ class RemoteWardrobeRepository(
         return items
     }
 
-    override suspend fun addItem(item: ClothingItem) {
-        api.addWardrobeItem(item.toCreateRequest())
+    override suspend fun addItem(item: ClothingItem): ClothingItem {
+        val response = api.addWardrobeItem(item.toCreateRequest())
+        val created = response.toDomain().copy(imageUrl = resolveApiUrl(response.imageUrl))
+        cachedItemsById = cachedItemsById + (created.id to created)
+        Log.d(logTag, "API response: $created")
+        return created
     }
 
     override suspend fun addItemWithPhoto(item: ClothingItem, photo: UploadImagePayload): ClothingItem {
@@ -94,18 +100,25 @@ class RemoteWardrobeRepository(
             filename = photo.fileName,
             body = photo.bytes.toRequestBody(photo.mimeType.toMediaTypeOrNull())
         )
-        val created = api.addWardrobeItemMultipart(
+        val response = api.addWardrobeItemMultipart(
             payload = buildMultipartItemFields(item),
             image = imagePart
-        ).toDomain()
-        return created.copy(imageUrl = resolveApiUrl(created.imageUrl))
+        )
+        val created = response.toDomain().copy(imageUrl = resolveApiUrl(response.imageUrl))
+        cachedItemsById = cachedItemsById + (created.id to created)
+        Log.d(logTag, "API response: $created")
+        return created
     }
 
     override suspend fun addItemsBulk(items: List<ClothingItem>): List<ClothingItem> {
         val response = api.addWardrobeItemsBulk(
             BulkCreateClothingItemsRequestDto(items = items.map { it.toCreateRequest() })
         )
-        return response.results.mapNotNull { it.item?.toDomain() }
+        val createdItems = response.results.mapNotNull { result ->
+            result.item?.let { dto -> dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl)) }
+        }
+        cachedItemsById = cachedItemsById + createdItems.associateBy { it.id }
+        return createdItems
     }
 
     override suspend fun suggestTags(item: ClothingItem): TagSuggestion {
@@ -117,8 +130,10 @@ class RemoteWardrobeRepository(
     }
 
     override suspend fun applyItemTagSuggestions(itemId: Int): ClothingItem {
-        val updated = api.applyWardrobeItemTagSuggestions(itemId).toDomain()
-        return updated.copy(imageUrl = resolveApiUrl(updated.imageUrl))
+        val response = api.applyWardrobeItemTagSuggestions(itemId)
+        val updated = response.toDomain().copy(imageUrl = resolveApiUrl(response.imageUrl))
+        cachedItemsById = cachedItemsById + (updated.id to updated)
+        return updated
     }
 
     override suspend fun uploadImage(bytes: ByteArray, fileName: String, mimeType: String): String {
@@ -151,17 +166,28 @@ class RemoteWardrobeRepository(
 
     override suspend fun deleteItem(item: ClothingItem) {
         api.deleteWardrobeItem(item.id)
+        cachedItemsById = cachedItemsById - item.id
     }
 
-    override suspend fun updateItem(item: ClothingItem) {
-        api.updateWardrobeItem(item.id, item.toCreateRequest())
+    override suspend fun updateItem(item: ClothingItem): ClothingItem {
+        val response = api.updateWardrobeItem(item.id, item.toCreateRequest())
+        val updated = response.toDomain().copy(imageUrl = resolveApiUrl(response.imageUrl))
+        cachedItemsById = cachedItemsById + (updated.id to updated)
+        Log.d(logTag, "API response: $updated")
+        return updated
     }
 
     override suspend fun setFavorite(itemId: Int, isFavorite: Boolean): ClothingItem {
-        return api.toggleWardrobeFavorite(
+        val response = api.toggleWardrobeFavorite(
             itemId = itemId,
             payload = FavoriteToggleRequestDto(isFavorite = isFavorite)
-        ).toDomain()
+        )
+        val updated = response.toDomain().copy(
+            imageUrl = resolveApiUrl(response.imageUrl) ?: cachedItemsById[itemId]?.imageUrl
+        )
+        cachedItemsById = cachedItemsById + (updated.id to updated)
+        Log.d(logTag, "API response: $updated")
+        return updated
     }
 
     override suspend fun getFavoriteItems(): List<ClothingItem> {

@@ -4,6 +4,7 @@
 package com.fitgpt.app.ui.wardrobe
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,8 +19,11 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
@@ -349,7 +353,10 @@ fun WardrobeScreen(
                         LazyColumn(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(displayItems) { item ->
+                            items(
+                                items = displayItems,
+                                key = { it.id }
+                            ) { item ->
                                 WardrobeItemCard(
                                     item = item,
                                     viewModel = viewModel,
@@ -554,74 +561,154 @@ fun WardrobeItemCard(
 ) {
 
     val explanation = viewModel.generateExplanation(item)
+    var actionsExpanded by rememberSaveable(item.id) { mutableStateOf(false) }
+    var revealDragDistance by remember(item.id) { mutableFloatStateOf(0f) }
 
     WebCard(
         modifier = Modifier.fillMaxWidth(),
         accentTop = false
     ) {
-        Row(
+        Column(
             modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize()
                 .padding(16.dp)
                 .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            RemoteImagePreview(
-                imageUrl = item.imageUrl,
-                contentDescription = item.category,
-                modifier = Modifier.size(72.dp)
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-
-                Text(
-                    text = "${item.name ?: item.category} • ${item.color}",
-                    style = MaterialTheme.typography.titleMedium
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RemoteImagePreview(
+                    imageUrl = item.imageUrl,
+                    contentDescription = item.category,
+                    modifier = Modifier.size(72.dp)
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
-                Text(
-                    text = "${item.season} • ${item.clothingType ?: "Type n/a"} • Fit ${item.fitTag ?: "n/a"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Column(modifier = Modifier.weight(1f)) {
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "${item.name ?: item.category} • ${item.color}",
+                        style = MaterialTheme.typography.titleMedium
+                    )
 
-                Text(
-                    text = explanation,
-                    style = MaterialTheme.typography.bodySmall
-                )
+                    Spacer(modifier = Modifier.height(4.dp))
 
-                if (showBodyFitAssist) {
+                    Text(
+                        text = "${item.season} • ${item.clothingType ?: "Type n/a"} • Fit ${item.fitTag ?: "n/a"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
                     Spacer(modifier = Modifier.height(8.dp))
-                    WebBadge(text = fitAssistLabel(item.fitTag))
+
+                    Text(
+                        text = explanation,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+
+                    if (showBodyFitAssist) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        WebBadge(text = fitAssistLabel(item.fitTag))
+                    }
+                    if (item.isOnePiece) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        WebBadge(text = "One-piece")
+                    }
+                    item.setIdentifier?.takeIf { it.isNotBlank() }?.let { setId ->
+                        Spacer(modifier = Modifier.height(6.dp))
+                        WebBadge(text = "Set: $setId")
+                    }
                 }
-                if (item.isOnePiece) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    WebBadge(text = "One-piece")
-                }
-                item.setIdentifier?.takeIf { it.isNotBlank() }?.let { setId ->
-                    Spacer(modifier = Modifier.height(6.dp))
-                    WebBadge(text = "Set: $setId")
+
+                IconButton(onClick = onToggleFavorite) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Favorite"
+                    )
                 }
             }
 
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Default.Edit, contentDescription = "Edit")
-            }
-
-            IconButton(onClick = onToggleFavorite) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = "Favorite"
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pointerInput(item.id) {
+                        detectVerticalDragGestures(
+                            onDragStart = {
+                                revealDragDistance = 0f
+                            },
+                            onVerticalDrag = { _, dragAmount ->
+                                revealDragDistance += dragAmount
+                            },
+                            onDragEnd = {
+                                when {
+                                    revealDragDistance <= -56f -> actionsExpanded = true
+                                    revealDragDistance >= 56f -> actionsExpanded = false
+                                }
+                                revealDragDistance = 0f
+                            },
+                            onDragCancel = {
+                                revealDragDistance = 0f
+                            }
+                        )
+                    },
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                shape = MaterialTheme.shapes.small
+            ) {
+                Text(
+                    text = if (actionsExpanded) "Swipe down here to hide actions" else "Swipe up here to reveal edit and delete",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
                 )
             }
 
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete")
+            AnimatedVisibility(visible = actionsExpanded) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onEdit,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Edit")
+                    }
+
+                    OutlinedButton(
+                        onClick = onDelete,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Delete")
+                    }
+                }
+            }
+
+            if (!actionsExpanded) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = { actionsExpanded = true }) {
+                        Text("Actions")
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = { actionsExpanded = false }) {
+                        Text("Hide")
+                    }
+                }
             }
         }
     }

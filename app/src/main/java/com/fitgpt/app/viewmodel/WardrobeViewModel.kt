@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
 data class WardrobeFilters(
-    val includeArchived: Boolean = true,
+    val includeArchived: Boolean = false,
     val search: String? = null,
     val category: String? = null,
     val color: String? = null,
@@ -81,6 +81,12 @@ data class RecommendationMeta(
     val promptFeedback: PromptFeedbackUiMeta? = null
 )
 
+data class LocationDebugInfo(
+    val lat: Double? = null,
+    val lon: Double? = null,
+    val city: String? = null
+)
+
 private data class WeatherRequestContext(
     val city: String?,
     val lat: Double?,
@@ -102,8 +108,10 @@ enum class ImageUploadTarget {
 class WardrobeViewModel(
     private val repository: WardrobeRepository
 ) : ViewModel() {
+    private val wardrobeLogTag = "WARDROBE_DEBUG"
     private val weatherLogTag = "FitGPTWeather"
     private val recommendationLogTag = "FitGPTRecommendation"
+    private val weatherDebugLogTag = "WEATHER_DEBUG"
 
     private val allItems = mutableListOf<ClothingItem>()
     private var currentFilters = WardrobeFilters()
@@ -134,6 +142,10 @@ class WardrobeViewModel(
     val savedOutfitsState: StateFlow<List<SavedOutfit>> = _savedOutfitsState
     private val _saveOutfitState = MutableStateFlow<UiState<Boolean?>>(UiState.Success(null))
     val saveOutfitState: StateFlow<UiState<Boolean?>> = _saveOutfitState
+    private val _wearOutfitState = MutableStateFlow<UiState<Boolean?>>(UiState.Success(null))
+    val wearOutfitState: StateFlow<UiState<Boolean?>> = _wearOutfitState
+    private val _planRecommendationState = MutableStateFlow<UiState<Boolean?>>(UiState.Success(null))
+    val planRecommendationState: StateFlow<UiState<Boolean?>> = _planRecommendationState
     private val _wardrobeGapState =
         MutableStateFlow<UiState<WardrobeGapAnalysis?>>(UiState.Success(null))
     val wardrobeGapState: StateFlow<UiState<WardrobeGapAnalysis?>> = _wardrobeGapState
@@ -179,6 +191,8 @@ class WardrobeViewModel(
         )
     )
     val weatherUiStatus: StateFlow<WeatherUiStatus> = _weatherUiStatus
+    private val _locationDebugInfo = MutableStateFlow(LocationDebugInfo())
+    val locationDebugInfo: StateFlow<LocationDebugInfo> = _locationDebugInfo
 
     init {
         refreshWardrobe()
@@ -191,6 +205,7 @@ class WardrobeViewModel(
     }
 
     fun applyWardrobeFilters(filters: WardrobeFilters) {
+        if (filters == currentFilters) return
         currentFilters = filters
         refreshWardrobe()
     }
@@ -199,30 +214,11 @@ class WardrobeViewModel(
         _wardrobeState.value = UiState.Loading
         viewModelScope.launch {
             try {
-                val items = repository.getWardrobeItems(
-                    includeArchived = currentFilters.includeArchived,
-                    search = currentFilters.search,
-                    category = currentFilters.category,
-                    color = currentFilters.color,
-                    clothingType = currentFilters.clothingType,
-                    season = currentFilters.season,
-                    fitTag = currentFilters.fitTag,
-                    layerType = currentFilters.layerType,
-                    isOnePiece = currentFilters.isOnePiece,
-                    setIdentifier = currentFilters.setIdentifier,
-                    styleTag = currentFilters.styleTag,
-                    seasonTag = currentFilters.seasonTag,
-                    occasionTag = currentFilters.occasionTag,
-                    accessoryType = currentFilters.accessoryType,
-                    favoritesOnly = currentFilters.favoritesOnly
-                )
-                allItems.clear()
-                allItems.addAll(items)
-                _wardrobeState.value = UiState.Success(items)
-                fetchWardrobeGaps()
-                fetchUnderusedAlerts()
-                fetchDuplicateCandidates()
-            } catch (_: Exception) {
+                val items = loadWardrobeItems()
+                publishWardrobeItems(items)
+                refreshWardrobeInsights()
+            } catch (exception: Exception) {
+                Log.e(wardrobeLogTag, "Failed to fetch wardrobe items", exception)
                 _wardrobeState.value = UiState.Error("Failed to load wardrobe items")
             }
         }
@@ -274,11 +270,14 @@ class WardrobeViewModel(
         _itemSaveState.value = UiState.Loading
         viewModelScope.launch {
             try {
-                repository.addItem(item)
+                val created = repository.addItem(item)
+                Log.d(wardrobeLogTag, "Item added: $created")
+                val items = loadWardrobeItems()
+                publishWardrobeItems(items)
+                refreshWardrobeInsights()
                 _itemSaveState.value = UiState.Success(1)
-                refreshWardrobe()
             } catch (exception: Exception) {
-                Log.e(recommendationLogTag, "add item failed", exception)
+                Log.e(wardrobeLogTag, "add item failed", exception)
                 _itemSaveState.value = UiState.Error("Failed to save item")
             }
         }
@@ -288,11 +287,15 @@ class WardrobeViewModel(
         _itemSaveState.value = UiState.Loading
         viewModelScope.launch {
             try {
-                repository.addItemWithPhoto(item, photo)
+                val created = repository.addItemWithPhoto(item, photo)
+                Log.d(wardrobeLogTag, "API response: $created")
+                Log.d(wardrobeLogTag, "Item added: $created")
+                val items = loadWardrobeItems()
+                publishWardrobeItems(items)
+                refreshWardrobeInsights()
                 _itemSaveState.value = UiState.Success(1)
-                refreshWardrobe()
             } catch (exception: Exception) {
-                Log.e(recommendationLogTag, "add item with photo failed", exception)
+                Log.e(wardrobeLogTag, "add item with photo failed", exception)
                 _itemSaveState.value = UiState.Error(resolveUploadError(exception, "Failed to save item"))
             }
         }
@@ -303,10 +306,13 @@ class WardrobeViewModel(
         viewModelScope.launch {
             try {
                 val savedItems = repository.addItemsBulk(items)
+                Log.d(wardrobeLogTag, "API response: $savedItems")
+                val refreshedItems = loadWardrobeItems()
+                publishWardrobeItems(refreshedItems)
+                refreshWardrobeInsights()
                 _bulkItemSaveState.value = UiState.Success(savedItems.size)
-                refreshWardrobe()
             } catch (exception: Exception) {
-                Log.e(recommendationLogTag, "bulk add item failed", exception)
+                Log.e(wardrobeLogTag, "bulk add item failed", exception)
                 _bulkItemSaveState.value = UiState.Error("Failed to save uploaded items")
             }
         }
@@ -322,6 +328,14 @@ class WardrobeViewModel(
 
     fun clearSaveOutfitState() {
         _saveOutfitState.value = UiState.Success(null)
+    }
+
+    fun clearWearOutfitState() {
+        _wearOutfitState.value = UiState.Success(null)
+    }
+
+    fun clearPlanRecommendationState() {
+        _planRecommendationState.value = UiState.Success(null)
     }
 
     fun suggestTagsForDraft(item: ClothingItem) {
@@ -394,8 +408,11 @@ class WardrobeViewModel(
         viewModelScope.launch {
             try {
                 repository.deleteItem(item)
-                refreshWardrobe()
-            } catch (_: Exception) {
+                val items = loadWardrobeItems()
+                publishWardrobeItems(items)
+                refreshWardrobeInsights()
+            } catch (exception: Exception) {
+                Log.e(wardrobeLogTag, "delete item failed", exception)
                 _wardrobeState.value = UiState.Error("Failed to delete item")
             }
         }
@@ -405,10 +422,14 @@ class WardrobeViewModel(
         _itemUpdateState.value = UiState.Loading
         viewModelScope.launch {
             try {
-                repository.updateItem(item)
+                val updated = repository.updateItem(item)
+                Log.d(wardrobeLogTag, "API response: $updated")
+                val items = loadWardrobeItems()
+                publishWardrobeItems(items)
+                refreshWardrobeInsights()
                 _itemUpdateState.value = UiState.Success(item.id)
-                refreshWardrobe()
-            } catch (_: Exception) {
+            } catch (exception: Exception) {
+                Log.e(wardrobeLogTag, "update item failed", exception)
                 _itemUpdateState.value = UiState.Error("Failed to update item")
             }
         }
@@ -434,15 +455,19 @@ class WardrobeViewModel(
         _recommendationState.value = UiState.Loading
         viewModelScope.launch {
             val sharedWeatherCity = resolvePreferredWeatherCity()
+            val hasFreshCoordinates = weatherLat != null && weatherLon != null
+            val requestedWeatherCity = weatherCity?.trim()?.takeIf { it.isNotEmpty() }
+                ?: if (hasFreshCoordinates) null else sharedWeatherCity
             try {
                 val resolvedTemp = manualTemp ?: latestWeatherSnapshot?.temperatureF
                 val resolvedWeatherCategory = weatherCategory ?: latestWeatherSnapshot?.weatherCategory
+                Log.d(weatherDebugLogTag, "Using city=${requestedWeatherCity.orEmpty()}")
                 val aiResult = repository.getAiRecommendation(
                     manualTemp = resolvedTemp,
                     timeContext = timeContext,
                     planDate = planDate,
                     exclude = exclude,
-                    weatherCity = weatherCity?.trim()?.takeIf { it.isNotEmpty() } ?: sharedWeatherCity,
+                    weatherCity = requestedWeatherCity,
                     weatherLat = weatherLat,
                     weatherLon = weatherLon,
                     weatherCategory = resolvedWeatherCategory,
@@ -497,7 +522,7 @@ class WardrobeViewModel(
                         timeContext = timeContext,
                         planDate = planDate,
                         exclude = exclude,
-                        weatherCity = weatherCity?.trim()?.takeIf { it.isNotEmpty() } ?: sharedWeatherCity,
+                        weatherCity = requestedWeatherCity,
                         weatherLat = weatherLat,
                         weatherLon = weatherLon,
                         weatherCategory = weatherCategory ?: latestWeatherSnapshot?.weatherCategory,
@@ -627,6 +652,14 @@ class WardrobeViewModel(
         _weatherCityState.value = city.trimStart()
     }
 
+    fun updateLocationDebugInfo(lat: Double?, lon: Double?, city: String?) {
+        _locationDebugInfo.value = LocationDebugInfo(
+            lat = lat,
+            lon = lon,
+            city = city?.trim()?.takeIf { it.isNotEmpty() }
+        )
+    }
+
     fun getCachedWeatherCity(): String? {
         return resolvePreferredWeatherCity()
     }
@@ -659,7 +692,9 @@ class WardrobeViewModel(
         city?.trim()?.takeIf { it.isNotEmpty() }?.let { enteredCity ->
             _weatherCityState.value = enteredCity
         }
-        val requestedCity = city?.trim()?.takeIf { it.isNotEmpty() } ?: resolvePreferredWeatherCity()
+        val hasFreshCoordinates = lat != null && lon != null
+        val requestedCity = city?.trim()?.takeIf { it.isNotEmpty() }
+            ?: if (hasFreshCoordinates) null else resolvePreferredWeatherCity()
         if (requestedCity != null || (lat != null && lon != null)) {
             lastWeatherRequestContext = WeatherRequestContext(
                 city = requestedCity,
@@ -668,6 +703,7 @@ class WardrobeViewModel(
                 source = source
             )
         }
+        Log.d(weatherDebugLogTag, "Using city=${requestedCity.orEmpty()}")
         if ((city == null || city.isBlank()) && (lat == null || lon == null)) {
             _weatherState.value = UiState.Success(latestWeatherSnapshot)
             _weatherUiStatus.value = WeatherUiStatus(
@@ -710,7 +746,6 @@ class WardrobeViewModel(
                     )
                     Log.i(weatherLogTag, "weather fetch success city=${weather.city} tempF=${weather.temperatureF}")
                 } else {
-                    _weatherCityState.value = weather.city
                     _weatherState.value = UiState.Success(weather)
                     _weatherUiStatus.value = WeatherUiStatus(
                         type = when (source) {
@@ -760,6 +795,7 @@ class WardrobeViewModel(
     }
 
     fun markOutfitAsWorn(items: List<ClothingItem>) {
+        _wearOutfitState.value = UiState.Loading
         val timestamp = System.currentTimeMillis()
         viewModelScope.launch {
             try {
@@ -767,8 +803,9 @@ class WardrobeViewModel(
                 refreshHistory()
                 refreshWardrobe()
                 fetchRecommendations()
+                _wearOutfitState.value = UiState.Success(true)
             } catch (_: Exception) {
-                _wardrobeState.value = UiState.Error("Failed to update wear history")
+                _wearOutfitState.value = UiState.Error("Failed to update wear history")
             }
         }
     }
@@ -829,8 +866,11 @@ class WardrobeViewModel(
         viewModelScope.launch {
             try {
                 repository.setFavorite(itemId = itemId, isFavorite = !item.isFavorite)
-                refreshWardrobe()
-            } catch (_: Exception) {
+                val items = loadWardrobeItems()
+                publishWardrobeItems(items)
+                refreshWardrobeInsights()
+            } catch (exception: Exception) {
+                Log.e(wardrobeLogTag, "favorite toggle failed", exception)
                 _wardrobeState.value = UiState.Error("Failed to update favorite")
             }
         }
@@ -844,9 +884,43 @@ class WardrobeViewModel(
         return allItems.filter { it.isFavorite && !it.isArchived }
     }
 
+    private suspend fun loadWardrobeItems(): List<ClothingItem> {
+        return repository.getWardrobeItems(
+            includeArchived = currentFilters.includeArchived,
+            search = currentFilters.search,
+            category = currentFilters.category,
+            color = currentFilters.color,
+            clothingType = currentFilters.clothingType,
+            season = currentFilters.season,
+            fitTag = currentFilters.fitTag,
+            layerType = currentFilters.layerType,
+            isOnePiece = currentFilters.isOnePiece,
+            setIdentifier = currentFilters.setIdentifier,
+            styleTag = currentFilters.styleTag,
+            seasonTag = currentFilters.seasonTag,
+            occasionTag = currentFilters.occasionTag,
+            accessoryType = currentFilters.accessoryType,
+            favoritesOnly = currentFilters.favoritesOnly
+        )
+    }
+
+    private fun publishWardrobeItems(items: List<ClothingItem>) {
+        allItems.clear()
+        allItems.addAll(items)
+        Log.d(wardrobeLogTag, "Fetched items count: ${items.size}")
+        _wardrobeState.value = UiState.Success(items)
+    }
+
+    private fun refreshWardrobeInsights() {
+        fetchWardrobeGaps()
+        fetchUnderusedAlerts()
+        fetchDuplicateCandidates()
+    }
+
     fun planCurrentRecommendation(planDate: String, occasion: String) {
         val recommendation = (recommendationState.value as? UiState.Success)?.data.orEmpty()
         if (recommendation.isEmpty()) return
+        _planRecommendationState.value = UiState.Loading
         viewModelScope.launch {
             try {
                 repository.planOutfit(
@@ -855,8 +929,9 @@ class WardrobeViewModel(
                     occasion = occasion
                 )
                 refreshPlannedOutfits()
+                _planRecommendationState.value = UiState.Success(true)
             } catch (_: Exception) {
-                _wardrobeState.value = UiState.Error("Failed to plan outfit")
+                _planRecommendationState.value = UiState.Error("Failed to plan outfit")
             }
         }
     }

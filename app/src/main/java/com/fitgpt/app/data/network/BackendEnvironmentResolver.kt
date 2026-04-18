@@ -1,5 +1,5 @@
 /**
- * Selects one runtime backend origin based on device environment and validates physical LAN config.
+ * Selects one runtime backend origin based on device environment and validates local overrides.
  */
 package com.fitgpt.app.data.network
 
@@ -16,14 +16,20 @@ object BackendEnvironmentResolver {
     )
 
     fun resolveBaseUrl(
+        apiBaseUrl: String,
         physicalLanBaseUrl: String,
         deviceInfo: DeviceInfo = currentDeviceInfo()
     ): String {
-        return if (isEmulator(deviceInfo)) {
-            EMULATOR_BASE_URL
-        } else {
-            validatePhysicalLanBaseUrl(physicalLanBaseUrl)
+        if (isEmulator(deviceInfo)) {
+            return EMULATOR_BASE_URL
         }
+
+        val normalizedLanBaseUrl = normalizeOrBlank(physicalLanBaseUrl)
+        if (normalizedLanBaseUrl.isNotBlank()) {
+            return validatePhysicalLanBaseUrl(normalizedLanBaseUrl)
+        }
+
+        return validateApiBaseUrl(apiBaseUrl)
     }
 
     private fun currentDeviceInfo(): DeviceInfo {
@@ -37,17 +43,11 @@ object BackendEnvironmentResolver {
     private fun isEmulator(deviceInfo: DeviceInfo): Boolean {
         return deviceInfo.fingerprint.contains("generic", ignoreCase = true) ||
             deviceInfo.model.contains("Emulator", ignoreCase = true) ||
-            deviceInfo.hardware.contains("goldfish", ignoreCase = true)
+            deviceInfo.hardware.contains("goldfish", ignoreCase = true) ||
+            deviceInfo.hardware.contains("ranchu", ignoreCase = true)
     }
 
-    private fun validatePhysicalLanBaseUrl(rawBaseUrl: String): String {
-        val normalized = normalizeOrBlank(rawBaseUrl)
-        if (normalized.isBlank()) {
-            throw IllegalStateException(
-                "API_LAN_BASE_URL is blank. Configure a LAN host such as http://192.168.x.x:8000/ for physical devices."
-            )
-        }
-
+    private fun validatePhysicalLanBaseUrl(normalized: String): String {
         val parsed = normalized.toHttpUrlOrNull()
             ?: throw IllegalStateException("API_LAN_BASE_URL is invalid: $normalized")
 
@@ -57,6 +57,26 @@ object BackendEnvironmentResolver {
                 "API_LAN_BASE_URL host '${parsed.host}' is not valid for physical devices. Use your Mac LAN IP."
             )
         }
+        return normalized
+    }
+
+    private fun validateApiBaseUrl(rawBaseUrl: String): String {
+        val normalized = normalizeOrBlank(rawBaseUrl)
+        if (normalized.isBlank()) {
+            throw IllegalStateException(
+                "API_BASE_URL is blank. Set API_BASE_URL for production or provide API_LAN_BASE_URL for physical devices."
+            )
+        }
+
+        val parsed = normalized.toHttpUrlOrNull()
+            ?: throw IllegalStateException("API_BASE_URL is invalid: $normalized")
+
+        if (parsed.host.lowercase() == "localhost") {
+            throw IllegalStateException(
+                "API_BASE_URL host '${parsed.host}' is not valid for Android devices. Use API_LAN_BASE_URL or a reachable deployed backend."
+            )
+        }
+
         return normalized
     }
 

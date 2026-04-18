@@ -2,6 +2,8 @@ import { AUTH_MODE_KEY, TOKEN_KEY } from "../utils/constants";
 import { apiFetch, clearToken, setToken, setUnauthorizedHandler } from "./apiFetch";
 
 describe("apiFetch", () => {
+  const originalWindowLocation = window.location;
+
   beforeEach(() => {
     localStorage.clear();
     global.fetch = jest.fn();
@@ -13,6 +15,10 @@ describe("apiFetch", () => {
     setUnauthorizedHandler(null);
     jest.resetAllMocks();
     delete global.fetch;
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: originalWindowLocation,
+    });
   });
 
   test("attaches the bearer token and returns parsed json", async () => {
@@ -74,5 +80,24 @@ describe("apiFetch", () => {
 
     expect(result).toBeNull();
     expect(request.headers.has("Content-Type")).toBe(false);
+  });
+
+  test("uses a relative path when no production API env is configured", async () => {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { hostname: "fitgpt.tech" },
+    });
+
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => "application/json" },
+      json: async () => ({ ok: true }),
+    });
+
+    await apiFetch("/me", { method: "GET" });
+
+    const [url] = global.fetch.mock.calls[0];
+    expect(url).toBe("/me");
   });
 });

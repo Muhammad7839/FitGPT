@@ -118,6 +118,14 @@ Optional runtime tuning:
 - `AI_TIMEOUT_SECONDS`
 - `GROQ_MODEL`
 
+### Client configuration alignment
+- Backend Google token validation reads `GOOGLE_CLIENT_ID`.
+- Android reads `GOOGLE_WEB_CLIENT_ID` first, then falls back to `GOOGLE_CLIENT_ID`, and writes both into `BuildConfig.GOOGLE_CLIENT_ID` and `BuildConfig.GOOGLE_WEB_CLIENT_ID`.
+- Web Google sign-in reads `REACT_APP_GOOGLE_CLIENT_ID`.
+- Android emulator networking is fixed to `http://10.0.2.2:8000/`.
+- Android physical devices prefer `API_LAN_BASE_URL`; when that is unset they fall back to `API_BASE_URL`.
+- Web API calls read `REACT_APP_API_BASE_URL`; when it is unset on local browser development they fall back to `http://127.0.0.1:8000`, and otherwise use same-origin relative paths.
+
 ### 3) Run API
 ```bash
 cd backend
