@@ -56,21 +56,40 @@ def get_bool_env(name: str, default: bool) -> bool:
     raise ValueError(f"{name} must be a boolean, got '{raw_value}'")
 
 
+def get_list_env(name: str, default: list[str]) -> list[str]:
+    raw_value = os.getenv(name)
+    if raw_value is None or raw_value.strip() == "":
+        return list(default)
+    return [item.strip() for item in raw_value.split(",") if item.strip()]
+
+
+def resolve_google_client_id() -> str:
+    return get_env("GOOGLE_CLIENT_ID", get_env("GOOGLE_WEB_CLIENT_ID", ""))
+
+
 def _default_sqlite_url(file_name: str) -> str:
     return f"sqlite:///{(BACKEND_ROOT / file_name).resolve()}"
 
+
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://fit-gpt-i3co.vercel.app",
+    "https://www.fitgpt.tech",
+]
 
 DATABASE_URL = get_env("DATABASE_URL", _default_sqlite_url("fitgpt.db"))
 SECRET_KEY = get_env("SECRET_KEY", "dev-only-change-me")
 JWT_ALGORITHM = get_env("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = get_int_env("ACCESS_TOKEN_EXPIRE_MINUTES", 60)
-GOOGLE_CLIENT_ID = get_env("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_ID = resolve_google_client_id()
 RESET_TOKEN_EXPIRE_MINUTES = get_int_env("RESET_TOKEN_EXPIRE_MINUTES", 30)
 ENVIRONMENT = get_env("ENVIRONMENT", "development").strip().lower()
 EXPOSE_RESET_TOKEN_IN_RESPONSE = get_bool_env(
     "EXPOSE_RESET_TOKEN_IN_RESPONSE",
     ENVIRONMENT not in {"prod", "production"},
 )
+CORS_ORIGINS = get_list_env("CORS_ORIGINS", DEFAULT_CORS_ORIGINS)
 OPENWEATHER_API_KEY = get_env("OPENWEATHER_API_KEY", "")
 OPENWEATHER_TIMEOUT_SECONDS = get_float_env("OPENWEATHER_TIMEOUT_SECONDS", 5)
 OPENWEATHER_FORECAST_CACHE_SECONDS = get_int_env("OPENWEATHER_FORECAST_CACHE_SECONDS", 900)

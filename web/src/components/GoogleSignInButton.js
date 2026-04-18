@@ -5,7 +5,9 @@ import { useAuth } from "../auth/AuthProvider";
 import { migrateGuestData, clearGuestData } from "../utils/userStorage";
 import { isNetworkError } from "../utils/helpers";
 
-const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "";
+const GOOGLE_CLIENT_ID =
+  (process.env.REACT_APP_GOOGLE_CLIENT_ID || "").trim() ||
+  (process.env.REACT_APP_GOOGLE_WEB_CLIENT_ID || "").trim();
 
 export default function GoogleSignInButton() {
   const navigate = useNavigate();

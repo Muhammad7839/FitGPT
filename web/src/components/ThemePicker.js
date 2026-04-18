@@ -8,6 +8,7 @@ const CATEGORY_LABELS = {
   classic: "Classic",
   preset: "Color",
   seasonal: "Seasonal & Mood",
+  accessibility: "Accessibility",
   custom: "Custom",
 };
 
@@ -81,7 +82,7 @@ export default function ThemePicker({ inline }) {
         {open && (
           <div className="themePickerDropdown">
             {/* Category sections */}
-            {["classic", "preset", "seasonal"].map((cat) => {
+            {["classic", "preset", "seasonal", "accessibility"].map((cat) => {
               const items = groups[cat];
               if (!items?.length) return null;
               return (

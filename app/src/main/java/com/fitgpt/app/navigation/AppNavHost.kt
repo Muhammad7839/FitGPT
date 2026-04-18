@@ -57,7 +57,9 @@ import com.fitgpt.app.viewmodel.ProfileViewModel
 import com.fitgpt.app.viewmodel.ProfileViewModelFactory
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import com.fitgpt.app.viewmodel.WardrobeViewModelFactory
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 private const val NAV_LOG_TAG = "FitGPTNav"
 private const val GOOGLE_AUTH_LOG_TAG = "GOOGLE_AUTH"
@@ -138,25 +140,60 @@ fun AppNavHost(
     suspend fun resolveSessionRoute(): String {
         val token = tokenStore.getAccessToken()
         if (token.isNullOrBlank()) {
-            hasToken = false
-            return Routes.LOGIN
+            val decision = resolveSessionBootstrapDecision(
+                hasStoredToken = false,
+                localOnboardingComplete = false,
+                status = SessionBootstrapStatus.NO_TOKEN
+            )
+            hasToken = decision.hasToken
+            return decision.route
         }
 
-        val validSession = authRepository.hasValidSession()
-        if (!validSession) {
-            hasToken = false
-            tokenStore.clearToken()
-            return Routes.LOGIN
+        var localOnboardingComplete = prefs.onboardingCompleted.first()
+        return try {
+            val profile = profileRepository.getProfile()
+            val decision = resolveSessionBootstrapDecision(
+                hasStoredToken = true,
+                localOnboardingComplete = localOnboardingComplete,
+                remoteOnboardingComplete = profile.onboardingComplete,
+                status = SessionBootstrapStatus.VALID_PROFILE
+            )
+            if (decision.shouldMarkOnboardingComplete) {
+                prefs.setOnboardingCompleted()
+                localOnboardingComplete = true
+            }
+            hasToken = decision.hasToken
+            decision.route
+        } catch (exception: HttpException) {
+            if (exception.code() == 401 || exception.code() == 403) {
+                val decision = resolveSessionBootstrapDecision(
+                    hasStoredToken = true,
+                    localOnboardingComplete = localOnboardingComplete,
+                    status = SessionBootstrapStatus.INVALID_SESSION
+                )
+                if (decision.shouldClearToken) {
+                    tokenStore.clearToken()
+                }
+                hasToken = decision.hasToken
+                decision.route
+            } else {
+                val decision = resolveSessionBootstrapDecision(
+                    hasStoredToken = true,
+                    localOnboardingComplete = localOnboardingComplete,
+                    status = SessionBootstrapStatus.PROFILE_UNAVAILABLE
+                )
+                hasToken = decision.hasToken
+                decision.route
+            }
+        } catch (_: Exception) {
+            val decision = resolveSessionBootstrapDecision(
+                hasStoredToken = true,
+                localOnboardingComplete = localOnboardingComplete,
+                status = SessionBootstrapStatus.PROFILE_UNAVAILABLE
+            )
+            hasToken = decision.hasToken
+            decision.route
         }
-
-        val onboardingComplete = runCatching {
-            profileRepository.getProfile().onboardingComplete
-        }.getOrNull()
-        hasToken = true
-        return resolveStartupRoute(
-            hasValidSession = true,
-            onboardingComplete = onboardingComplete
-        )
     }
 
     LaunchedEffect(Unit) {
@@ -242,6 +279,7 @@ fun AppNavHost(
                                 gender = answers.gender,
                                 heightCm = answers.heightCm
                             )
+                            onboardingViewModel.completeOnboarding(answers)
                             hasToken = true
                             startDestination = Routes.DASHBOARD
                             navController.navigate(Routes.DASHBOARD) {

@@ -57,6 +57,14 @@ function mergeSavedOutfits(remoteList, localList) {
   return merged;
 }
 
+function buildSyncFallback(result, error) {
+  return {
+    ...result,
+    localOnly: true,
+    syncError: error instanceof Error ? error.message : "Remote sync failed.",
+  };
+}
+
 export const savedOutfitsApi = {
   async listSaved(user) {
     if (!user) {
@@ -92,8 +100,8 @@ export const savedOutfitsApi = {
 
     try {
       return await apiFetch(`${PATHS.list}/${encodeURIComponent(signature)}`, { method: "DELETE" });
-    } catch {
-      return { deleted: true };
+    } catch (error) {
+      return buildSyncFallback({ deleted: true }, error);
     }
   },
 
@@ -121,7 +129,23 @@ export const savedOutfitsApi = {
           writeLocal([res.saved_outfit, ...current], user);
         }
         return res;
-      } catch {}
+      } catch (error) {
+        const list = readLocal(user);
+        const exists = list.some((o) => (o?.outfit_signature || "") === sig);
+        if (exists) {
+          return buildSyncFallback(
+            { created: false, message: "This outfit is already in your saved outfits." },
+            error
+          );
+        }
+
+        const record = buildLocalRecord(payload, normalized, sig);
+        writeLocal([record, ...list], user);
+        return buildSyncFallback(
+          { created: true, message: "Saved.", saved_outfit: record },
+          error
+        );
+      }
     }
 
     const list = readLocal(user);

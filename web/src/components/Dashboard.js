@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 
+import { useTheme } from "../App";
 import { useAuth } from "../auth/AuthProvider";
 import { savedOutfitsApi } from "../api/savedOutfitsApi";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
@@ -19,6 +20,7 @@ import {
   REUSE_OUTFIT_KEY,
   CURRENT_RECS_KEY,
   EVT_OUTFIT_HISTORY_CHANGED,
+  EVT_ACCESSIBILITY_CHANGED,
   EVT_RECOMMENDATION_FEEDBACK_CHANGED,
   EVT_RECOMMENDATION_PERSONALIZATION_CHANGED,
   UNDERUSED_ALERTS_KEY,
@@ -38,6 +40,7 @@ import {
   loadRecommendationFeedback,
   saveRecommendationFeedback,
 } from "../utils/userStorage";
+import { adaptAiText, effectiveAccessibilityPrefs, readAccessibilityPrefs } from "../utils/accessibilityPrefs";
 import { safeParse, formatToday, normalizeFitTag, normalizeItems, buildGoogleCalendarUrl, onTiltMove, onTiltLeave, tomorrowDateStr } from "../utils/helpers";
 import { getWeatherContext } from "../api/weatherApi";
 import { analyzeWardrobeGaps } from "../utils/wardrobeGapInsights";
@@ -976,6 +979,19 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   ]);
 
   const [selectedIdx, setSelectedIdx] = useState(null);
+  const { theme } = useTheme() || {};
+  const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(null));
+  const effectiveAccessibility = useMemo(
+    () => effectiveAccessibilityPrefs(accessibilityPrefs, theme),
+    [accessibilityPrefs, theme]
+  );
+
+  useEffect(() => {
+    setAccessibilityPrefs(readAccessibilityPrefs(null));
+    const onChange = () => setAccessibilityPrefs(readAccessibilityPrefs(null));
+    window.addEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
+    return () => window.removeEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
+  }, []);
 
   useEffect(() => {
     if (selectedIdx != null && selectedIdx >= outfits.length) {
@@ -1380,7 +1396,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     navigate("/wardrobe");
   };
 
-  const openPlanModal = () => {
+  const openPlanModal = async () => {
     if (isGuestMode) {
       setSaveMsg("Sign in to save outfit plans.");
       window.setTimeout(() => setSaveMsg(""), 2500);
@@ -1406,15 +1422,15 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       image_url: x?.image_url || "",
     }));
 
-    plannedOutfitsApi.planOutfit({
+    const result = await plannedOutfitsApi.planOutfit({
       item_ids: itemIds,
       item_details: itemDetails,
       planned_date: date,
       occasion: "",
       source: "planner",
-    }, user).catch(() => {});
+    }, user).catch(() => null);
 
-    setSaveMsg("Opening Google Calendar...");
+    setSaveMsg(result?.localOnly ? "Opening Google Calendar. Plan saved locally only." : "Opening Google Calendar...");
     window.setTimeout(() => setSaveMsg(""), 2500);
   };
 
@@ -1477,8 +1493,8 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     if (savedSigs.has(sig)) {
       setSavingSig(sig);
       try {
-        await savedOutfitsApi.unsaveOutfit(sig, user);
-        await outfitHistoryApi.removeBySignature(sig, user);
+        const savedResult = await savedOutfitsApi.unsaveOutfit(sig, user);
+        const historyResult = await outfitHistoryApi.removeBySignature(sig, user);
         setSavedSigs((prev) => {
           const next = new Set(prev);
           next.delete(sig);
@@ -1486,7 +1502,11 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         });
         setSavedOutfitEntries((prev) => prev.filter((entry) => (entry?.outfit_signature || "").toString().trim() !== sig));
         syncHistoryState(historyEntries.filter((entry) => idsSignature(Array.isArray(entry?.item_ids) ? entry.item_ids : []) !== sig));
-        setSaveMsg("Removed from saved outfits.");
+        setSaveMsg(
+          savedResult?.localOnly || historyResult?.localOnly
+            ? "Removed locally. Backend sync failed."
+            : "Removed from saved outfits."
+        );
         window.setTimeout(() => setSaveMsg(""), 2500);
       } catch (e) {
         setSaveMsg(e?.message || "Could not unsave outfit.");
@@ -1553,8 +1573,13 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         }
       }
 
-      if (msg) setSaveMsg(msg);
-      else setSaveMsg(created ? "Saved! Refreshing recommendations..." : "This outfit is already in your saved outfits.");
+      if (res?.localOnly && created) {
+        setSaveMsg("Saved locally only. Backend sync failed.");
+      } else if (msg) {
+        setSaveMsg(msg);
+      } else {
+        setSaveMsg(created ? "Saved! Refreshing recommendations..." : "This outfit is already in your saved outfits.");
+      }
 
       window.setTimeout(() => {
         setSaveMsg("");
@@ -2338,13 +2363,24 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             <div className="dashWhyContent">
               <div className="dashWhyLead">
                 <span key={`${selectedIdx}-${aiRefreshToken}-${recSeed}`} className="dashAiReveal">
-                  {(explanationSummaryText || explanationText).split(" ").map((word, i) => (
-                    <React.Fragment key={i}>
-                      <span className="dashAiWord" style={{ animationDelay: `${i * 28}ms` }}>
-                        {word}
-                      </span>{" "}
-                    </React.Fragment>
-                  ))}
+                  {adaptAiText(explanationSummaryText || explanationText, effectiveAccessibility)
+                    .split(/\n{2,}/)
+                    .filter(Boolean)
+                    .map((paragraph, paragraphIndex, paragraphs) => (
+                      <span key={paragraphIndex} className="dashAiParagraph">
+                        {paragraph.split(" ").map((word, wordIndex) => (
+                          <React.Fragment key={wordIndex}>
+                            <span
+                              className="dashAiWord"
+                              style={{ animationDelay: `${(paragraphIndex * 40 + wordIndex) * 28}ms` }}
+                            >
+                              {word}
+                            </span>{" "}
+                          </React.Fragment>
+                        ))}
+                        {paragraphIndex < paragraphs.length - 1 ? "\n" : null}
+                      </span>
+                    ))}
                 </span>
               </div>
 
@@ -2353,7 +2389,9 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                   {explanationDetails.map((detail) => (
                     <div key={detail.title} className="dashWhyCard">
                       <div className="dashWhyCardTitle">{detail.title}</div>
-                      <div className="dashWhyCardText">{detail.body}</div>
+                      <div className="dashWhyCardText" style={{ whiteSpace: "pre-line" }}>
+                        {adaptAiText(detail.body, effectiveAccessibility)}
+                      </div>
                     </div>
                   ))}
                   {outfitSummaries[selectedIdx]?.confidence && (

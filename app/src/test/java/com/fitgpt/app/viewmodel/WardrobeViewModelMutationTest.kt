@@ -230,4 +230,73 @@ class WardrobeViewModelMutationTest {
             viewModel.planRecommendationState.value
         )
     }
+
+    @Test
+    fun fetchRecommendations_fallsBackToLegacyEndpointWhenAiRequestFails() = runTest {
+        val repo = object : WardrobeRepository by FakeWardrobeRepository() {
+            override suspend fun getAiRecommendation(
+                manualTemp: Int?,
+                timeContext: String?,
+                planDate: String?,
+                exclude: String?,
+                weatherCity: String?,
+                weatherLat: Double?,
+                weatherLon: Double?,
+                weatherCategory: String?,
+                occasion: String?,
+                stylePreference: String?,
+                preferredSeasons: List<String>
+            ) = error("ai unavailable")
+        }
+        val viewModel = WardrobeViewModel(repo)
+        advanceUntilIdle()
+
+        viewModel.fetchRecommendations()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.recommendationState.value is UiState.Success)
+        assertTrue(viewModel.recommendationMeta.value.fallbackUsed)
+        assertEquals("legacy_endpoint_fallback", viewModel.recommendationMeta.value.warning)
+    }
+
+    @Test
+    fun fetchRecommendations_setsErrorWhenAiAndLegacyEndpointsFail() = runTest {
+        val repo = object : WardrobeRepository by FakeWardrobeRepository() {
+            override suspend fun getAiRecommendation(
+                manualTemp: Int?,
+                timeContext: String?,
+                planDate: String?,
+                exclude: String?,
+                weatherCity: String?,
+                weatherLat: Double?,
+                weatherLon: Double?,
+                weatherCategory: String?,
+                occasion: String?,
+                stylePreference: String?,
+                preferredSeasons: List<String>
+            ) = error("ai unavailable")
+
+            override suspend fun getRecommendations(
+                manualTemp: Int?,
+                timeContext: String?,
+                planDate: String?,
+                exclude: String?,
+                weatherCity: String?,
+                weatherLat: Double?,
+                weatherLon: Double?,
+                weatherCategory: String?,
+                occasion: String?
+            ): List<ClothingItem> = error("legacy unavailable")
+        }
+        val viewModel = WardrobeViewModel(repo)
+        advanceUntilIdle()
+
+        viewModel.fetchRecommendations()
+        advanceUntilIdle()
+
+        assertEquals(
+            UiState.Error("Failed to load recommendations"),
+            viewModel.recommendationState.value
+        )
+    }
 }

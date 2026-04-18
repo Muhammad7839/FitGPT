@@ -1,13 +1,26 @@
 import { TOKEN_KEY, AUTH_MODE_KEY } from "../utils/constants";
 
+const REQUEST_TIMEOUT_MS = 15000;
+
+function isPrivateNetworkHost(hostname) {
+  return /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+    hostname.endsWith(".local");
+}
+
 function resolveBaseUrl() {
   const configured = (process.env.REACT_APP_API_BASE_URL || "").toString().trim();
   if (configured) return configured;
 
   if (typeof window !== "undefined") {
-    const { hostname } = window.location;
+    const configuredLan = (process.env.REACT_APP_API_LAN_BASE_URL || "").toString().trim();
+    const { hostname, protocol } = window.location;
     if (hostname === "localhost" || hostname === "127.0.0.1") {
       return "http://127.0.0.1:8000";
+    }
+    if (isPrivateNetworkHost(hostname)) {
+      return configuredLan || `${protocol === "https:" ? "https" : "http"}://${hostname}:8000`;
     }
   }
 
@@ -83,9 +96,13 @@ async function readErrorMessage(res) {
 
 export async function apiFetch(path, options = {}) {
   const url = buildUrl(path);
-
   const token = getToken();
   const headers = new Headers(options.headers || {});
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const externalSignal = options.signal;
+  let timeoutId = null;
+  let didTimeout = false;
+  let removeExternalAbortListener = null;
 
   const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
 
@@ -97,11 +114,54 @@ export async function apiFetch(path, options = {}) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const res = await fetch(url, {
-    ...options,
-    headers,
-    credentials: "include",
-  });
+  if (controller) {
+    if (externalSignal?.aborted) {
+      controller.abort(externalSignal.reason);
+    } else if (externalSignal?.addEventListener) {
+      const abortFromExternalSignal = () => controller.abort(externalSignal.reason);
+      externalSignal.addEventListener("abort", abortFromExternalSignal, { once: true });
+      removeExternalAbortListener = () => {
+        externalSignal.removeEventListener("abort", abortFromExternalSignal);
+      };
+    }
+
+    timeoutId = setTimeout(() => {
+      didTimeout = true;
+      controller.abort();
+    }, REQUEST_TIMEOUT_MS);
+  }
+
+  let res;
+  try {
+    res = await fetch(url, {
+      ...options,
+      headers,
+      credentials: "include",
+      signal: controller?.signal || externalSignal,
+    });
+  } catch (error) {
+    if (timeoutId) clearTimeout(timeoutId);
+    removeExternalAbortListener?.();
+
+    if (didTimeout) {
+      const timeoutError = new Error("Request timed out. Please try again.");
+      timeoutError.code = "request_timeout";
+      throw timeoutError;
+    }
+
+    if (error?.name === "AbortError") {
+      const abortError = new Error("Request was cancelled.");
+      abortError.code = "request_aborted";
+      throw abortError;
+    }
+
+    const networkError = new Error("Network request failed. Check your connection and backend.");
+    networkError.code = "network_error";
+    throw networkError;
+  }
+
+  if (timeoutId) clearTimeout(timeoutId);
+  removeExternalAbortListener?.();
 
   if (!res.ok) {
     if (res.status === 401) {

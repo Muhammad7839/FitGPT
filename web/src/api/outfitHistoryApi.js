@@ -54,6 +54,14 @@ function mergeHistoryEntries(remoteList, localList) {
   return merged;
 }
 
+function buildSyncFallback(result, error) {
+  return {
+    ...result,
+    localOnly: true,
+    syncError: error instanceof Error ? error.message : "Remote sync failed.",
+  };
+}
+
 export const outfitHistoryApi = {
   async listHistory(user) {
     if (!user) {
@@ -93,8 +101,8 @@ export const outfitHistoryApi = {
 
     try {
       return await apiFetch(`${PATHS.list}/${encodeURIComponent(signature)}`, { method: "DELETE" });
-    } catch {
-      return { deleted: true };
+    } catch (error) {
+      return buildSyncFallback({ deleted: true }, error);
     }
   },
 
@@ -111,8 +119,8 @@ export const outfitHistoryApi = {
 
     try {
       return await apiFetch(PATHS.list, { method: "DELETE" });
-    } catch {
-      return { cleared: true };
+    } catch (error) {
+      return buildSyncFallback({ cleared: true }, error);
     }
   },
 
@@ -138,7 +146,14 @@ export const outfitHistoryApi = {
           writeLocal([res.history_entry, ...readLocal(user)], user);
         }
         return res;
-      } catch {}
+      } catch (error) {
+        const record = buildLocalRecord(payload, normalized, user);
+        writeLocal([record, ...readLocal(user)], user);
+        return buildSyncFallback(
+          { created: true, message: "Added to history.", history_entry: record },
+          error
+        );
+      }
     }
 
     const record = buildLocalRecord(payload, normalized, user);

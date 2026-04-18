@@ -82,9 +82,9 @@ export default function SavedOutfits() {
     if (!sig) return;
 
     try {
-      await savedOutfitsApi.unsaveOutfit(sig, user);
+      const result = await savedOutfitsApi.unsaveOutfit(sig, user);
       setSaved((prev) => prev.filter((o) => (o?.outfit_signature || "") !== sig));
-      setMsg("Outfit removed.");
+      setMsg(result?.localOnly ? "Outfit removed locally only. Backend sync failed." : "Outfit removed.");
       window.setTimeout(() => setMsg(""), 2500);
     } catch (e) {
       setMsg(e?.message || "Could not remove outfit.");
@@ -105,7 +105,7 @@ export default function SavedOutfits() {
     return { id: trimmed, name: "Item", image_url: "" };
   }
 
-  function handlePlanForLater(outfit) {
+  async function handlePlanForLater(outfit) {
     const date = tomorrowDateStr();
     const occasion = outfit?.context?.occasion || "";
 
@@ -128,16 +128,15 @@ export default function SavedOutfits() {
     });
     window.open(calUrl, "_blank", "noopener");
 
-   
-    plannedOutfitsApi.planOutfit({
+    const result = await plannedOutfitsApi.planOutfit({
       item_ids: itemIds,
       item_details: itemDetails,
       planned_date: date,
       occasion,
       source: "planner",
-    }, user).catch(() => {});
+    }, user).catch(() => null);
 
-    setMsg("Opening Google Calendar...");
+    setMsg(result?.localOnly ? "Opening Google Calendar. Plan saved locally only." : "Opening Google Calendar...");
     window.setTimeout(() => setMsg(""), 2500);
   }
 
@@ -298,4 +297,3 @@ export default function SavedOutfits() {
     </div>
   );
 }
-

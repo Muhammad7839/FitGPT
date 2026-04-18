@@ -21,3 +21,22 @@ def test_collect_optional_config_warnings_returns_empty_when_integrations_presen
     monkeypatch.setattr(config, "GOOGLE_CLIENT_ID", "client-id")
 
     assert config.collect_optional_config_warnings() == []
+
+
+def test_resolve_google_client_id_falls_back_to_google_web_client_id(monkeypatch):
+    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    monkeypatch.setenv("GOOGLE_WEB_CLIENT_ID", "web-client-id")
+
+    assert config.resolve_google_client_id() == "web-client-id"
+
+
+def test_get_list_env_parses_cors_origins(monkeypatch):
+    monkeypatch.setenv(
+        "CORS_ORIGINS",
+        " https://preview.fitgpt.tech , http://192.168.1.50:3000 , "
+    )
+
+    assert config.get_list_env("CORS_ORIGINS", config.DEFAULT_CORS_ORIGINS) == [
+        "https://preview.fitgpt.tech",
+        "http://192.168.1.50:3000",
+    ]

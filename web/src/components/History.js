@@ -144,9 +144,9 @@ export function HistoryContent() {
 
   const handleClearHistory = async () => {
     try {
-      await outfitHistoryApi.clearHistory(user);
+      const result = await outfitHistoryApi.clearHistory(user);
       setHistory([]);
-      setMsg("History cleared.");
+      setMsg(result?.localOnly ? "History cleared locally only. Backend sync failed." : "History cleared.");
     } catch {
       setMsg("Could not clear history.");
     }
@@ -336,4 +336,3 @@ export default function History() {
     </div>
   );
 }
-

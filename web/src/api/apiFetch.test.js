@@ -15,10 +15,12 @@ describe("apiFetch", () => {
     setUnauthorizedHandler(null);
     jest.resetAllMocks();
     delete global.fetch;
+    delete process.env.REACT_APP_API_LAN_BASE_URL;
     Object.defineProperty(window, "location", {
       configurable: true,
       value: originalWindowLocation,
     });
+    jest.useRealTimers();
   });
 
   test("attaches the bearer token and returns parsed json", async () => {
@@ -99,5 +101,70 @@ describe("apiFetch", () => {
 
     const [url] = global.fetch.mock.calls[0];
     expect(url).toBe("/me");
+  });
+
+  test("uses the current LAN host for private-network development", async () => {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { hostname: "192.168.1.24", protocol: "http:" },
+    });
+
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => "application/json" },
+      json: async () => ({ ok: true }),
+    });
+
+    await apiFetch("/me", { method: "GET" });
+
+    const [url] = global.fetch.mock.calls[0];
+    expect(url).toBe("http://192.168.1.24:8000/me");
+  });
+
+  test("prefers the configured LAN API base URL for private-network development", async () => {
+    process.env.REACT_APP_API_LAN_BASE_URL = "http://192.168.1.50:9000";
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { hostname: "192.168.1.24", protocol: "http:" },
+    });
+
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => "application/json" },
+      json: async () => ({ ok: true }),
+    });
+
+    await apiFetch("/me", { method: "GET" });
+
+    const [url] = global.fetch.mock.calls[0];
+    expect(url).toBe("http://192.168.1.50:9000/me");
+  });
+
+  test("normalizes backend timeouts into an explicit error", async () => {
+    jest.useFakeTimers();
+    global.fetch.mockImplementation((_url, request) => new Promise((_resolve, reject) => {
+      request.signal.addEventListener("abort", () => {
+        reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+      });
+    }));
+
+    const pending = apiFetch("/slow", { method: "GET" });
+    jest.advanceTimersByTime(15000);
+
+    await expect(pending).rejects.toMatchObject({
+      message: "Request timed out. Please try again.",
+      code: "request_timeout",
+    });
+  });
+
+  test("normalizes network failures into an explicit error", async () => {
+    global.fetch.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await expect(apiFetch("/me", { method: "GET" })).rejects.toMatchObject({
+      message: "Network request failed. Check your connection and backend.",
+      code: "network_error",
+    });
   });
 });
