@@ -3,7 +3,7 @@
 import json
 from typing import Optional
 
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean
+from sqlalchemy import Column, Index, Integer, String, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 
 from app.database.database import Base
@@ -64,9 +64,14 @@ class ClothingItem(Base):
     is_archived = Column(Boolean, nullable=False, default=False)
     last_worn_timestamp = Column(Integer, nullable=True)
 
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
     owner = relationship("User", back_populates="wardrobe_items")
+
+    __table_args__ = (
+        Index("ix_clothing_items_owner_archived", "owner_id", "is_archived"),
+        Index("ix_clothing_items_owner_favorite", "owner_id", "is_favorite"),
+    )
 
     @staticmethod
     def _decode_json_list(raw: Optional[str]) -> list[str]:
@@ -136,7 +141,7 @@ class OutfitHistory(Base):
     __tablename__ = "outfit_history"
 
     id = Column(Integer, primary_key=True, index=True)
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     item_ids_csv = Column(String, nullable=False)
     worn_at_timestamp = Column(Integer, nullable=False)
 
@@ -145,7 +150,7 @@ class SavedOutfit(Base):
     __tablename__ = "saved_outfits"
 
     id = Column(Integer, primary_key=True, index=True)
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     item_ids_csv = Column(String, nullable=False)
     saved_at_timestamp = Column(Integer, nullable=False)
 
@@ -154,7 +159,7 @@ class PlannedOutfit(Base):
     __tablename__ = "planned_outfits"
 
     id = Column(Integer, primary_key=True, index=True)
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     item_ids_csv = Column(String, nullable=False)
     planned_date = Column(String, nullable=False)
     occasion = Column(String, nullable=True)
