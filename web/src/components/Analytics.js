@@ -36,29 +36,23 @@ function monthLabel(dateStr) {
   }
 }
 
+function readThemeColors(root) {
+  const cs = getComputedStyle(root);
+  return {
+    accent: cs.getPropertyValue("--accent").trim() || "#8b1e1e",
+    text: cs.getPropertyValue("--text").trim() || "#111",
+    muted: cs.getPropertyValue("--muted").trim() || "#888",
+    bg: cs.getPropertyValue("--bg").trim() || "#fff",
+    surface: cs.getPropertyValue("--surface").trim() || "#fff",
+  };
+}
+
 function useThemeColors() {
   const [colors, setColors] = useState({ accent: "#8b1e1e", text: "#111", muted: "#888", bg: "#fff", surface: "#fff" });
   useEffect(() => {
     const root = document.documentElement;
-    const cs = getComputedStyle(root);
-    setColors({
-      accent: cs.getPropertyValue("--accent").trim() || "#8b1e1e",
-      text: cs.getPropertyValue("--text").trim() || "#111",
-      muted: cs.getPropertyValue("--muted").trim() || "#888",
-      bg: cs.getPropertyValue("--bg").trim() || "#fff",
-      surface: cs.getPropertyValue("--surface").trim() || "#fff",
-    });
-
-    const obs = new MutationObserver(() => {
-      const cs2 = getComputedStyle(root);
-      setColors({
-        accent: cs2.getPropertyValue("--accent").trim() || "#8b1e1e",
-        text: cs2.getPropertyValue("--text").trim() || "#111",
-        muted: cs2.getPropertyValue("--muted").trim() || "#888",
-        bg: cs2.getPropertyValue("--bg").trim() || "#fff",
-        surface: cs2.getPropertyValue("--surface").trim() || "#fff",
-      });
-    });
+    setColors(readThemeColors(root));
+    const obs = new MutationObserver(() => setColors(readThemeColors(root)));
     obs.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
     return () => obs.disconnect();
   }, []);

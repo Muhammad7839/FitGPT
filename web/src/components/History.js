@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
@@ -34,7 +34,7 @@ export function HistoryContent() {
 
   const wardrobeById = useMemo(() => buildWardrobeMap(wardrobe), [wardrobe]);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     setMsg("");
     try {
@@ -54,12 +54,11 @@ export function HistoryContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [refresh]);
 
   const filtered = useMemo(() => {
     const d = range === "7" ? 7 : range === "30" ? 30 : 0;

@@ -1,9 +1,11 @@
 // web/src/components/CustomThemeEditor.js
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { useTheme } from "../App";
 import { buildCustomTheme } from "../theme/themeDefinitions";
 import { deriveAccentVars } from "../theme/colorUtils";
+
+const CTE_TITLE_ID = "cte-title";
 
 function ColorRow({ label, value, onChange }) {
   return (
@@ -34,6 +36,17 @@ function ColorRow({ label, value, onChange }) {
 
 export default function CustomThemeEditor({ onClose }) {
   const { saveCustomTheme, setTheme } = useTheme();
+  const lastFocusedRef = useRef(null);
+
+  useEffect(() => {
+    lastFocusedRef.current = document.activeElement;
+    return () => {
+      const target = lastFocusedRef.current;
+      if (target && typeof target.focus === "function") {
+        target.focus();
+      }
+    };
+  }, []);
 
   const [name, setName] = useState("");
   const [base, setBase] = useState("dark");
@@ -91,10 +104,16 @@ export default function CustomThemeEditor({ onClose }) {
   }, [previewTheme, name, saveCustomTheme, setTheme, onClose]);
 
   return ReactDOM.createPortal(
-    <div className="modalOverlay" onClick={onClose}>
+    <div
+      className="modalOverlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={CTE_TITLE_ID}
+      onClick={onClose}
+    >
       <div className="modalCard cteModal" onClick={(e) => e.stopPropagation()}>
         <div className="cteHeader">
-          <h2 className="cteTitle">Create Custom Theme</h2>
+          <h2 id={CTE_TITLE_ID} className="cteTitle">Create Custom Theme</h2>
           <button type="button" className="cteCloseBtn" onClick={onClose}>
             &times;
           </button>

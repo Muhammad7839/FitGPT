@@ -1966,7 +1966,11 @@ function rejectionPenalty(outfit, rejectedOutfits, now) {
     if (sim === 0) continue;
 
     const age = entry?.timestamp ? (now - entry.timestamp) / (1000 * 60 * 60 * 24) : 0;
-    const decay = age > REJECTION_DECAY_DAYS ? 0.3 : age > 14 ? 0.6 : 1;
+    let decay;
+    if (age >= 45) decay = 0.05;
+    else if (age > REJECTION_DECAY_DAYS) decay = 0.15;
+    else if (age > 14) decay = 0.5;
+    else decay = 1;
 
     if (sim >= 0.8) total += 25 * decay;
     else if (sim >= 0.5) total += 12 * decay;

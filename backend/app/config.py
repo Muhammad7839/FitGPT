@@ -1,28 +1,48 @@
 """Centralized runtime configuration for backend environment variables."""
 
+import logging
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 
-def _load_local_env_file() -> None:
-    """Load key=value pairs from backend/.env into process env if missing."""
-    env_path = Path(__file__).resolve().parents[1] / ".env"
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+_ENV_LOADED = False
+
+
+def _fill_empty_env_from_file(env_path: Path) -> None:
+    """Fill empty/missing env vars from a .env file.
+
+    dotenv's override=False leaves blank shell vars (e.g. GOOGLE_CLIENT_ID="") as
+    blank, which silently disables features. We treat empty-string shell vars
+    as absent and substitute the .env value.
+    """
     if not env_path.exists():
         return
-
     for raw_line in env_path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
-
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip().strip("\"'")
-        if key and key not in os.environ:
+        if not key:
+            continue
+        current = os.environ.get(key)
+        if current is None or current.strip() == "":
             os.environ[key] = value
 
 
-_load_local_env_file()
+def load_environment() -> None:
+    global _ENV_LOADED
+    env_path = BACKEND_ROOT / ".env"
+    if not _ENV_LOADED:
+        load_dotenv(dotenv_path=env_path, override=False)
+        _fill_empty_env_from_file(env_path)
+        _ENV_LOADED = True
+
+
+load_environment()
 
 
 def get_env(name: str, default: str) -> str:
@@ -57,7 +77,11 @@ def get_bool_env(name: str, default: bool) -> bool:
     raise ValueError(f"{name} must be a boolean, got '{raw_value}'")
 
 
-DATABASE_URL = get_env("DATABASE_URL", "sqlite:///./fitgpt.db")
+def _default_sqlite_url(file_name: str) -> str:
+    return f"sqlite:///{(BACKEND_ROOT / file_name).resolve()}"
+
+
+DATABASE_URL = get_env("DATABASE_URL", _default_sqlite_url("fitgpt.db"))
 SECRET_KEY = get_env("SECRET_KEY", "dev-only-change-me")
 JWT_ALGORITHM = get_env("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = get_int_env("ACCESS_TOKEN_EXPIRE_MINUTES", 60)
@@ -76,3 +100,12 @@ AI_TEMPERATURE = get_float_env("AI_TEMPERATURE", 0.4)
 ENVIRONMENT = get_env("ENVIRONMENT", "development").strip().lower()
 if ENVIRONMENT in {"prod", "production"} and SECRET_KEY == "dev-only-change-me":
     raise RuntimeError("SECRET_KEY must be set in production")
+
+
+def log_optional_config_warnings(logger: logging.Logger) -> None:
+    if not OPENWEATHER_API_KEY:
+        logger.warning("OPENWEATHER_API_KEY missing — using fallback weather mode")
+    if not GROQ_API_KEY:
+        logger.warning("GROQ_API_KEY missing — using fallback AURA mode")
+    if not GOOGLE_CLIENT_ID:
+        logger.warning("GOOGLE_CLIENT_ID missing — Google sign-in token verification is disabled")
