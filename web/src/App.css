@@ -4833,6 +4833,7 @@ img.dashSquareImg {
   left: 50%;
   transform: translateX(-50%);
   bottom: 86px;
+  z-index: 10001;
   background: rgba(17, 24, 39, 0.92);
   color: #fff;
   padding: 12px 14px;
