@@ -3,6 +3,11 @@ import java.io.File
 import java.util.Properties
 
 fun projectPropertyOrLocal(project: Project, key: String, defaultValue: String = ""): String {
+    val envValue = System.getenv(key)?.trim().orEmpty()
+    if (envValue.isNotBlank()) {
+        return envValue
+    }
+
     val directValue = (project.findProperty(key) as String?)?.trim().orEmpty()
     if (directValue.isNotBlank()) {
         return directValue
@@ -38,15 +43,16 @@ android {
         versionName = "1.0"
         val googleWebClientId = projectPropertyOrLocal(
             project,
-            "GOOGLE_CLIENT_ID",
-            projectPropertyOrLocal(project, "GOOGLE_WEB_CLIENT_ID")
+            "GOOGLE_WEB_CLIENT_ID",
+            projectPropertyOrLocal(project, "GOOGLE_CLIENT_ID")
         )
-        val apiBaseUrlRaw = projectPropertyOrLocal(project, "API_BASE_URL", "http://10.0.2.2:8000/")
+        val apiBaseUrlRaw = projectPropertyOrLocal(project, "API_BASE_URL")
         val apiBaseUrl = if (apiBaseUrlRaw.endsWith("/")) apiBaseUrlRaw else "$apiBaseUrlRaw/"
         val apiLanBaseUrlRaw = projectPropertyOrLocal(project, "API_LAN_BASE_URL")
         val apiLanBaseUrl = apiLanBaseUrlRaw.trim().let { value ->
             if (value.isBlank()) "" else if (value.endsWith("/")) value else "$value/"
         }
+        buildConfigField("String", "GOOGLE_CLIENT_ID", "\"$googleWebClientId\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         buildConfigField("String", "API_LAN_BASE_URL", "\"$apiLanBaseUrl\"")

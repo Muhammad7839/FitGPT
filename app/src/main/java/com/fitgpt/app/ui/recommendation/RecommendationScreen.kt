@@ -44,7 +44,8 @@ import com.fitgpt.app.viewmodel.WeatherStatusType
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-private const val LOCATION_LOG_TAG = "FitGPTLocation"
+private const val LOCATION_LOG_TAG = "LOCATION_DEBUG"
+private const val WEATHER_DEBUG_LOG_TAG = "WEATHER_DEBUG"
 
 @Composable
 fun RecommendationScreen(
@@ -55,6 +56,8 @@ fun RecommendationScreen(
     val recommendationMeta by viewModel.recommendationMeta.collectAsState()
     val recommendationOptions by viewModel.recommendationOptionsState.collectAsState()
     val saveOutfitState by viewModel.saveOutfitState.collectAsState()
+    val wearOutfitState by viewModel.wearOutfitState.collectAsState()
+    val planRecommendationState by viewModel.planRecommendationState.collectAsState()
     val weatherState by viewModel.weatherState.collectAsState()
     val weatherCity by viewModel.weatherCityState.collectAsState()
     val weatherUiStatus by viewModel.weatherUiStatus.collectAsState()
@@ -78,6 +81,8 @@ fun RecommendationScreen(
     val gpsLocationProvider = remember(context) { GpsLocationProvider(context) }
     val snackbarHostState = remember { SnackbarHostState() }
     val isSavingOutfit = saveOutfitState is UiState.Loading
+    val isWearingOutfit = wearOutfitState is UiState.Loading
+    val isPlanningRecommendation = planRecommendationState is UiState.Loading
 
     fun applyContextRequest(
         city: String?,
@@ -96,11 +101,20 @@ fun RecommendationScreen(
             listOf(resolvedSeason.lowercase())
         }
 
-        val resolvedCity = city?.trim()?.takeIf { it.isNotEmpty() } ?: viewModel.getCachedWeatherCity()
+        val hasFreshCoordinates = lat != null && lon != null
+        val cachedCity = viewModel.getCachedWeatherCity()
+        val resolvedCity = city?.trim()?.takeIf { it.isNotEmpty() }
+            ?: if (hasFreshCoordinates) null else cachedCity
         val resolvedLat = if (resolvedCity == null) lat else null
         val resolvedLon = if (resolvedCity == null) lon else null
 
         resolvedCity?.let { viewModel.setWeatherCityInput(it) }
+        viewModel.updateLocationDebugInfo(
+            lat = lat,
+            lon = lon,
+            city = city?.trim()?.takeIf { it.isNotEmpty() } ?: resolvedCity
+        )
+        Log.d(WEATHER_DEBUG_LOG_TAG, "Using city=${resolvedCity.orEmpty()}")
 
         if (resolvedCity != null) {
             viewModel.fetchWeather(
@@ -129,7 +143,7 @@ fun RecommendationScreen(
     fun loadUsingCurrentLocation() {
         scope.launch {
             locationMessage = "Detecting location..."
-            Log.i(LOCATION_LOG_TAG, "recommendation screen location requested")
+            Log.d(LOCATION_LOG_TAG, "recommendation screen location requested")
             val locationContext = gpsLocationProvider.getCurrentLocationContext()
             if (locationContext == null) {
                 locationMessage = "Location unavailable. You can still use city manually."
@@ -137,10 +151,16 @@ fun RecommendationScreen(
                 Log.w(LOCATION_LOG_TAG, "recommendation location unavailable")
                 return@launch
             }
+            Log.d(LOCATION_LOG_TAG, "lat=${locationContext.lat} lon=${locationContext.lon}")
             val cityLabel = locationContext.city?.takeIf { it.isNotBlank() }
             locationMessage = cityLabel?.let { "Using current location: $it" } ?: "Location found. Using coordinates while city resolves."
             cityLabel?.let { viewModel.setWeatherCityInput(it) }
-            Log.i(LOCATION_LOG_TAG, "recommendation location resolved")
+            viewModel.updateLocationDebugInfo(
+                lat = locationContext.lat,
+                lon = locationContext.lon,
+                city = cityLabel
+            )
+            Log.d(LOCATION_LOG_TAG, "recommendation location resolved")
             applyContextRequest(city = cityLabel, lat = locationContext.lat, lon = locationContext.lon)
         }
     }
@@ -219,6 +239,38 @@ fun RecommendationScreen(
         }
     }
 
+    LaunchedEffect(wearOutfitState) {
+        when (val currentWearState = wearOutfitState) {
+            UiState.Loading -> Unit
+            is UiState.Error -> {
+                snackbarHostState.showSnackbar(currentWearState.message)
+                viewModel.clearWearOutfitState()
+            }
+            is UiState.Success -> {
+                if (currentWearState.data == true) {
+                    viewModel.clearWearOutfitState()
+                    navController.navigateToSecondary(Routes.HISTORY)
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(planRecommendationState) {
+        when (val currentPlanState = planRecommendationState) {
+            UiState.Loading -> Unit
+            is UiState.Error -> {
+                snackbarHostState.showSnackbar(currentPlanState.message)
+                viewModel.clearPlanRecommendationState()
+            }
+            is UiState.Success -> {
+                if (currentPlanState.data == true) {
+                    viewModel.clearPlanRecommendationState()
+                    navController.navigateToSecondary(Routes.PLANS)
+                }
+            }
+        }
+    }
+
     when (state) {
 
         is UiState.Loading -> {
@@ -243,7 +295,8 @@ fun RecommendationScreen(
             FitGptScaffold(
                 navController = navController,
                 currentRoute = Routes.RECOMMENDATION,
-                title = "Outfit Recommendation"
+                title = "Outfit Recommendation",
+                snackbarHost = { SnackbarHost(snackbarHostState) }
             ) { paddingValues ->
                 Column(
                     modifier = Modifier
@@ -273,7 +326,8 @@ fun RecommendationScreen(
             FitGptScaffold(
                 navController = navController,
                 currentRoute = Routes.RECOMMENDATION,
-                title = "Outfit Recommendation"
+                title = "Outfit Recommendation",
+                snackbarHost = { SnackbarHost(snackbarHostState) }
             ) { paddingValues ->
 
                 Column(
@@ -706,12 +760,11 @@ fun RecommendationScreen(
                         onClick = {
                             if (recommendedItems.isEmpty()) return@Button
                             viewModel.markOutfitAsWorn(recommendedItems)
-                            navController.navigateToSecondary(Routes.HISTORY)
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = recommendedItems.isNotEmpty()
+                        enabled = recommendedItems.isNotEmpty() && !isWearingOutfit
                     ) {
-                        Text("Wear This Outfit")
+                        Text(if (isWearingOutfit) "Saving Wear History..." else "Wear This Outfit")
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -749,14 +802,13 @@ fun RecommendationScreen(
                             if (recommendedItems.isEmpty()) return@Button
                             val today = java.time.LocalDate.now().plusDays(1).toString()
                             viewModel.planCurrentRecommendation(today, "Planned from recommendation")
-                            navController.navigateToSecondary(Routes.PLANS)
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = recommendedItems.isNotEmpty()
+                        enabled = recommendedItems.isNotEmpty() && !isPlanningRecommendation
                     ) {
                         Icon(Icons.Default.DateRange, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Plan for Tomorrow")
+                        Text(if (isPlanningRecommendation) "Planning..." else "Plan for Tomorrow")
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))

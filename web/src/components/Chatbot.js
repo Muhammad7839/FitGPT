@@ -18,7 +18,7 @@ import {
 } from "../utils/userStorage";
 
 const GREETING =
-  "Hi! I'm AURA. Ask me about outfits, styling, color pairing, or what to wear for any occasion.";
+  "Hi! I'm AURA. Ask me about outfits, styling, color pairing, or how to get the most out of FitGPT.";
 const EMPTY_PROMPT = "Ask me anything about outfits or styling!";
 const CLARIFY_PROMPT =
   "Can you tell me more about the occasion or style you are going for?";

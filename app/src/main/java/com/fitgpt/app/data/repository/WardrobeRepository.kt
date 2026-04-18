@@ -34,7 +34,7 @@ interface WardrobeRepository {
         accessoryType: String? = null,
         favoritesOnly: Boolean = false
     ): List<ClothingItem>
-    suspend fun addItem(item: ClothingItem)
+    suspend fun addItem(item: ClothingItem): ClothingItem
     suspend fun addItemWithPhoto(item: ClothingItem, photo: UploadImagePayload): ClothingItem
     suspend fun addItemsBulk(items: List<ClothingItem>): List<ClothingItem>
     suspend fun suggestTags(item: ClothingItem): TagSuggestion
@@ -43,7 +43,7 @@ interface WardrobeRepository {
     suspend fun uploadImage(bytes: ByteArray, fileName: String, mimeType: String): String
     suspend fun uploadImagesBatch(images: List<UploadImagePayload>): List<UploadResult>
     suspend fun deleteItem(item: ClothingItem)
-    suspend fun updateItem(item: ClothingItem)
+    suspend fun updateItem(item: ClothingItem): ClothingItem
     suspend fun setFavorite(itemId: Int, isFavorite: Boolean): ClothingItem
     suspend fun getFavoriteItems(): List<ClothingItem>
     suspend fun getWardrobeGaps(): WardrobeGapAnalysis

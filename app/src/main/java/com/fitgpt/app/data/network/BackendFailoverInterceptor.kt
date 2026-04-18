@@ -36,6 +36,7 @@ class BackendFailoverInterceptor : Interceptor {
             }
         }
 
+        Log.w(LOG_TAG, "NETWORK_DEBUG: Connection failed, check host/IP configuration")
         throw lastError ?: IOException("Unable to reach backend host")
     }
 

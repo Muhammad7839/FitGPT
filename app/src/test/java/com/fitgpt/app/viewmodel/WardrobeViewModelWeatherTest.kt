@@ -171,9 +171,13 @@ class WardrobeViewModelWeatherTest {
     @Test
     fun retryWeather_usesLastSuccessfulCityWhenNoRequestIsActive() = runTest {
         var requestedCity: String? = null
+        var requestedLat: Double? = null
+        var requestedLon: Double? = null
         val repo = object : WardrobeRepository by FakeWardrobeRepository() {
             override suspend fun getCurrentWeather(city: String?, lat: Double?, lon: Double?): WeatherSnapshot {
                 requestedCity = city
+                requestedLat = lat
+                requestedLon = lon
                 return WeatherSnapshot(
                     city = city ?: "Mountain View",
                     temperatureF = 70,
@@ -196,6 +200,44 @@ class WardrobeViewModelWeatherTest {
 
         assertEquals("Mountain View", requestedCity)
         assertEquals(WeatherStatusType.AVAILABLE, viewModel.weatherUiStatus.value.type)
+    }
+
+    @Test
+    fun fetchWeather_withFreshCoordinates_doesNotReuseCachedCity() = runTest {
+        var requestedCity: String? = null
+        var requestedLat: Double? = null
+        var requestedLon: Double? = null
+        val repo = object : WardrobeRepository by FakeWardrobeRepository() {
+            override suspend fun getCurrentWeather(city: String?, lat: Double?, lon: Double?): WeatherSnapshot {
+                requestedCity = city
+                requestedLat = lat
+                requestedLon = lon
+                return WeatherSnapshot(
+                    city = "New York",
+                    temperatureF = 61,
+                    weatherCategory = "mild",
+                    condition = "Cloudy",
+                    description = "Cloudy",
+                    available = true
+                )
+            }
+        }
+        val viewModel = WardrobeViewModel(repo)
+
+        viewModel.fetchWeather(city = "Mountain View", source = WeatherRequestSource.MANUAL_CITY)
+        advanceUntilIdle()
+
+        viewModel.fetchWeather(
+            lat = 40.7128,
+            lon = -74.0060,
+            source = WeatherRequestSource.LOCATION
+        )
+        advanceUntilIdle()
+
+        assertNull(requestedCity)
+        assertEquals(40.7128, requestedLat ?: 0.0, 0.0001)
+        assertEquals(-74.0060, requestedLon ?: 0.0, 0.0001)
+        assertEquals("New York", viewModel.getCachedWeatherCity())
     }
 
     @Test
