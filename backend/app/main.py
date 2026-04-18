@@ -80,6 +80,23 @@ def _ensure_runtime_schema() -> None:
                 # Another worker may have raced to ADD COLUMN — tolerate duplicate.
                 logger.info("Skipping additive migration %r (%s)", sql, exc)
 
+    # Additive indexes for common filter columns. CREATE INDEX IF NOT EXISTS is
+    # supported by both SQLite and PostgreSQL, so the same statement works.
+    index_statements = [
+        "CREATE INDEX IF NOT EXISTS ix_clothing_items_owner_id ON clothing_items (owner_id)",
+        "CREATE INDEX IF NOT EXISTS ix_clothing_items_owner_archived ON clothing_items (owner_id, is_archived)",
+        "CREATE INDEX IF NOT EXISTS ix_clothing_items_owner_favorite ON clothing_items (owner_id, is_favorite)",
+        "CREATE INDEX IF NOT EXISTS ix_outfit_history_owner_id ON outfit_history (owner_id)",
+        "CREATE INDEX IF NOT EXISTS ix_saved_outfits_owner_id ON saved_outfits (owner_id)",
+        "CREATE INDEX IF NOT EXISTS ix_planned_outfits_owner_id ON planned_outfits (owner_id)",
+    ]
+    for sql in index_statements:
+        try:
+            with engine.begin() as connection:
+                connection.execute(text(sql))
+        except (OperationalError, ProgrammingError) as exc:
+            logger.info("Skipping index migration %r (%s)", sql, exc)
+
 
 _ensure_runtime_schema()
 

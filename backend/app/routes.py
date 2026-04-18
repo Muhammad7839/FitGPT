@@ -54,9 +54,15 @@ _forgot_log_by_key: dict[tuple[str, str], list[float]] = {}
 def _register_forgot_attempt(key: tuple[str, str]) -> int:
     """Append a timestamp for the given (kind, value) key and return the count within the window."""
     now = datetime.now(timezone.utc).timestamp()
-    stamps = _forgot_log_by_key.setdefault(key, [])
     cutoff = now - _FORGOT_WINDOW_SECONDS
-    # Drop expired attempts.
+
+    # Opportunistically prune every key so the dict doesn't grow unbounded when
+    # attackers probe many distinct emails. Cheap for our expected table size.
+    stale_keys = [k for k, stamps in _forgot_log_by_key.items() if not any(ts >= cutoff for ts in stamps)]
+    for k in stale_keys:
+        _forgot_log_by_key.pop(k, None)
+
+    stamps = _forgot_log_by_key.setdefault(key, [])
     fresh = [ts for ts in stamps if ts >= cutoff]
     fresh.append(now)
     _forgot_log_by_key[key] = fresh
