@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import {
   CATEGORIES as ITEM_CATEGORIES,
   FIT_TAG_OPTIONS,
@@ -15,11 +15,24 @@ import {
 } from "../utils/wardrobeOptions";
 import SuggestedTagsPanel from "./SuggestedTagsPanel";
 
+const BULK_UPLOAD_TITLE_ID = "bulk-upload-title";
+
 function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, isSaving, error }) {
+  const lastFocusedRef = useRef(null);
+  useEffect(() => {
+    lastFocusedRef.current = document.activeElement;
+    return () => {
+      const target = lastFocusedRef.current;
+      if (target && typeof target.focus === "function") {
+        target.focus();
+      }
+    };
+  }, []);
+
   return (
-    <div className="modalOverlay" role="dialog" aria-modal="true">
+    <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby={BULK_UPLOAD_TITLE_ID}>
       <div className="modalCard bulkUploadModalCard" style={{ maxHeight: "85vh", overflow: "auto", width: "min(780px, 96vw)" }}>
-        <div className="modalTitle">Add {items.length} item{items.length > 1 ? "s" : ""}</div>
+        <div id={BULK_UPLOAD_TITLE_ID} className="modalTitle">Add {items.length} item{items.length > 1 ? "s" : ""}</div>
 
         <div style={{ display: "grid", gap: 14, marginTop: 12 }}>
           {items.map((entry) => {

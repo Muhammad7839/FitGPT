@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -10,12 +11,20 @@ from app.routes import router
 
 app = FastAPI()
 
-origins = [
+_DEFAULT_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://fit-gpt-i3co.vercel.app",
-    "https://www.fitgpt.tech"
+    "https://www.fitgpt.tech",
 ]
+
+
+def _parse_origins(raw: str) -> list[str]:
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+_cors_env = os.getenv("CORS_ORIGINS", "").strip()
+origins = _parse_origins(_cors_env) if _cors_env else _DEFAULT_ORIGINS
 
 app.add_middleware(
     CORSMiddleware,

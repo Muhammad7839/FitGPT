@@ -29,20 +29,22 @@ def _create_item(client, auth, *, category: str, color: str, name: str, clothing
     return response.json()
 
 
-def test_ai_chat_requires_auth(client):
+def test_ai_chat_allows_guest(client):
     response = client.post(
         "/ai/chat",
         json={"messages": [{"role": "user", "content": "help me pick an outfit"}]},
     )
-    assert response.status_code == 401
+    assert response.status_code == 200
+    assert "reply" in response.json()
 
 
-def test_chat_alias_requires_auth(client):
+def test_chat_alias_allows_guest(client):
     response = client.post(
         "/chat",
         json={"messages": [{"role": "user", "content": "help me pick an outfit"}]},
     )
-    assert response.status_code == 401
+    assert response.status_code == 200
+    assert "reply" in response.json()
 
 
 def test_ai_chat_success(client, monkeypatch):

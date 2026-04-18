@@ -86,15 +86,22 @@ function normalizeTimestamp(value, fallback = Date.now()) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function makeMessageId() {
+  return `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function normalizeMessages(messages) {
   const safe = (Array.isArray(messages) ? messages : [])
     .map((message) => ({
+      id: (message?.id || makeMessageId()).toString(),
       role: message?.role === "assistant" ? "assistant" : "user",
       content: (message?.content || "").toString(),
     }))
     .filter((message) => message.content.trim());
 
-  return safe.length > 0 ? safe : [{ role: "assistant", content: GREETING }];
+  return safe.length > 0
+    ? safe
+    : [{ id: makeMessageId(), role: "assistant", content: GREETING }];
 }
 
 function normalizeChat(chat) {
@@ -115,6 +122,7 @@ function serializeChat(chat) {
     id: normalized.id,
     title: normalized.title,
     messages: normalized.messages.map((message) => ({
+      id: message.id,
       role: message.role === "assistant" ? "assistant" : "user",
       content: (message.content || "").toString(),
     })),
@@ -184,7 +192,7 @@ function makeChat() {
   return {
     id: now.toString(36) + Math.random().toString(36).slice(2, 6),
     title: "New Chat",
-    messages: [{ role: "assistant", content: GREETING }],
+    messages: [{ id: makeMessageId(), role: "assistant", content: GREETING }],
     createdAt: now,
     updatedAt: now,
   };
@@ -592,7 +600,10 @@ export default function Chatbot() {
 
   const activeChat = chats.find((chat) => chat.id === activeChatId) || chats[0] || makeChat();
   const messages = useMemo(
-    () => activeChat?.messages || [{ role: "assistant", content: GREETING }],
+    () =>
+      activeChat?.messages || [
+        { id: "greeting_default", role: "assistant", content: GREETING },
+      ],
     [activeChat]
   );
   const sortedChats = useMemo(
@@ -664,7 +675,10 @@ export default function Chatbot() {
   const appendAssistantMessage = useCallback(
     (content, assistantIndex) => {
       updateActiveChat((chat) => ({
-        messages: [...chat.messages, { role: "assistant", content }],
+        messages: [
+          ...chat.messages,
+          { id: makeMessageId(), role: "assistant", content },
+        ],
       }));
       setTypingIdx(assistantIndex);
     },
@@ -684,8 +698,8 @@ export default function Chatbot() {
     if (isUnclearPrompt(text)) {
       const unclearMessages = [
         ...messages,
-        { role: "user", content: text },
-        { role: "assistant", content: CLARIFY_PROMPT },
+        { id: makeMessageId(), role: "user", content: text },
+        { id: makeMessageId(), role: "assistant", content: CLARIFY_PROMPT },
       ];
       updateActiveChat(() => ({
         messages: unclearMessages,
@@ -698,7 +712,7 @@ export default function Chatbot() {
     }
 
     const context = buildChatContext(effectiveUser);
-    const userMessage = { role: "user", content: text };
+    const userMessage = { id: makeMessageId(), role: "user", content: text };
     const nextMessages = [...messages, userMessage];
 
     updateActiveChat(() => ({
@@ -1004,8 +1018,9 @@ export default function Chatbot() {
                   const display = message.role === "assistant"
                     ? adaptAiText(message.content, effectivePrefs)
                     : message.content;
+                  const messageKey = message.id || `${activeChat.id}_${index}`;
                   return (
-                    <div key={index} className={`chatbot-row chatbot-row-${message.role}`}>
+                    <div key={messageKey} className={`chatbot-row chatbot-row-${message.role}`}>
                       <div className="chatbot-avatar">
                         {message.role === "assistant" ? (
                           <img src="/fitgpt-logo.png" alt="FitGPT" className="chatbot-avatar-logo" />

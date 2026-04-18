@@ -5,31 +5,21 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from passlib.context import CryptContext
-from sqlalchemy import or_
+from sqlalchemy import case, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.ai import deterministic, history
+from app.auth import hash_password
 from app.config import RESET_TOKEN_EXPIRE_MINUTES
 from app.weather import map_temperature_to_category
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
-# =============================
-# User CRUD
-# =============================
-
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
 
 
 def create_user(db: Session, user: schemas.UserCreate):
     hashed_password = hash_password(user.password)
     db_user = models.User(
-        email=user.email,
+        email=user.email.lower().strip(),
         hashed_password=hashed_password
     )
     _apply_default_preferences(db_user)
@@ -40,7 +30,8 @@ def create_user(db: Session, user: schemas.UserCreate):
 
 
 def get_or_create_google_user(db: Session, email: str, full_name: Optional[str]):
-    existing_user = get_user_by_email(db, email)
+    normalized_email = email.lower().strip()
+    existing_user = get_user_by_email(db, normalized_email)
     if existing_user:
         if full_name and not existing_user.full_name:
             existing_user.full_name = full_name
@@ -50,7 +41,7 @@ def get_or_create_google_user(db: Session, email: str, full_name: Optional[str])
 
     generated_password = uuid.uuid4().hex
     db_user = models.User(
-        email=email,
+        email=normalized_email,
         full_name=full_name,
         hashed_password=hash_password(generated_password),
     )
@@ -60,14 +51,17 @@ def get_or_create_google_user(db: Session, email: str, full_name: Optional[str])
         db.commit()
     except IntegrityError:
         db.rollback()
-        return get_user_by_email(db, email)
+        concurrent_user = get_user_by_email(db, normalized_email)
+        if concurrent_user is None:
+            raise
+        return concurrent_user
     db.refresh(db_user)
     return db_user
 
 
 def get_user_by_email(db: Session, email: str):
     return db.query(models.User).filter(
-        models.User.email == email
+        models.User.email == email.lower().strip()
     ).first()
 
 
@@ -144,27 +138,37 @@ def _apply_default_preferences(db_user: models.User) -> None:
 
 def build_profile_summary(db: Session, db_user: models.User) -> dict:
     """Return a compact profile summary payload with preference + wardrobe stats."""
-    wardrobe_count = db.query(models.ClothingItem).filter(
-        models.ClothingItem.owner_id == db_user.id
-    ).count()
-    active_wardrobe_count = db.query(models.ClothingItem).filter(
-        models.ClothingItem.owner_id == db_user.id,
-        models.ClothingItem.is_archived.is_(False),
-    ).count()
-    favorite_count = db.query(models.ClothingItem).filter(
-        models.ClothingItem.owner_id == db_user.id,
-        models.ClothingItem.is_favorite.is_(True),
-        models.ClothingItem.is_archived.is_(False),
-    ).count()
-    saved_outfit_count = db.query(models.SavedOutfit).filter(
+    wardrobe_stats = db.query(
+        func.count(models.ClothingItem.id),
+        func.coalesce(
+            func.sum(case((models.ClothingItem.is_archived.is_(False), 1), else_=0)),
+            0,
+        ),
+        func.coalesce(
+            func.sum(
+                case(
+                    (
+                        (models.ClothingItem.is_archived.is_(False))
+                        & (models.ClothingItem.is_favorite.is_(True)),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ),
+            0,
+        ),
+    ).filter(models.ClothingItem.owner_id == db_user.id).one()
+    wardrobe_count, active_wardrobe_count, favorite_count = (int(value) for value in wardrobe_stats)
+
+    saved_outfit_count = db.query(func.count(models.SavedOutfit.id)).filter(
         models.SavedOutfit.owner_id == db_user.id
-    ).count()
-    planned_outfit_count = db.query(models.PlannedOutfit).filter(
+    ).scalar() or 0
+    planned_outfit_count = db.query(func.count(models.PlannedOutfit.id)).filter(
         models.PlannedOutfit.owner_id == db_user.id
-    ).count()
-    history_count = db.query(models.OutfitHistory).filter(
+    ).scalar() or 0
+    history_count = db.query(func.count(models.OutfitHistory.id)).filter(
         models.OutfitHistory.owner_id == db_user.id
-    ).count()
+    ).scalar() or 0
 
     return {
         "id": db_user.id,
@@ -178,9 +182,9 @@ def build_profile_summary(db: Session, db_user: models.User) -> dict:
         "wardrobe_count": wardrobe_count,
         "active_wardrobe_count": active_wardrobe_count,
         "favorite_count": favorite_count,
-        "saved_outfit_count": saved_outfit_count,
-        "planned_outfit_count": planned_outfit_count,
-        "history_count": history_count,
+        "saved_outfit_count": int(saved_outfit_count),
+        "planned_outfit_count": int(planned_outfit_count),
+        "history_count": int(history_count),
     }
 
 
