@@ -68,6 +68,8 @@ async function readErrorMessage(res) {
   return `Request failed (${res.status})`;
 }
 
+const DEFAULT_TIMEOUT_MS = 15000;
+
 export async function apiFetch(path, options = {}) {
   const url = buildUrl(path);
 
@@ -84,11 +86,39 @@ export async function apiFetch(path, options = {}) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const res = await fetch(url, {
-    ...options,
-    headers,
-    credentials: "include",
-  });
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...fetchOptions } = options;
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeoutId = controller && Number.isFinite(timeoutMs) && timeoutMs > 0
+    ? setTimeout(() => controller.abort(new Error("timeout")), timeoutMs)
+    : null;
+  if (callerSignal && controller) {
+    if (callerSignal.aborted) controller.abort(callerSignal.reason);
+    else callerSignal.addEventListener("abort", () => controller.abort(callerSignal.reason), { once: true });
+  }
+
+  let res;
+  try {
+    res = await fetch(url, {
+      ...fetchOptions,
+      headers,
+      credentials: "include",
+      signal: controller ? controller.signal : callerSignal,
+    });
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      const abortErr = new Error("Request timed out. Check your connection and try again.");
+      abortErr.status = 0;
+      abortErr.isTimeout = true;
+      throw abortErr;
+    }
+    const netErr = new Error("Network error: could not reach the server.");
+    netErr.status = 0;
+    netErr.isNetwork = true;
+    netErr.cause = err;
+    throw netErr;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 
   if (!res.ok) {
     if (res.status === 401) {

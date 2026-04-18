@@ -83,7 +83,7 @@ def _default_sqlite_url(file_name: str) -> str:
 
 DATABASE_URL = get_env("DATABASE_URL", _default_sqlite_url("fitgpt.db"))
 SECRET_KEY = get_env("SECRET_KEY", "dev-only-change-me")
-JWT_ALGORITHM = get_env("JWT_ALGORITHM", "HS256")
+JWT_ALGORITHM = "HS256"  # hardcoded to prevent "none"-algorithm downgrade via env
 ACCESS_TOKEN_EXPIRE_MINUTES = get_int_env("ACCESS_TOKEN_EXPIRE_MINUTES", 60)
 GOOGLE_CLIENT_ID = get_env("GOOGLE_CLIENT_ID", "")
 RESET_TOKEN_EXPIRE_MINUTES = get_int_env("RESET_TOKEN_EXPIRE_MINUTES", 30)

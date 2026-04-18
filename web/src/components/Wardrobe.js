@@ -328,6 +328,8 @@ export default function Wardrobe() {
   const [pendingDuplicateAction, setPendingDuplicateAction] = useState(null);
   const [ignoredDuplicateKeys, setIgnoredDuplicateKeys] = useState(() => loadIgnoredDuplicateKeys(user));
   const duplicateScanRef = useRef(0);
+  const bulkRunRef = useRef(0);
+  useEffect(() => () => { bulkRunRef.current = -1; }, []);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -894,12 +896,16 @@ export default function Wardrobe() {
       setBulkError("");
       setBulkOpen(true);
 
+      const runId = bulkRunRef.current + 1;
+      bulkRunRef.current = runId;
+
       for (const entry of entries) {
         generateItemTagSuggestions({
           imageUrl: entry.preview,
           fileName: entry.file?.name || entry.name,
           fallbackCategory: entry.category,
         }).then((result) => {
+          if (bulkRunRef.current !== runId) return;
           setBulkItems((prev) =>
             prev.map((e) => {
               if (e._key !== entry._key) return e;
@@ -907,6 +913,7 @@ export default function Wardrobe() {
             })
           );
         }).catch(() => {
+          if (bulkRunRef.current !== runId) return;
           setBulkItems((prev) =>
             prev.map((e) => e._key === entry._key ? {
               ...e,
@@ -1130,6 +1137,7 @@ export default function Wardrobe() {
 
   const cancelBulk = () => {
     if (isBulkSaving) return;
+    bulkRunRef.current += 1;
     setBulkOpen(false);
     setBulkItems([]);
     setBulkError("");

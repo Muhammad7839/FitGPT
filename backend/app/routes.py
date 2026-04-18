@@ -1,7 +1,8 @@
 """API route definitions for auth, wardrobe, profile, planning, and recommendation flows."""
 
+import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 from uuid import uuid4
@@ -34,6 +35,42 @@ router = APIRouter()
 UPLOADS_DIR = Path("uploads")
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 ai_service = AiService()
+
+
+# ---------------------------------------------------------------------------
+# In-memory rate limiter for password-reset endpoints.
+#
+# Keeps two sliding windows (per-email and per-IP) to prevent account
+# enumeration and email spam. Single-process only — if the backend ever runs
+# with multiple workers, move this to Redis.
+# ---------------------------------------------------------------------------
+_FORGOT_WINDOW_SECONDS = 60 * 60  # 1 hour
+_FORGOT_MAX_PER_EMAIL = 5
+_FORGOT_MAX_PER_IP = 20
+_forgot_attempts: dict[str, list[float]] = {"email": [], "ip": []}
+_forgot_log_by_key: dict[tuple[str, str], list[float]] = {}
+
+
+def _register_forgot_attempt(key: tuple[str, str]) -> int:
+    """Append a timestamp for the given (kind, value) key and return the count within the window."""
+    now = datetime.now(timezone.utc).timestamp()
+    stamps = _forgot_log_by_key.setdefault(key, [])
+    cutoff = now - _FORGOT_WINDOW_SECONDS
+    # Drop expired attempts.
+    fresh = [ts for ts in stamps if ts >= cutoff]
+    fresh.append(now)
+    _forgot_log_by_key[key] = fresh
+    return len(fresh)
+
+
+def _check_forgot_rate_limit(email: str, client_ip: str) -> None:
+    email_count = _register_forgot_attempt(("email", email.lower()))
+    ip_count = _register_forgot_attempt(("ip", client_ip))
+    if email_count > _FORGOT_MAX_PER_EMAIL or ip_count > _FORGOT_MAX_PER_IP:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many password reset requests. Please wait before trying again.",
+        )
 
 
 def _serialize_saved_outfits(saved_outfits: list[models.SavedOutfit]) -> list[dict]:
@@ -92,7 +129,7 @@ def _timestamp_to_iso(timestamp: Optional[int]) -> str:
     if timestamp is None:
         return ""
     try:
-        return datetime.utcfromtimestamp(int(timestamp)).isoformat() + "Z"
+        return datetime.fromtimestamp(int(timestamp), tz=timezone.utc).replace(tzinfo=None).isoformat() + "Z"
     except (OSError, TypeError, ValueError):
         return ""
 
@@ -477,8 +514,12 @@ def login_with_google_alias(
 @router.post("/forgot-password", response_model=schemas.ForgotPasswordResponse)
 def forgot_password(
     payload: schemas.ForgotPasswordRequest,
-    db: Session = Depends(get_db)
+    request: Request,
+    db: Session = Depends(get_db),
 ):
+    client_ip = request.client.host if request.client else "unknown"
+    _check_forgot_rate_limit(payload.email, client_ip)
+
     user = crud.get_user_by_email(db, payload.email)
     detail = "If the account exists, reset instructions were issued"
     if not user:
@@ -495,11 +536,12 @@ def forgot_password(
 @router.post("/auth/forgot-password", response_model=schemas.ForgotPasswordResponse)
 def forgot_password_alias(
     payload: schemas.ForgotPasswordRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Compatibility alias for web clients expecting /auth/forgot-password."""
     logger.info("Compatibility auth route hit path=/auth/forgot-password")
-    return forgot_password(payload=payload, db=db)
+    return forgot_password(payload=payload, request=request, db=db)
 
 
 @router.post("/reset-password", response_model=schemas.ResetPasswordResponse)
@@ -635,7 +677,11 @@ async def create_wardrobe_item(
             form_keys,
         )
         uploaded = _extract_compat_upload_file(form)
-        image_url = _store_uploaded_image(uploaded, current_user.id) if uploaded else None
+        image_url = (
+            await asyncio.to_thread(_store_uploaded_image, uploaded, current_user.id)
+            if uploaded
+            else None
+        )
         compat_item = _build_compat_wardrobe_item_from_form(form=form, image_url=image_url)
         created = crud.create_clothing_item(db, compat_item, current_user.id)
         logger.info("Created wardrobe item user_id=%s item_id=%s", current_user.id, created.id)
@@ -1245,7 +1291,7 @@ def create_outfit_history_alias(
         return {"created": False, "message": "Nothing to record."}
 
     _ensure_owned_items(db, current_user.id, item_ids)
-    worn_at_timestamp = int(datetime.utcnow().timestamp())
+    worn_at_timestamp = int(datetime.now(timezone.utc).timestamp())
     raw_worn_at_timestamp = payload.get("worn_at_timestamp")
     if isinstance(raw_worn_at_timestamp, (int, float, str)):
         try:
@@ -1342,7 +1388,7 @@ def save_outfit(
         db=db,
         user_id=current_user.id,
         item_ids=payload.item_ids,
-        saved_at_timestamp=payload.saved_at_timestamp or int(datetime.utcnow().timestamp()),
+        saved_at_timestamp=payload.saved_at_timestamp or int(datetime.now(timezone.utc).timestamp()),
     )
     saved_outfits = crud.get_saved_outfits_for_user(db, current_user.id)
     return {"outfits": _serialize_saved_outfits(saved_outfits)}
@@ -1397,7 +1443,7 @@ def save_outfit_alias(
             return {"created": False, "message": "This outfit is already in your saved outfits."}
 
     _ensure_owned_items(db, current_user.id, item_ids)
-    saved_at_timestamp = int(datetime.utcnow().timestamp())
+    saved_at_timestamp = int(datetime.now(timezone.utc).timestamp())
     raw_saved_at_timestamp = payload.get("saved_at_timestamp")
     if isinstance(raw_saved_at_timestamp, (int, float, str)):
         try:
@@ -1480,7 +1526,7 @@ def save_planned_outfit(
         item_ids=payload.item_ids,
         planned_date=payload.planned_date,
         occasion=payload.occasion,
-        created_at_timestamp=payload.created_at_timestamp or int(datetime.utcnow().timestamp()),
+        created_at_timestamp=payload.created_at_timestamp or int(datetime.now(timezone.utc).timestamp()),
     )
     planned_outfits = crud.get_planned_outfits_for_user(db, current_user.id)
     return {"outfits": _serialize_planned_outfits(planned_outfits)}
@@ -1501,7 +1547,7 @@ def assign_planned_outfit(
             planned_date=planned_date,
             occasion=payload.occasion,
             replace_existing=payload.replace_existing,
-            created_at_timestamp=payload.created_at_timestamp or int(datetime.utcnow().timestamp()),
+            created_at_timestamp=payload.created_at_timestamp or int(datetime.now(timezone.utc).timestamp()),
         )
 
     planned_outfits = crud.get_planned_outfits_for_user(db, current_user.id)

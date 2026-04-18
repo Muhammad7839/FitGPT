@@ -7,9 +7,23 @@ from typing import Optional
 from app import models
 
 
+_MAX_PROMPT_FIELD_LEN = 120
+
+
 def _safe_text(value: Optional[str], fallback: str = "unspecified") -> str:
-    cleaned = (value or "").strip()
-    return cleaned or fallback
+    """Sanitize a user-controlled string for safe insertion into an LLM prompt.
+
+    Collapses newlines/tabs to spaces (prevents injected instructions) and caps
+    length so a malicious profile field cannot dominate the system prompt.
+    """
+    raw = (value or "").strip()
+    if not raw:
+        return fallback
+    sanitized = raw.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+    sanitized = " ".join(sanitized.split())
+    if len(sanitized) > _MAX_PROMPT_FIELD_LEN:
+        sanitized = sanitized[:_MAX_PROMPT_FIELD_LEN].rstrip() + "..."
+    return sanitized or fallback
 
 
 def build_chat_system_prompt(

@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 
@@ -5,9 +6,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from app.database.database import engine, Base
 from app import models
 from app.routes import router
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -68,13 +72,29 @@ def _ensure_runtime_schema() -> None:
             pending_alters.append("ALTER TABLE clothing_items ADD COLUMN occasion_tags_json VARCHAR DEFAULT '[]'")
         if "accessory_type" not in clothing_columns:
             pending_alters.append("ALTER TABLE clothing_items ADD COLUMN accessory_type VARCHAR")
-        if pending_alters:
-            with engine.begin() as connection:
-                for sql in pending_alters:
+        for sql in pending_alters:
+            try:
+                with engine.begin() as connection:
                     connection.execute(text(sql))
+            except (OperationalError, ProgrammingError) as exc:
+                # Another worker may have raced to ADD COLUMN — tolerate duplicate.
+                logger.info("Skipping additive migration %r (%s)", sql, exc)
 
 
 _ensure_runtime_schema()
+
+
+@app.get("/health")
+def healthcheck() -> dict:
+    """Lightweight health check — probes DB connectivity."""
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        db_status = "ok"
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Health check DB probe failed: %s", exc)
+        db_status = "error"
+    return {"status": "ok" if db_status == "ok" else "degraded", "db": db_status}
 
 app.include_router(router)
 uploads_dir = Path("uploads")

@@ -1,11 +1,12 @@
 """Authentication utilities: password hashing, JWT creation, and user resolution."""
 
 import bcrypt
-from datetime import datetime, timedelta
+import jwt
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import Depends, Header, HTTPException, status
-from jose import JWTError, jwt
+from jwt.exceptions import InvalidTokenError
 from sqlalchemy.orm import Session
 
 from app import models
@@ -83,9 +84,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode = data.copy()
 
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
     to_encode.update({"exp": expire})
 
@@ -106,7 +107,7 @@ def get_optional_user(
         if user_id is None:
             return None
         user_id = int(user_id)
-    except (JWTError, ValueError, TypeError):
+    except (InvalidTokenError, ValueError, TypeError):
         return None
     return db.query(models.User).filter(models.User.id == user_id).first()
 
@@ -127,7 +128,7 @@ def get_current_user(
 
         user_id = int(user_id)
 
-    except (JWTError, ValueError, TypeError):
+    except (InvalidTokenError, ValueError, TypeError):
         raise credentials_exception
 
     user = db.query(models.User).filter(models.User.id == user_id).first()
