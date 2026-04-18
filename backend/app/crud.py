@@ -5,31 +5,21 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from passlib.context import CryptContext
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.ai import deterministic, history
+from app.auth import hash_password
 from app.config import RESET_TOKEN_EXPIRE_MINUTES
 from app.weather import map_temperature_to_category
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
-# =============================
-# User CRUD
-# =============================
-
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
 
 
 def create_user(db: Session, user: schemas.UserCreate):
     hashed_password = hash_password(user.password)
     db_user = models.User(
-        email=user.email,
+        email=user.email.lower().strip(),
         hashed_password=hashed_password
     )
     _apply_default_preferences(db_user)
@@ -40,7 +30,8 @@ def create_user(db: Session, user: schemas.UserCreate):
 
 
 def get_or_create_google_user(db: Session, email: str, full_name: Optional[str]):
-    existing_user = get_user_by_email(db, email)
+    normalized_email = email.lower().strip()
+    existing_user = get_user_by_email(db, normalized_email)
     if existing_user:
         if full_name and not existing_user.full_name:
             existing_user.full_name = full_name
@@ -50,7 +41,7 @@ def get_or_create_google_user(db: Session, email: str, full_name: Optional[str])
 
     generated_password = uuid.uuid4().hex
     db_user = models.User(
-        email=email,
+        email=normalized_email,
         full_name=full_name,
         hashed_password=hash_password(generated_password),
     )
@@ -67,7 +58,7 @@ def get_or_create_google_user(db: Session, email: str, full_name: Optional[str])
 
 def get_user_by_email(db: Session, email: str):
     return db.query(models.User).filter(
-        models.User.email == email
+        models.User.email == email.lower().strip()
     ).first()
 
 
