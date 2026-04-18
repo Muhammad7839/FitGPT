@@ -1,105 +1,124 @@
 # FitGPT
 
-FitGPT is a cross-platform wardrobe management and outfit recommendation system.
-The goal of FitGPT is to reduce decision fatigue by helping users organize their clothing
-and receive clear, explainable outfit suggestions.
+FitGPT is an AI-powered wardrobe management and outfit recommendation app. It helps users
+organize their clothing and receive clear, explainable outfit suggestions tailored to their
+style preferences, body type, weather, and time of day.
 
-This repository contains both the Android app and the Web app, developed in parallel
-by different team members while following the same product goals and UX design.
+The primary product is a **React web app** backed by a **FastAPI** service. An Android app
+exists under `app/` but is no longer actively developed.
 
 ---
 
-## Repository Structure
+## Repository Layout
 
 ```text
 FitGPT/
-│
-├── app/                 # Android application (Jetpack Compose)
-│   ├── src/
-│   ├── build.gradle.kts
-│   └── proguard-rules.pro
-│
-├── web/                 # Web frontend (React or similar)
-│   └── README.md
-│
-├── gradle/              # Gradle wrapper files
-├── build.gradle.kts     # Project-level Gradle configuration
-├── settings.gradle.kts
-├── gradle.properties
-├── gradlew
-├── gradlew.bat
-└── README.md            # Project overview (this file)
-└── README.md            # Project overview
+├── web/        React 19 frontend (Create React App)
+├── backend/    FastAPI + SQLAlchemy backend
+├── app/        Android app (dormant)
+├── render.yaml Render deployment config
+└── .github/    CI workflows (when permitted by auth scope)
 ```
 
 ---
 
-## Android Application (app/)
+## Local Development
 
-The Android app is built using modern Android development practices.
+### Prerequisites
+- Python 3.12+ (3.13 supported)
+- Node 20+
+- npm
 
-### Tech Stack
-- Kotlin
-- Jetpack Compose
-- MVVM architecture
-- Navigation Compose
-- StateFlow
-- Fake repository (temporary, will be replaced with Room database)
+### Backend
 
-### Current Features
-- View wardrobe items
-- Add clothing items
-- Edit clothing items
-- Delete clothing items
-- Filter wardrobe by season
-- Filter wardrobe by comfort level
-- Basic AI explanation placeholder for recommendations
-- Navigation between screens
+```bash
+cd backend
+python -m venv .venv
+# Windows:   .venv\Scripts\activate
+# macOS/Lin: source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env  # then fill in values, see below
+uvicorn app.main:app --reload --port 8000
+```
 
-### Screens Implemented
-- Wardrobe Screen
-- Add Item Screen
-- Edit Item Screen
-- Recommendation Screen (placeholder)
+Backend runs at http://localhost:8000. Swagger UI at http://localhost:8000/docs.
+
+#### Environment variables (`backend/.env`)
+| Key | Required? | Purpose |
+|-----|-----------|---------|
+| `DATABASE_URL` | optional | PostgreSQL URL. Defaults to local SQLite `fitgpt.db` |
+| `SECRET_KEY` | **yes for prod** | JWT signing key. Must not be default in production |
+| `GROQ_API_KEY` | optional | Enables LLM-backed recommendations + AURA chat |
+| `GROQ_MODEL` | optional | Defaults to `llama-3.3-70b-versatile` |
+| `GOOGLE_CLIENT_ID` | optional | Enables Google sign-in |
+| `GMAIL_ADDRESS` / `GMAIL_APP_PASSWORD` | optional | Sends password-reset emails |
+| `FRONTEND_URL` | optional | Public frontend URL used in emails (default `http://localhost:3000`) |
+| `CORS_ORIGINS` | optional | Comma-separated allowed origins (default includes localhost + known prod) |
+| `OPENWEATHER_API_KEY` | optional | Live weather; fallback mode used if missing |
+
+### Frontend
+
+```bash
+cd web
+npm install
+npm start
+```
+
+Frontend runs at http://localhost:3000.
+
+#### Environment variables (`web/.env`)
+| Key | Purpose |
+|-----|---------|
+| `REACT_APP_API_BASE_URL` | Backend base URL (default: hosted Render instance) |
+| `REACT_APP_GOOGLE_CLIENT_ID` | Google OAuth client ID (public) |
 
 ---
 
-## Web Application (web/)
+## Testing
 
-The web folder is reserved for the frontend team.
+```bash
+# Backend — 68 tests
+cd backend && pytest -q
 
-### Web Team Responsibilities
-- Implement the same features as the Android app
-- Follow shared UX documentation and Figma designs
-- Match screen names, flows, and behavior with Android
-- Build a responsive web-first experience
+# Frontend — 601 tests
+cd web && CI=true npm test -- --watchAll=false
 
----
+# Frontend production build
+cd web && CI=false npm run build
+```
 
-## Shared Product Goals
-
-Both Android and Web versions must support:
-- Wardrobe management
-- Outfit recommendations
-- Explainable suggestions
-- Accessibility-friendly UX
-- Consistent screen flow and terminology
+CI config lives in `.github/workflows/test.yml` and runs both suites on PR.
 
 ---
 
-## Collaboration Guidelines
+## Deployment
 
-- Android work stays inside the `app/` folder
-- Web work stays inside the `web/` folder
-- Do not modify the other platform’s folder
-- Use Git branches and pull requests for changes
-- Keep commits small and clearly named
-- Sync frequently to avoid merge conflicts
+The backend is designed for Render.com deployment via `render.yaml`:
+
+- FastAPI web service with `healthCheckPath: /health`
+- Render-provisioned PostgreSQL, wired via `DATABASE_URL`
+- Single-worker uvicorn on port 10000
+
+The frontend deploys to Vercel or any static host.
+
+---
+
+## Architecture Notes
+
+- **Local-first wardrobe**: sessionStorage is the source of truth for wardrobe items.
+  All mutations are optimistic; API calls are best-effort.
+- **Per-user storage isolation**: `web/src/utils/userStorage.js` namespaces all
+  localStorage keys by user ID.
+- **AI layer**: `backend/app/ai/` wraps Groq's LLM. Deterministic scoring runs first;
+  the LLM re-ranks. User-controlled fields are sanitized before prompt inclusion.
+- **Themes**: 10 presets + custom builder, managed via CSS variables in
+  `web/src/theme/`.
+
+For deeper architectural detail (including common bugs and their root causes), see
+[`CLAUDE.md`](./CLAUDE.md) at the repo root.
 
 ---
 
 ## Project Status
 
-This is an active senior project.
-The architecture and features will evolve during development.
-
+Active senior project. Web app is the primary deliverable; Android is archived.

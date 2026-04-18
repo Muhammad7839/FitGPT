@@ -11,6 +11,17 @@ GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 
+def _validate_header_safe_email(to_email: str) -> str:
+    """Reject any email containing CR/LF/NUL to prevent SMTP header injection.
+
+    Pydantic's EmailStr already blocks these at the API layer — this is
+    defense-in-depth for any direct caller.
+    """
+    if any(ch in to_email for ch in ("\r", "\n", "\0")):
+        raise ValueError("Email address contains illegal control characters")
+    return to_email
+
+
 def send_password_reset_email(to_email: str, token: str) -> None:
     if not GMAIL_ADDRESS or not GMAIL_APP_PASSWORD:
         logger.warning(
@@ -19,6 +30,7 @@ def send_password_reset_email(to_email: str, token: str) -> None:
         )
         return
 
+    to_email = _validate_header_safe_email(to_email)
     reset_link = f"{FRONTEND_URL}/reset-password?token={token}"
 
     html_body = f"""\

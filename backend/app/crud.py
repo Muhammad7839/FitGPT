@@ -2,7 +2,7 @@
 
 import hashlib
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import case, func, or_
@@ -71,7 +71,7 @@ def _hash_reset_token(token: str) -> str:
 
 def create_password_reset_token(db: Session, db_user: models.User) -> str:
     token = uuid.uuid4().hex
-    expires_at = int(datetime.utcnow().timestamp()) + (RESET_TOKEN_EXPIRE_MINUTES * 60)
+    expires_at = int(datetime.now(timezone.utc).timestamp()) + (RESET_TOKEN_EXPIRE_MINUTES * 60)
     db_user.reset_token_hash = _hash_reset_token(token)
     db_user.reset_token_expires_at = expires_at
     db.commit()
@@ -81,7 +81,7 @@ def create_password_reset_token(db: Session, db_user: models.User) -> str:
 
 def get_user_by_reset_token(db: Session, token: str):
     token_hash = _hash_reset_token(token)
-    now = int(datetime.utcnow().timestamp())
+    now = int(datetime.now(timezone.utc).timestamp())
     return db.query(models.User).filter(
         models.User.reset_token_hash == token_hash,
         models.User.reset_token_expires_at.is_not(None),
@@ -702,7 +702,7 @@ def save_saved_outfit(
     item_ids: list[int],
     saved_at_timestamp: Optional[int] = None,
 ):
-    timestamp = saved_at_timestamp or int(datetime.utcnow().timestamp())
+    timestamp = saved_at_timestamp or int(datetime.now(timezone.utc).timestamp())
     outfit = models.SavedOutfit(
         owner_id=user_id,
         item_ids_csv=",".join(str(item_id) for item_id in item_ids),
@@ -737,7 +737,7 @@ def save_planned_outfit(
     occasion: Optional[str] = None,
     created_at_timestamp: Optional[int] = None,
 ):
-    timestamp = created_at_timestamp or int(datetime.utcnow().timestamp())
+    timestamp = created_at_timestamp or int(datetime.now(timezone.utc).timestamp())
     outfit = models.PlannedOutfit(
         owner_id=user_id,
         item_ids_csv=",".join(str(item_id) for item_id in item_ids),
