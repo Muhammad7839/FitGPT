@@ -701,7 +701,7 @@ async def create_wardrobe_item(
     try:
         item = schemas.ClothingItemCreate.model_validate(payload)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        raise HTTPException(status_code=422, detail=exc.errors(include_context=False, include_url=False)) from exc
 
     created = crud.create_clothing_item(db, item, current_user.id)
     logger.info("Created wardrobe item user_id=%s item_id=%s", current_user.id, created.id)
