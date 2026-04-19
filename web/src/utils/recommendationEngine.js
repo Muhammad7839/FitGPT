@@ -800,7 +800,7 @@ function metadataScore(item, context) {
   let score = 0;
 
   if (preferredStyles.length) {
-    score += styles.some((style) => preferredStyles.includes(style)) ? 10 : styles.length ? -5 : 2;
+    score += styles.some((style) => preferredStyles.includes(style)) ? 10 : styles.length ? -12 : 2;
   } else if (styles.includes("casual")) {
     score += 2;
   }
@@ -1355,6 +1355,60 @@ function scoreOutfitCandidate(outfit, context) {
 
   score += feedbackBiasForOutfit(outfit, context.feedbackProfile) * weightFactors.feedback;
   score += personalizationBiasForOutfit(outfit, context.personalizationProfile) * weightFactors.personalization;
+
+  /* ── Outfit-level style coherence ──────────────────────────────────── */
+  const preferredStyles = preferredStylesFromAnswers(context.answers);
+  if (preferredStyles.length) {
+    const FORMAL_STYLES = new Set(["formal", "smart casual", "work"]);
+    const STREETWEAR_STYLES = new Set(["streetwear", "street", "urban", "casual", "hype"]);
+    const ATHLETIC_STYLES = new Set(["activewear", "athletic", "sport"]);
+
+    const wantsStreet = preferredStyles.some((s) => STREETWEAR_STYLES.has(s));
+    const wantsFormal = preferredStyles.some((s) => FORMAL_STYLES.has(s));
+    const wantsAthletic = preferredStyles.some((s) => ATHLETIC_STYLES.has(s));
+
+    const coreItems = outfit.filter((item) => {
+      const r = itemRole(item);
+      return r === "top" || r === "bottom" || r === "one-piece";
+    });
+
+    const formalCoreCount = coreItems.filter((item) =>
+      normalizeTagArray(item?.style_tags).map(normalizeStyleValue).some((s) => FORMAL_STYLES.has(s))
+    ).length;
+
+    const athleticCoreCount = coreItems.filter((item) =>
+      normalizeTagArray(item?.style_tags).map(normalizeStyleValue).some((s) => ATHLETIC_STYLES.has(s))
+    ).length;
+
+    // Streetwear user getting 2+ formal core pieces: heavy penalty
+    if (wantsStreet && !wantsFormal && formalCoreCount >= 2) score -= 28;
+    else if (wantsStreet && !wantsFormal && formalCoreCount === 1) score -= 14;
+
+    // Formal user getting athletic core pieces
+    if (wantsFormal && !wantsStreet && athleticCoreCount >= 1) score -= 18;
+
+    // Shoe coherence check
+    const shoeItems = outfit.filter((item) => itemRole(item) === "shoes");
+    for (const shoe of shoeItems) {
+      const shoeBlob = [shoe?.name, shoe?.clothing_type, ...(normalizeTagArray(shoe?.style_tags))].join(" ").toLowerCase();
+      if (wantsStreet && !wantsFormal) {
+        if (["flat", "ballet", "pump", "heel", "oxford", "dress shoe", "court shoe"].some((t) => shoeBlob.includes(t))) score -= 18;
+      }
+      if (wantsFormal && !wantsStreet) {
+        if (["sneaker", "trainer", "running shoe", "canvas shoe"].some((t) => shoeBlob.includes(t))) score -= 18;
+      }
+    }
+
+    // Outerwear coherence: heavy winter coat in warm/hot weather
+    const wCatLow = (context.weatherCat || "").toLowerCase();
+    if (wCatLow === "warm" || wCatLow === "hot") {
+      const heavyOuter = outfit.filter((item) => {
+        const blob = [item?.name, item?.clothing_type].join(" ").toLowerCase();
+        return itemRole(item) === "outerwear" && ["puffer", "down jacket", "parka", "winter coat", "padded jacket"].some((t) => blob.includes(t));
+      });
+      score -= heavyOuter.length * 20;
+    }
+  }
 
   return score;
 }
