@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { registerWithEmail, getMe } from "../api/authApi";
+import { registerWithEmail, loginWithEmail, getMe } from "../api/authApi";
 import { useAuth } from "../auth/AuthProvider";
 import { migrateGuestData, clearGuestData } from "../utils/userStorage";
 import GoogleSignInButton from "./GoogleSignInButton";
@@ -45,7 +45,23 @@ export default function Signup() {
     setIsLoading(true);
 
     try {
-      await registerWithEmail(email.trim(), password);
+      try {
+        await registerWithEmail(email.trim(), password);
+      } catch (regErr) {
+        const msg = (regErr?.message || "").toLowerCase();
+        if (!msg.includes("already") && !msg.includes("registered") && !msg.includes("exists")) {
+          throw regErr;
+        }
+        // Account already exists — fall through to login below
+      }
+
+      try {
+        await loginWithEmail(email.trim(), password);
+      } catch (loginErr) {
+        // Registration worked but auto-login failed — send to login page so user can sign in manually
+        navigate("/login", { replace: true });
+        return;
+      }
 
       try {
         const me = await getMe();
@@ -56,7 +72,7 @@ export default function Signup() {
         if (typeof setUser === "function") setUser(me);
       } catch {}
 
-      navigate("/login", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(err?.message || "Registration failed. Please try again.");
     } finally {

@@ -446,7 +446,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const isGuestMode = !user;
 
   const wardrobe = useWardrobe(user);
-  const [recSeed, setRecSeed] = useState(() => readRecSeed());
+  const [recSeed, setRecSeed] = useState(() => Date.now());
 
   const [saveMsg, setSaveMsg] = useState("");
   const [savingSig, setSavingSig] = useState("");
@@ -1077,7 +1077,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     }
 
     const activeOutfit = outfits[selectedIdx] || outfits[0] || [];
-    const text = buildExplanation({ answers: effectiveAnswers, outfit: activeOutfit, weatherCategory, precipCategory: precipCondition, timeCategory });
+    const text = buildExplanation({ answers: effectiveAnswers, outfit: activeOutfit, weatherCategory, precipCategory: precipCondition, timeCategory, outfitIndex: selectedIdx ?? 0 });
     const cleaned = (text || "").toString().trim();
     return cleaned || "Pick a style and an occasion in onboarding to get a personalized explanation.";
   }, [effectiveAnswers, outfits, selectedIdx, aiSource, pairedExplanations, reused, weatherCategory, precipCondition, timeCategory]);
@@ -1128,7 +1128,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       const comfortSummary = buildComfortSummary(outfit, effectiveAnswers, weatherCategory);
       const explanation = aiSource === "ai" && !reused && pairedExplanations[idx]
         ? pairedExplanations[idx]
-        : buildExplanation({ answers: effectiveAnswers, outfit, weatherCategory, precipCategory: precipCondition, timeCategory });
+        : buildExplanation({ answers: effectiveAnswers, outfit, weatherCategory, precipCategory: precipCondition, timeCategory, outfitIndex: idx });
       const explanationPreview = summarizeExplanation(explanation) || buildColorReason(outfit);
 
       const traits = [];
