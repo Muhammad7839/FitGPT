@@ -25,7 +25,7 @@ Use [$skill-creator](/Users/muhammad/.codex/skills/.system/skill-creator/SKILL.m
 Do not use [$fitgpt-dev-orchestrator](/Users/muhammad/.codex/skills/fitgpt-dev-orchestrator/SKILL.md) unless the user explicitly asks for orchestration or FitGPT session triage.
 
 ## Automation Maintenance Rules
-When the task is recurring AGENTS maintenance, treat it as a documentation task grounded in recent evidence. Review the current conversation, the automation memory file, and the existing `AGENTS.md` before editing. If no memory file exists yet, create it after the run and note that this was the first baseline.
+When the task is recurring AGENTS maintenance, treat it as a documentation task grounded in recent evidence. Review the current conversation, the automation memory file, and the existing `AGENTS.md` before editing. Resolve `$CODEX_HOME` first and fall back to `~/.codex` if the automation message references `$CODEX_HOME/.../memory.md` but the variable is unset in the shell session. If no memory file exists yet, create it after the run and note that this was the first baseline.
 
 Prefer small instruction updates that address repeated friction, ambiguity, or avoidable misunderstandings. Do not rewrite unrelated sections or add speculative rules that are not supported by recent interactions.
 

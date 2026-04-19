@@ -16481,6 +16481,563 @@ select:focus-visible {
   }
 }
 
+.mannequinViewerContainer {
+  position: relative;
+  width: 100%;
+  height: 480px;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: linear-gradient(160deg, #faf8f5 0%, #f0ebe4 50%, #e8e0d8 100%);
+  box-shadow: 0 10px 32px rgba(17, 24, 39, 0.08);
+}
+
+[data-theme="dark"] .mannequinViewerContainer {
+  background: linear-gradient(160deg, #2a2520 0%, #1e1a16 50%, #161210 100%);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.mannequinHint {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  color: rgba(100, 80, 60, 0.56);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+
+[data-theme="dark"] .mannequinHint {
+  color: rgba(220, 204, 189, 0.5);
+}
+
+.mannequinLegend {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.mannequinLegendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 172px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="dark"] .mannequinLegendItem {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(30, 26, 22, 0.88);
+}
+
+.mannequinLegendThumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.mannequinLegendPlaceholder {
+  background: linear-gradient(135deg, rgba(139, 30, 30, 0.12), rgba(0, 0, 0, 0.06));
+}
+
+.mannequinLegendInfo {
+  display: grid;
+  gap: 2px;
+}
+
+.mannequinLegendName {
+  color: rgba(0, 0, 0, 0.82);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+[data-theme="dark"] .mannequinLegendName {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.mannequinLegendCat {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+[data-theme="dark"] .mannequinLegendCat {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.mannequinConflictBanner {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  max-width: min(60%, 320px);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(196, 130, 40, 0.26);
+  background: rgba(255, 237, 200, 0.94);
+  color: rgba(90, 60, 10, 0.92);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  font-size: 11.5px;
+  line-height: 1.35;
+  pointer-events: none;
+}
+
+[data-theme="dark"] .mannequinConflictBanner {
+  background: rgba(40, 32, 22, 0.92);
+  border-color: rgba(255, 196, 120, 0.22);
+  color: rgba(255, 222, 180, 0.92);
+}
+
+.mannequinConflictIcon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(196, 130, 40, 0.9);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.mannequinConflictList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+
+.dashViewToggle {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .dashViewToggle {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dashViewToggleBtn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+[data-theme="dark"] .dashViewToggleBtn {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.dashViewToggleBtn.active {
+  background: #fff;
+  color: rgba(0, 0, 0, 0.85);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .dashViewToggleBtn.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.mannequinSaveBtnRow {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.outfitBuilder {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px 22px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.outfitBuilderHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.outfitBuilderTitle {
+  margin: 0;
+  color: var(--text);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.outfitBuilderSub {
+  max-width: 640px;
+  margin: 6px 0 0;
+  color: rgba(0, 0, 0, 0.6);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+[data-theme="dark"] .outfitBuilderSub {
+  color: rgba(232, 230, 227, 0.74);
+}
+
+.outfitBuilderActions {
+  display: flex;
+  gap: 8px;
+}
+
+.outfitBuilderMsg {
+  align-self: flex-start;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(139, 30, 30, 0.2);
+  background: rgba(139, 30, 30, 0.08);
+  color: rgba(90, 20, 20, 0.9);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+[data-theme="dark"] .outfitBuilderMsg {
+  border-color: rgba(255, 120, 120, 0.28);
+  background: rgba(255, 120, 120, 0.12);
+  color: rgba(255, 205, 205, 0.95);
+}
+
+.outfitBuilderGrid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.4fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .outfitBuilderGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.outfitBuilderWardrobe,
+.outfitBuilderCanvas {
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--surface, #fff);
+}
+
+.outfitBuilderWardrobe {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-height: 720px;
+  overflow-y: auto;
+}
+
+.outfitBuilderCanvas {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 560px;
+}
+
+[data-theme="dark"] .outfitBuilderWardrobe,
+[data-theme="dark"] .outfitBuilderCanvas {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.outfitBuilderEmpty {
+  padding: 22px 8px;
+  color: rgba(0, 0, 0, 0.55);
+  text-align: center;
+  font-size: 13px;
+}
+
+[data-theme="dark"] .outfitBuilderEmpty {
+  color: rgba(232, 230, 227, 0.7);
+}
+
+.outfitBuilderGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.outfitBuilderGroupTitle {
+  margin: 0;
+  color: rgba(0, 0, 0, 0.56);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+[data-theme="dark"] .outfitBuilderGroupTitle {
+  color: rgba(232, 230, 227, 0.72);
+}
+
+.outfitBuilderGroupItems {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.outfitBuilderItem {
+  all: unset;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.02);
+  cursor: grab;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.outfitBuilderItem:hover {
+  transform: translateY(-1px);
+  border-color: rgba(139, 30, 30, 0.26);
+  box-shadow: 0 4px 12px rgba(139, 30, 30, 0.08);
+}
+
+.outfitBuilderItem:active {
+  cursor: grabbing;
+}
+
+.outfitBuilderItem.selected {
+  border-color: rgba(139, 30, 30, 0.6);
+  background: rgba(139, 30, 30, 0.08);
+}
+
+[data-theme="dark"] .outfitBuilderItem {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .outfitBuilderItem.selected {
+  border-color: rgba(255, 170, 170, 0.5);
+  background: rgba(196, 60, 60, 0.18);
+}
+
+.outfitBuilderItemImg,
+.outfitBuilderSelectedImg {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.outfitBuilderItemPlaceholder {
+  background: linear-gradient(135deg, rgba(139, 30, 30, 0.1), rgba(0, 0, 0, 0.04));
+}
+
+.outfitBuilderItemInfo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+
+.outfitBuilderItemName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.outfitBuilderItemColor {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  flex-shrink: 0;
+}
+
+.outfitBuilderCanvasHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.outfitBuilderCanvasLabel {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.outfitBuilderConflicts {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(196, 130, 40, 0.3);
+  background: rgba(255, 237, 200, 0.9);
+  color: rgba(90, 60, 10, 0.94);
+}
+
+[data-theme="dark"] .outfitBuilderConflicts {
+  border-color: rgba(255, 196, 120, 0.3);
+  background: rgba(40, 32, 22, 0.8);
+  color: rgba(255, 222, 180, 0.95);
+}
+
+.outfitBuilderConflictTitle {
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.outfitBuilderConflictList {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.outfitBuilderDropZone {
+  flex: 1;
+  display: flex;
+  min-height: 420px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 2px dashed rgba(0, 0, 0, 0.12);
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.outfitBuilderDropZone.dragOver {
+  border-color: rgba(139, 30, 30, 0.55);
+  background: rgba(139, 30, 30, 0.05);
+}
+
+[data-theme="dark"] .outfitBuilderDropZone {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+[data-theme="dark"] .outfitBuilderDropZone.dragOver {
+  border-color: rgba(255, 170, 170, 0.45);
+  background: rgba(196, 60, 60, 0.1);
+}
+
+.outfitBuilderDropHint {
+  max-width: 320px;
+  margin: auto;
+  color: rgba(0, 0, 0, 0.45);
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+[data-theme="dark"] .outfitBuilderDropHint {
+  color: rgba(232, 230, 227, 0.55);
+}
+
+.outfitBuilderSelectedGrid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  align-content: flex-start;
+}
+
+.outfitBuilderSelectedTile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="dark"] .outfitBuilderSelectedTile {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.outfitBuilderSelectedRemove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.outfitBuilderSelectedRemove:hover {
+  background: rgba(139, 30, 30, 0.85);
+}
+
+.outfitBuilderSelectedMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.outfitBuilderSelectedName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.outfitBuilderSelectedSlot {
+  color: rgba(0, 0, 0, 0.5);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+[data-theme="dark"] .outfitBuilderSelectedSlot {
+  color: rgba(232, 230, 227, 0.6);
+}
+
 /* Accessibility: large text mode */
 html[data-text-size="large"] body,
 html[data-text-size="large"] .btn,

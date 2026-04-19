@@ -74,6 +74,27 @@ def test_wardrobe_create_returns_422_for_oversized_style_tag_list(client):
     assert body["detail"][0]["loc"] == ["style_tags"]
 
 
+def test_wardrobe_create_returns_serializable_422_for_oversized_tag_element(client):
+    token = register_and_login(client, "wardrobe-long-tag@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+    payload = {
+        "name": "Long-tag item",
+        "category": "Top",
+        "color": "Black",
+        "season": "All",
+        "comfort_level": 3,
+        "style_tags": ["x" * 100],
+    }
+
+    response = client.post("/wardrobe/items", json=payload, headers=auth)
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["detail"][0]["loc"] == ["style_tags"]
+    assert "64 characters or fewer" in body["detail"][0]["msg"]
+    assert "ctx" not in body["detail"][0]
+
+
 def test_forgot_password_is_rate_limited_per_email(client, monkeypatch):
     monkeypatch.setattr(routes_module, "EXPOSE_RESET_TOKEN_IN_RESPONSE", False)
     register_and_login(client, "rate-limit@example.com", "password123")
@@ -110,14 +131,21 @@ def test_auth_forgot_password_alias_is_rate_limited_per_ip(client):
 
 
 def test_safe_text_collapses_whitespace_and_caps_length():
-    source = "  line one\nline two\tline three  " + ("x" * 200)
+    source = "  line one\r\nline two\tline three  " + ("x" * 200)
 
     result = _safe_text(source)
 
     assert "\n" not in result
+    assert "\r" not in result
     assert "\t" not in result
     assert result.startswith("line one line two line three")
     assert len(result) == 120
+
+
+def test_safe_text_returns_fallback_for_empty_values():
+    assert _safe_text(None) == "unspecified"
+    assert _safe_text("   ") == "unspecified"
+    assert _safe_text("", fallback="everyday") == "everyday"
 
 
 def test_verify_google_id_token_requires_config(monkeypatch):

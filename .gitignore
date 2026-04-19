@@ -12,9 +12,18 @@ fitgpt_test.db
 # Python cache
 __pycache__/
 *.pyc
+*.pyo
+.pytest_cache/
+.coverage
 
 # macOS
 .DS_Store
+
+# Node / web
+node_modules/
+web/node_modules/
+dist/
+coverage/
 
 # Android build
 build/
@@ -25,6 +34,10 @@ local.properties
 # IDE
 .idea/
 .vscode/
+
+# Env files
+.env.*
+!.env.example
 
 .codex/
 fitgpt.db
