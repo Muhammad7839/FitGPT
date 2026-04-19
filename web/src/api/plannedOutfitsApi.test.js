@@ -50,7 +50,7 @@ describe("plannedOutfitsApi.planOutfit", () => {
 
     expect(result.created).toBe(true);
     expect(result.localOnly).toBe(true);
-    expect(result.syncError).toBe("backend offline");
+    expect(result.syncError).toBe(true);
   });
 });
 
@@ -176,7 +176,7 @@ describe("plannedOutfitsApi.removePlanned", () => {
     expect(result).toMatchObject({
       deleted: true,
       localOnly: true,
-      syncError: "delete failed",
+      syncError: true,
     });
   });
 });

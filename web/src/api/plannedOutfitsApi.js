@@ -88,11 +88,11 @@ function mergePlannedOutfits(remoteList, localList) {
   return merged;
 }
 
-function buildSyncFallback(result, error) {
+function buildSyncFallback(result, _error) {
   return {
     ...result,
     localOnly: true,
-    syncError: error instanceof Error ? error.message : "Remote sync failed.",
+    syncError: true,
   };
 }
 

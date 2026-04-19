@@ -48,7 +48,7 @@ describe("outfitHistoryApi.recordWorn", () => {
 
     expect(result.created).toBe(true);
     expect(result.localOnly).toBe(true);
-    expect(result.syncError).toBe("backend offline");
+    expect(result.syncError).toBe(true);
   });
 });
 
@@ -135,7 +135,7 @@ describe("outfitHistoryApi.clearHistory", () => {
     expect(result).toMatchObject({
       cleared: true,
       localOnly: true,
-      syncError: "clear failed",
+      syncError: true,
     });
   });
 });

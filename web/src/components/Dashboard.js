@@ -11,6 +11,7 @@ import { fetchAIRecommendations } from "../api/recommendationsApi";
 import { submitRecommendationFeedback } from "../api/recommendationFeedbackApi";
 import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 import ClothCard from "./ClothCard";
+import MannequinViewer from "./MannequinViewer";
 import MeshGradient from "./MeshGradient";
 import ErrorBoundary from "./ErrorBoundary";
 import WardrobeGapPanel from "./WardrobeGapPanel";
@@ -979,6 +980,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   ]);
 
   const [selectedIdx, setSelectedIdx] = useState(null);
+  const [viewMode, setViewMode] = useState("grid");
   const { theme } = useTheme() || {};
   const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(null));
   const effectiveAccessibility = useMemo(
@@ -999,6 +1001,12 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     setShowWhyDetails(false);
     }
   }, [outfits.length, selectedIdx]);
+
+  useEffect(() => {
+    if (viewMode === "mannequin" && outfits.length > 0 && selectedIdx == null) {
+      setSelectedIdx(0);
+    }
+  }, [outfits.length, selectedIdx, viewMode]);
 
   /* Show nudge after sustained engagement with selected outfit */
   useEffect(() => {
@@ -1971,6 +1979,25 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
               }}>
                 Share
               </button>
+              <div className="dashViewToggle">
+                <button
+                  type="button"
+                  className={`dashViewToggleBtn${viewMode === "grid" ? " active" : ""}`}
+                  onClick={() => setViewMode("grid")}
+                >
+                  Grid
+                </button>
+                <button
+                  type="button"
+                  className={`dashViewToggleBtn${viewMode === "mannequin" ? " active" : ""}`}
+                  onClick={() => {
+                    setViewMode("mannequin");
+                    if (selectedIdx == null) setSelectedIdx(0);
+                  }}
+                >
+                  3D
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -2063,50 +2090,98 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                   </div>
                 ) : null}
 
-                <div className="dashOutfitGridFigma">
-                  {outfit.map((item, itemIdx) => (
-                    <div
-                      key={item.id}
-                      className={"dashSquareTile dashTileReveal" + (normalizeCategory(item?.category) === "Accessories" ? " accessory" : "")}
-                      style={{ animationDelay: `${itemIdx * 90 + idx * 140}ms` }}
-                      onPointerMove={onTiltMove}
-                      onPointerLeave={onTiltLeave}
-                    >
-                      <div className="dashSquareRole">{outfitRoleLabel(item)}</div>
-                      {idx === selectedIdx ? (
-                        <ErrorBoundary fallback={item.image_url ? <img className="dashSquareImg" src={item.image_url} alt={item.name} /> : <div className="dashSquareImg" aria-hidden="true" />}><ClothCard key={clothCardKey(outfit, item, aiRefreshToken, recSeed)} imageUrl={item.image_url} className="dashSquareImg" /></ErrorBoundary>
-                      ) : item.image_url ? (
-                        <img className="dashSquareImg" src={item.image_url} alt={item.name} />
-                      ) : (
-                        <div className="dashSquareImg" aria-hidden="true" />
-                      )}
-                      <div className="dashSquareNameRow">
-                        <span
-                          className="dashColorDot"
-                          style={{ background: colorToCss(item.color) }}
-                          title={item.color}
-                        />
-                        <span className="dashSquareName">{item.name}</span>
+                {viewMode === "mannequin" && idx === selectedIdx ? (
+                  <>
+                    <ErrorBoundary fallback={<div className="dashEmptySub" style={{ padding: "24px 0" }}>3D view unavailable.</div>}>
+                      <MannequinViewer outfit={outfit} bodyType={bodyTypeId} />
+                    </ErrorBoundary>
+                    <div className="mannequinSaveBtnRow">
+                      <button
+                        type="button"
+                        className={"styledSaveBtn" + (isSaved ? " saved" : "")}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleSaveOutfit(outfit);
+                        }}
+                        disabled={disabled}
+                      >
+                        <span className="styledSaveBtnIcon">{isSaved ? "\u2713" : "\u2661"}</span>
+                        <span className="styledSaveBtnText">{label}</span>
+                      </button>
+                      <div className="dashFeedbackBtns">
+                        <button
+                          type="button"
+                          className="dashFeedbackBtn dashFeedbackLike"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleFeedback(outfit, "like");
+                          }}
+                          title="More like this"
+                        >
+                          &#x25B2;
+                        </button>
+                        <button
+                          type="button"
+                          className="dashFeedbackBtn dashFeedbackDislike"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleFeedback(outfit, "dislike");
+                          }}
+                          title="Less like this"
+                        >
+                          &#x25BC;
+                        </button>
                       </div>
                     </div>
-                  ))}
+                  </>
+                ) : (
+                  <div className="dashOutfitGridFigma">
+                    {outfit.map((item, itemIdx) => (
+                      <div
+                        key={item.id}
+                        className={"dashSquareTile dashTileReveal" + (normalizeCategory(item?.category) === "Accessories" ? " accessory" : "")}
+                        style={{ animationDelay: `${itemIdx * 90 + idx * 140}ms` }}
+                        onPointerMove={onTiltMove}
+                        onPointerLeave={onTiltLeave}
+                      >
+                        <div className="dashSquareRole">{outfitRoleLabel(item)}</div>
+                        {idx === selectedIdx ? (
+                          <ErrorBoundary fallback={item.image_url ? <img className="dashSquareImg" src={item.image_url} alt={item.name} /> : <div className="dashSquareImg" aria-hidden="true" />}>
+                            <ClothCard key={clothCardKey(outfit, item, aiRefreshToken, recSeed)} imageUrl={item.image_url} className="dashSquareImg" />
+                          </ErrorBoundary>
+                        ) : item.image_url ? (
+                          <img className="dashSquareImg" src={item.image_url} alt={item.name} />
+                        ) : (
+                          <div className="dashSquareImg" aria-hidden="true" />
+                        )}
+                        <div className="dashSquareNameRow">
+                          <span
+                            className="dashColorDot"
+                            style={{ background: colorToCss(item.color) }}
+                            title={item.color}
+                          />
+                          <span className="dashSquareName">{item.name}</span>
+                        </div>
+                      </div>
+                    ))}
 
-                  <div className="dashSaveBtnCell">
-                    <button
-                      type="button"
-                      className={"styledSaveBtn" + (isSaved ? " saved" : "")}
-                      onClick={() => handleSaveOutfit(outfit)}
-                      disabled={disabled}
-                    >
-                      <span className="styledSaveBtnIcon">{isSaved ? "\u2713" : "\u2661"}</span>
-                      <span className="styledSaveBtnText">{label}</span>
-                    </button>
-                    <div className="dashFeedbackBtns">
-                      <button type="button" className="dashFeedbackBtn dashFeedbackLike" onClick={() => handleFeedback(outfit, "like")} title="More like this">&#x25B2;</button>
-                      <button type="button" className="dashFeedbackBtn dashFeedbackDislike" onClick={() => handleFeedback(outfit, "dislike")} title="Less like this">&#x25BC;</button>
+                    <div className="dashSaveBtnCell">
+                      <button
+                        type="button"
+                        className={"styledSaveBtn" + (isSaved ? " saved" : "")}
+                        onClick={() => handleSaveOutfit(outfit)}
+                        disabled={disabled}
+                      >
+                        <span className="styledSaveBtnIcon">{isSaved ? "\u2713" : "\u2661"}</span>
+                        <span className="styledSaveBtnText">{label}</span>
+                      </button>
+                      <div className="dashFeedbackBtns">
+                        <button type="button" className="dashFeedbackBtn dashFeedbackLike" onClick={() => handleFeedback(outfit, "like")} title="More like this">&#x25B2;</button>
+                        <button type="button" className="dashFeedbackBtn dashFeedbackDislike" onClick={() => handleFeedback(outfit, "dislike")} title="Less like this">&#x25BC;</button>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 <div className="dashOptionReason">
                   <div className="dashOptionReasonHead">

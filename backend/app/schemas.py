@@ -260,6 +260,8 @@ class ClothingItemCreate(BaseModel):
             cleaned = raw.strip()
             if not cleaned:
                 continue
+            if len(cleaned) > 64:
+                raise ValueError("tag must be 64 characters or fewer")
             key = cleaned.lower()
             if key in seen:
                 continue
@@ -363,6 +365,8 @@ class ClothingItemUpdate(BaseModel):
             cleaned = raw.strip()
             if not cleaned:
                 continue
+            if len(cleaned) > 64:
+                raise ValueError("tag must be 64 characters or fewer")
             key = cleaned.lower()
             if key in seen:
                 continue
