@@ -1,6 +1,6 @@
 import { TOKEN_KEY, AUTH_MODE_KEY } from "../utils/constants";
 
-const BASE_URL = process.env.REACT_APP_API_BASE_URL || "https://fitgpt-backend-tdiq.onrender.com";
+const BASE_URL = (process.env.REACT_APP_API_BASE_URL || "https://fitgpt-backend-tdiq.onrender.com").trim();
 
 const AUTH_STRATEGY = (process.env.REACT_APP_AUTH_STRATEGY || "token").toLowerCase();
 const USE_COOKIES = AUTH_STRATEGY === "cookies";
@@ -45,7 +45,8 @@ function setAuthMode(mode) {
 }
 
 function buildUrl(path) {
-  const base = BASE_URL.endsWith("/") ? BASE_URL.slice(0, -1) : BASE_URL;
+  const trimmed = BASE_URL.trim();
+  const base = trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
   if (!path) return base;
   if (path.startsWith("http")) return path;
   const p = path.startsWith("/") ? path : `/${path}`;

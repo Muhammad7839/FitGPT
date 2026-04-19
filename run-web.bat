@@ -8,9 +8,18 @@ echo    FitGPT Web App Launcher
 echo ========================================
 echo.
 
-:: Check for Python
-where python >nul 2>&1
-if !errorlevel! neq 0 (
+:: Check for Python (try python, py launcher, then known install path)
+set PYTHON_CMD=
+where python >nul 2>&1 && set PYTHON_CMD=python
+if not defined PYTHON_CMD (
+    where py >nul 2>&1 && set PYTHON_CMD=py
+)
+if not defined PYTHON_CMD (
+    if exist "C:\Users\madee\AppData\Local\Programs\Python\Python312\python.exe" (
+        set PYTHON_CMD=C:\Users\madee\AppData\Local\Programs\Python\Python312\python.exe
+    )
+)
+if not defined PYTHON_CMD (
     echo [ERROR] Python is not installed or not in PATH.
     echo         Download it from https://www.python.org/downloads/
     goto :fail
@@ -41,16 +50,16 @@ if not exist "%~dp0web\package.json" (
 :: Install Python dependencies from requirements.txt
 echo [1/4] Checking Python dependencies...
 if exist "%~dp0backend\requirements.txt" (
-    pip install -r "%~dp0backend\requirements.txt" --quiet >nul 2>&1
+    %PYTHON_CMD% -m pip install -r "%~dp0backend\requirements.txt" --quiet >nul 2>&1
     if !errorlevel! neq 0 (
         echo       Installing Python dependencies...
-        pip install -r "%~dp0backend\requirements.txt"
+        %PYTHON_CMD% -m pip install -r "%~dp0backend\requirements.txt"
     )
 ) else (
-    pip show fastapi uvicorn sqlalchemy passlib python-jose pydantic python-dotenv requests groq >nul 2>&1
+    %PYTHON_CMD% -m pip show fastapi uvicorn sqlalchemy passlib python-jose pydantic python-dotenv requests groq >nul 2>&1
     if !errorlevel! neq 0 (
         echo       Installing Python dependencies...
-        pip install fastapi uvicorn sqlalchemy passlib python-jose pydantic[email] python-dotenv python-multipart requests groq
+        %PYTHON_CMD% -m pip install fastapi uvicorn sqlalchemy passlib python-jose pydantic[email] python-dotenv python-multipart requests groq
     )
 )
 echo       Python dependencies OK.
@@ -78,11 +87,11 @@ for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr ":3000.*LISTENING"') d
 echo [4/4] Starting servers...
 echo.
 
-start "FitGPT Backend" cmd /k "cd /d "%~dp0backend" && python -m uvicorn app.main:app --reload --port 8000"
+start "FitGPT Backend" cmd /k "cd /d "%~dp0backend" && "%PYTHON_CMD%" -m uvicorn app.main:app --reload --port 8000"
 
 timeout /t 4 /nobreak >nul
 
-start "FitGPT Frontend" cmd /k "cd /d "%~dp0web" && npm start"
+start "FitGPT Frontend" cmd /k "cd /d "%~dp0web" && set REACT_APP_API_BASE_URL=http://localhost:8000 && npm start"
 
 echo.
 echo ========================================
