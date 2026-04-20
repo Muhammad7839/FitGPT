@@ -8,6 +8,7 @@ import { loadWardrobe } from "../utils/userStorage";
 import { EVT_SAVED_OUTFITS_CHANGED } from "../utils/constants";
 import { buildWardrobeMap, formatCardDate, labelFromSource, setReuseOutfit as setReuse, buildGoogleCalendarUrl, tomorrowDateStr } from "../utils/helpers";
 import GuestModeNotice from "./GuestModeNotice";
+import OutfitMannequinPreview from "./OutfitMannequinPreview";
 
 export default function SavedOutfits() {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ export default function SavedOutfits() {
   const [saved, setSaved] = useState([]);
   const [msg, setMsg] = useState("");
   const [confirmUnsave, setConfirmUnsave] = useState(null);
+  const [mannequinPreview, setMannequinPreview] = useState(null);
 
 
   const wardrobe = useMemo(() => loadWardrobe(user), [user]);
@@ -102,7 +104,12 @@ export default function SavedOutfits() {
     const match = details.find((d) => (d?.id ?? "").toString().trim() === trimmed);
     if (match) return match;
 
-    return { id: trimmed, name: "Item", image_url: "" };
+    return {
+      id: trimmed,
+      name: trimmed || "Item",
+      image_url: "",
+      not_rendered_reason: "This saved piece is no longer in the active wardrobe, so FitGPT can only list it in the preview summary.",
+    };
   }
 
   function handlePlanForLater(outfit) {
@@ -277,6 +284,15 @@ export default function SavedOutfits() {
                   <button className="btn primary" onClick={() => reuseOutfit(o)}>
                     Wear Again
                   </button>
+                    <button
+                      className="btn"
+                      onClick={() => setMannequinPreview({
+                        outfit: itemIds.map((id) => resolveItem(id, o)),
+                        title: `3D Outfit Preview: ${title}`,
+                      })}
+                    >
+                    View on mannequin
+                  </button>
                   <button className="btn" onClick={() => handlePlanForLater(o)}>
                     Plan for Later
                   </button>
@@ -293,6 +309,14 @@ export default function SavedOutfits() {
           );
         })}
       </div>
+
+      <OutfitMannequinPreview
+        isOpen={Boolean(mannequinPreview)}
+        onClose={() => setMannequinPreview(null)}
+        outfit={mannequinPreview?.outfit || []}
+        title={mannequinPreview?.title || "3D Outfit Preview"}
+        subtitle="Saved outfit preview"
+      />
 
     </div>
   );

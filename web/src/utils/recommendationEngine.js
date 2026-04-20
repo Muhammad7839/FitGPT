@@ -1365,8 +1365,6 @@ function scoreOutfitCandidate(outfit, context) {
 
     const wantsStreet = preferredStyles.some((s) => STREETWEAR_STYLES.has(s));
     const wantsFormal = preferredStyles.some((s) => FORMAL_STYLES.has(s));
-    const wantsAthletic = preferredStyles.some((s) => ATHLETIC_STYLES.has(s));
-
     const coreItems = outfit.filter((item) => {
       const r = itemRole(item);
       return r === "top" || r === "bottom" || r === "one-piece";
@@ -1471,7 +1469,9 @@ export function generateThreeOutfits(
   const candidates = [];
   const seenSigs = new Set();
 
-  for (let variant = 0; variant < 12; variant += 1) {
+  const variantAttempts = Math.max(24, requestedLimit * 12);
+
+  for (let variant = 0; variant < variantAttempts; variant += 1) {
     const outfit = buildOutfitCandidate(buckets, rng, context, variant);
     const mapped = mappedOutfit(outfit);
     if (!mapped.length) continue;
@@ -1504,7 +1504,8 @@ export function generateThreeOutfits(
 
   candidates.sort((a, b) => b.score - a.score);
 
-  const diversityThreshold = requestedLimit <= 2 ? 0.40 : 0.28;
+  const diversityThreshold = requestedLimit <= 2 ? 0.32 : 0.24;
+  const fallbackSimilarityCap = 0.58;
   const selectedEntries = [];
   const deferredEntries = [];
 
@@ -1520,11 +1521,21 @@ export function generateThreeOutfits(
       continue;
     }
 
-    deferredEntries.push(candidate);
+    deferredEntries.push({ ...candidate, maxSimilarity });
   }
+
+  deferredEntries.sort((a, b) => {
+    if (a.maxSimilarity !== b.maxSimilarity) return a.maxSimilarity - b.maxSimilarity;
+    return b.score - a.score;
+  });
 
   for (const candidate of deferredEntries) {
     if (selectedEntries.length >= requestedLimit) break;
+    const maxSimilarity = selectedEntries.reduce((highest, entry) => {
+      const similarity = recommendationSimilarity(entry.outfit, candidate.outfit);
+      return similarity > highest ? similarity : highest;
+    }, 0);
+    if (selectedEntries.length && maxSimilarity > fallbackSimilarityCap) continue;
     selectedEntries.push(candidate);
   }
 
@@ -1566,7 +1577,12 @@ function recommendationSimilarity(outfitA, outfitB) {
     tokenSet(outfitB, (item) => normalizeColorName(item?.color || ""))
   );
 
-  return itemSimilarity * 0.6 + typeSimilarity * 0.25 + colorSimilarity * 0.15;
+  const roleSimilarity = overlapRatio(
+    tokenSet(outfitA, (item) => itemRole(item)),
+    tokenSet(outfitB, (item) => itemRole(item))
+  );
+
+  return itemSimilarity * 0.68 + typeSimilarity * 0.17 + colorSimilarity * 0.08 + roleSimilarity * 0.07;
 }
 
 export function scoreOutfitForDisplay(

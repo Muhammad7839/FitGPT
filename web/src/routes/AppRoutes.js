@@ -3,7 +3,7 @@ import { Route, Routes, Navigate, useLocation, useNavigate } from "react-router-
 import PageTransition from "../components/PageTransition";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { useAuth } from "../auth/AuthProvider";
-import { loadAnswers, saveAnswers, isOnboarded, clearOnboarding, isTutorialDone } from "../utils/userStorage";
+import { loadAnswers, saveAnswers, isOnboarded, clearOnboarding, isTutorialDone, clearTutorialDone } from "../utils/userStorage";
 import GuidedTutorial from "../components/GuidedTutorial";
 import Login from "../components/Login";
 import Signup from "../components/Signup";
@@ -18,7 +18,7 @@ import Plans from "../components/Plans";
 import SavedOutfits from "../components/SavedOutfits";
 import OutfitBuilder from "../components/OutfitBuilder";
 
-function OnboardingWrapper({ onComplete, savedAnswers }) {
+function OnboardingWrapper({ onComplete, savedAnswers, showSplashOnLoad = true }) {
   const navigate = useNavigate();
 
   const handleComplete = useCallback(
@@ -29,13 +29,14 @@ function OnboardingWrapper({ onComplete, savedAnswers }) {
     [onComplete, navigate]
   );
 
-  return <Onboarding onComplete={handleComplete} initialAnswers={savedAnswers} />;
+  return <Onboarding onComplete={handleComplete} initialAnswers={savedAnswers} showSplashOnLoad={showSplashOnLoad} />;
 }
 
 export default function AppRoutes() {
   const location = useLocation();
-  const { pathname, search } = location;
+  const { pathname, search, state } = location;
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [answers, setAnswers] = useState(() => loadAnswers(user));
   const [onboarded, setOnboarded] = useState(() => isOnboarded(user));
@@ -67,8 +68,8 @@ export default function AppRoutes() {
     const nextParams = new URLSearchParams(search);
     nextParams.delete("resetOnboarding");
     const nextUrl = nextParams.toString() ? `/?${nextParams.toString()}` : "/";
-    window.location.replace(nextUrl);
-  }, [search]);
+    navigate(nextUrl, { replace: true, state: { skipOnboardingSplash: true } });
+  }, [navigate, search]);
 
   const handleOnboardingComplete = useCallback(
     (finalAnswers) => {
@@ -82,9 +83,12 @@ export default function AppRoutes() {
 
   const handleResetOnboarding = useCallback(() => {
     clearOnboarding(user);
+    clearTutorialDone();
     setAnswers(null);
     setOnboarded(false);
-  }, [user]);
+    setJustOnboarded(false);
+    navigate("/", { replace: true, state: { skipOnboardingSplash: true } });
+  }, [navigate, user]);
 
   const handleTutorialDismiss = useCallback(() => {
     setJustOnboarded(false);
@@ -103,6 +107,7 @@ export default function AppRoutes() {
                 <OnboardingWrapper
                   onComplete={handleOnboardingComplete}
                   savedAnswers={answers}
+                  showSplashOnLoad={!state?.skipOnboardingSplash}
                 />
               )
             }

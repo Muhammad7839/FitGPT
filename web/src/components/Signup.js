@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { registerWithEmail, loginWithEmail, getMe } from "../api/authApi";
+import { saveProfileDraft } from "../api/profileApi";
 import { useAuth } from "../auth/AuthProvider";
 import { migrateGuestData, clearGuestData } from "../utils/userStorage";
-import GoogleSignInButton from "./GoogleSignInButton";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -63,14 +63,22 @@ export default function Signup() {
         return;
       }
 
+      const profileDraft = {
+        fullName: fullName.trim(),
+        dob: dob || "",
+      };
+
       try {
         const me = await getMe();
         if (me) {
+          await saveProfileDraft(profileDraft, me);
           migrateGuestData(me);
           clearGuestData();
         }
         if (typeof setUser === "function") setUser(me);
-      } catch {}
+      } catch {
+        await saveProfileDraft(profileDraft, { email: email.trim() });
+      }
 
       navigate("/dashboard", { replace: true });
     } catch (err) {
@@ -101,10 +109,6 @@ export default function Signup() {
             Back
           </button>
         </div>
-
-        <GoogleSignInButton />
-
-        <div className="authDivider"><span>or</span></div>
 
         <form onSubmit={onSubmit} className="authForm">
           <label className="authFormGroup">

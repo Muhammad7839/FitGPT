@@ -25,6 +25,7 @@ import ItemFormFields, { CATEGORIES as ITEM_CATEGORIES, FIT_TAG_OPTIONS } from "
 import WardrobeItemCard from "./WardrobeItemCard";
 import BulkUploadModal from "./BulkUploadModal";
 import DuplicateReviewModal from "./DuplicateReviewModal";
+import ManualOutfitBuilder from "./ManualOutfitBuilder";
 
 const CATEGORIES = ["All Items", ...ITEM_CATEGORIES];
 
@@ -326,6 +327,7 @@ export default function Wardrobe() {
   const [duplicateScan, setDuplicateScan] = useState({ status: "idle", findings: [], scannedIds: [], scannedAt: 0 });
   const [duplicateReviewOpen, setDuplicateReviewOpen] = useState(false);
   const [pendingDuplicateAction, setPendingDuplicateAction] = useState(null);
+  const [manualBuilderOpen, setManualBuilderOpen] = useState(false);
   const [ignoredDuplicateKeys, setIgnoredDuplicateKeys] = useState(() => loadIgnoredDuplicateKeys(user));
   const duplicateScanRef = useRef(0);
   const bulkRunRef = useRef(0);
@@ -1393,7 +1395,7 @@ export default function Wardrobe() {
         }
 
         if (!cancelled) {
-          if (focusItem) applyDuplicateScanResult(nextItems, [focusItem], { openOnFound: false });
+          if (focusItem) applyDuplicateScanResult(nextItems, [], { openOnFound: false });
           else setDuplicateScan({ status: "clear", findings: [], scannedIds: [], scannedAt: Date.now() });
           setPendingDuplicateAction(null);
           setToast("Duplicate item removed.");
@@ -1420,7 +1422,7 @@ export default function Wardrobe() {
         await syncMergedItemBestEffort(mergedItem, action.removeId);
 
         if (!cancelled) {
-          applyDuplicateScanResult(nextItems, [mergedItem], { openOnFound: false });
+          applyDuplicateScanResult(nextItems, [], { openOnFound: false });
           setPendingDuplicateAction(null);
           setToast("Items merged into one wardrobe entry.");
           window.setTimeout(() => setToast(""), 2200);
@@ -1915,6 +1917,18 @@ export default function Wardrobe() {
         </section>
       ) : null}
 
+      {tab === "active" ? (
+        <section className="manualBuilderLaunchRow">
+          <button
+            type="button"
+            className="wardrobeChooseBtn manualBuilderLaunchBtn"
+            onClick={() => setManualBuilderOpen(true)}
+          >
+            Build your outfit
+          </button>
+        </section>
+      ) : null}
+
       {duplicateScan.status !== "idle" ? (
         <section
           className={`duplicateScanBanner ${duplicateScan.status}`}
@@ -2069,6 +2083,13 @@ export default function Wardrobe() {
         onClose={closeDuplicateReview}
         onStartAction={handleDuplicateActionChange}
         onKeepBoth={keepDuplicateItems}
+      />
+
+      <ManualOutfitBuilder
+        open={manualBuilderOpen}
+        onClose={() => setManualBuilderOpen(false)}
+        items={items}
+        user={user}
       />
 
       {editOpen ? ReactDOM.createPortal(
