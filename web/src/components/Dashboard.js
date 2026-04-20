@@ -6,17 +6,18 @@ import { useAuth } from "../auth/AuthProvider";
 import { useTheme } from "../App";
 import { savedOutfitsApi } from "../api/savedOutfitsApi";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
+import { wardrobeApi } from "../api/wardrobeApi";
 import useWardrobe from "../hooks/useWardrobe";
 import { fetchAIRecommendations } from "../api/recommendationsApi";
 import { submitRecommendationFeedback } from "../api/recommendationFeedbackApi";
 import { readAccessibilityPrefs, adaptAiText, effectiveAccessibilityPrefs } from "../utils/accessibilityPrefs";
 import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
-import ClothCard from "./ClothCard";
 import MannequinViewer from "./MannequinViewer";
 import MeshGradient from "./MeshGradient";
 import ErrorBoundary from "./ErrorBoundary";
 import WardrobeGapPanel from "./WardrobeGapPanel";
 import WardrobeRotationPanel from "./WardrobeRotationPanel";
+import OutfitMannequinPreview from "./OutfitMannequinPreview";
 import {
   OPEN_ADD_ITEM_FLAG,
   REUSE_OUTFIT_KEY,
@@ -28,7 +29,6 @@ import {
   UNDERUSED_ALERTS_KEY,
 } from "../utils/constants";
 import {
-  readRecSeed,
   writeRecSeed,
   readTimeOverride,
   writeTimeOverride,
@@ -37,6 +37,8 @@ import {
   makeObjectStore,
   readSeasonalMode,
   writeSeasonalMode,
+  saveWardrobe,
+  mergeWardrobeWithLocalMetadata,
   loadRejectedOutfits,
   saveRejectedOutfit,
   loadRecommendationFeedback,
@@ -94,13 +96,6 @@ const dismissedUnderusedAlertsStore = makeObjectStore(UNDERUSED_ALERTS_KEY);
 
 function recommendationSignature(outfit) {
   return idsSignature((Array.isArray(outfit) ? outfit : []).map((item) => item?.id));
-}
-
-function clothCardKey(outfit, item, refreshToken, recSeed) {
-  const outfitSig = recommendationSignature(outfit);
-  const itemId = (item?.id ?? "").toString();
-  const image = (item?.image_url || "").toString();
-  return `${outfitSig}|${itemId}|${image}|${refreshToken}|${recSeed}`;
 }
 
 function readRecentRecommendationSigs() {
@@ -404,11 +399,7 @@ function buildWeatherPresentation({ category, tempF, loading, source, message, p
     headline: tempLabel,
     subline: `Live weather: ${categoryLabel}${conditionSuffix}`,
     status: "Live weather active",
-    detail: hasTemp
-      ? precipLabel
-        ? `Recommendations are adjusted for ${precipLabel.toLowerCase()} conditions.`
-        : "Recommendations are using your current local temperature."
-      : "",
+    detail: "",
   };
 }
 
@@ -487,6 +478,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [seasonalMode, setSeasonalMode] = useState(() => readSeasonalMode(user));
   const [showWhyDetails, setShowWhyDetails] = useState(false);
   const [showRefineControls, setShowRefineControls] = useState(false);
+  const [refreshWardrobeSnapshot, setRefreshWardrobeSnapshot] = useState(null);
 
   const [rejectedOutfits] = useState(() => loadRejectedOutfits(user));
   const [legacyPreferenceProfile, setLegacyPreferenceProfile] = useState(null);
@@ -650,6 +642,10 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   }, [user]);
 
   useEffect(() => {
+    setRefreshWardrobeSnapshot(null);
+  }, [wardrobe]);
+
+  useEffect(() => {
     setRotationPreferences(readRotationAlertPreferences(user));
   }, [user]);
 
@@ -681,6 +677,11 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const explicitFeedbackCount = useMemo(
     () => Object.values(recommendationFeedback?.entriesBySignature || {}).filter((entry) => entry?.signal !== FEEDBACK_SIGNALS.SKIP).length,
     [recommendationFeedback]
+  );
+
+  const recommendationWardrobe = useMemo(
+    () => (Array.isArray(refreshWardrobeSnapshot) && refreshWardrobeSnapshot.length ? refreshWardrobeSnapshot : wardrobe),
+    [refreshWardrobeSnapshot, wardrobe]
   );
 
   const personalizationSummary = useMemo(
@@ -776,7 +777,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
     const timerId = setTimeout(() => {
       async function fetchAI() {
-        const active = (Array.isArray(wardrobe) ? wardrobe : []).filter(
+        const active = (Array.isArray(recommendationWardrobe) ? recommendationWardrobe : []).filter(
           (x) => x && x.is_active !== false
         );
         if (active.length < 2) {
@@ -863,14 +864,14 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       alive = false;
       clearTimeout(timerId);
     };
-  }, [wardrobe, weatherCategory, timeCategory, effectiveAnswers, aiRefreshToken, currentSeason, seasonalMode]);
+  }, [recommendationWardrobe, weatherCategory, timeCategory, effectiveAnswers, aiRefreshToken, currentSeason, seasonalMode]);
 
   const bodyTypeId = effectiveAnswers?.bodyType ? effectiveAnswers.bodyType : DEFAULT_BODY_TYPE;
 
   const generatedOutfits = useMemo(
     () =>
       generateThreeOutfits(
-        wardrobe,
+        recommendationWardrobe,
         recSeed,
         bodyTypeId,
         recentExactSigs,
@@ -889,7 +890,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           limit: 9,
         }
       ),
-    [wardrobe, recSeed, bodyTypeId, recentExactSigs, recentItemCounts, weatherCategory, precipCondition, timeCategory, effectiveAnswers, savedSigs, currentSeason, seasonalMode, feedbackProfile, personalizationProfile, rejectedOutfits]
+    [recommendationWardrobe, recSeed, bodyTypeId, recentExactSigs, recentItemCounts, weatherCategory, precipCondition, timeCategory, effectiveAnswers, savedSigs, currentSeason, seasonalMode, feedbackProfile, personalizationProfile, rejectedOutfits]
   );
 
   const reused = useMemo(() => readReuseOutfit(), []);
@@ -995,6 +996,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     () => effectiveAccessibilityPrefs(accessibilityPrefs, theme),
     [accessibilityPrefs, theme]
   );
+  const [mannequinPreview, setMannequinPreview] = useState(null);
 
   useEffect(() => {
     if (selectedIdx != null && selectedIdx >= outfits.length) {
@@ -1210,7 +1212,21 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     }
   };
 
-  const handleRefreshRecommendation = () => {
+  const handleRefreshRecommendation = async () => {
+    if (!isGuestMode) {
+      try {
+        const remoteItems = await wardrobeApi.getItems();
+        const apiItems = Array.isArray(remoteItems) ? remoteItems : [];
+        if (apiItems.length) {
+          const mergedItems = mergeWardrobeWithLocalMetadata(apiItems, wardrobe);
+          saveWardrobe(mergedItems, user);
+          setRefreshWardrobeSnapshot(mergedItems);
+        }
+      } catch {
+        // Keep the local refresh path working even if the wardrobe API is unavailable.
+      }
+    }
+
     rememberCurrentRecommendations();
     clearReuseOutfit();
     setSelectedIdx(0);
@@ -2143,13 +2159,11 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                       onPointerLeave={onTiltLeave}
                     >
                       <div className="dashSquareRole">{outfitRoleLabel(item)}</div>
-                      {idx === selectedIdx ? (
-                        <ErrorBoundary fallback={item.image_url ? <img className="dashSquareImg" src={item.image_url} alt={item.name} /> : <div className="dashSquareImg" aria-hidden="true" />}><ClothCard key={clothCardKey(outfit, item, aiRefreshToken, recSeed)} imageUrl={item.image_url} className="dashSquareImg" /></ErrorBoundary>
-                      ) : item.image_url ? (
-                        <img className="dashSquareImg" src={item.image_url} alt={item.name} />
-                      ) : (
-                        <div className="dashSquareImg" aria-hidden="true" />
-                      )}
+                        {item.image_url ? (
+                          <img className="dashSquareImg" src={item.image_url} alt={item.name} />
+                        ) : (
+                          <div className="dashSquareImg" aria-hidden="true" />
+                        )}
                       <div className="dashSquareNameRow">
                         <span
                           className="dashColorDot"
@@ -2181,7 +2195,22 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                 <div className="dashOptionReason">
                   <div className="dashOptionReasonHead">
                     <div className="dashOptionReasonLabel">Why this works</div>
-                    <div className="dashOptionReasonHint">Quick summary</div>
+                    <div className="dashOptionReasonActions">
+                      <div className="dashOptionReasonHint">Quick summary</div>
+                      <button
+                        type="button"
+                        className="dashPreviewBtn"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setMannequinPreview({
+                            outfit,
+                            title: `3D Outfit Preview: Option ${String(idx + 1).padStart(2, "0")}`,
+                          });
+                        }}
+                      >
+                        View on mannequin
+                      </button>
+                    </div>
                   </div>
                   <div className="dashOptionReasonText">{summary.explanationPreview}</div>
                 </div>
@@ -2395,6 +2424,13 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             ) : null}
           </div>
         ) : null}
+        <OutfitMannequinPreview
+          isOpen={Boolean(mannequinPreview)}
+          onClose={() => setMannequinPreview(null)}
+          outfit={mannequinPreview?.outfit || []}
+          title={mannequinPreview?.title || "3D Outfit Preview"}
+          subtitle="View on mannequin"
+        />
       </section>
 
       <WardrobeGapPanel

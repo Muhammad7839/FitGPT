@@ -4,7 +4,6 @@ import { loginWithEmail, getMe } from "../api/authApi";
 import { useAuth } from "../auth/AuthProvider";
 import { migrateGuestData, clearGuestData } from "../utils/userStorage";
 import { isNetworkError } from "../utils/helpers";
-import GoogleSignInButton from "./GoogleSignInButton";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -82,10 +81,6 @@ export default function Login() {
             Back
           </button>
         </div>
-
-        <GoogleSignInButton />
-
-        <div className="authDivider"><span>or</span></div>
 
         <form onSubmit={onSubmit} className="authForm">
           <label className="authFormGroup">

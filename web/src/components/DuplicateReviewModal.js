@@ -81,9 +81,7 @@ function ConfirmationPanel({ action, onCancel, onConfirm }) {
   );
 }
 
-function FindingCard({ finding, pendingAction, onStartAction, onKeepBoth }) {
-  const actionForFinding = pendingAction?.pairKey === finding.pairKey ? pendingAction : null;
-
+function FindingCard({ finding, onStartAction, onKeepBoth }) {
   return (
     <article className="duplicateFindingCard">
       <div className="duplicateFindingHeader">
@@ -172,11 +170,6 @@ function FindingCard({ finding, pendingAction, onStartAction, onKeepBoth }) {
         </button>
       </div>
 
-      <ConfirmationPanel
-        action={actionForFinding}
-        onCancel={() => onStartAction(null)}
-        onConfirm={() => onStartAction({ ...actionForFinding, confirmNow: true })}
-      />
     </article>
   );
 }
@@ -229,12 +222,23 @@ export default function DuplicateReviewModal({
             <FindingCard
               key={finding.pairKey}
               finding={finding}
-              pendingAction={pendingAction}
               onStartAction={onStartAction}
               onKeepBoth={onKeepBoth}
             />
           ))}
         </div>
+
+        {pendingAction ? (
+          <div className="modalOverlay duplicateConfirmOverlay" role="presentation">
+            <div className="duplicateConfirmModal">
+              <ConfirmationPanel
+                action={pendingAction}
+                onCancel={() => onStartAction(null)}
+                onConfirm={() => onStartAction({ ...pendingAction, confirmNow: true })}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>,
     document.body
