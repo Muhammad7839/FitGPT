@@ -411,13 +411,23 @@ export function generateTripPackingPlan({
       });
     }
 
+    const crossDayItemCounts = new Map();
+    const usedSignatures = new Set();
     return tripDays.map((date, index) => {
       const suggestion = buildFallbackPlanningSuggestion({
         wardrobe,
         seedNumber: baseSeed + index * 53,
         bodyTypeId,
         answers,
+        recentItemCounts: crossDayItemCounts,
+        savedSigs: usedSignatures,
       });
+
+      if (suggestion.signature) usedSignatures.add(suggestion.signature);
+      for (const item of Array.isArray(suggestion.outfit) ? suggestion.outfit : []) {
+        const id = (item?.id ?? "").toString().trim();
+        if (id) crossDayItemCounts.set(id, (crossDayItemCounts.get(id) || 0) + 2);
+      }
 
       return {
         date,

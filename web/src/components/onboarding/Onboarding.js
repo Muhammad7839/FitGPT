@@ -74,10 +74,11 @@ export default function Onboarding({
   initialStep = 1,
   initialAnswers,
   onProgress,
+  showSplashOnLoad = true,
 }) {
   const navigate = useNavigate();
 
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(() => !!showSplashOnLoad);
   const [step, setStep] = useState(() => clampStep(initialStep));
   const [answers, setAnswers] = useState(() => normalizeAnswers(initialAnswers));
 

@@ -250,11 +250,24 @@ def _style_values(item: models.ClothingItem) -> set[str]:
 
 def _guess_style_from_item(item: models.ClothingItem) -> Optional[str]:
     blob = f"{item.name or ''} {item.clothing_type or ''} {item.brand or ''}".lower()
-    if any(token in blob for token in {"formal", "tailored", "blazer", "dress", "oxford"}):
+    if any(token in blob for token in {"formal", "tailored", "blazer", "dress shirt", "dress pant", "trouser", "oxford shoe", "loafer", "slacks"}):
         return "formal"
-    if any(token in blob for token in {"sport", "athletic", "running", "training"}):
+    if any(token in blob for token in {"sport", "athletic", "running", "training", "gym", "activewear", "legging", "jogger", "track"}):
         return "athletic"
+    if any(token in blob for token in {"streetwear", "urban", "hoodie", "cargo", "sneaker", "hype", "oversized", "graphic tee"}):
+        return "streetwear"
     return "casual"
+
+
+def _item_blob(item: models.ClothingItem) -> str:
+    return " ".join([
+        item.name or "",
+        item.clothing_type or "",
+        item.category or "",
+        item.fit_tag or "",
+        item.brand or "",
+        " ".join(item.style_tags),
+    ]).lower()
 
 
 def _build_candidate_combos(items: list[models.ClothingItem], weather_category: str) -> list[list[models.ClothingItem]]:
@@ -425,6 +438,7 @@ def _score_candidate(
     structure_bonus = _structure_bonus(combo, weather_category)
     set_bonus = _set_bonus(combo)
     temp_penalty = sum(_temperature_penalty(item, weather_category) for item in combo) / len(combo)
+    coherence_penalty = _outfit_coherence_penalty(combo, style_target, weather_category)
 
     score = (
         (avg_item_score * 0.52)
@@ -433,6 +447,7 @@ def _score_candidate(
         + (structure_bonus * 0.10)
         + (set_bonus * 0.08)
         - (temp_penalty * 0.12)
+        - (coherence_penalty * 0.10)
     )
     explanation = _build_combo_explanation(
         combo=combo,
@@ -519,17 +534,98 @@ def _comfort_score(item: models.ClothingItem, comfort_target: int) -> float:
     return 0.2
 
 
+_STREETWEAR_STYLES = {"streetwear", "street", "urban", "casual", "hype"}
+_FORMAL_STYLES = {"formal", "business", "tailored", "office", "work", "smart casual"}
+_ATHLETIC_STYLES = {"athletic", "sport", "activewear", "gym", "training", "sporty", "activewear"}
+
+
 def _style_score(item: models.ClothingItem, style_target: str) -> float:
     styles = _style_values(item)
     if not styles:
         return 0.7
     if style_target in styles:
         return 1.0
-    if style_target == "formal" and "casual" in styles:
-        return 0.45
-    if style_target in {"athletic", "sporty"} and "formal" in styles:
-        return 0.4
+
+    target = style_target.lower().strip()
+
+    if target in _STREETWEAR_STYLES:
+        if styles.intersection(_FORMAL_STYLES):
+            return 0.3
+        if styles.intersection(_ATHLETIC_STYLES):
+            return 0.75
+        return 0.7
+
+    if target in _FORMAL_STYLES:
+        if styles.intersection({"casual"}):
+            return 0.45
+        if styles.intersection(_ATHLETIC_STYLES):
+            return 0.35
+        if styles.intersection(_STREETWEAR_STYLES - {"casual"}):
+            return 0.4
+        return 0.7
+
+    if target in _ATHLETIC_STYLES:
+        if styles.intersection(_FORMAL_STYLES):
+            return 0.35
+        if styles.intersection(_STREETWEAR_STYLES - {"casual"}):
+            return 0.6
+        return 0.7
+
     return 0.7
+
+
+def _outfit_coherence_penalty(combo: list[models.ClothingItem], style_target: str, weather_category: str) -> float:
+    """Penalizes style/weather-incoherent item combinations within an outfit."""
+    penalty = 0.0
+    target = style_target.lower().strip()
+
+    for item in combo:
+        cat = _normalize_category(item.category)
+        blob = _item_blob(item)
+        fit = (item.fit_tag or "").lower().strip()
+
+        if cat == "shoes":
+            # Flats, heels, dress shoes clash with streetwear/casual
+            if target in _STREETWEAR_STYLES:
+                if any(t in blob for t in {"flat", "ballet", "pump", "heel", "oxford", "dress shoe", "court shoe", "kitten"}):
+                    penalty += 0.4
+                if any(t in blob for t in {"loafer", "derby"}) and "casual" not in blob:
+                    penalty += 0.2
+            # Sneakers/trainers clash with formal
+            if target in _FORMAL_STYLES:
+                if any(t in blob for t in {"sneaker", "trainer", "running shoe", "sport shoe", "athletic shoe", "canvas shoe"}):
+                    penalty += 0.5
+            # Non-athletic footwear in athletic context
+            if target in _ATHLETIC_STYLES:
+                has_athletic = any(t in blob for t in {"sneaker", "trainer", "running", "sport", "athletic", "cross-train"})
+                if not has_athletic:
+                    penalty += 0.55
+
+        elif cat == "bottom":
+            # Formal trousers/slacks in streetwear without relaxed/oversized fit
+            if target in _STREETWEAR_STYLES:
+                is_formal_bottom = any(t in blob for t in {"dress pant", "trouser", "slacks", "chino", "dress trouser", "suit pant"})
+                is_relaxed = fit in {"oversized", "relaxed", "loose", "wide", "wide-leg", "baggy", "straight"}
+                if is_formal_bottom and not is_relaxed:
+                    penalty += 0.5
+            # Shorts/athletic bottoms in formal context
+            if target in _FORMAL_STYLES:
+                if any(t in blob for t in {"short", "sweatpant", "jogger", "track pant", "legging"}):
+                    penalty += 0.55
+
+        elif cat == "outerwear":
+            # Heavy winter outerwear in warm/mild weather
+            is_winter_heavy = any(t in blob for t in {
+                "puffer", "down jacket", "down coat", "parka", "winter coat",
+                "heavy coat", "padded jacket", "quilted jacket", "duvet jacket",
+            })
+            if is_winter_heavy:
+                if weather_category in {"warm", "hot"}:
+                    penalty += 0.8
+                elif weather_category == "mild":
+                    penalty += 0.4
+
+    return penalty
 
 
 def _occasion_score(item: models.ClothingItem, occasion: str) -> float:

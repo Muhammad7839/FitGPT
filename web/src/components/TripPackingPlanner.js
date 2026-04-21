@@ -109,6 +109,12 @@ function formatTripDay(date) {
 function normalizeTripActivityLabel(value) {
   return (value || "")
     .toString()
+    .split("")
+    .map((char) => {
+      const code = char.charCodeAt(0);
+      return (code >= 0 && code <= 31) || code === 127 ? " " : char;
+    })
+    .join("")
     .replace(/\b(?=[A-Z0-9]{4,}\b)(?=.*\d)[A-Z0-9]+\b/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
