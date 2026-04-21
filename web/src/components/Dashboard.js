@@ -531,7 +531,9 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { theme } = useTheme() || {};
-  const isEditorial = theme?.id === "editorial";
+  // Catches "editorial" and any sibling like "editorial-dark" so the hero,
+  // insight strip, and dominant-selected layout render across the family.
+  const isEditorial = typeof theme?.id === "string" && theme.id.startsWith("editorial");
   const isGuestMode = !user;
 
   const wardrobe = useWardrobe(user);
