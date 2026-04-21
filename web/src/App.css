@@ -20256,6 +20256,11 @@ html[data-hc="true"] .dashAiParagraph {
 
 .editorialHeadlineTemp {
   color: #c43c3c;
+  font-weight: 700;
+  /* The fallback Times/Georgia degree glyph renders as a hairline that
+     can disappear into anti-aliasing — set the font-feature-settings to
+     pull a solid degree from the font's stylistic set when available. */
+  font-variant-numeric: lining-nums;
 }
 
 .editorialDek {
