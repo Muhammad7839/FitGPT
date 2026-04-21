@@ -432,9 +432,94 @@ function rejectSyncErrorText() {
   return `${REJECT_SUCCESS_MESSAGE} We couldn't sync that rejection right now.`;
 }
 
+// ── Editorial mode helpers ─────────────────────────────────────────
+// Used only when the "editorial" theme is active. Keep these data-only
+// (no JSX) so they stay easy to test and don't pull React in.
+
+function editorialDayName(date) {
+  return date.toLocaleDateString(undefined, { weekday: "long" });
+}
+
+function buildEditorialHeadline({ count, tempF, day }) {
+  const ways = count >= 3 ? "Three" : count === 2 ? "Two" : count === 1 ? "One" : "No";
+  const wayLabel = count === 1 ? "way" : "ways";
+  if (count === 0) {
+    return `No outfits for a ${day}.`;
+  }
+  if (Number.isFinite(tempF)) {
+    return `${ways} ${wayLabel} to dress for a ${Math.round(tempF)}\u00B0 ${day}.`;
+  }
+  return `${ways} ${wayLabel} to dress for a ${day}.`;
+}
+
+function buildClosetGapInsight(wardrobe) {
+  const active = (wardrobe || []).filter((item) => !item?.is_archived);
+  const counts = { Tops: 0, Bottoms: 0, Shoes: 0, Outerwear: 0, Accessories: 0 };
+  for (const item of active) {
+    const cat = normalizeCategory(item?.category);
+    if (counts[cat] != null) counts[cat] += 1;
+  }
+  const order = ["Outerwear", "Tops", "Bottoms", "Shoes", "Accessories"];
+  const missing = order.find((c) => counts[c] === 0);
+  if (missing) return { headline: `Add ${missing.toLowerCase()}`, sub: "Empty category in your closet" };
+  const lowest = order.reduce((acc, c) => (counts[c] < counts[acc] ? c : acc), order[0]);
+  if (counts[lowest] <= 2) return { headline: `Light on ${lowest.toLowerCase()}`, sub: `Only ${counts[lowest]} in rotation` };
+  return { headline: "Balanced closet", sub: "Every category is covered" };
+}
+
+function buildRotationInsight(historyEntries) {
+  const list = Array.isArray(historyEntries) ? historyEntries : [];
+  const now = new Date();
+  const monthAgo = new Date(now);
+  monthAgo.setDate(monthAgo.getDate() - 30);
+  const recent = list.filter((entry) => {
+    const ts = entry?.worn_at || entry?.created_at;
+    if (!ts) return false;
+    const d = new Date(ts);
+    return !Number.isNaN(d.getTime()) && d >= monthAgo;
+  });
+  if (recent.length === 0) return { headline: "Quiet month", sub: "Log an outfit to start the count" };
+  return {
+    headline: `${recent.length} outfit${recent.length === 1 ? "" : "s"} worn`,
+    sub: "In the last 30 days",
+  };
+}
+
+function buildTomorrowInsight(plannedOutfits) {
+  const list = Array.isArray(plannedOutfits) ? plannedOutfits : [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const future = list
+    .filter((p) => {
+      const d = p?.planned_date ? new Date(p.planned_date) : null;
+      return d && !Number.isNaN(d.getTime()) && d >= today;
+    })
+    .sort((a, b) => new Date(a.planned_date) - new Date(b.planned_date));
+  const next = future[0];
+  if (!next) return { headline: "Nothing planned", sub: "Plan an outfit from the dashboard" };
+  const when = new Date(next.planned_date);
+  const isToday = when.getTime() === today.getTime();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const isTomorrow = when.getTime() === tomorrow.getTime();
+  const label = isToday ? "Today" : isTomorrow ? "Tomorrow" : when.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  return {
+    headline: label,
+    sub: next.occasion ? titleCase(next.occasion) : "Outfit planned",
+  };
+}
+
+function pickEditorialHeroImage(outfit) {
+  const list = Array.isArray(outfit) ? outfit : [];
+  const withImg = list.find((item) => item?.image_url);
+  return withImg?.image_url || null;
+}
+
 export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { theme } = useTheme() || {};
+  const isEditorial = theme?.id === "editorial";
   const isGuestMode = !user;
 
   const wardrobe = useWardrobe(user);
@@ -482,6 +567,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [refreshWardrobeSnapshot, setRefreshWardrobeSnapshot] = useState(null);
 
   const [rejectedOutfits] = useState(() => loadRejectedOutfits(user));
+  const [editorialPlanned, setEditorialPlanned] = useState([]);
   const [legacyPreferenceProfile, setLegacyPreferenceProfile] = useState(null);
 
   /* Build personalization profile from all signals once history + saved are loaded */
@@ -507,6 +593,19 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const nudgeTimerRef = useRef(null);
 
   useEffect(() => { recordVisit(user); }, [user]);
+
+  // Editorial mode: load planned outfits for the "Tomorrow" insight card.
+  // Only fires when the editorial theme is active so we don't pay for it
+  // on every dashboard mount.
+  useEffect(() => {
+    if (!isEditorial) return;
+    let alive = true;
+    plannedOutfitsApi.listPlanned(user).then((res) => {
+      if (!alive) return;
+      setEditorialPlanned(Array.isArray(res?.planned_outfits) ? res.planned_outfits : []);
+    }).catch(() => { if (alive) setEditorialPlanned([]); });
+    return () => { alive = false; };
+  }, [isEditorial, user]);
 
   const [aiOutfits, setAiOutfits] = useState(null);
   const [aiExplanations, setAiExplanations] = useState([]);
@@ -983,7 +1082,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [viewMode, setViewMode] = useState("grid");
-  const { theme } = useTheme() || {};
   const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(user));
 
   useEffect(() => {
@@ -1716,55 +1814,124 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     return "Filtered by current season. In season items stay first, while overlap pieces still help with transitional weather.";
   }, [seasonalMode, hasSeasonTags, currentSeasonLabel]);
 
+  const editorialHeadline = isEditorial
+    ? buildEditorialHeadline({
+        count: outfits.length,
+        tempF: weatherTempF,
+        day: editorialDayName(new Date()),
+      })
+    : "";
+  const editorialHeroOutfit = isEditorial ? (outfits[selectedIdx ?? 0] || outfits[0] || []) : [];
+  const editorialHeroImage = isEditorial ? pickEditorialHeroImage(editorialHeroOutfit) : null;
+  const editorialClosetGap = isEditorial ? buildClosetGapInsight(wardrobe) : null;
+  const editorialRotation = isEditorial ? buildRotationInsight(historyEntries) : null;
+  const editorialTomorrow = isEditorial ? buildTomorrowInsight(editorialPlanned) : null;
+
   return (
-    <div className="onboarding onboardingPage dashPage">
-      <div className="dashHeroBar">
-        <div className="dashHeroLeft">
-          <div className="dashHeroDate">{formatToday()}</div>
-          <div className="dashHeroIntro">
-            A cleaner way to check today&apos;s outfit, refine it fast, and spot the next best move for your wardrobe.
+    <div className={"onboarding onboardingPage dashPage" + (isEditorial ? " dashPageEditorial" : "")}>
+      {isEditorial ? (
+        <header className="editorialHero">
+          <div className="editorialHeroLeft">
+            <div className="editorialMasthead">FitGPT — {formatToday()}</div>
+            <h1 className="editorialHeadline">{editorialHeadline}</h1>
+            <div className="editorialDek">
+              {weatherPresentation.subline || "Refine, save, or plan today's look."}
+            </div>
+            <div className="editorialActions">
+              <button type="button" className="editorialBtnPrimary" onClick={goAddItem}>Add item</button>
+              {!isGuestMode ? (
+                <>
+                  <button type="button" className="editorialBtnGhost" onClick={openPlanModal}>Plan outfit</button>
+                  <button type="button" className="editorialBtnGhost" onClick={() => navigate("/history")}>History</button>
+                </>
+              ) : null}
+            </div>
           </div>
-          <div className="dashQuickRow">
-            <button type="button" className="dashQuickBtn" onClick={goAddItem}>+ Add Item</button>
-            {!isGuestMode ? (
-              <>
-                <button type="button" className="dashQuickBtn" onClick={openPlanModal}>{"\u2606"} Plan Outfit</button>
-                <button type="button" className="dashQuickBtn" onClick={() => navigate("/history")}>{"\u29D6"} History</button>
-              </>
-            ) : null}
+          <div className="editorialHeroRight">
+            {editorialHeroImage ? (
+              <div className="editorialHeroFigure">
+                <img src={editorialHeroImage} alt="Today's selected outfit" className="editorialHeroImg" />
+                <div className="editorialHeroCaption">
+                  {`Plate ${String((selectedIdx ?? 0) + 1).padStart(2, "0")} \u2014 ${editorialHeroOutfit.length} pieces`}
+                </div>
+              </div>
+            ) : (
+              <div className="editorialHeroFigure editorialHeroFigureEmpty">
+                <div className="editorialHeroFigureLabel">No plate yet</div>
+                <div className="editorialHeroCaption">Add a few items to render today's outfit.</div>
+              </div>
+            )}
           </div>
-        </div>
-        <div className="dashHeroRight">
-          <div
-            className="dashPersonalization"
-            title={`Personalization: ${legacyPreferenceProfile?.personalizationLevel ?? 0}%`}
-          >
-            <span className="dashPersonalizationSparkle" aria-hidden="true">{"\u2728"}</span>
-            <div className="dashPersonalizationBody">
-              <div className="dashPersonalizationHead">
-                <span className="dashPersonalizationLabel">
-                  {(() => {
-                    const lvl = legacyPreferenceProfile?.personalizationLevel ?? 0;
-                    if (lvl >= 70) return "Tuned to you";
-                    if (lvl >= 35) return "Learning";
-                    return "Getting started";
-                  })()}
-                </span>
-                <span className="dashPersonalizationPct">
-                  {`${Math.round(legacyPreferenceProfile?.personalizationLevel ?? 0)}%`}
-                </span>
+        </header>
+      ) : (
+        <div className="dashHeroBar">
+          <div className="dashHeroLeft">
+            <div className="dashHeroDate">{formatToday()}</div>
+            <div className="dashHeroIntro">
+              A cleaner way to check today&apos;s outfit, refine it fast, and spot the next best move for your wardrobe.
+            </div>
+            <div className="dashQuickRow">
+              <button type="button" className="dashQuickBtn" onClick={goAddItem}>+ Add Item</button>
+              {!isGuestMode ? (
+                <>
+                  <button type="button" className="dashQuickBtn" onClick={openPlanModal}>{"\u2606"} Plan Outfit</button>
+                  <button type="button" className="dashQuickBtn" onClick={() => navigate("/history")}>{"\u29D6"} History</button>
+                </>
+              ) : null}
+            </div>
+          </div>
+          <div className="dashHeroRight">
+            <div
+              className="dashPersonalization"
+              title={`Personalization: ${legacyPreferenceProfile?.personalizationLevel ?? 0}%`}
+            >
+              <span className="dashPersonalizationSparkle" aria-hidden="true">{"\u2728"}</span>
+              <div className="dashPersonalizationBody">
+                <div className="dashPersonalizationHead">
+                  <span className="dashPersonalizationLabel">
+                    {(() => {
+                      const lvl = legacyPreferenceProfile?.personalizationLevel ?? 0;
+                      if (lvl >= 70) return "Tuned to you";
+                      if (lvl >= 35) return "Learning";
+                      return "Getting started";
+                    })()}
+                  </span>
+                  <span className="dashPersonalizationPct">
+                    {`${Math.round(legacyPreferenceProfile?.personalizationLevel ?? 0)}%`}
+                  </span>
+                </div>
+                <div className="dashPersonalizationBar" aria-hidden="true">
+                  <div
+                    className="dashPersonalizationFill"
+                    style={{ width: `${legacyPreferenceProfile?.personalizationLevel ?? 0}%` }}
+                  />
+                </div>
+                <div className="dashPersonalizationCaption">Personalized daily styling</div>
               </div>
-              <div className="dashPersonalizationBar" aria-hidden="true">
-                <div
-                  className="dashPersonalizationFill"
-                  style={{ width: `${legacyPreferenceProfile?.personalizationLevel ?? 0}%` }}
-                />
-              </div>
-              <div className="dashPersonalizationCaption">Personalized daily styling</div>
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {isEditorial ? (
+        <section className="editorialInsightStrip" aria-label="Closet insights">
+          <article className="editorialInsightCard">
+            <div className="editorialInsightLabel">Rotation</div>
+            <div className="editorialInsightHeadline">{editorialRotation?.headline}</div>
+            <div className="editorialInsightSub">{editorialRotation?.sub}</div>
+          </article>
+          <article className="editorialInsightCard">
+            <div className="editorialInsightLabel">Closet gap</div>
+            <div className="editorialInsightHeadline">{editorialClosetGap?.headline}</div>
+            <div className="editorialInsightSub">{editorialClosetGap?.sub}</div>
+          </article>
+          <article className="editorialInsightCard">
+            <div className="editorialInsightLabel">Tomorrow</div>
+            <div className="editorialInsightHeadline">{editorialTomorrow?.headline}</div>
+            <div className="editorialInsightSub">{editorialTomorrow?.sub}</div>
+          </article>
+        </section>
+      ) : null}
 
       <section className="card dashWide dashWeatherCard dashSectionCard">
         <div className="dashWeatherHud">

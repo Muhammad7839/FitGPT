@@ -70,6 +70,32 @@ export const PRESET_THEMES = [
     vars: buildVars("dark", "#c43c3c"),
   },
 
+  // Editorial — cream paper aesthetic, serif-friendly, ink burgundy accent.
+  // Used by the magazine-style Dashboard hero. Opt-in only.
+  {
+    id: "editorial",
+    name: "Editorial Paper",
+    base: "light",
+    category: "preset",
+    icon: "\uD83D\uDCD6",
+    vars: buildVars("light", "#7a1f1f", {
+      "--bg": "#f5efe6",
+      "--pageBg1": "#f0e8db",
+      "--pageBg2": "#f7f1e8",
+      "--surface": "#fbf6ee",
+      "--surface-input": "#fbf6ee",
+      "--surface-border": "rgba(38, 28, 20, 0.14)",
+      "--text": "#2a221c",
+      "--muted": "rgba(42, 34, 28, 0.6)",
+      "--border": "rgba(38, 28, 20, 0.14)",
+      "--bgSoft": "rgba(38, 28, 20, 0.05)",
+      "--shadow": "0 14px 38px rgba(38, 28, 20, 0.12)",
+      "--shadow-hover": "0 18px 50px rgba(38, 28, 20, 0.18)",
+      "--wardrobe-blue": "#7a1f1f",
+      "--wardrobe-blue-soft": "rgba(122, 31, 31, 0.08)",
+    }),
+  },
+
   // Color presets
   {
     id: "ocean",
