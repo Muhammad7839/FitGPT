@@ -7,7 +7,7 @@ import { loadWardrobe, saveWardrobe, loadAnswers, mergeWardrobeWithLocalMetadata
 import { preloadModel } from "../utils/classifyClothing";
 import { detectDuplicateFindings, loadIgnoredDuplicateKeys, mergeDuplicateItems, saveIgnoredDuplicateKeys } from "../utils/duplicateDetection";
 import { OPEN_ADD_ITEM_FLAG } from "../utils/constants";
-import { makeId, normalizeFitTag, fileToDataUrl, isNetworkError, onTiltMove, onTiltLeave } from "../utils/helpers";
+import { dataUrlToFile, makeId, normalizeFitTag, fileToDataUrl, isNetworkError, onTiltMove, onTiltLeave } from "../utils/helpers";
 import { generateItemTagSuggestions } from "../utils/tagSuggestions";
 import { getCurrentSeason, getSeasonLabel, getSeasonalWardrobeLabel, sortItemsBySeasonalRelevance, summarizeSeasonalCollection } from "../utils/seasonalWardrobe";
 import {
@@ -23,6 +23,7 @@ import {
 
 import ItemFormFields, { CATEGORIES as ITEM_CATEGORIES, FIT_TAG_OPTIONS } from "./ItemFormFields";
 import WardrobeItemCard from "./WardrobeItemCard";
+import BarcodeScannerModal from "./BarcodeScannerModal";
 import BulkUploadModal from "./BulkUploadModal";
 import DuplicateReviewModal from "./DuplicateReviewModal";
 import ManualOutfitBuilder from "./ManualOutfitBuilder";
@@ -228,6 +229,7 @@ export default function Wardrobe() {
   const filterRef = useRef(null);
   const localEditRef = useRef(false);
   const addCategoryTouchedRef = useRef(false);
+  const pendingScanNameRef = useRef("");
   const setItemsAndSave = useCallback((updater) => {
     setItems((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
@@ -266,6 +268,7 @@ export default function Wardrobe() {
   const [toast, setToast] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [showUploadPanel, setShowUploadPanel] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [showCategoryTabs, setShowCategoryTabs] = useState(false);
 
   const [filterOpen, setFilterOpen] = useState(false);
@@ -776,8 +779,10 @@ export default function Wardrobe() {
       setPendingPreview(preview);
       setPendingFile(file);
 
-      const niceName = file.name.replace(/\.[^/.]+$/, "");
-      const fallbackCategory = guessCategoryFromName(file.name);
+      const scanName = (pendingScanNameRef.current || "").trim();
+      pendingScanNameRef.current = "";
+      const niceName = scanName || file.name.replace(/\.[^/.]+$/, "");
+      const fallbackCategory = guessCategoryFromName(scanName ? scanName : file.name);
       setFormName(niceName);
       addCategoryTouchedRef.current = false;
       setFormCategory(fallbackCategory);
@@ -838,6 +843,31 @@ export default function Wardrobe() {
       window.setTimeout(() => setToast(""), 2500);
     }
   };
+
+  const handleScanResult = useCallback(async ({ code, name, imageUrl }) => {
+    setScannerOpen(false);
+    const scannedName = (name || "").trim();
+    pendingScanNameRef.current = scannedName;
+
+    if (imageUrl) {
+      try {
+        const file = await dataUrlToFile(imageUrl, "scanned-item.jpg");
+        openAddModalForFile(file);
+        return;
+      } catch {}
+    }
+
+    const shortCode = (code || "").toString().slice(0, 60);
+    const hint = scannedName
+      ? `Scanned "${scannedName}" — please pick a photo.`
+      : shortCode
+        ? `Scanned: ${shortCode}. Please pick a photo.`
+        : "Please pick a photo.";
+    setShowUploadPanel(true);
+    setToast(hint);
+    window.setTimeout(() => setToast(""), 3200);
+    openPicker();
+  }, []);
 
   const onPickFile = async (fileList) => {
     const allFiles = Array.from(fileList || []);
@@ -1646,6 +1676,13 @@ export default function Wardrobe() {
           </button>
           <button
             type="button"
+            className="wardrobeChipBtn"
+            onClick={() => setScannerOpen(true)}
+          >
+            Scan tag
+          </button>
+          <button
+            type="button"
             className={showUploadPanel ? "wardrobeChipBtn active" : "wardrobeChipBtn"}
             onClick={() => setShowUploadPanel((prev) => !prev)}
             aria-expanded={showUploadPanel}
@@ -2074,6 +2111,12 @@ export default function Wardrobe() {
           error={bulkError}
         />
       ) : null}
+
+      <BarcodeScannerModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onResult={handleScanResult}
+      />
 
       <DuplicateReviewModal
         open={duplicateReviewOpen}

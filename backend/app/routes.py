@@ -26,6 +26,7 @@ from app.auth import (
 from app.config import EXPOSE_RESET_TOKEN_IN_RESPONSE, MAX_UPLOAD_IMAGE_BYTES
 from app.database.database import get_db
 from app.google_oauth import GoogleTokenValidationError, verify_google_id_token
+from app.product_lookup import lookup as lookup_product_code
 from app.recommendation_explanations import RecommendationContext, build_recommendation_explanation
 from app.weather import WeatherLookupError, fetch_current_weather, map_temperature_to_category
 
@@ -875,6 +876,19 @@ def delete_wardrobe_item(
     crud.delete_clothing_item(db, db_item)
     logger.info("Archived wardrobe item user_id=%s item_id=%s", current_user.id, item_id)
     return {"detail": "Item deleted successfully"}
+
+
+@router.post("/product-lookup", response_model=schemas.ProductLookupResponse)
+async def product_lookup(payload: schemas.ProductLookupRequest) -> schemas.ProductLookupResponse:
+    """Resolve a scanned barcode/QR value to product metadata (best-effort)."""
+    result = await asyncio.to_thread(lookup_product_code, payload.code)
+    return schemas.ProductLookupResponse(
+        code=result.code,
+        name=result.name,
+        image_url=result.image_url,
+        description=result.description,
+        source=result.source,
+    )
 
 
 # =============================
