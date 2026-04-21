@@ -18201,6 +18201,20 @@ html[data-hc="true"] .dashAiParagraph {
   transition: flex-grow 220ms ease, box-shadow 220ms ease;
 }
 
+/* Empty / sparse / loading states are the only child when there are no
+   outfit options. Without flex:1 they collapse to content width and get
+   pinned to the left of the row container. */
+[data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashEmptyWardrobe,
+[data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashSparseWardrobe,
+[data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashAiLoading {
+  flex: 1 1 100%;
+  width: 100%;
+}
+
+[data-theme-id^="editorial"] .dashEmptyActions {
+  justify-content: center;
+}
+
 [data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption.dashOutfitSelected {
   flex: 2.4 1 0;
   order: -1;
