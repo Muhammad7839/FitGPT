@@ -20560,7 +20560,9 @@ html[data-hc="true"] .dashAiParagraph {
   letter-spacing: 0.04em;
 }
 
-/* Editorial option label — serif italic plate numbers */
+/* Editorial option label — serif italic plate numbers, flat on paper.
+   Strip the base gradient/clip-path/skew so text sits on the page bg,
+   not on a burgundy parallelogram. */
 [data-theme-id="editorial"] .optionLabel {
   font-family: "Georgia", serif;
   font-style: italic;
@@ -20575,6 +20577,9 @@ html[data-hc="true"] .dashAiParagraph {
   display: flex;
   gap: 6px;
   align-items: baseline;
+  background: transparent;
+  clip-path: none;
+  transform: none;
 }
 
 [data-theme-id="editorial"] .optionLabel::after {
@@ -20589,6 +20594,13 @@ html[data-hc="true"] .dashAiParagraph {
   color: var(--accent);
   opacity: 1;
   letter-spacing: 0;
+  transform: none;
+  text-shadow: none;
+}
+
+[data-theme-id="editorial"] .optionLabelSlash,
+[data-theme-id="editorial"] .optionLabelText {
+  transform: none;
 }
 
 [data-theme-id="editorial"] .optionLabelSlash {
