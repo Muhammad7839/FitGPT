@@ -17676,21 +17676,21 @@ html[data-hc="true"] .dashAiParagraph {
 }
 
 /* === Editorial theme — global overrides (top nav + sections) ============ */
-/* All scoped to [data-theme-id="editorial"] so they're completely opt-in. */
+/* All scoped to [data-theme-id^="editorial"] so they're completely opt-in. */
 
-[data-theme-id="editorial"] .topNav {
+[data-theme-id^="editorial"] .topNav {
   background: var(--bg);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   border-bottom: 1px solid var(--text);
 }
 
-[data-theme-id="editorial"] .topNavInner {
+[data-theme-id^="editorial"] .topNavInner {
   height: 64px;
   max-width: 1200px;
 }
 
-[data-theme-id="editorial"] .topNavBrandName {
+[data-theme-id^="editorial"] .topNavBrandName {
   font-family: "Playfair Display", "Didot", "Georgia", serif;
   font-weight: 600;
   font-size: 20px;
@@ -17698,12 +17698,12 @@ html[data-hc="true"] .dashAiParagraph {
   font-style: italic;
 }
 
-[data-theme-id="editorial"] .topNavLogo {
+[data-theme-id^="editorial"] .topNavLogo {
   border-radius: 0;
   filter: grayscale(0.4);
 }
 
-[data-theme-id="editorial"] .topNavLink {
+[data-theme-id^="editorial"] .topNavLink {
   font-family: "Georgia", serif;
   font-size: 11px;
   font-weight: 500;
@@ -17717,19 +17717,19 @@ html[data-hc="true"] .dashAiParagraph {
   position: relative;
 }
 
-[data-theme-id="editorial"] .topNavLink:hover {
+[data-theme-id^="editorial"] .topNavLink:hover {
   background: transparent;
   color: var(--accent);
 }
 
-[data-theme-id="editorial"] .topNavLinkActive,
-[data-theme-id="editorial"] .topNavLinkActive:hover {
+[data-theme-id^="editorial"] .topNavLinkActive,
+[data-theme-id^="editorial"] .topNavLinkActive:hover {
   background: transparent;
   color: var(--text);
   border: none;
 }
 
-[data-theme-id="editorial"] .topNavLinkActive::after {
+[data-theme-id^="editorial"] .topNavLinkActive::after {
   content: "";
   position: absolute;
   left: 12px;
@@ -17739,7 +17739,7 @@ html[data-hc="true"] .dashAiParagraph {
   background: var(--text);
 }
 
-[data-theme-id="editorial"] .topNavProfileLink {
+[data-theme-id^="editorial"] .topNavProfileLink {
   background: transparent;
   border: 1px solid var(--text);
   border-radius: 0;
@@ -17750,7 +17750,7 @@ html[data-hc="true"] .dashAiParagraph {
 
 /* Section eyebrows + titles ─────────────────────────────────── */
 
-[data-theme-id="editorial"] .dashSectionEyebrow {
+[data-theme-id^="editorial"] .dashSectionEyebrow {
   font-family: "Georgia", serif;
   font-style: italic;
   font-weight: 400;
@@ -17760,7 +17760,7 @@ html[data-hc="true"] .dashAiParagraph {
   opacity: 0.8;
 }
 
-[data-theme-id="editorial"] .dashSectionTitle {
+[data-theme-id^="editorial"] .dashSectionTitle {
   font-family: "Playfair Display", "Didot", "Georgia", serif;
   font-weight: 600;
   font-size: 32px;
@@ -17769,23 +17769,23 @@ html[data-hc="true"] .dashAiParagraph {
 
 /* Rec card (Today's Recommendation) ─────────────────────────── */
 
-[data-theme-id="editorial"] .dashRecCard {
+[data-theme-id^="editorial"] .dashRecCard {
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
   border-radius: 0;
 }
 
-[data-theme-id="editorial"] .dashRecHeaderGradient {
+[data-theme-id^="editorial"] .dashRecHeaderGradient {
   display: none;
 }
 
-[data-theme-id="editorial"] .dashRecHeader {
+[data-theme-id^="editorial"] .dashRecHeader {
   border-bottom: 1px solid var(--text);
   padding-bottom: 16px;
 }
 
-[data-theme-id="editorial"] .dashRecTitle {
+[data-theme-id^="editorial"] .dashRecTitle {
   font-family: "Playfair Display", "Didot", "Georgia", serif;
   font-weight: 600;
   font-size: 28px;
@@ -17793,7 +17793,7 @@ html[data-hc="true"] .dashAiParagraph {
   color: var(--text);
 }
 
-[data-theme-id="editorial"] .dashChip {
+[data-theme-id^="editorial"] .dashChip {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--text);
@@ -17805,7 +17805,7 @@ html[data-hc="true"] .dashAiParagraph {
   padding: 6px 12px;
 }
 
-[data-theme-id="editorial"] .dashRecPersonalizationBadge {
+[data-theme-id^="editorial"] .dashRecPersonalizationBadge {
   background: var(--accent);
   color: var(--bg);
   border-radius: 0;
@@ -17815,13 +17815,13 @@ html[data-hc="true"] .dashAiParagraph {
   text-transform: uppercase;
 }
 
-[data-theme-id="editorial"] .dashRecPersonalizationText {
+[data-theme-id^="editorial"] .dashRecPersonalizationText {
   font-family: "Georgia", serif;
   font-style: italic;
   color: var(--muted);
 }
 
-[data-theme-id="editorial"] .dashRecActionBtn {
+[data-theme-id^="editorial"] .dashRecActionBtn {
   border-radius: 0;
   font-family: "Georgia", serif;
   font-size: 11px;
@@ -17829,12 +17829,12 @@ html[data-hc="true"] .dashAiParagraph {
   text-transform: uppercase;
 }
 
-[data-theme-id="editorial"] .dashViewToggle {
+[data-theme-id^="editorial"] .dashViewToggle {
   border-radius: 0;
   border: 1px solid var(--text);
 }
 
-[data-theme-id="editorial"] .dashViewToggleBtn {
+[data-theme-id^="editorial"] .dashViewToggleBtn {
   border-radius: 0;
   font-family: "Georgia", serif;
   font-size: 11px;
@@ -17844,25 +17844,25 @@ html[data-hc="true"] .dashAiParagraph {
 
 /* Weather card ─────────────────────────────────────────────── */
 
-[data-theme-id="editorial"] .dashWeatherCard {
+[data-theme-id^="editorial"] .dashWeatherCard {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 0;
   box-shadow: var(--shadow);
 }
 
-[data-theme-id="editorial"] .dashWeatherTemp {
+[data-theme-id^="editorial"] .dashWeatherTemp {
   font-family: "Playfair Display", "Didot", "Georgia", serif;
   font-weight: 600;
 }
 
-[data-theme-id="editorial"] .dashWeatherLabel,
-[data-theme-id="editorial"] .dashWeatherStatus {
+[data-theme-id^="editorial"] .dashWeatherLabel,
+[data-theme-id^="editorial"] .dashWeatherStatus {
   font-family: "Georgia", serif;
   font-style: italic;
 }
 
-[data-theme-id="editorial"] .dashMiniPill {
+[data-theme-id^="editorial"] .dashMiniPill {
   background: transparent;
   border: 1px solid var(--text);
   border-radius: 0;
@@ -17873,7 +17873,7 @@ html[data-hc="true"] .dashAiParagraph {
   padding: 4px 10px;
 }
 
-[data-theme-id="editorial"] .dashRefineToggle {
+[data-theme-id^="editorial"] .dashRefineToggle {
   background: var(--text);
   color: var(--bg);
   border-radius: 0;
@@ -17885,7 +17885,7 @@ html[data-hc="true"] .dashAiParagraph {
 
 /* Style tips marquee ───────────────────────────────────────── */
 
-[data-theme-id="editorial"] .dashStyleMarquee {
+[data-theme-id^="editorial"] .dashStyleMarquee {
   background: transparent;
   border-top: 1px solid var(--text);
   border-bottom: 1px solid var(--text);
@@ -17894,20 +17894,20 @@ html[data-hc="true"] .dashAiParagraph {
   margin-bottom: 24px;
 }
 
-[data-theme-id="editorial"] .dashStyleMarqueeText {
+[data-theme-id^="editorial"] .dashStyleMarqueeText {
   font-family: "Georgia", serif;
   font-style: italic;
   font-size: 14px;
   color: var(--text);
 }
 
-[data-theme-id="editorial"] .dashStyleMarqueeDot {
+[data-theme-id^="editorial"] .dashStyleMarqueeDot {
   background: var(--accent);
 }
 
 /* Page background — paper-feel gradient ─────────────────────── */
 
-[data-theme-id="editorial"] body {
+[data-theme-id^="editorial"] body {
   background: var(--bg);
 }
 
@@ -18077,7 +18077,9 @@ html[data-hc="true"] .dashAiParagraph {
   font-size: 11px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--bg);
+  /* Caption sits on a dark translucent overlay regardless of theme,
+     so the text must always be light — don't tie it to var(--bg). */
+  color: #f5efe6;
   background: rgba(0, 0, 0, 0.55);
   padding: 6px 10px;
   text-align: center;
@@ -18173,7 +18175,7 @@ html[data-hc="true"] .dashAiParagraph {
    compact thumbnail cards (2x2 tile grid, no meta/traits/feedback).
    Click a thumbnail to swap which is dominant — wired by existing JSX. */
 
-[data-theme-id="editorial"] .dashOutfitsAnimWrap {
+[data-theme-id^="editorial"] .dashOutfitsAnimWrap {
   display: flex;
   flex-direction: row;
   gap: 18px;
@@ -18181,7 +18183,7 @@ html[data-hc="true"] .dashAiParagraph {
   padding: 0;
 }
 
-[data-theme-id="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption {
+[data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption {
   margin-top: 0 !important;
   flex: 1 1 0;
   min-width: 0;
@@ -18194,7 +18196,7 @@ html[data-hc="true"] .dashAiParagraph {
   transition: flex-grow 220ms ease, box-shadow 220ms ease;
 }
 
-[data-theme-id="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption.dashOutfitSelected {
+[data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption.dashOutfitSelected {
   flex: 2.4 1 0;
   order: -1;
   background: var(--surface);
@@ -18202,37 +18204,37 @@ html[data-hc="true"] .dashAiParagraph {
   box-shadow: var(--shadow);
 }
 
-[data-theme-id="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption:not(.dashOutfitSelected) {
+[data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption:not(.dashOutfitSelected) {
   cursor: pointer;
   background: var(--bgSoft);
   opacity: 0.92;
 }
 
-[data-theme-id="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption:not(.dashOutfitSelected):hover {
+[data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption:not(.dashOutfitSelected):hover {
   opacity: 1;
   background: var(--surface);
 }
 
 /* Hide the rich chrome on non-selected — keep only label + tiles. */
-[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOptionMeta,
-[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOptionTraits,
-[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashComfortStrip,
-[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOutfitActionsRow,
-[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOutfitFeedbackPanel,
-[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashFeedbackBtns,
-[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .mannequinSaveBtnRow,
-[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .styledSaveBtn {
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOptionMeta,
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOptionTraits,
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashComfortStrip,
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOutfitActionsRow,
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOutfitFeedbackPanel,
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashFeedbackBtns,
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .mannequinSaveBtnRow,
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .styledSaveBtn {
   display: none;
 }
 
 /* Compact tile grid for non-selected: 2x2 with smaller tiles */
-[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOutfitGridFigma {
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOutfitGridFigma {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   padding: 8px 0 0;
 }
 
-[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashSquareTile {
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashSquareTile {
   min-height: 100px;
   padding: 10px 8px;
   border-radius: 0;
@@ -18240,38 +18242,38 @@ html[data-hc="true"] .dashAiParagraph {
   border: 1px solid var(--border);
 }
 
-[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashSquareImg {
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashSquareImg {
   max-width: 80px;
   border-radius: 0;
 }
 
-[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashSquareNameRow {
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashSquareNameRow {
   display: none;
 }
 
 /* Editorial tile styling for the SELECTED option (paper-feel, square) */
-[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashOutfitGridFigma {
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashOutfitGridFigma {
   padding: 16px 0 8px;
   gap: 12px;
 }
 
-[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashSquareTile {
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashSquareTile {
   border-radius: 0;
   border: 1px solid var(--border);
   box-shadow: none;
   background: var(--bg);
 }
 
-[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashSquareTile:hover {
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashSquareTile:hover {
   box-shadow: 0 4px 14px rgba(38, 28, 20, 0.12);
 }
 
-[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashSquareImg {
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashSquareImg {
   border-radius: 0;
   background: var(--bgSoft);
 }
 
-[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashSquareName {
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashSquareName {
   font-family: "Georgia", serif;
   font-size: 12px;
   letter-spacing: 0.04em;
@@ -18280,7 +18282,7 @@ html[data-hc="true"] .dashAiParagraph {
 /* Editorial option label — serif italic plate numbers, flat on paper.
    Strip the base gradient/clip-path/skew so text sits on the page bg,
    not on a burgundy parallelogram. */
-[data-theme-id="editorial"] .optionLabel {
+[data-theme-id^="editorial"] .optionLabel {
   font-family: "Georgia", serif;
   font-style: italic;
   font-size: 11px;
@@ -18299,11 +18301,11 @@ html[data-hc="true"] .dashAiParagraph {
   transform: none;
 }
 
-[data-theme-id="editorial"] .optionLabel::after {
+[data-theme-id^="editorial"] .optionLabel::after {
   display: none;
 }
 
-[data-theme-id="editorial"] .optionLabelNum {
+[data-theme-id^="editorial"] .optionLabelNum {
   font-family: "Playfair Display", "Didot", "Georgia", serif;
   font-style: italic;
   font-weight: 600;
@@ -18315,26 +18317,26 @@ html[data-hc="true"] .dashAiParagraph {
   text-shadow: none;
 }
 
-[data-theme-id="editorial"] .optionLabelSlash,
-[data-theme-id="editorial"] .optionLabelText {
+[data-theme-id^="editorial"] .optionLabelSlash,
+[data-theme-id^="editorial"] .optionLabelText {
   transform: none;
 }
 
-[data-theme-id="editorial"] .optionLabelSlash {
+[data-theme-id^="editorial"] .optionLabelSlash {
   opacity: 0.4;
 }
 
 /* Selected option meta + traits styling */
-[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionScore {
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionScore {
   font-family: "Playfair Display", "Didot", "Georgia", serif;
 }
 
-[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionScoreValue {
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionScoreValue {
   font-size: 28px;
   font-weight: 600;
 }
 
-[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionScoreLabel {
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionScoreLabel {
   font-family: "Georgia", serif;
   font-style: italic;
   font-size: 11px;
@@ -18342,7 +18344,7 @@ html[data-hc="true"] .dashAiParagraph {
   text-transform: uppercase;
 }
 
-[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionTrait {
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionTrait {
   background: transparent;
   border: 1px solid var(--text);
   border-radius: 0;
@@ -18353,7 +18355,7 @@ html[data-hc="true"] .dashAiParagraph {
   padding: 3px 8px;
 }
 
-[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionRankBadge {
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionRankBadge {
   background: transparent;
   border: 1px solid var(--text);
   border-radius: 0;
@@ -18364,7 +18366,7 @@ html[data-hc="true"] .dashAiParagraph {
 }
 
 /* Save button + feedback pills paper-feel */
-[data-theme-id="editorial"] .styledSaveBtn {
+[data-theme-id^="editorial"] .styledSaveBtn {
   background: var(--text);
   color: var(--bg);
   border-radius: 0;
@@ -18376,23 +18378,23 @@ html[data-hc="true"] .dashAiParagraph {
   text-transform: uppercase;
 }
 
-[data-theme-id="editorial"] .styledSaveBtn.saved {
+[data-theme-id^="editorial"] .styledSaveBtn.saved {
   background: var(--accent);
 }
 
 /* Mobile: fall back to vertical stack so non-selected aren't crushed */
 @media (max-width: 760px) {
-  [data-theme-id="editorial"] .dashOutfitsAnimWrap {
+  [data-theme-id^="editorial"] .dashOutfitsAnimWrap {
     flex-direction: column;
   }
 
-  [data-theme-id="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption,
-  [data-theme-id="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption.dashOutfitSelected {
+  [data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption,
+  [data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption.dashOutfitSelected {
     flex: 1 1 auto;
     order: 0;
   }
 
-  [data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOutfitGridFigma {
+  [data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOutfitGridFigma {
     grid-template-columns: repeat(4, 1fr);
   }
 }
