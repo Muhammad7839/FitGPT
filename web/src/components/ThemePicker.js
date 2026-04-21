@@ -7,6 +7,7 @@ import CustomThemeEditor from "./CustomThemeEditor";
 const CATEGORY_LABELS = {
   classic: "Classic",
   preset: "Color",
+  editorial: "Editorial",
   seasonal: "Seasonal & Mood",
   accessibility: "Accessibility",
   custom: "Custom",
@@ -82,7 +83,7 @@ export default function ThemePicker({ inline }) {
         {open && (
           <div className="themePickerDropdown">
             {/* Category sections */}
-            {["classic", "preset", "seasonal", "accessibility"].map((cat) => {
+            {["classic", "preset", "editorial", "seasonal", "accessibility"].map((cat) => {
               const items = groups[cat];
               if (!items?.length) return null;
               return (
