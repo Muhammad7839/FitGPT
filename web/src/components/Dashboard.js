@@ -444,12 +444,16 @@ function buildEditorialHeadline({ count, tempF, day }) {
   const ways = count >= 3 ? "Three" : count === 2 ? "Two" : count === 1 ? "One" : "No";
   const wayLabel = count === 1 ? "way" : "ways";
   if (count === 0) {
-    return `No outfits for a ${day}.`;
+    return { before: `No outfits for a ${day}.`, temp: "", after: "" };
   }
   if (Number.isFinite(tempF)) {
-    return `${ways} ${wayLabel} to dress for a ${Math.round(tempF)}\u00B0 ${day}.`;
+    return {
+      before: `${ways} ${wayLabel} to dress for a `,
+      temp: `${Math.round(tempF)}\u00B0`,
+      after: ` ${day}.`,
+    };
   }
-  return `${ways} ${wayLabel} to dress for a ${day}.`;
+  return { before: `${ways} ${wayLabel} to dress for a ${day}.`, temp: "", after: "" };
 }
 
 function buildClosetGapInsight(wardrobe) {
@@ -1820,7 +1824,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         tempF: weatherTempF,
         day: editorialDayName(new Date()),
       })
-    : "";
+    : { before: "", temp: "", after: "" };
   const editorialHeroOutfit = isEditorial ? (outfits[selectedIdx ?? 0] || outfits[0] || []) : [];
   const editorialHeroImage = isEditorial ? pickEditorialHeroImage(editorialHeroOutfit) : null;
   const editorialClosetGap = isEditorial ? buildClosetGapInsight(wardrobe) : null;
@@ -1833,7 +1837,13 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         <header className="editorialHero">
           <div className="editorialHeroLeft">
             <div className="editorialMasthead">FitGPT — {formatToday()}</div>
-            <h1 className="editorialHeadline">{editorialHeadline}</h1>
+            <h1 className="editorialHeadline">
+              {editorialHeadline.before}
+              {editorialHeadline.temp ? (
+                <span className="editorialHeadlineTemp">{editorialHeadline.temp}</span>
+              ) : null}
+              {editorialHeadline.after}
+            </h1>
             <div className="editorialDek">
               {weatherPresentation.subline || "Refine, save, or plan today's look."}
             </div>
