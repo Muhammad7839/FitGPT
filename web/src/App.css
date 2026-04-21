@@ -5192,6 +5192,12 @@ img.dashSquareImg {
   background: rgba(255, 255, 255, 0.82);
 }
 
+.bulkUploadItemPreviewPlaceholder {
+  background:
+    linear-gradient(135deg, rgba(180, 180, 180, 0.22), rgba(140, 140, 140, 0.1));
+  border-style: dashed;
+}
+
 .bulkUploadFieldStack {
   display: grid;
   gap: 8px;

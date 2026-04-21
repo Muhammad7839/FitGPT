@@ -27,6 +27,7 @@ from app.config import EXPOSE_RESET_TOKEN_IN_RESPONSE, MAX_UPLOAD_IMAGE_BYTES
 from app.database.database import get_db
 from app.google_oauth import GoogleTokenValidationError, verify_google_id_token
 from app.product_lookup import lookup as lookup_product_code
+from app.receipt_ocr import extract_clothing_items as extract_receipt_clothing
 from app.recommendation_explanations import RecommendationContext, build_recommendation_explanation
 from app.weather import WeatherLookupError, fetch_current_weather, map_temperature_to_category
 
@@ -888,6 +889,55 @@ async def product_lookup(payload: schemas.ProductLookupRequest) -> schemas.Produ
         image_url=result.image_url,
         description=result.description,
         source=result.source,
+    )
+
+
+@router.post("/receipts/ocr", response_model=schemas.ReceiptOcrResponse)
+async def receipt_ocr(
+    image: UploadFile = File(...),
+    current_user: models.User = Depends(get_current_user),
+) -> schemas.ReceiptOcrResponse:
+    """Parse a clothing receipt photo into wardrobe-ready line items."""
+    content_type = (image.content_type or "").lower()
+    if content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WEBP images are allowed")
+
+    buffer = bytearray()
+    try:
+        while True:
+            chunk = image.file.read(1024 * 1024)
+            if not chunk:
+                break
+            buffer.extend(chunk)
+            if len(buffer) > MAX_UPLOAD_IMAGE_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="Image exceeds max upload size",
+                )
+    finally:
+        image.file.close()
+
+    result = await asyncio.to_thread(extract_receipt_clothing, bytes(buffer), content_type)
+    logger.info(
+        "Receipt OCR user_id=%s bytes=%s items=%s source=%s warning=%s",
+        current_user.id,
+        len(buffer),
+        len(result.items),
+        result.source,
+        result.warning,
+    )
+    return schemas.ReceiptOcrResponse(
+        items=[
+            schemas.ReceiptOcrItem(
+                name=item.name,
+                category=item.category,
+                color=item.color,
+                price=item.price,
+            )
+            for item in result.items
+        ],
+        source=result.source,
+        warning=result.warning,
     )
 
 
