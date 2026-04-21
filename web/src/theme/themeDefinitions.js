@@ -76,7 +76,7 @@ export const PRESET_THEMES = [
     id: "editorial",
     name: "Editorial Paper",
     base: "light",
-    category: "preset",
+    category: "editorial",
     icon: "\uD83D\uDCD6",
     vars: buildVars("light", "#7a1f1f", {
       "--bg": "#f5efe6",
@@ -102,7 +102,7 @@ export const PRESET_THEMES = [
     id: "editorial-dark",
     name: "Editorial Night",
     base: "dark",
-    category: "preset",
+    category: "editorial",
     icon: "\uD83C\uDF03",
     vars: buildVars("dark", "#c43c3c", {
       "--bg": "#1a1410",
