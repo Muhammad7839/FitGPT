@@ -17675,6 +17675,242 @@ html[data-hc="true"] .dashAiParagraph {
   }
 }
 
+/* === Editorial theme — global overrides (top nav + sections) ============ */
+/* All scoped to [data-theme-id="editorial"] so they're completely opt-in. */
+
+[data-theme-id="editorial"] .topNav {
+  background: var(--bg);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: 1px solid var(--text);
+}
+
+[data-theme-id="editorial"] .topNavInner {
+  height: 64px;
+  max-width: 1200px;
+}
+
+[data-theme-id="editorial"] .topNavBrandName {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-weight: 600;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  font-style: italic;
+}
+
+[data-theme-id="editorial"] .topNavLogo {
+  border-radius: 0;
+  filter: grayscale(0.4);
+}
+
+[data-theme-id="editorial"] .topNavLink {
+  font-family: "Georgia", serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text);
+  border-radius: 0;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  position: relative;
+}
+
+[data-theme-id="editorial"] .topNavLink:hover {
+  background: transparent;
+  color: var(--accent);
+}
+
+[data-theme-id="editorial"] .topNavLinkActive,
+[data-theme-id="editorial"] .topNavLinkActive:hover {
+  background: transparent;
+  color: var(--text);
+  border: none;
+}
+
+[data-theme-id="editorial"] .topNavLinkActive::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 2px;
+  height: 1px;
+  background: var(--text);
+}
+
+[data-theme-id="editorial"] .topNavProfileLink {
+  background: transparent;
+  border: 1px solid var(--text);
+  border-radius: 0;
+  box-shadow: none;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+/* Section eyebrows + titles ─────────────────────────────────── */
+
+[data-theme-id="editorial"] .dashSectionEyebrow {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  color: var(--accent);
+  opacity: 0.8;
+}
+
+[data-theme-id="editorial"] .dashSectionTitle {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-weight: 600;
+  font-size: 32px;
+  letter-spacing: -0.01em;
+}
+
+/* Rec card (Today's Recommendation) ─────────────────────────── */
+
+[data-theme-id="editorial"] .dashRecCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  border-radius: 0;
+}
+
+[data-theme-id="editorial"] .dashRecHeaderGradient {
+  display: none;
+}
+
+[data-theme-id="editorial"] .dashRecHeader {
+  border-bottom: 1px solid var(--text);
+  padding-bottom: 16px;
+}
+
+[data-theme-id="editorial"] .dashRecTitle {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-weight: 600;
+  font-size: 28px;
+  letter-spacing: -0.005em;
+  color: var(--text);
+}
+
+[data-theme-id="editorial"] .dashChip {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--text);
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+}
+
+[data-theme-id="editorial"] .dashRecPersonalizationBadge {
+  background: var(--accent);
+  color: var(--bg);
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+[data-theme-id="editorial"] .dashRecPersonalizationText {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  color: var(--muted);
+}
+
+[data-theme-id="editorial"] .dashRecActionBtn {
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+[data-theme-id="editorial"] .dashViewToggle {
+  border-radius: 0;
+  border: 1px solid var(--text);
+}
+
+[data-theme-id="editorial"] .dashViewToggleBtn {
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Weather card ─────────────────────────────────────────────── */
+
+[data-theme-id="editorial"] .dashWeatherCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: var(--shadow);
+}
+
+[data-theme-id="editorial"] .dashWeatherTemp {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-weight: 600;
+}
+
+[data-theme-id="editorial"] .dashWeatherLabel,
+[data-theme-id="editorial"] .dashWeatherStatus {
+  font-family: "Georgia", serif;
+  font-style: italic;
+}
+
+[data-theme-id="editorial"] .dashMiniPill {
+  background: transparent;
+  border: 1px solid var(--text);
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+}
+
+[data-theme-id="editorial"] .dashRefineToggle {
+  background: var(--text);
+  color: var(--bg);
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* Style tips marquee ───────────────────────────────────────── */
+
+[data-theme-id="editorial"] .dashStyleMarquee {
+  background: transparent;
+  border-top: 1px solid var(--text);
+  border-bottom: 1px solid var(--text);
+  border-radius: 0;
+  padding: 14px 0;
+  margin-bottom: 24px;
+}
+
+[data-theme-id="editorial"] .dashStyleMarqueeText {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 14px;
+  color: var(--text);
+}
+
+[data-theme-id="editorial"] .dashStyleMarqueeDot {
+  background: var(--accent);
+}
+
+/* Page background — paper-feel gradient ─────────────────────── */
+
+[data-theme-id="editorial"] body {
+  background: var(--bg);
+}
+
 /* === Editorial theme — magazine-style Dashboard hero & insight strip === */
 /* Scoped to the editorial theme via the dashPageEditorial modifier so other
    themes are completely unaffected. */
