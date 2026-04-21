@@ -48,11 +48,18 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
                   alignItems: "start",
                 }}
               >
-                <img
-                  src={entry.preview}
-                  alt={entry.name}
-                  className="bulkUploadItemPreview"
-                />
+                {entry.preview ? (
+                  <img
+                    src={entry.preview}
+                    alt={entry.name}
+                    className="bulkUploadItemPreview"
+                  />
+                ) : (
+                  <div
+                    className="bulkUploadItemPreview bulkUploadItemPreviewPlaceholder"
+                    aria-hidden="true"
+                  />
+                )}
 
                 <div className="bulkUploadFieldStack">
                   <SuggestedTagsPanel

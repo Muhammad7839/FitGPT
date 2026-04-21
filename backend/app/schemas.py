@@ -721,3 +721,16 @@ class ProductLookupResponse(BaseModel):
     image_url: Optional[str] = None
     description: Optional[str] = None
     source: str
+
+
+class ReceiptOcrItem(BaseModel):
+    name: str = Field(max_length=128)
+    category: str = Field(max_length=32)
+    color: str = Field(default="", max_length=64)
+    price: float = Field(default=0.0, ge=0)
+
+
+class ReceiptOcrResponse(BaseModel):
+    items: list[ReceiptOcrItem]
+    source: str
+    warning: Optional[str] = None
