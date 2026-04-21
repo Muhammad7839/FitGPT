@@ -76,6 +76,13 @@ export function fileToDataUrl(file, maxSize = 200) {
   });
 }
 
+export async function dataUrlToFile(dataUrl, filename = "scanned-item.jpg") {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  const type = blob.type || "image/jpeg";
+  return new File([blob], filename, { type });
+}
+
 export function formatCardDate(iso) {
   try {
     const d = new Date(iso);

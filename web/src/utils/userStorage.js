@@ -228,8 +228,16 @@ export function readRecSeed() {
   try {
     const raw = sessionStorage.getItem(REC_SEED_KEY);
     if (raw) {
+      const parsed = safeParse(raw);
+      const today = new Date().toISOString().slice(0, 10);
+
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const seed = Number(parsed.seed);
+        if (parsed.date === today && Number.isFinite(seed)) return seed;
+      }
+
       const n = Number(raw);
-      if (Number.isFinite(n)) return n;
+      if (Number.isFinite(n)) return Date.now();
     }
   } catch {}
   return Date.now();
@@ -237,7 +245,13 @@ export function readRecSeed() {
 
 export function writeRecSeed(seed) {
   try {
-    sessionStorage.setItem(REC_SEED_KEY, String(seed));
+    sessionStorage.setItem(
+      REC_SEED_KEY,
+      JSON.stringify({
+        seed,
+        date: new Date().toISOString().slice(0, 10),
+      })
+    );
   } catch {}
 }
 
@@ -323,6 +337,10 @@ export function markTutorialDone() {
   try {
     localStorage.setItem(TUTORIAL_DONE_KEY, "1");
   } catch {}
+}
+
+export function clearTutorialDone() {
+  localStorage.removeItem(TUTORIAL_DONE_KEY);
 }
 
 const REJECTED_OUTFITS_KEY = "fitgpt_rejected_outfits_v1";

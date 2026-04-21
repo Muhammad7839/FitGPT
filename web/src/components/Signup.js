@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { registerWithEmail, getMe } from "../api/authApi";
+import { registerWithEmail, loginWithEmail, getMe } from "../api/authApi";
+import { saveProfileDraft } from "../api/profileApi";
 import { useAuth } from "../auth/AuthProvider";
 import { migrateGuestData, clearGuestData } from "../utils/userStorage";
-import GoogleSignInButton from "./GoogleSignInButton";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -45,18 +45,42 @@ export default function Signup() {
     setIsLoading(true);
 
     try {
-      await registerWithEmail(email.trim(), password);
+      try {
+        await registerWithEmail(email.trim(), password);
+      } catch (regErr) {
+        const msg = (regErr?.message || "").toLowerCase();
+        if (!msg.includes("already") && !msg.includes("registered") && !msg.includes("exists")) {
+          throw regErr;
+        }
+        // Account already exists — fall through to login below
+      }
+
+      try {
+        await loginWithEmail(email.trim(), password);
+      } catch (loginErr) {
+        // Registration worked but auto-login failed — send to login page so user can sign in manually
+        navigate("/login", { replace: true });
+        return;
+      }
+
+      const profileDraft = {
+        fullName: fullName.trim(),
+        dob: dob || "",
+      };
 
       try {
         const me = await getMe();
         if (me) {
+          await saveProfileDraft(profileDraft, me);
           migrateGuestData(me);
           clearGuestData();
         }
         if (typeof setUser === "function") setUser(me);
-      } catch {}
+      } catch {
+        await saveProfileDraft(profileDraft, { email: email.trim() });
+      }
 
-      navigate("/login", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(err?.message || "Registration failed. Please try again.");
     } finally {
@@ -85,10 +109,6 @@ export default function Signup() {
             Back
           </button>
         </div>
-
-        <GoogleSignInButton />
-
-        <div className="authDivider"><span>or</span></div>
 
         <form onSubmit={onSubmit} className="authForm">
           <label className="authFormGroup">
