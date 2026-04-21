@@ -196,6 +196,36 @@ function hasSuggestedTagValues(suggestions) {
   );
 }
 
+function titleCaseWord(value) {
+  return (value || "")
+    .toString()
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function looksLikeCameraName(name) {
+  const trimmed = (name || "").toString().trim();
+  if (!trimmed) return true;
+  if (/^(IMG|DSC|PXL|DCIM|PICT|SCR|PHOTO|GOPR|WIN|MVIMG|BURST)[_\-\s]?\d+/i.test(trimmed)) return true;
+  if (/^Screenshot/i.test(trimmed)) return true;
+  if (/^\d+$/.test(trimmed)) return true;
+  if (!/\s/.test(trimmed) && /\d/.test(trimmed) && trimmed.length > 10) return true;
+  return false;
+}
+
+function buildAutoName(suggestions, category) {
+  const firstColor = (suggestions?.color || "").toString().split(",")[0].trim();
+  const type = (suggestions?.clothingType || "").toString().trim();
+  const parts = [];
+  if (firstColor) parts.push(titleCaseWord(firstColor));
+  if (type) {
+    parts.push(optionLabel(type));
+  } else if (category) {
+    parts.push(category);
+  }
+  return parts.join(" ").trim();
+}
+
 function applySuggestionToBulkEntry(entry, result) {
   const suggestions = result?.suggestions || null;
   const next = {
@@ -212,6 +242,11 @@ function applySuggestionToBulkEntry(entry, result) {
   if ((!Array.isArray(entry.styleTags) || entry.styleTags.length === 0) && suggestions?.styleTags?.length) next.styleTags = suggestions.styleTags;
   if ((!Array.isArray(entry.occasionTags) || entry.occasionTags.length === 0) && suggestions?.occasionTags?.length) next.occasionTags = suggestions.occasionTags;
   if ((!Array.isArray(entry.seasonTags) || entry.seasonTags.length === 0) && suggestions?.seasonTags?.length) next.seasonTags = suggestions.seasonTags;
+
+  if (!entry.userOverrode && looksLikeCameraName(entry.name)) {
+    const autoName = buildAutoName(suggestions, next.category);
+    if (autoName) next.name = autoName;
+  }
 
   return next;
 }
@@ -271,6 +306,12 @@ export default function Wardrobe() {
   const [showUploadPanel, setShowUploadPanel] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [receiptScannerOpen, setReceiptScannerOpen] = useState(false);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const dragCounterRef = useRef(0);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const [showCategoryTabs, setShowCategoryTabs] = useState(false);
 
   const [filterOpen, setFilterOpen] = useState(false);
@@ -832,6 +873,11 @@ export default function Wardrobe() {
         if (result.suggestions?.seasonTags?.length) {
           setFormSeasonTags((current) => (current.length ? current : result.suggestions.seasonTags));
         }
+        setFormName((current) => {
+          if (!looksLikeCameraName(current)) return current;
+          const auto = buildAutoName(result.suggestions, result.category || fallbackCategory);
+          return auto || current;
+        });
       }).catch(() => {
         setIsClassifying(false);
         setAddTaggingState("error");
@@ -1024,6 +1070,46 @@ export default function Wardrobe() {
     e.preventDefault();
     e.stopPropagation();
   };
+
+  const dragHasFiles = (e) => {
+    const dt = e.dataTransfer;
+    if (!dt) return false;
+    const types = dt.types;
+    if (!types) return false;
+    for (let i = 0; i < types.length; i += 1) {
+      if (types[i] === "Files") return true;
+    }
+    return false;
+  };
+
+  const onPageDragEnter = useCallback((e) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    dragCounterRef.current += 1;
+    if (dragCounterRef.current === 1) setIsDraggingFiles(true);
+  }, []);
+
+  const onPageDragOver = useCallback((e) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const onPageDragLeave = useCallback((e) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+    if (dragCounterRef.current === 0) setIsDraggingFiles(false);
+  }, []);
+
+  const onPageDrop = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDraggingFiles(false);
+    const files = e.dataTransfer?.files;
+    if (files && files.length) onPickFile(files);
+  }, [onPickFile]);
 
   const saveNewItem = async () => {
     setAddError("");
@@ -1314,6 +1400,83 @@ export default function Wardrobe() {
     setPendingDeleteId(null);
   };
 
+  const toggleSelectionMode = () => {
+    setSelectionMode((prev) => {
+      if (prev) setSelectedIds(new Set());
+      return !prev;
+    });
+  };
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelectItem = useCallback((id) => {
+    if (id == null) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = () => {
+    const visibleIds = filtered.map((it) => it.id).filter((id) => id != null);
+    if (!visibleIds.length) return;
+    const allSelected = visibleIds.every((id) => selectedIds.has(id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        for (const id of visibleIds) next.delete(id);
+      } else {
+        for (const id of visibleIds) next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const askBatchDelete = () => {
+    if (!selectedIds.size) return;
+    setBatchDeleteOpen(true);
+  };
+
+  const cancelBatchDelete = () => {
+    if (isBatchDeleting) return;
+    setBatchDeleteOpen(false);
+  };
+
+  const confirmBatchDelete = async () => {
+    if (!selectedIds.size) return;
+    const ids = [...selectedIds];
+    const idSet = new Set(ids);
+    setIsBatchDeleting(true);
+
+    setItemsAndSave((prev) => prev.filter((x) => !idSet.has(x.id)));
+
+    if (effectiveSignedIn) {
+      for (const id of ids) {
+        try {
+          await wardrobeApi.deleteItem(id);
+        } catch (e) {
+          if (isNetworkError(e)) {
+            setBackendOffline(true);
+            break;
+          }
+        }
+      }
+    }
+
+    setIsBatchDeleting(false);
+    setBatchDeleteOpen(false);
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+    const n = ids.length;
+    setToast(`Deleted ${n} item${n === 1 ? "" : "s"}.`);
+    window.setTimeout(() => setToast(""), 2500);
+  };
+
   const closeDuplicateReview = () => {
     setDuplicateReviewOpen(false);
     setPendingDuplicateAction(null);
@@ -1321,12 +1484,29 @@ export default function Wardrobe() {
 
   const keepDuplicateItems = (finding) => {
     if (!finding?.pairKey) return;
+    const remainingCount = (duplicateScan.findings || []).filter(
+      (f) => f?.pairKey !== finding.pairKey
+    ).length;
     const nextIgnored = [...new Set([...ignoredDuplicateKeys, finding.pairKey])];
     setIgnoredDuplicateKeys(nextIgnored);
     removeDuplicateFinding(finding.pairKey);
     setPendingDuplicateAction(null);
+    if (remainingCount === 0) setDuplicateReviewOpen(false);
     setToast("We will stop flagging this pair as a duplicate.");
     window.setTimeout(() => setToast(""), 2200);
+  };
+
+  const keepAllDuplicateItems = () => {
+    const currentFindings = duplicateScan.findings || [];
+    const keys = currentFindings.map((f) => f?.pairKey).filter(Boolean);
+    if (!keys.length) return;
+    setIgnoredDuplicateKeys((prev) => [...new Set([...(prev || []), ...keys])]);
+    setDuplicateScan((prev) => ({ ...prev, findings: [], status: "clear" }));
+    setPendingDuplicateAction(null);
+    setDuplicateReviewOpen(false);
+    const n = keys.length;
+    setToast(`Kept both items for ${n} pair${n === 1 ? "" : "s"}.`);
+    window.setTimeout(() => setToast(""), 2500);
   };
 
   const handleDuplicateActionChange = (nextAction) => {
@@ -1635,7 +1815,26 @@ export default function Wardrobe() {
   const isItemBusy = (id) => isArchiving && pendingArchiveId === id;
 
   return (
-    <div className="onboarding onboardingPage">
+    <div
+      className={"onboarding onboardingPage" + (isDraggingFiles ? " wardrobePageDragging" : "")}
+      onDragEnter={onPageDragEnter}
+      onDragOver={onPageDragOver}
+      onDragLeave={onPageDragLeave}
+      onDrop={onPageDrop}
+    >
+      {isDraggingFiles ? (
+        <div className="wardrobeDropOverlay" aria-hidden="true">
+          <div className="wardrobeDropOverlayCard">
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <div className="wardrobeDropOverlayTitle">Drop photos to add</div>
+            <div className="wardrobeDropOverlaySub">JPEG, PNG, or WEBP — we'll auto-categorize them.</div>
+          </div>
+        </div>
+      ) : null}
       <div className="wardrobeHeader">
         <div>
           <div className="wardrobeTitleRow">
@@ -1720,36 +1919,117 @@ export default function Wardrobe() {
 
       <section className="wardrobeActionStrip">
         <div className="wardrobeActionCopy">
-          <div className="wardrobeActionTitle">Add to your wardrobe</div>
+          <div className="wardrobeActionTitleRow">
+            <div className="wardrobeActionTitle">Add to your wardrobe</div>
+            <button
+              type="button"
+              className={"wardrobeActionHelpBtn" + (showUploadPanel ? " active" : "")}
+              onClick={() => setShowUploadPanel((prev) => !prev)}
+              aria-expanded={showUploadPanel}
+              aria-label={showUploadPanel ? "Hide upload tips" : "Show upload tips"}
+              title={showUploadPanel ? "Hide upload tips" : "Show upload tips"}
+            >
+              <span aria-hidden="true">?</span>
+            </button>
+          </div>
+          <div className="wardrobeActionSub">
+            Upload photos, scan a clothing tag, or snap a receipt.
+          </div>
         </div>
         <div className="wardrobeActionButtons">
-          <button type="button" className="wardrobeChooseBtn" onClick={openPicker}>
-            Upload Photos
-          </button>
           <button
             type="button"
-            className="wardrobeChipBtn"
-            onClick={() => setScannerOpen(true)}
+            className="wardrobeChooseBtn wardrobeChooseBtnIcon"
+            onClick={openPicker}
           >
-            Scan tag
+            <span className="wardrobeBtnIcon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </span>
+            <span>Upload Photos</span>
           </button>
+          <div className="wardrobeScanGroup">
+            <button
+              type="button"
+              className="wardrobeChipBtn wardrobeChipBtnIcon"
+              onClick={() => setScannerOpen(true)}
+            >
+              <span className="wardrobeBtnIcon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/></svg>
+              </span>
+              <span>Scan tag</span>
+            </button>
+            <button
+              type="button"
+              className="wardrobeChipBtn wardrobeChipBtnIcon"
+              onClick={() => setReceiptScannerOpen(true)}
+            >
+              <span className="wardrobeBtnIcon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 3v18l2-1.5L9 21l2-1.5L13 21l2-1.5L17 21l2-1.5V3H5z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>
+              </span>
+              <span>Scan receipt</span>
+            </button>
+          </div>
           <button
             type="button"
-            className="wardrobeChipBtn"
-            onClick={() => setReceiptScannerOpen(true)}
+            className={"wardrobeChipBtn wardrobeChipBtnIcon" + (selectionMode ? " active" : "")}
+            onClick={toggleSelectionMode}
+            aria-pressed={selectionMode}
           >
-            Scan receipt
-          </button>
-          <button
-            type="button"
-            className={showUploadPanel ? "wardrobeChipBtn active" : "wardrobeChipBtn"}
-            onClick={() => setShowUploadPanel((prev) => !prev)}
-            aria-expanded={showUploadPanel}
-          >
-            {showUploadPanel ? "Hide upload help" : "Show upload help"}
+            <span className="wardrobeBtnIcon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><polyline points="8 12 11 15 16 9"/></svg>
+            </span>
+            <span>{selectionMode ? "Exit select" : "Select"}</span>
           </button>
         </div>
       </section>
+
+      {selectionMode ? (() => {
+        const visibleIds = filtered.map((it) => it.id).filter((id) => id != null);
+        const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+        return (
+          <div className="wardrobeSelectionBar" role="toolbar" aria-label="Selection actions">
+            <div className="wardrobeSelectionLeft">
+              <button
+                type="button"
+                className={"wardrobeSelectionAll" + (allVisibleSelected ? " active" : "")}
+                onClick={toggleSelectAll}
+                disabled={isBatchDeleting || !visibleIds.length}
+                aria-pressed={allVisibleSelected}
+              >
+                <span className={"wardrobeSelectCheckInline" + (allVisibleSelected ? " on" : "")} aria-hidden="true">
+                  {allVisibleSelected ? "\u2713" : ""}
+                </span>
+                <span>
+                  {allVisibleSelected ? "Deselect all" : `Select all (${visibleIds.length})`}
+                </span>
+              </button>
+              <div className="wardrobeSelectionCount">
+                {selectedIds.size
+                  ? `${selectedIds.size} selected`
+                  : "Tap items to select"}
+              </div>
+            </div>
+            <div className="wardrobeSelectionActions">
+              <button
+                type="button"
+                className="btn"
+                onClick={exitSelectionMode}
+                disabled={isBatchDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn primary wardrobeSelectionDanger"
+                onClick={askBatchDelete}
+                disabled={!selectedIds.size || isBatchDeleting}
+              >
+                Delete {selectedIds.size || 0}
+              </button>
+            </div>
+          </div>
+        );
+      })() : null}
 
       {uploadError ? (
         <div
@@ -2095,6 +2375,9 @@ export default function Wardrobe() {
             allowArchive={!isGuestMode}
             onTiltMove={onTiltMove}
             onTiltLeave={onTiltLeave}
+            selectionMode={selectionMode}
+            isSelected={selectedIds.has(it.id)}
+            onToggleSelect={toggleSelectItem}
           />
         ))}
 
@@ -2191,6 +2474,7 @@ export default function Wardrobe() {
         onClose={closeDuplicateReview}
         onStartAction={handleDuplicateActionChange}
         onKeepBoth={keepDuplicateItems}
+        onKeepAll={keepAllDuplicateItems}
       />
 
       <ManualOutfitBuilder
@@ -2233,7 +2517,7 @@ export default function Wardrobe() {
         document.body
       ) : null}
 
-      {confirmOpen ? (
+      {confirmOpen ? ReactDOM.createPortal(
         <div className="modalOverlay" role="dialog" aria-modal="true">
           <div className="modalCard">
             <div className="modalTitle">Delete item?</div>
@@ -2248,7 +2532,29 @@ export default function Wardrobe() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
+      ) : null}
+
+      {batchDeleteOpen ? ReactDOM.createPortal(
+        <div className="modalOverlay" role="dialog" aria-modal="true">
+          <div className="modalCard">
+            <div className="modalTitle">
+              Delete {selectedIds.size} item{selectedIds.size === 1 ? "" : "s"}?
+            </div>
+            <div className="modalSub">This permanently removes the selected items from your wardrobe.</div>
+
+            <div className="modalActions">
+              <button type="button" className="btnSecondary" onClick={cancelBatchDelete} disabled={isBatchDeleting}>
+                Cancel
+              </button>
+              <button type="button" className="btnPrimary" onClick={confirmBatchDelete} disabled={isBatchDeleting}>
+                {isBatchDeleting ? "Deleting..." : `Delete ${selectedIds.size}`}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       ) : null}
 
       {toast ? <div className="wardrobeToast">{toast}</div> : null}

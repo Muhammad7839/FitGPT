@@ -31,10 +31,11 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
 
   return (
     <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby={BULK_UPLOAD_TITLE_ID}>
-      <div className="modalCard bulkUploadModalCard" style={{ maxHeight: "85vh", overflow: "auto", width: "min(780px, 96vw)" }}>
-        <div id={BULK_UPLOAD_TITLE_ID} className="modalTitle">Add {items.length} item{items.length > 1 ? "s" : ""}</div>
+      <div className="modalCard bulkUploadModalCard bulkUploadModalColumn" style={{ maxHeight: "85vh", width: "min(780px, 96vw)" }}>
+        <div className="bulkUploadScrollArea">
+          <div id={BULK_UPLOAD_TITLE_ID} className="modalTitle">Add {items.length} item{items.length > 1 ? "s" : ""}</div>
 
-        <div style={{ display: "grid", gap: 14, marginTop: 12 }}>
+          <div style={{ display: "grid", gap: 14, marginTop: 12 }}>
           {items.map((entry) => {
             const clothingTypes = clothingTypeOptionsForCategory(entry.category);
             return (
@@ -194,9 +195,10 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
           })}
         </div>
 
-        {error ? <div className="wardrobeFormError" style={{ marginTop: 10 }}>{error}</div> : null}
+          {error ? <div className="wardrobeFormError" style={{ marginTop: 10 }}>{error}</div> : null}
+        </div>
 
-        <div className="modalActions">
+        <div className="modalActions bulkUploadActions">
           <button type="button" className="btnSecondary" onClick={onCancel} disabled={isSaving}>
             Cancel
           </button>

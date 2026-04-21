@@ -123,6 +123,14 @@ function colorList(raw) {
   return (raw || "").toString().split(",").map((part) => part.trim()).filter(Boolean);
 }
 
+function SelectionCheckbox({ isSelected }) {
+  return (
+    <span className={"wardrobeSelectCheck" + (isSelected ? " on" : "")} aria-hidden="true">
+      {isSelected ? "\u2713" : ""}
+    </span>
+  );
+}
+
 function WardrobeItemCard({
   item,
   view,
@@ -142,6 +150,9 @@ function WardrobeItemCard({
   onTiltLeave,
   seasonalModeEnabled = false,
   currentSeason = "",
+  selectionMode = false,
+  isSelected = false,
+  onToggleSelect,
 }) {
   const fitText = fitLabel(item.fit_tag || item.fitTag || item.fit);
   const isBusy = isItemBusy(item.id);
@@ -150,10 +161,22 @@ function WardrobeItemCard({
   const colors = colorList(item.color);
   const seasonMatch = seasonalModeEnabled ? getSeasonMatch(item, currentSeason) : null;
   const seasonToneClass = seasonMatch ? `wardrobeSeasonTone-${seasonMatch.tone}` : "";
+  const selectionClass = selectionMode ? ` wardrobeSelectable${isSelected ? " wardrobeSelected" : ""}` : "";
+  const handleSelectionClick = (e) => {
+    if (!selectionMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof onToggleSelect === "function") onToggleSelect(item.id);
+  };
 
   if (view === "list") {
     return (
-      <div className={`wardrobeRowItem ${seasonToneClass}`.trim()}>
+      <div
+        className={`wardrobeRowItem ${seasonToneClass}${selectionClass}`.trim()}
+        onClick={selectionMode ? handleSelectionClick : undefined}
+        role={selectionMode ? "button" : undefined}
+        aria-pressed={selectionMode ? isSelected : undefined}
+      >
         <div className="wardrobeRowLeft">
           <div className="wardrobeThumbWrap sm">
             {item.image_url ? (
@@ -161,6 +184,7 @@ function WardrobeItemCard({
             ) : (
               <div className="wardrobeThumb sm" aria-hidden="true" />
             )}
+            {selectionMode ? <SelectionCheckbox isSelected={isSelected} /> : null}
           </div>
 
           <div className="wardrobeRowText">
@@ -190,21 +214,31 @@ function WardrobeItemCard({
           </div>
         </div>
 
-        <div className="wardrobeRowActions">
-          <ItemActions {...actionProps} />
-        </div>
+        {selectionMode ? null : (
+          <div className="wardrobeRowActions">
+            <ItemActions {...actionProps} />
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className={`wardrobeCard ${seasonToneClass}`.trim()} onPointerMove={onTiltMove} onPointerLeave={onTiltLeave}>
+    <div
+      className={`wardrobeCard ${seasonToneClass}${selectionClass}`.trim()}
+      onPointerMove={selectionMode ? undefined : onTiltMove}
+      onPointerLeave={selectionMode ? undefined : onTiltLeave}
+      onClick={selectionMode ? handleSelectionClick : undefined}
+      role={selectionMode ? "button" : undefined}
+      aria-pressed={selectionMode ? isSelected : undefined}
+    >
       <div className="wardrobeThumbWrap">
         {item.image_url ? (
           <img className="wardrobeThumbImg" src={item.image_url} alt={item.name} />
         ) : (
           <div className="wardrobeThumb" aria-hidden="true" />
         )}
+        {selectionMode ? <SelectionCheckbox isSelected={isSelected} /> : null}
       </div>
 
       <div className="wardrobeCardBody">
@@ -233,9 +267,11 @@ function WardrobeItemCard({
           </div>
         ) : null}
 
-        <div className="wardrobeCardActions">
-          <ItemActions {...actionProps} />
-        </div>
+        {selectionMode ? null : (
+          <div className="wardrobeCardActions">
+            <ItemActions {...actionProps} />
+          </div>
+        )}
       </div>
     </div>
   );
