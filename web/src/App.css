@@ -17674,3 +17674,256 @@ html[data-hc="true"] .dashAiParagraph {
     grid-template-columns: 1fr;
   }
 }
+
+/* === Editorial theme — magazine-style Dashboard hero & insight strip === */
+/* Scoped to the editorial theme via the dashPageEditorial modifier so other
+   themes are completely unaffected. */
+
+.dashPageEditorial {
+  font-feature-settings: "ss01", "kern", "liga";
+}
+
+.editorialHero {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 36px;
+  padding: 36px 32px 28px;
+  margin-bottom: 24px;
+  background: linear-gradient(180deg, var(--pageBg1) 0%, var(--bg) 100%);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.editorialHero::after {
+  content: "";
+  position: absolute;
+  left: 32px;
+  right: 32px;
+  bottom: 0;
+  height: 1px;
+  background: var(--text);
+  opacity: 0.18;
+}
+
+.editorialHeroLeft {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 280px;
+}
+
+.editorialMasthead {
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0.55;
+  border-bottom: 1px solid var(--text);
+  padding-bottom: 8px;
+  margin-bottom: 18px;
+  width: fit-content;
+}
+
+.editorialHeadline {
+  font-family: "Playfair Display", "Didot", "Georgia", "Times New Roman", serif;
+  font-weight: 600;
+  font-size: clamp(36px, 5vw, 60px);
+  line-height: 1.05;
+  letter-spacing: -0.012em;
+  margin: 0;
+  color: var(--text);
+}
+
+.editorialDek {
+  font-family: "Georgia", "Times New Roman", serif;
+  font-style: italic;
+  font-size: 16px;
+  line-height: 1.5;
+  margin-top: 18px;
+  color: var(--muted);
+  max-width: 46ch;
+}
+
+.editorialActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 28px;
+  flex-wrap: wrap;
+}
+
+.editorialBtnPrimary,
+.editorialBtnGhost {
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 10px 18px;
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.editorialBtnPrimary {
+  background: var(--text);
+  color: var(--bg);
+  border: 1px solid var(--text);
+}
+
+.editorialBtnPrimary:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.editorialBtnGhost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--text);
+}
+
+.editorialBtnGhost:hover {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.editorialHeroRight {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.editorialHeroFigure {
+  width: 100%;
+  max-width: 380px;
+  aspect-ratio: 4 / 5;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.editorialHeroImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  filter: saturate(0.92) contrast(1.02);
+}
+
+.editorialHeroFigureEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+}
+
+.editorialHeroFigureLabel {
+  font-family: "Playfair Display", "Georgia", serif;
+  font-size: 22px;
+  font-style: italic;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.editorialHeroCaption {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  font-family: "Georgia", serif;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--bg);
+  background: rgba(0, 0, 0, 0.55);
+  padding: 6px 10px;
+  text-align: center;
+}
+
+.editorialHeroFigureEmpty .editorialHeroCaption {
+  position: static;
+  background: transparent;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: normal;
+  font-style: italic;
+  font-size: 13px;
+  padding: 0;
+  margin-top: 4px;
+}
+
+/* Insight strip ───────────────────────────────────────────── */
+
+.editorialInsightStrip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  margin-bottom: 28px;
+  border-top: 1px solid var(--text);
+  border-bottom: 1px solid var(--text);
+}
+
+.editorialInsightCard {
+  padding: 22px 24px;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editorialInsightCard:last-child {
+  border-right: none;
+}
+
+.editorialInsightLabel {
+  font-family: "Georgia", serif;
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0.55;
+}
+
+.editorialInsightHeadline {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-size: 22px;
+  line-height: 1.15;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.editorialInsightSub {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+@media (max-width: 760px) {
+  .editorialHero {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 24px 18px;
+  }
+
+  .editorialHeroLeft {
+    min-height: auto;
+  }
+
+  .editorialInsightStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .editorialInsightCard {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .editorialInsightCard:last-child {
+    border-bottom: none;
+  }
+}
