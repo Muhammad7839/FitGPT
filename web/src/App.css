@@ -17971,6 +17971,10 @@ html[data-hc="true"] .dashAiParagraph {
   color: var(--text);
 }
 
+.editorialHeadlineTemp {
+  color: #c43c3c;
+}
+
 .editorialDek {
   font-family: "Georgia", "Times New Roman", serif;
   font-style: italic;
