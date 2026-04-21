@@ -709,3 +709,15 @@ class PlannedOutfitAssignmentResponse(BaseModel):
     detail: str
     planned_dates: list[str]
     outfits: list[PlannedOutfitEntry]
+
+
+class ProductLookupRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=2048)
+
+
+class ProductLookupResponse(BaseModel):
+    code: str
+    name: Optional[str] = None
+    image_url: Optional[str] = None
+    description: Optional[str] = None
+    source: str
