@@ -18163,3 +18163,220 @@ html[data-hc="true"] .dashAiParagraph {
     border-bottom: none;
   }
 }
+
+/* === Editorial theme Phase 3 — dominant-selected outfit strip ============ */
+/* Selected option dominates (flex:2, full chrome). Non-selected become
+   compact thumbnail cards (2x2 tile grid, no meta/traits/feedback).
+   Click a thumbnail to swap which is dominant — wired by existing JSX. */
+
+[data-theme-id="editorial"] .dashOutfitsAnimWrap {
+  display: flex;
+  flex-direction: row;
+  gap: 18px;
+  align-items: stretch;
+  padding: 0;
+}
+
+[data-theme-id="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption {
+  margin-top: 0 !important;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 18px;
+  transition: flex-grow 220ms ease, box-shadow 220ms ease;
+}
+
+[data-theme-id="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption.dashOutfitSelected {
+  flex: 2.4 1 0;
+  order: -1;
+  background: var(--surface);
+  border: 1px solid var(--text);
+  box-shadow: var(--shadow);
+}
+
+[data-theme-id="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption:not(.dashOutfitSelected) {
+  cursor: pointer;
+  background: var(--bgSoft);
+  opacity: 0.92;
+}
+
+[data-theme-id="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption:not(.dashOutfitSelected):hover {
+  opacity: 1;
+  background: var(--surface);
+}
+
+/* Hide the rich chrome on non-selected — keep only label + tiles. */
+[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOptionMeta,
+[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOptionTraits,
+[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashComfortStrip,
+[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOutfitActionsRow,
+[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOutfitFeedbackPanel,
+[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashFeedbackBtns,
+[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .mannequinSaveBtnRow,
+[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .styledSaveBtn {
+  display: none;
+}
+
+/* Compact tile grid for non-selected: 2x2 with smaller tiles */
+[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOutfitGridFigma {
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 8px 0 0;
+}
+
+[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashSquareTile {
+  min-height: 100px;
+  padding: 10px 8px;
+  border-radius: 0;
+  box-shadow: none;
+  border: 1px solid var(--border);
+}
+
+[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashSquareImg {
+  max-width: 80px;
+  border-radius: 0;
+}
+
+[data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashSquareNameRow {
+  display: none;
+}
+
+/* Editorial tile styling for the SELECTED option (paper-feel, square) */
+[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashOutfitGridFigma {
+  padding: 16px 0 8px;
+  gap: 12px;
+}
+
+[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashSquareTile {
+  border-radius: 0;
+  border: 1px solid var(--border);
+  box-shadow: none;
+  background: var(--bg);
+}
+
+[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashSquareTile:hover {
+  box-shadow: 0 4px 14px rgba(38, 28, 20, 0.12);
+}
+
+[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashSquareImg {
+  border-radius: 0;
+  background: var(--bgSoft);
+}
+
+[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashSquareName {
+  font-family: "Georgia", serif;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+/* Editorial option label — serif italic plate numbers */
+[data-theme-id="editorial"] .optionLabel {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0.7;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+[data-theme-id="editorial"] .optionLabel::after {
+  display: none;
+}
+
+[data-theme-id="editorial"] .optionLabelNum {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-style: italic;
+  font-weight: 600;
+  font-size: 22px;
+  color: var(--accent);
+  opacity: 1;
+  letter-spacing: 0;
+}
+
+[data-theme-id="editorial"] .optionLabelSlash {
+  opacity: 0.4;
+}
+
+/* Selected option meta + traits styling */
+[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionScore {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+}
+
+[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionScoreValue {
+  font-size: 28px;
+  font-weight: 600;
+}
+
+[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionScoreLabel {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionTrait {
+  background: transparent;
+  border: 1px solid var(--text);
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+}
+
+[data-theme-id="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionRankBadge {
+  background: transparent;
+  border: 1px solid var(--text);
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Save button + feedback pills paper-feel */
+[data-theme-id="editorial"] .styledSaveBtn {
+  background: var(--text);
+  color: var(--bg);
+  border-radius: 0;
+  clip-path: none;
+  transform: none;
+  font-family: "Georgia", serif;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+[data-theme-id="editorial"] .styledSaveBtn.saved {
+  background: var(--accent);
+}
+
+/* Mobile: fall back to vertical stack so non-selected aren't crushed */
+@media (max-width: 760px) {
+  [data-theme-id="editorial"] .dashOutfitsAnimWrap {
+    flex-direction: column;
+  }
+
+  [data-theme-id="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption,
+  [data-theme-id="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption.dashOutfitSelected {
+    flex: 1 1 auto;
+    order: 0;
+  }
+
+  [data-theme-id="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOutfitGridFigma {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
