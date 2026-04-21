@@ -22,6 +22,15 @@ export function applyTheme(themeObj) {
   // 1. Set the base (light/dark) so all existing component selectors work
   el.setAttribute("data-theme", themeObj.base);
 
+  // 1a. Also expose the specific theme id so theme-scoped CSS can target a
+  // particular preset globally (e.g. [data-theme-id="editorial"]). The base
+  // attribute alone can't distinguish between two light themes.
+  if (themeObj.id) {
+    el.setAttribute("data-theme-id", themeObj.id);
+  } else {
+    el.removeAttribute("data-theme-id");
+  }
+
   // 1b. Mark high-contrast themes so accessibility-specific CSS can target them
   if (themeObj.highContrast) {
     el.setAttribute("data-hc", "true");
