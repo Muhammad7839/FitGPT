@@ -96,6 +96,32 @@ export const PRESET_THEMES = [
     }),
   },
 
+  // Editorial Night — same magazine layout in a dark warm-ink palette.
+  // Shares all [data-theme-id^="editorial"] CSS via the matching id prefix.
+  {
+    id: "editorial-dark",
+    name: "Editorial Night",
+    base: "dark",
+    category: "preset",
+    icon: "\uD83C\uDF03",
+    vars: buildVars("dark", "#c43c3c", {
+      "--bg": "#1a1410",
+      "--pageBg1": "#15100c",
+      "--pageBg2": "#1a1410",
+      "--surface": "#231b14",
+      "--surface-input": "rgba(35, 27, 20, 0.92)",
+      "--surface-border": "rgba(232, 223, 208, 0.10)",
+      "--text": "#e8dfd0",
+      "--muted": "rgba(232, 223, 208, 0.60)",
+      "--border": "rgba(232, 223, 208, 0.10)",
+      "--bgSoft": "rgba(232, 223, 208, 0.06)",
+      "--shadow": "0 14px 38px rgba(0, 0, 0, 0.45)",
+      "--shadow-hover": "0 18px 50px rgba(0, 0, 0, 0.55)",
+      "--wardrobe-blue": "#c43c3c",
+      "--wardrobe-blue-soft": "rgba(196, 60, 60, 0.14)",
+    }),
+  },
+
   // Color presets
   {
     id: "ocean",
