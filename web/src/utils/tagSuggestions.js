@@ -317,15 +317,19 @@ export async function generateItemTagSuggestions({
 }) {
   let category = fallbackCategory;
   let classifierLabel = "";
+  let classifierType = "";
 
   try {
     const classification = await classifyFromUrl(imageUrl);
     if (classification?.category) category = classification.category;
     if (classification?.label) classifierLabel = classification.label;
+    if (classification?.type) classifierType = classification.type;
   } catch {}
 
   const { text, tokens } = tokenize(fileName, classifierLabel);
-  const clothingType = inferClothingType(category, text, tokens);
+  const options = CLOTHING_TYPE_OPTIONS[category] || [];
+  const typeFromClassifier = options.includes(classifierType) ? classifierType : "";
+  const clothingType = typeFromClassifier || inferClothingType(category, text, tokens);
 
   let colors = [];
   try {
@@ -352,6 +356,7 @@ export async function generateItemTagSuggestions({
       occasionTags,
       seasonTags,
     },
+    label: classifierLabel,
     status,
     message: buildStatusMessage(status),
     suggestedCount: filledCount,

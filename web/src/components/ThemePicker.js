@@ -109,9 +109,16 @@ export default function ThemePicker({ inline }) {
                           }}
                         >
                           <span
-                            className="themePickerAccentBar"
+                            className="themePickerSwatchSurface"
+                            style={{ background: t.vars["--surface"] || t.vars["--pageBg1"] || t.vars["--bg"] }}
+                          />
+                          <span
+                            className="themePickerSwatchAccent"
                             style={{ background: t.vars["--accent"] }}
                           />
+                          {t.id === theme.id ? (
+                            <span className="themePickerSwatchCheck" aria-hidden="true">{"\u2713"}</span>
+                          ) : null}
                         </span>
                         <span className="themePickerTileLabel">
                           <span className="themePickerTileIcon">{t.icon}</span>

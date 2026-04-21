@@ -78,6 +78,7 @@ import {
   readRecommendationPersonalization,
   trackRecommendationPersonalization,
 } from "../utils/recommendationPersonalization";
+import STYLE_TIPS from "../utils/styleTips";
 
 const DEFAULT_BODY_TYPE = "rectangle";
 const OCCASION_OPTIONS = ["", "casual", "work", "formal", "athletic", "social", "lounge"];
@@ -1716,6 +1717,10 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     if (type === "dislike") {
       saveRejectedOutfit(outfit, user);
     }
+    /* Also feed the new-format feedback store so the Like/Dislike button's
+     * active state reflects the click; submitFeedback is async but we don't
+     * need to await it here. */
+    submitFeedback({ outfit, signal: type }).catch(() => {});
     /* Rebuild personalization profile from all signals */
     Promise.all([
       outfitHistoryApi.listHistory(user).catch(() => ({ history: [] })),
@@ -1941,25 +1946,30 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       <section className="card dashWide dashWeatherCard dashSectionCard">
         <div className="dashWeatherHud">
           <div className="dashWeatherMain">
-            <span className="dashWeatherEmoji">
+            <span className={"dashWeatherEmoji" + (weatherLoading ? " dashWeatherEmojiLoading" : "")}>
               {weatherPresentation.glyph}
             </span>
             <div className="dashWeatherInfo">
-              <div className="dashWeatherTemp">
-                {weatherLoading ? `Detecting Weather${".".repeat(dotCount)}` : weatherPresentation.headline}
+              <div className={"dashWeatherTemp" + (weatherLoading ? " dashWeatherTempLoading" : "")}>
+                {weatherLoading ? "Detecting weather" : weatherPresentation.headline}
               </div>
               <div className="dashWeatherLabel">
-                {weatherLoading ? "" : weatherPresentation.subline}
+                {weatherLoading ? "Checking forecast for your area" : weatherPresentation.subline}
               </div>
             </div>
           </div>
 
           <div className="dashRefineSummary">
             <div className="dashRefinePills">
-              <span className="dashMiniPill">{weatherLoading ? `Detecting${".".repeat(dotCount)}` : weatherPresentation.status}</span>
+              {!weatherLoading ? (
+                <span className="dashMiniPill">{weatherPresentation.status}</span>
+              ) : null}
               <span className="dashMiniPill">{timeLine}</span>
-              <span className="dashMiniPill">{seasonalMode ? seasonalWardrobeLabel : "All Seasons"}</span>
-              {seasonalMode ? <span className="dashMiniPill">Filtered by current season</span> : null}
+              {seasonalMode ? (
+                <span className="dashMiniPill dashMiniPillAccent">{seasonalWardrobeLabel}</span>
+              ) : (
+                <span className="dashMiniPill">All seasons</span>
+              )}
               {selectedOccasion ? <span className="dashMiniPill">{titleCase(selectedOccasion)}</span> : null}
               {selectedStyle ? <span className="dashMiniPill">{titleCase(selectedStyle)}</span> : null}
             </div>
@@ -2135,6 +2145,17 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         ) : null}
       </div>
 
+      <div className="dashStyleMarquee" aria-label="Style tips">
+        <div className="dashStyleMarqueeTrack" aria-hidden="true">
+          {STYLE_TIPS.concat(STYLE_TIPS).map((tip, index) => (
+            <span className="dashStyleMarqueeItem" key={`mq-${index}`}>
+              <span className="dashStyleMarqueeDot" aria-hidden="true" />
+              <span className="dashStyleMarqueeText">{tip}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+
       <section className="card dashWide dashRecCard dashSectionCard">
         <div className="dashRecHeader">
           <ErrorBoundary fallback={null}><MeshGradient className="dashRecHeaderGradient" /></ErrorBoundary>
@@ -2157,41 +2178,80 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           <div className="dashChip">{chipText}</div>
           {outfits.length > 0 && (
             <div className="dashRecActions">
-              <button type="button" className="btn primary dashRecActionBtn" onClick={handleRefreshRecommendation} disabled={!canRefresh}>
-                Refresh
+              <button
+                type="button"
+                className="dashRecActionBtn dashRecActionPrimary"
+                onClick={handleRefreshRecommendation}
+                disabled={!canRefresh}
+                aria-label="Refresh recommendations"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="23 4 23 10 17 10" />
+                  <polyline points="1 20 1 14 7 14" />
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                </svg>
+                <span>Refresh</span>
               </button>
-              <button type="button" className="btn dashRecActionBtn" onClick={() => {
-                const outfit = outfits[selectedIdx ?? 0] || outfits[0] || [];
-                if (!outfit.length) return;
-                const lines = outfit.map((item) => `${item.name}${item.color ? ` (${item.color})` : ""}`);
-                const text = `My FitGPT Outfit:\n${lines.join("\n")}`;
-                navigator.clipboard.writeText(text).then(() => {
-                  setSaveMsg("Outfit copied to clipboard!");
-                  window.setTimeout(() => setSaveMsg(""), 2500);
-                }).catch(() => {
-                  setSaveMsg("Could not copy to clipboard.");
-                  window.setTimeout(() => setSaveMsg(""), 2500);
-                });
-              }}>
-                Share
+              <button
+                type="button"
+                className="dashRecActionBtn dashRecActionSecondary"
+                onClick={() => {
+                  const outfit = outfits[selectedIdx ?? 0] || outfits[0] || [];
+                  if (!outfit.length) return;
+                  const lines = outfit.map((item) => `${item.name}${item.color ? ` (${item.color})` : ""}`);
+                  const text = `My FitGPT Outfit:\n${lines.join("\n")}`;
+                  navigator.clipboard.writeText(text).then(() => {
+                    setSaveMsg("Outfit copied to clipboard!");
+                    window.setTimeout(() => setSaveMsg(""), 2500);
+                  }).catch(() => {
+                    setSaveMsg("Could not copy to clipboard.");
+                    window.setTimeout(() => setSaveMsg(""), 2500);
+                  });
+                }}
+                aria-label="Share outfit"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="18" cy="5" r="3" />
+                  <circle cx="6" cy="12" r="3" />
+                  <circle cx="18" cy="19" r="3" />
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                </svg>
+                <span>Share</span>
               </button>
-              <div className="dashViewToggle">
+              <div className="dashViewToggle" role="radiogroup" aria-label="View mode">
                 <button
                   type="button"
-                  className={`dashViewToggleBtn${viewMode === "grid" ? " active" : ""}`}
+                  role="radio"
+                  aria-checked={viewMode === "grid"}
+                  className={"dashViewToggleBtn" + (viewMode === "grid" ? " active" : "")}
                   onClick={() => setViewMode("grid")}
+                  title="Grid view"
                 >
-                  Grid
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="14" y="14" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                  </svg>
+                  <span>Grid</span>
                 </button>
                 <button
                   type="button"
-                  className={`dashViewToggleBtn${viewMode === "mannequin" ? " active" : ""}`}
+                  role="radio"
+                  aria-checked={viewMode === "mannequin"}
+                  className={"dashViewToggleBtn" + (viewMode === "mannequin" ? " active" : "")}
                   onClick={() => {
                     setViewMode("mannequin");
                     if (selectedIdx == null) setSelectedIdx(0);
                   }}
+                  title="3D mannequin view"
                 >
-                  3D
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="5" r="2.5" />
+                    <path d="M7 10h10l-1 5h-3v7h-2v-7H8z" />
+                  </svg>
+                  <span>3D</span>
                 </button>
               </div>
             </div>
@@ -2203,17 +2263,44 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             <div className="dashAiLoading" style={{ padding: "32px 0", textAlign: "center" }}>
               {personalizationSummary.loadingLabel}
             </div>
-          ) : outfits.length === 0 ? (
+          ) : wardrobe.filter((it) => it?.is_active !== false).length === 0 ? (
             <div className="dashEmptyWardrobe">
               <div className="dashEmptyIcon">&#x1F455;</div>
               <div className="dashEmptyTitle">Your wardrobe is empty</div>
               <div className="dashEmptySub">Add a few items to get recommendations.</div>
               <div className="dashEmptyActions">
-                <button className="btn primary" type="button" onClick={() => navigate("/wardrobe")}>
-                  Add clothing items
+                <button className="btn primary dashEmptyBtn" type="button" onClick={() => navigate("/wardrobe")}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <span>Add clothing items</span>
                 </button>
-                <button className="btn" type="button" onClick={() => navigate("/wardrobe")}>
-                  Open wardrobe
+                <button className="btn dashEmptyBtn" type="button" onClick={() => navigate("/wardrobe")}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v7"/><path d="M12 10l-8 4.5v5h16v-5z"/><circle cx="12" cy="4" r="1.5"/></svg>
+                  <span>Open wardrobe</span>
+                </button>
+              </div>
+            </div>
+          ) : outfits.length === 0 || wardrobe.filter((it) => it?.is_active !== false).length < 3 ? (
+            <div className="dashEmptyWardrobe dashSparseWardrobe">
+              <div className="dashEmptyIcon">&#x1F9FA;</div>
+              <div className="dashEmptyTitle">Almost there</div>
+              <div className="dashEmptySub">
+                {(() => {
+                  const active = wardrobe.filter((it) => it?.is_active !== false).length;
+                  const remaining = Math.max(0, 3 - active);
+                  if (remaining > 0) {
+                    return `Add ${remaining} more item${remaining === 1 ? "" : "s"} from different categories (tops, bottoms, shoes) and we'll start suggesting full outfits.`;
+                  }
+                  return `You have ${active} item${active === 1 ? "" : "s"} but we couldn't assemble an outfit. Try adding items from different categories (tops, bottoms, shoes).`;
+                })()}
+              </div>
+              <div className="dashEmptyActions">
+                <button className="btn primary dashEmptyBtn" type="button" onClick={() => navigate("/wardrobe")}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <span>Add more items</span>
+                </button>
+                <button className="btn dashEmptyBtn" type="button" onClick={() => navigate("/wardrobe")}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v7"/><path d="M12 10l-8 4.5v5h16v-5z"/><circle cx="12" cy="4" r="1.5"/></svg>
+                  <span>Open wardrobe</span>
                 </button>
               </div>
             </div>
@@ -2236,8 +2323,8 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             const feedbackHint = feedbackSignal
               ? feedbackSummaryText(feedbackEntry)
               : showPromptHighlight
-                ? "Like or Not for me. One tap helps future picks improve over time."
-                : "Like or Not for me.";
+                ? "Hide removes this outfit from view. Add detail for a specific reason."
+                : "Hide this option, or add detail about what worked.";
             const feedbackToneClass = feedbackSignal === FEEDBACK_SIGNALS.LIKE
               ? " dashOutfitFeedbackLike"
               : feedbackSignal === FEEDBACK_SIGNALS.DISLIKE
@@ -2266,9 +2353,15 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                       <span className="dashOptionScoreLabel">match</span>
                     </div>
 
-                    <div className="dashOptionRankGroup">
-                      <span className="dashOptionRank">{summary.rankLabel}</span>
-                      <span className="dashOptionConfidence">{summary.confidenceLabel}</span>
+                    <div className={"dashOptionRankBadge conf-" + (summary.confidenceLabel || "").toLowerCase()}>
+                      <span className="dashOptionRankDot" aria-hidden="true" />
+                      <span className="dashOptionRankLabel">{summary.rankLabel}</span>
+                      {summary.confidenceLabel ? (
+                        <>
+                          <span className="dashOptionRankSep" aria-hidden="true">{"\u00B7"}</span>
+                          <span className="dashOptionRankConfidence">{summary.confidenceLabel}</span>
+                        </>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -2372,8 +2465,34 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                         <span className="styledSaveBtnText">{label}</span>
                       </button>
                       <div className="dashFeedbackBtns">
-                        <button type="button" className="dashFeedbackBtn dashFeedbackLike" onClick={() => handleFeedback(outfit, "like")} title="More like this">&#x25B2;</button>
-                        <button type="button" className="dashFeedbackBtn dashFeedbackDislike" onClick={() => handleFeedback(outfit, "dislike")} title="Less like this">&#x25BC;</button>
+                        <button
+                          type="button"
+                          className={"dashFeedbackBtn dashFeedbackLike" + (feedbackSignal === FEEDBACK_SIGNALS.LIKE ? " active" : "")}
+                          onClick={() => handleFeedback(outfit, "like")}
+                          title="More like this"
+                          aria-label="More like this"
+                          aria-pressed={feedbackSignal === FEEDBACK_SIGNALS.LIKE}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M7 10v12" />
+                            <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.97 2.35l-1.4 8A2 2 0 0 1 18.43 22H7V10l4.66-6.66A1 1 0 0 1 13 3a2.88 2.88 0 0 1 2 4.88Z" />
+                          </svg>
+                          <span>Like</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={"dashFeedbackBtn dashFeedbackDislike" + (feedbackSignal === FEEDBACK_SIGNALS.DISLIKE ? " active" : "")}
+                          onClick={() => handleFeedback(outfit, "dislike")}
+                          title="Less like this"
+                          aria-label="Less like this"
+                          aria-pressed={feedbackSignal === FEEDBACK_SIGNALS.DISLIKE}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M17 14V2" />
+                            <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.97-2.35l1.4-8A2 2 0 0 1 5.57 2H17v12l-4.66 6.66A1 1 0 0 1 11 21a2.88 2.88 0 0 1-2-4.88Z" />
+                          </svg>
+                          <span>Dislike</span>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -2410,32 +2529,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                     </div>
 
                     <div className="dashFeedbackActions compact" role="group" aria-label={`Recommendation feedback for outfit option ${idx + 1}`}>
-                    <button
-                      type="button"
-                      className={"dashFeedbackBtn like compact" + (feedbackSignal === FEEDBACK_SIGNALS.LIKE ? " active" : "")}
-                      aria-pressed={feedbackSignal === FEEDBACK_SIGNALS.LIKE}
-                      disabled={isFeedbackPending}
-                      onClick={() => {
-                        selectRecommendationOption(idx, { track: false });
-                        void submitFeedback({ outfit, signal: FEEDBACK_SIGNALS.LIKE });
-                      }}
-                    >
-                      <span aria-hidden="true">👍</span>
-                      <span className="dashFeedbackBtnText">Like</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={"dashFeedbackBtn dislike compact" + (feedbackSignal === FEEDBACK_SIGNALS.DISLIKE ? " active" : "")}
-                      aria-pressed={feedbackSignal === FEEDBACK_SIGNALS.DISLIKE}
-                      disabled={isFeedbackPending}
-                      onClick={() => {
-                        selectRecommendationOption(idx, { track: false });
-                        void submitFeedback({ outfit, signal: FEEDBACK_SIGNALS.DISLIKE });
-                      }}
-                    >
-                      <span aria-hidden="true">👎</span>
-                      <span className="dashFeedbackBtnText">Not for me</span>
-                    </button>
                     <button
                       type="button"
                       className="dashFeedbackBtn reject compact ghost"
