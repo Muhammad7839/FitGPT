@@ -18616,3 +18616,91 @@ html[data-hc="true"] .dashAiParagraph {
   padding: 3px 8px;
   font-weight: 500;
 }
+
+/* === Editorial theme — refine chips & season note ====================== */
+/* The pill-shaped weather/time/season/occasion/style chips clash with the
+   square paper aesthetic. Drop the geometric placeholder icons too — they
+   feel out of place in a serif layout. */
+
+[data-theme-id^="editorial"] .dashContextChipIcon {
+  display: none;
+}
+
+[data-theme-id^="editorial"] .dashContextChip {
+  border-radius: 0;
+  border: 1px solid var(--text);
+  background: transparent;
+  color: var(--text);
+  font-family: "Georgia", serif;
+  font-style: normal;
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 8px 14px;
+}
+
+[data-theme-id^="editorial"] .dashContextChip:hover {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+[data-theme-id^="editorial"] .dashContextChip.active {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+
+/* Picker buttons that drop down beneath the chips (Cold/Cool/Mild/...) */
+[data-theme-id^="editorial"] .dashContextPickerBtn {
+  border-radius: 0;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-family: "Georgia", serif;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 500;
+  padding: 7px 12px;
+}
+
+[data-theme-id^="editorial"] .dashContextPickerBtn:hover {
+  background: var(--bgSoft);
+  border-color: var(--text);
+}
+
+[data-theme-id^="editorial"] .dashContextPickerBtn.active {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+
+[data-theme-id^="editorial"] .dashContextPicker {
+  border-top: 1px solid var(--text);
+  padding-top: 14px;
+  margin-top: 14px;
+}
+
+/* Season note row */
+[data-theme-id^="editorial"] .dashSeasonNote {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 14px;
+}
+
+[data-theme-id^="editorial"] .dashSeasonIndicator {
+  border-radius: 0;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-family: "Georgia", serif;
+  font-style: normal;
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
