@@ -18439,3 +18439,180 @@ html[data-hc="true"] .dashAiParagraph {
     grid-template-columns: repeat(4, 1fr);
   }
 }
+
+/* === Editorial theme — outfit breakdown overlay (dashWhyFloat) ============ */
+/* Matches the magazine aesthetic: serif headlines, square paper cards,
+   hairline dividers, accent-ink toggle/close, no rounded pills. */
+
+[data-theme-id^="editorial"] .dashWhyFloat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: var(--shadow);
+}
+
+[data-theme-id^="editorial"] .dashWhyHeader {
+  border-bottom: 1px solid var(--text);
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+}
+
+[data-theme-id^="editorial"] .dashWhyEyebrow {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 400;
+}
+
+[data-theme-id^="editorial"] .dashInfoTitle {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-weight: 600;
+  font-style: normal;
+  font-size: 32px;
+  letter-spacing: -0.012em;
+  color: var(--text);
+}
+
+[data-theme-id^="editorial"] .dashWhyIntro {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+[data-theme-id^="editorial"] .dashWhyToggle {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--text);
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 8px 14px;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+[data-theme-id^="editorial"] .dashWhyToggle:hover {
+  background: var(--text);
+  color: var(--bg);
+}
+
+[data-theme-id^="editorial"] .dashWhyClose {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--text);
+  border-radius: 0;
+  width: 36px;
+  height: 36px;
+  font-family: "Georgia", serif;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+[data-theme-id^="editorial"] .dashWhyClose:hover {
+  background: var(--text);
+  color: var(--bg);
+}
+
+/* Lead callout — magazine intro paragraph */
+[data-theme-id^="editorial"] .dashWhyLead {
+  background: var(--bgSoft);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 0;
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text);
+  padding: 18px 22px;
+}
+
+/* Detail grid cards */
+[data-theme-id^="editorial"] .dashWhyCard {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 18px;
+}
+
+[data-theme-id^="editorial"] .dashWhyCardTitle {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+[data-theme-id^="editorial"] .dashWhyCardText {
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+/* Confidence breakdown — hairline bars in accent ink */
+[data-theme-id^="editorial"] .dashConfidenceLabel {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  font-weight: 400;
+  color: var(--text);
+  opacity: 0.75;
+}
+
+[data-theme-id^="editorial"] .dashConfidenceBar {
+  background: var(--bgSoft);
+  border-radius: 0;
+  height: 3px;
+}
+
+[data-theme-id^="editorial"] .dashConfidenceFill {
+  background: var(--accent);
+  border-radius: 0;
+}
+
+[data-theme-id^="editorial"] .dashConfidenceValue {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-style: italic;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--accent);
+  opacity: 1;
+  letter-spacing: 0;
+}
+
+[data-theme-id^="editorial"] .dashConfidenceNote {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* AI badge in the title row */
+[data-theme-id^="editorial"] .dashAiBadge {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  font-weight: 500;
+}
