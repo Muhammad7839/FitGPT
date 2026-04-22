@@ -11890,6 +11890,16 @@ select:focus-visible {
    Chatbot — Claude/ChatGPT-style
    ============================= */
 
+@keyframes chatbotToggleFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+@keyframes chatbotToggleHalo {
+  0%, 100% { box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32), 0 0 0 0 var(--accent-soft, rgba(196, 60, 60, 0.0)); }
+  50%      { box-shadow: 0 14px 32px rgba(0, 0, 0, 0.36), 0 0 0 8px var(--accent-soft, rgba(196, 60, 60, 0.18)); }
+}
+
 .chatbot-toggle {
   position: fixed;
   bottom: 24px;
@@ -11898,28 +11908,51 @@ select:focus-visible {
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  border: none;
-  background: var(--accent, #4f8cff);
+  border: 2px solid var(--accent, #4f8cff);
+  background: radial-gradient(circle at 30% 25%, var(--surface, #1a1a22) 0%, var(--bg, #0f0f14) 75%);
   color: #fff;
   font-size: 1.7rem;
   cursor: pointer;
-  box-shadow: 0 4px 18px rgba(0,0,0,.28);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background .2s, transform .2s, box-shadow .2s;
+  transition: background .2s, transform .2s, border-color .2s;
+  /* Two animations layered: a slow vertical bob + a gentle halo pulse
+     synced to the same 3.6s rhythm so the button feels alive. */
+  animation: chatbotToggleFloat 3.6s ease-in-out infinite,
+             chatbotToggleHalo 3.6s ease-in-out infinite;
 }
 .chatbot-toggle:hover {
-  transform: scale(1.08);
-  background: var(--accent-hover, #3a6fdb);
-  box-shadow: 0 6px 24px rgba(0,0,0,.35);
+  /* Pause the float on hover so the button sits still while the user
+     aims for it — feels more intentional than a moving target. */
+  animation-play-state: paused;
+  transform: scale(1.08) translateY(-2px);
+  border-color: var(--accent-hover, #3a6fdb);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.42), 0 0 0 10px var(--accent-soft-2, rgba(196, 60, 60, 0.22));
+}
+.chatbot-toggle:focus-visible {
+  outline: none;
+  border-color: var(--accent-hover, #3a6fdb);
+  box-shadow: 0 0 0 4px var(--accent-soft-2, rgba(196, 60, 60, 0.30));
+}
+.chatbot-toggle:active {
+  transform: scale(0.96) translateY(-1px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .chatbot-toggle {
+    animation: none;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32);
+  }
 }
 .chatbot-toggle-logo {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   object-fit: cover;
   pointer-events: none;
+  /* Gentle inset feel so the avatar reads as part of the badge,
+     not a pasted PNG. */
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
 }
 
 /* ── Panel ── */
