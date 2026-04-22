@@ -17,6 +17,7 @@ export default function SavedOutfits() {
   const [saved, setSaved] = useState([]);
   const [msg, setMsg] = useState("");
   const [confirmUnsave, setConfirmUnsave] = useState(null);
+  const [plannedOutfit, setPlannedOutfit] = useState(null);
 
 
   const wardrobe = useMemo(() => loadWardrobe(user), [user]);
@@ -25,7 +26,6 @@ export default function SavedOutfits() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    setMsg("");
 
     try {
       const res = await savedOutfitsApi.listSaved(user);
@@ -84,11 +84,19 @@ export default function SavedOutfits() {
     try {
       const result = await savedOutfitsApi.unsaveOutfit(sig, user);
       setSaved((prev) => prev.filter((o) => (o?.outfit_signature || "") !== sig));
+      setPlannedOutfit(null);
       setMsg(result?.localOnly ? "Outfit removed locally only. Backend sync failed." : "Outfit removed.");
-      window.setTimeout(() => setMsg(""), 2500);
+      window.setTimeout(() => {
+        setMsg("");
+        setPlannedOutfit(null);
+      }, 2500);
     } catch (e) {
+      setPlannedOutfit(null);
       setMsg(e?.message || "Could not remove outfit.");
-      window.setTimeout(() => setMsg(""), 2500);
+      window.setTimeout(() => {
+        setMsg("");
+        setPlannedOutfit(null);
+      }, 2500);
     }
     setConfirmUnsave(null);
   }
@@ -136,8 +144,17 @@ export default function SavedOutfits() {
       source: "planner",
     }, user).catch(() => null);
 
-    setMsg(result?.localOnly ? "Opening Google Calendar. Plan saved locally only." : "Opening Google Calendar...");
-    window.setTimeout(() => setMsg(""), 2500);
+    if (result?.created) {
+      setPlannedOutfit(result?.planned_outfit || null);
+      setMsg(result?.localOnly ? "Outfit planned successfully. Backend sync is pending." : "Outfit planned successfully.");
+    } else {
+      setPlannedOutfit(null);
+      setMsg(result?.message || "Could not plan outfit.");
+    }
+    window.setTimeout(() => {
+      setMsg("");
+      setPlannedOutfit(null);
+    }, 2500);
   }
 
   const onHoloMove = useCallback((e) => {
@@ -182,7 +199,18 @@ export default function SavedOutfits() {
         </div>
       </div>
 
-      {msg && <div className="noteBox" style={{ marginTop: 12 }}>{msg}</div>}
+      {msg && (
+        <div className="noteBox" style={{ marginTop: 12 }} role="status" aria-live="polite">
+          <div>{msg}</div>
+          {plannedOutfit ? (
+            <div style={{ marginTop: 10 }}>
+              <button className="btn" type="button" onClick={() => navigate("/plans")}>
+                Open Plans
+              </button>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {confirmUnsave && (
         <div className="modalOverlay" role="dialog" aria-modal="true">

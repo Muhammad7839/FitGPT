@@ -35,11 +35,24 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
                   alignItems: "start",
                 }}
               >
-                <img
-                  src={entry.preview}
-                  alt={entry.name}
-                  style={{ width: 80, height: 80, borderRadius: 12, objectFit: "cover" }}
-                />
+                {entry.preview ? (
+                  <img
+                    src={entry.preview}
+                    alt={entry.name}
+                    style={{ width: 80, height: 80, borderRadius: 12, objectFit: "cover" }}
+                  />
+                ) : (
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      width: 80,
+                      height: 80,
+                      borderRadius: 12,
+                      border: "1px dashed rgba(0, 0, 0, 0.16)",
+                      background: "linear-gradient(135deg, rgba(180, 180, 180, 0.22), rgba(140, 140, 140, 0.1))",
+                    }}
+                  />
+                )}
 
                 <div style={{ display: "grid", gap: 8 }}>
                   <SuggestedTagsPanel

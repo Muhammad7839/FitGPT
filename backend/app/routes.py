@@ -27,6 +27,7 @@ from app.auth import (
 from app.config import EXPOSE_RESET_TOKEN_IN_RESPONSE, MAX_UPLOAD_IMAGE_BYTES
 from app.database.database import get_db
 from app.google_oauth import GoogleTokenValidationError, verify_google_id_token
+from app.receipt_ocr import extract_clothing_items as extract_receipt_clothing
 from app.recommendation_explanations import RecommendationContext, build_recommendation_explanation
 from app.weather import (
     ForecastSnapshot,
@@ -891,6 +892,55 @@ def create_wardrobe_items_bulk(
     return {"results": results}
 
 
+@router.post("/receipts/ocr", response_model=schemas.ReceiptOcrResponse)
+def receipt_ocr(
+    image: UploadFile = File(...),
+    current_user: models.User = Depends(get_current_user),
+) -> schemas.ReceiptOcrResponse:
+    """Parse a clothing receipt photo into wardrobe-ready line items."""
+    content_type = (image.content_type or "").lower()
+    if content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WEBP images are allowed")
+
+    buffer = bytearray()
+    try:
+        while True:
+            chunk = image.file.read(1024 * 1024)
+            if not chunk:
+                break
+            buffer.extend(chunk)
+            if len(buffer) > MAX_UPLOAD_IMAGE_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="Image exceeds max upload size",
+                )
+    finally:
+        image.file.close()
+
+    result = extract_receipt_clothing(bytes(buffer), content_type)
+    logger.info(
+        "Receipt OCR user_id=%s bytes=%s items=%s source=%s warning=%s",
+        current_user.id,
+        len(buffer),
+        len(result.items),
+        result.source,
+        result.warning,
+    )
+    return schemas.ReceiptOcrResponse(
+        items=[
+            schemas.ReceiptOcrItem(
+                name=item.name,
+                category=item.category,
+                color=item.color,
+                price=item.price,
+            )
+            for item in result.items
+        ],
+        source=result.source,
+        warning=result.warning,
+    )
+
+
 @router.get("/wardrobe/items", response_model=list[schemas.ClothingItemResponse])
 def get_my_wardrobe(
     include_archived: bool = False,
@@ -1640,6 +1690,30 @@ def chat_with_ai_alias(
 ):
     """Compatibility alias for web clients expecting /chat."""
     return chat_with_ai(payload=payload, db=db, current_user=current_user)
+
+
+@router.get("/chat/conversations", response_model=schemas.ChatConversationsResponse)
+def list_chat_conversations(
+    current_user: Optional[models.User] = Depends(get_optional_user),
+):
+    """Compatibility shim until server-backed chat history persistence is implemented."""
+    return {
+        "conversations": [],
+        "local_only": True,
+    }
+
+
+@router.put("/chat/conversations", response_model=schemas.ChatConversationsSyncResponse)
+def sync_chat_conversations(
+    payload: schemas.ChatConversationsSyncRequest,
+    current_user: Optional[models.User] = Depends(get_optional_user),
+):
+    """Acknowledge chat history sync requests without failing web clients."""
+    _ = payload
+    return {
+        "saved": False,
+        "local_only": True,
+    }
 
 
 @router.post("/ai/recommendations", response_model=schemas.AiRecommendationResponse)

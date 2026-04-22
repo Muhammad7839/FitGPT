@@ -95,16 +95,19 @@ async function readErrorMessage(res) {
 }
 
 export async function apiFetch(path, options = {}) {
+  const { timeoutMs, ...fetchOptions } = options;
   const url = buildUrl(path);
   const token = getToken();
-  const headers = new Headers(options.headers || {});
+  const headers = new Headers(fetchOptions.headers || {});
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-  const externalSignal = options.signal;
+  const externalSignal = fetchOptions.signal;
   let timeoutId = null;
   let didTimeout = false;
   let removeExternalAbortListener = null;
+  const requestTimeoutMs =
+    Number.isFinite(timeoutMs) && Number(timeoutMs) > 0 ? Number(timeoutMs) : REQUEST_TIMEOUT_MS;
 
-  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  const isFormData = typeof FormData !== "undefined" && fetchOptions.body instanceof FormData;
 
   if (!isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -128,13 +131,13 @@ export async function apiFetch(path, options = {}) {
     timeoutId = setTimeout(() => {
       didTimeout = true;
       controller.abort();
-    }, REQUEST_TIMEOUT_MS);
+    }, requestTimeoutMs);
   }
 
   let res;
   try {
     res = await fetch(url, {
-      ...options,
+      ...fetchOptions,
       headers,
       credentials: "include",
       signal: controller?.signal || externalSignal,

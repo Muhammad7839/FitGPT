@@ -114,9 +114,9 @@ fun AppNavHost(
             null
         }
     val authRepository = remember { ServiceLocator.provideAuthRepository(context) }
-    val authViewModel: AuthViewModel =
-        viewModel(factory = AuthViewModelFactory(authRepository, tokenStore))
     val profileRepository = remember { ServiceLocator.provideProfileRepository(context) }
+    val authViewModel: AuthViewModel =
+        viewModel(factory = AuthViewModelFactory(authRepository, tokenStore, profileRepository))
     val profileViewModel: ProfileViewModel? =
         if (hasToken) {
             viewModel(factory = ProfileViewModelFactory(profileRepository))

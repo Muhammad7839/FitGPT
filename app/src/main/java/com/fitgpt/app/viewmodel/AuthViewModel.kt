@@ -6,8 +6,10 @@ package com.fitgpt.app.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.fitgpt.app.BuildConfig
 import com.fitgpt.app.data.auth.AuthSessionStore
 import com.fitgpt.app.data.repository.AuthRepository
+import com.fitgpt.app.data.repository.ProfileRepository
 import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
@@ -31,8 +33,14 @@ sealed class AuthState {
 
 class AuthViewModel(
     private val repository: AuthRepository,
-    private val tokenStore: AuthSessionStore
+    private val tokenStore: AuthSessionStore,
+    private val profileRepository: ProfileRepository? = null,
 ) : ViewModel() {
+    companion object {
+        private const val DEV_QUICK_LOGIN_EMAIL = "dev.quicklogin@example.com"
+        private const val DEV_QUICK_LOGIN_PASSWORD = "Test1234"
+    }
+
     private val authLogTag = "GOOGLE_AUTH"
 
     private val _loginState = MutableStateFlow<AuthState>(AuthState.Idle)
@@ -75,6 +83,64 @@ class AuthViewModel(
                 _loginState.value = AuthState.Error(message)
             } catch (e: Exception) {
                 _loginState.value = AuthState.Error(resolveNetworkAuthError(e, action = "login"))
+            }
+        }
+    }
+
+    fun quickLoginDev() {
+        if (!BuildConfig.DEBUG) {
+            return
+        }
+
+        _loginState.value = AuthState.Loading
+        viewModelScope.launch {
+            try {
+                Log.d(authLogTag, "DEV_QUICK_LOGIN attempting login")
+                val token = try {
+                    repository.login(
+                        email = DEV_QUICK_LOGIN_EMAIL,
+                        password = DEV_QUICK_LOGIN_PASSWORD
+                    )
+                } catch (exception: HttpException) {
+                    if (exception.code() != 401) {
+                        throw exception
+                    }
+
+                    Log.d(authLogTag, "DEV_QUICK_LOGIN account missing or rejected; attempting registration")
+                    try {
+                        repository.register(
+                            email = DEV_QUICK_LOGIN_EMAIL,
+                            password = DEV_QUICK_LOGIN_PASSWORD
+                        )
+                    } catch (registerException: HttpException) {
+                        if (registerException.code() != 400) {
+                            throw registerException
+                        }
+                    }
+
+                    repository.login(
+                        email = DEV_QUICK_LOGIN_EMAIL,
+                        password = DEV_QUICK_LOGIN_PASSWORD
+                    )
+                }
+
+                if (persistSession(token)) {
+                    ensureDevQuickLoginOnboardingComplete()
+                    _loginState.value = AuthState.Success
+                } else {
+                    _loginState.value = AuthState.Error("Unable to save your session. Please try again.")
+                }
+            } catch (exception: HttpException) {
+                val message = if (exception.code() == 401) {
+                    "Quick login failed. Reset the dev account or clear local backend data."
+                } else {
+                    "Quick login failed (${exception.code()})"
+                }
+                _loginState.value = AuthState.Error(message)
+            } catch (exception: Exception) {
+                _loginState.value = AuthState.Error(
+                    resolveNetworkAuthError(exception, action = "debug quick login")
+                )
             }
         }
     }
@@ -226,6 +292,24 @@ class AuthViewModel(
     private suspend fun persistSession(token: com.fitgpt.app.data.remote.dto.TokenResponse): Boolean {
         tokenStore.saveToken(token)
         return !tokenStore.getAccessToken().isNullOrBlank()
+    }
+
+    private suspend fun ensureDevQuickLoginOnboardingComplete() {
+        val repository = profileRepository ?: return
+        val profile = repository.getProfile()
+        if (profile.onboardingComplete) {
+            return
+        }
+
+        Log.d(authLogTag, "DEV_QUICK_LOGIN completing onboarding for dedicated dev account")
+        repository.completeOnboarding(
+            stylePreferences = emptyList(),
+            comfortPreferences = emptyList(),
+            dressFor = emptyList(),
+            bodyType = null,
+            gender = null,
+            heightCm = null
+        )
     }
 
     private fun extractHttpDetail(exception: HttpException): String? {
