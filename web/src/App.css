@@ -20666,22 +20666,44 @@ html[data-hc="true"] .dashAiParagraph {
   opacity: 0.4;
 }
 
-/* Selected option meta + traits styling */
+/* Selected option meta + traits styling.
+   The score reads like a magazine pull-quote — large italic Playfair
+   numeral in accent ink with a hairline divider above the label. */
 [data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionScore {
   font-family: "Playfair Display", "Didot", "Georgia", serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border-left: 1px solid var(--border);
+  min-width: 86px;
 }
 
 [data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionScoreValue {
-  font-size: 28px;
-  font-weight: 600;
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 38px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+  text-shadow: none;
 }
 
 [data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionScoreLabel {
   font-family: "Georgia", serif;
-  font-style: italic;
-  font-size: 11px;
-  letter-spacing: 0.16em;
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.32em;
   text-transform: uppercase;
+  color: var(--text);
+  opacity: 0.62;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  width: 100%;
+  text-align: center;
 }
 
 [data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionTrait {
