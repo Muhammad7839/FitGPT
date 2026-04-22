@@ -16363,6 +16363,402 @@ select:focus-visible {
   font-weight: 900;
 }
 
+.mannequinPreviewModalCard {
+  width: min(1080px, 96vw);
+  max-height: calc(100vh - 28px);
+  padding: 18px;
+  overflow-y: auto;
+  background:
+    radial-gradient(circle at top right, rgba(139, 30, 30, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(247, 240, 237, 0.99));
+}
+
+.mannequinPreviewHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mannequinPreviewEyebrow {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(139, 30, 30, 0.72);
+  margin-bottom: 8px;
+}
+
+.mannequinPreviewTitle {
+  margin-bottom: 6px;
+}
+
+.mannequinPreviewSub {
+  max-width: 54ch;
+}
+
+.mannequinPreviewClose {
+  flex: 0 0 auto;
+}
+
+.mannequinPreviewBody {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.85fr);
+  gap: 18px;
+}
+
+.mannequinPreviewCanvasCard,
+.mannequinPreviewInfoCard {
+  border-radius: 24px;
+  border: 1px solid rgba(139, 30, 30, 0.14);
+  box-shadow: 0 16px 40px rgba(17, 24, 39, 0.1);
+}
+
+.mannequinPreviewCanvasCard {
+  position: relative;
+  min-height: 560px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 16%, rgba(248, 180, 95, 0.18), transparent 24%),
+    linear-gradient(180deg, #1a1a22 0%, #0f1016 100%);
+}
+
+.mannequinPreviewCanvasWrap {
+  height: 100%;
+}
+
+.mannequinPreviewCanvasWrap.isLoading {
+  opacity: 0.72;
+}
+
+.mannequinPreviewControls {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 18px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mannequinPreviewControlBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(10, 10, 14, 0.72);
+  color: rgba(255, 245, 245, 0.96);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.mannequinPreviewControlBtn svg {
+  flex-shrink: 0;
+  opacity: 0.92;
+}
+
+/* Collapse to icon-only when the canvas card is narrow (e.g. inside the
+   editorial dominant-selected outfit) so all 5 buttons stay reachable. */
+@media (max-width: 880px) {
+  .mannequinPreviewControlBtn {
+    padding: 0 10px;
+    min-width: 36px;
+    justify-content: center;
+  }
+  .mannequinPreviewControlBtn span {
+    display: none;
+  }
+}
+
+.mannequinPreviewControlBtn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 208, 208, 0.34);
+  background: rgba(18, 18, 24, 0.86);
+}
+
+.mannequinPreviewControlBtn.isAccent {
+  background: linear-gradient(180deg, rgba(152, 40, 40, 0.92), rgba(114, 27, 27, 0.95));
+  border-color: rgba(255, 208, 208, 0.22);
+}
+
+.mannequinPreviewLoading {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 2;
+  border-radius: 999px;
+  background: rgba(10, 10, 14, 0.72);
+  color: rgba(255, 245, 245, 0.94);
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mannequinPreviewInfoCard {
+  background: rgba(255, 255, 255, 0.82);
+  padding: 18px;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.mannequinPreviewSection {
+  display: grid;
+  gap: 10px;
+}
+
+.mannequinPreviewSectionTitle {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(17, 24, 39, 0.74);
+}
+
+.mannequinPreviewStatusRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mannequinPreviewStatusPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(139, 30, 30, 0.16);
+  background: rgba(139, 30, 30, 0.08);
+  color: #8b1e1e;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mannequinPreviewStatusPill.muted {
+  background: rgba(17, 24, 39, 0.05);
+  color: rgba(17, 24, 39, 0.72);
+  border-color: rgba(17, 24, 39, 0.1);
+}
+
+.mannequinPreviewNotice,
+.mannequinPreviewUnsupported {
+  border-radius: 18px;
+  padding: 12px 14px;
+  background: rgba(139, 30, 30, 0.06);
+  border: 1px solid rgba(139, 30, 30, 0.12);
+  color: rgba(17, 24, 39, 0.78);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.mannequinPreviewNoticeSubtle {
+  background: rgba(17, 24, 39, 0.05);
+  border-color: rgba(17, 24, 39, 0.08);
+}
+
+.mannequinPreviewRoleList,
+.mannequinPreviewItemList {
+  display: grid;
+  gap: 10px;
+}
+
+.mannequinPreviewRoleRow,
+.mannequinPreviewItemRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mannequinPreviewRoleLabel {
+  color: rgba(17, 24, 39, 0.64);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mannequinPreviewRoleValue,
+.mannequinPreviewItemText {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.mannequinPreviewItemRow {
+  justify-content: flex-start;
+}
+
+.mannequinPreviewItemDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.45);
+}
+
+.mannequinPreviewItemDot.isMuted {
+  background: rgba(17, 24, 39, 0.22);
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.06);
+}
+
+.mannequinPreviewFallback {
+  padding: 22px;
+  display: grid;
+  gap: 14px;
+}
+
+.mannequinPreviewFallbackTitle {
+  color: rgba(255, 245, 245, 0.96);
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.mannequinPreviewFallbackText {
+  color: rgba(255, 225, 225, 0.78);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.mannequinPreviewThumbGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 12px;
+}
+
+.mannequinPreviewThumbTile {
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mannequinPreviewThumbImg,
+.mannequinPreviewThumbPh {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
+}
+
+.mannequinPreviewThumbPh {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+}
+
+.mannequinPreviewThumbName {
+  padding: 10px 12px 12px;
+  color: rgba(255, 245, 245, 0.9);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+[data-theme="dark"] .dashPreviewBtn {
+  background: rgba(196, 60, 60, 0.18);
+  border-color: rgba(255, 203, 203, 0.18);
+  color: rgba(255, 225, 225, 0.96);
+}
+
+[data-theme="dark"] .dashPreviewBtn:hover {
+  background: rgba(196, 60, 60, 0.24);
+  border-color: rgba(255, 203, 203, 0.28);
+}
+
+[data-theme="dark"] .mannequinPreviewModalCard {
+  background:
+    radial-gradient(circle at top right, rgba(196, 60, 60, 0.18), transparent 28%),
+    linear-gradient(180deg, rgba(24, 24, 30, 0.99), rgba(16, 16, 22, 0.99));
+}
+
+[data-theme="dark"] .mannequinPreviewEyebrow {
+  color: rgba(255, 203, 203, 0.8);
+}
+
+[data-theme="dark"] .mannequinPreviewInfoCard {
+  background: rgba(27, 27, 34, 0.92);
+  border-color: rgba(255, 203, 203, 0.12);
+}
+
+[data-theme="dark"] .mannequinPreviewSectionTitle,
+[data-theme="dark"] .mannequinPreviewRoleValue,
+[data-theme="dark"] .mannequinPreviewItemText {
+  color: rgba(255, 245, 245, 0.94);
+}
+
+[data-theme="dark"] .mannequinPreviewRoleLabel,
+[data-theme="dark"] .mannequinPreviewStatusPill.muted {
+  color: rgba(255, 225, 225, 0.72);
+}
+
+[data-theme="dark"] .mannequinPreviewStatusPill.muted {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="dark"] .mannequinPreviewNoticeSubtle {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .mannequinPreviewItemDot.isMuted {
+  background: rgba(255, 245, 245, 0.4);
+  box-shadow: 0 0 0 3px rgba(255, 245, 245, 0.08);
+}
+
+[data-theme="dark"] .mannequinPreviewNotice,
+[data-theme="dark"] .mannequinPreviewUnsupported {
+  background: rgba(196, 60, 60, 0.12);
+  border-color: rgba(255, 203, 203, 0.12);
+  color: rgba(255, 232, 232, 0.88);
+}
+
+@media (max-width: 900px) {
+  .mannequinPreviewBody {
+    grid-template-columns: 1fr;
+  }
+
+  .mannequinPreviewCanvasCard {
+    min-height: 460px;
+  }
+
+  .mannequinPreviewControls {
+    position: static;
+    margin: 12px 16px 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .mannequinPreviewHeader {
+    flex-direction: column;
+  }
+
+  .mannequinPreviewClose {
+    width: 100%;
+  }
+
+  .mannequinPreviewCanvasCard {
+    min-height: 380px;
+  }
+
+  .mannequinPreviewControls {
+    margin: 12px;
+  }
+
+  .mannequinPreviewControlBtn {
+    flex: 1 1 calc(50% - 10px);
+    justify-content: center;
+  }
+}
+
 .tripDatePopover {
   width: min(276px, calc(100vw - 28px));
   padding: 12px;
