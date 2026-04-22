@@ -13878,42 +13878,42 @@ select:focus-visible {
 .chatbot-composer-inner {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
+  gap: 6px;
   border: 1.5px solid var(--border, #ddd);
-  border-radius: 22px;
-  padding: 6px 6px 6px 16px;
+  border-radius: 24px;
+  padding: 6px 8px 6px 18px;
   background: var(--bg, #fff);
   transition: border-color .2s, box-shadow .2s;
 }
 .chatbot-composer-inner:focus-within {
   border-color: var(--accent, #4f8cff);
-  box-shadow: 0 0 0 3px rgba(79,140,255,.1);
+  box-shadow: 0 0 0 3px var(--accent-soft-2, rgba(79, 140, 255, 0.12));
 }
 .chatbot-textarea {
   flex: 1;
   border: none;
   outline: none;
   resize: none;
-  font-size: .87rem;
-  line-height: 1.45;
+  font-size: .92rem;
+  line-height: 1.5;
   color: var(--text, #222);
   background: transparent;
   font-family: inherit;
-  min-height: 22px;
+  min-height: 24px;
   max-height: 120px;
   overflow-y: auto;
-  padding: 4px 0;
+  padding: 7px 4px 7px 0;
 }
 .chatbot-textarea::placeholder {
   color: var(--text-muted, #aaa);
 }
 .chatbot-send {
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
   border-radius: 50%;
   border: none;
-  background: var(--border, #ddd);
+  background: var(--bgSoft, var(--border, #ddd));
   color: var(--text-muted, #999);
   cursor: pointer;
   display: flex;
@@ -13921,6 +13921,11 @@ select:focus-visible {
   justify-content: center;
   transition: background .2s, color .2s, transform .15s;
   flex-shrink: 0;
+}
+.chatbot-send svg,
+.chatbot-mic svg {
+  width: 18px;
+  height: 18px;
 }
 .chatbot-send--ready {
   background: var(--accent, #4f8cff);
@@ -13936,12 +13941,12 @@ select:focus-visible {
   transform: none;
 }
 .chatbot-mic {
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
   border-radius: 50%;
   border: none;
-  background: var(--border, #ddd);
+  background: var(--bgSoft, var(--border, #ddd));
   color: var(--text-muted, #999);
   cursor: pointer;
   display: flex;

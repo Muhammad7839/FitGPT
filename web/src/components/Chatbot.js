@@ -454,6 +454,12 @@ function AutoResizeTextarea({ value, onChange, onKeyDown, disabled, inputRef, he
       disabled={disabled}
       aria-label="Ask AURA about outfits or styling"
       aria-describedby={helperTextId}
+      autoComplete="off"
+      autoCorrect="off"
+      spellCheck="false"
+      data-gramm="false"
+      data-gramm_editor="false"
+      data-enable-grammarly="false"
     />
   );
 }
