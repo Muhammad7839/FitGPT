@@ -25,6 +25,7 @@ import ItemFormFields, { CATEGORIES as ITEM_CATEGORIES, FIT_TAG_OPTIONS } from "
 import WardrobeItemCard from "./WardrobeItemCard";
 import BulkUploadModal from "./BulkUploadModal";
 import DuplicateReviewModal from "./DuplicateReviewModal";
+import ReceiptScannerModal from "./ReceiptScannerModal";
 
 const CATEGORIES = ["All Items", ...ITEM_CATEGORIES];
 
@@ -265,6 +266,7 @@ export default function Wardrobe() {
   const [toast, setToast] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [showUploadPanel, setShowUploadPanel] = useState(false);
+  const [receiptScannerOpen, setReceiptScannerOpen] = useState(false);
   const [showCategoryTabs, setShowCategoryTabs] = useState(false);
 
   const [filterOpen, setFilterOpen] = useState(false);
@@ -922,6 +924,50 @@ export default function Wardrobe() {
 
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
+  const handleReceiptResult = useCallback(({ items: extractedItems }) => {
+    setReceiptScannerOpen(false);
+    if (!Array.isArray(extractedItems) || !extractedItems.length) return;
+
+    const categoryMap = {
+      Top: "Tops",
+      Bottom: "Bottoms",
+      Outerwear: "Outerwear",
+      Shoes: "Shoes",
+      Accessory: "Accessories",
+    };
+
+    const entries = extractedItems.map((item) => {
+      const name = (item?.name || "").toString().trim();
+      return {
+        _key: makeId(),
+        file: null,
+        preview: "",
+        name,
+        category: categoryMap[(item?.category || "").toString().trim()] || guessCategoryFromName(name),
+        color: (item?.color || "").toString().trim(),
+        fitTag: "unknown",
+        clothingType: "",
+        layerType: "",
+        isOnePiece: false,
+        setId: "",
+        styleTags: [],
+        occasionTags: [],
+        seasonTags: [],
+        classifying: false,
+        taggingState: "idle",
+        taggingMessage: "",
+        suggestedTags: null,
+        userOverrode: false,
+      };
+    });
+
+    setBulkItems(entries);
+    setBulkError("");
+    setBulkOpen(true);
+    setToast(`Extracted ${entries.length} item${entries.length > 1 ? "s" : ""} from receipt. Review before saving.`);
+    window.setTimeout(() => setToast(""), 3500);
+  }, []);
 
   const onDrop = (e) => {
     e.preventDefault();
@@ -1636,6 +1682,13 @@ export default function Wardrobe() {
           </button>
           <button
             type="button"
+            className="wardrobeChipBtn"
+            onClick={() => setReceiptScannerOpen(true)}
+          >
+            Scan receipt
+          </button>
+          <button
+            type="button"
             className={showUploadPanel ? "wardrobeChipBtn active" : "wardrobeChipBtn"}
             onClick={() => setShowUploadPanel((prev) => !prev)}
             aria-expanded={showUploadPanel}
@@ -2052,6 +2105,12 @@ export default function Wardrobe() {
           error={bulkError}
         />
       ) : null}
+
+      <ReceiptScannerModal
+        open={receiptScannerOpen}
+        onClose={() => setReceiptScannerOpen(false)}
+        onResult={handleReceiptResult}
+      />
 
       <DuplicateReviewModal
         open={duplicateReviewOpen}

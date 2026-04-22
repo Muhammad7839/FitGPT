@@ -1,10 +1,51 @@
-import React, { useMemo, useRef } from "react";
+import React, { Component, useCallback, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 
 import { colorToCss, normalizeCategory } from "../utils/recommendationEngine";
 import { getItemSlot, slotLabel, SLOTS, validateOutfit } from "../utils/outfitLayering";
+
+function isWebGLAvailable() {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return false;
+  }
+
+  try {
+    const canvas = document.createElement("canvas");
+    return !!(
+      window.WebGLRenderingContext &&
+      (canvas.getContext("webgl") || canvas.getContext("experimental-webgl"))
+    );
+  } catch {
+    return false;
+  }
+}
+
+class MannequinCanvasBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch() {
+    if (typeof this.props.onError === "function") {
+      this.props.onError();
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback ?? null;
+    }
+
+    return this.props.children;
+  }
+}
 
 function normalizeDisplayColor(value) {
   const css = colorToCss(value || "");
@@ -185,15 +226,50 @@ function legendEntries(outfit) {
     }));
 }
 
+function MannequinFallback() {
+  return (
+    <div className="mannequinViewerContainer">
+      <div className="noteBox" style={{ marginTop: 0 }} role="status" aria-live="polite">
+        3D preview not supported on this device
+      </div>
+    </div>
+  );
+}
+
 export default function MannequinViewer({ outfit = [], bodyType = "rectangle" }) {
   const validation = useMemo(() => validateOutfit(outfit), [outfit]);
   const entries = useMemo(() => legendEntries(outfit).slice(0, 4), [outfit]);
+  const [webglSupported, setWebglSupported] = useState(() => isWebGLAvailable());
+
+  const createRenderer = useCallback((defaults) => {
+    if (!isWebGLAvailable()) {
+      setWebglSupported(false);
+      throw new Error("WebGL not supported");
+    }
+
+    try {
+      return new THREE.WebGLRenderer({ ...defaults, antialias: true });
+    } catch (error) {
+      console.warn("WebGL failed:", error);
+      setWebglSupported(false);
+      throw error;
+    }
+  }, []);
+
+  if (!webglSupported) {
+    return <MannequinFallback />;
+  }
 
   return (
     <div className="mannequinViewerContainer">
-      <Canvas camera={{ position: [0, 1.2, 4.2], fov: 34 }}>
-        <ViewerScene outfit={outfit} bodyType={bodyType} />
-      </Canvas>
+      <MannequinCanvasBoundary
+        fallback={<MannequinFallback />}
+        onError={() => setWebglSupported(false)}
+      >
+        <Canvas camera={{ position: [0, 1.2, 4.2], fov: 34 }} gl={createRenderer}>
+          <ViewerScene outfit={outfit} bodyType={bodyType} />
+        </Canvas>
+      </MannequinCanvasBoundary>
 
       {validation.conflicts.length > 0 ? (
         <div className="mannequinConflictBanner" role="status">

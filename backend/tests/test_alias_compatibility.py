@@ -177,3 +177,36 @@ def test_outfit_history_aliases_interoperate_with_canonical_routes(client):
     legacy_after = client.get("/outfit-history", headers=auth)
     assert legacy_after.status_code == 200
     assert legacy_after.json()["history"] == []
+
+
+def test_chat_conversation_compatibility_endpoints_return_local_only_status(client):
+    token = register_and_login(client, "chat-conversations@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    listed = client.get("/chat/conversations", headers=auth)
+    assert listed.status_code == 200
+    assert listed.json() == {
+        "conversations": [],
+        "local_only": True,
+    }
+
+    synced = client.put(
+        "/chat/conversations",
+        headers=auth,
+        json={
+            "conversations": [
+                {
+                    "id": "chat-1",
+                    "title": "Office outfit",
+                    "messages": [{"role": "user", "content": "What should I wear?"}],
+                    "created_at": "2026-04-21T12:00:00Z",
+                    "updated_at": "2026-04-21T12:01:00Z",
+                }
+            ]
+        },
+    )
+    assert synced.status_code == 200
+    assert synced.json() == {
+        "saved": False,
+        "local_only": True,
+    }

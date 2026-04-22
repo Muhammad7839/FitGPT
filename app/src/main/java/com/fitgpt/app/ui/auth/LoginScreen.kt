@@ -279,6 +279,17 @@ fun LoginScreen(
                         }
                     }
 
+                    if (BuildConfig.DEBUG) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = { viewModel.quickLoginDev() },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = state !is AuthState.Loading
+                        ) {
+                            Text("Quick Login (Dev)")
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(12.dp))
                     HorizontalDivider()
                     if (showGoogleSignIn) {

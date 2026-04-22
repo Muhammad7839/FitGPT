@@ -578,6 +578,28 @@ class ChatResponse(BaseModel):
     warning: Optional[str] = None
 
 
+class ChatConversationRecord(BaseModel):
+    id: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=1, max_length=120)
+    messages: list[ChatMessage] = Field(default_factory=list, max_length=100)
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChatConversationsResponse(BaseModel):
+    conversations: list[ChatConversationRecord] = Field(default_factory=list)
+    local_only: bool = False
+
+
+class ChatConversationsSyncRequest(BaseModel):
+    conversations: list[ChatConversationRecord] = Field(default_factory=list, max_length=100)
+
+
+class ChatConversationsSyncResponse(BaseModel):
+    saved: bool
+    local_only: bool = False
+
+
 class AiRecommendationRequest(BaseModel):
     manual_temp: Optional[int] = Field(default=None, ge=-30, le=130)
     time_context: Optional[str] = Field(default=None, max_length=64)
@@ -1074,3 +1096,16 @@ class PlannedOutfitAssignmentResponse(BaseModel):
     detail: str
     planned_dates: list[str]
     outfits: list[PlannedOutfitEntry]
+
+
+class ReceiptOcrItem(BaseModel):
+    name: str = Field(max_length=128)
+    category: str = Field(max_length=32)
+    color: str = Field(default="", max_length=64)
+    price: float = Field(default=0.0, ge=0)
+
+
+class ReceiptOcrResponse(BaseModel):
+    items: list[ReceiptOcrItem]
+    source: str
+    warning: Optional[str] = None
