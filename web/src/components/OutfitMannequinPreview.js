@@ -471,12 +471,36 @@ function MannequinCanvas({ grouped, textures, actionToken, showCallouts, onDragC
   useEffect(() => {
     const controls = controlsRef.current;
     if (!controls || !actionToken?.type) return;
-    if (actionToken.type === CAMERA_ACTIONS.RESET) { controls.reset(); controls.update(); return; }
+
+    if (actionToken.type === CAMERA_ACTIONS.RESET) {
+      controls.reset();
+      controls.update();
+      return;
+    }
+
+    // three-stdlib's OrbitControls doesn't expose rotateLeft/rotateUp on
+    // its public API (only dollyIn/dollyOut). Rotate via spherical math
+    // around the target so we stay on supported methods.
     const step = Math.PI / 8;
-    if (actionToken.type === CAMERA_ACTIONS.ROTATE_LEFT) controls.rotateLeft(step);
-    if (actionToken.type === CAMERA_ACTIONS.ROTATE_RIGHT) controls.rotateLeft(-step);
-    if (actionToken.type === CAMERA_ACTIONS.ZOOM_IN) controls.dollyIn(1.18);
-    if (actionToken.type === CAMERA_ACTIONS.ZOOM_OUT) controls.dollyOut(1.18);
+    const camera = controls.object;
+    const target = controls.target;
+
+    if (actionToken.type === CAMERA_ACTIONS.ROTATE_LEFT
+      || actionToken.type === CAMERA_ACTIONS.ROTATE_RIGHT) {
+      const delta = actionToken.type === CAMERA_ACTIONS.ROTATE_LEFT ? step : -step;
+      const offset = new THREE.Vector3().subVectors(camera.position, target);
+      const spherical = new THREE.Spherical().setFromVector3(offset);
+      spherical.theta += delta;
+      offset.setFromSpherical(spherical);
+      camera.position.copy(target).add(offset);
+      camera.lookAt(target);
+    }
+
+    if (actionToken.type === CAMERA_ACTIONS.ZOOM_IN
+      && typeof controls.dollyIn === "function") controls.dollyIn(1.18);
+    if (actionToken.type === CAMERA_ACTIONS.ZOOM_OUT
+      && typeof controls.dollyOut === "function") controls.dollyOut(1.18);
+
     controls.update();
   }, [actionToken]);
 
