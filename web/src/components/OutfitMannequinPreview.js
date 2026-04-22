@@ -652,20 +652,73 @@ export default function OutfitMannequinPreview({
               </ErrorBoundary>
             )}
             <div className="mannequinPreviewControls" aria-label="Preview controls">
-              <button type="button" className="mannequinPreviewControlBtn" onClick={() => triggerAction(CAMERA_ACTIONS.ROTATE_LEFT)}>
-                Rotate left
+              <button
+                type="button"
+                className="mannequinPreviewControlBtn"
+                onClick={() => triggerAction(CAMERA_ACTIONS.ROTATE_LEFT)}
+                title="Rotate left"
+                aria-label="Rotate left"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 12a9 9 0 1 0 3-6.7" />
+                  <polyline points="3 4 3 9 8 9" />
+                </svg>
+                <span>Rotate L</span>
               </button>
-              <button type="button" className="mannequinPreviewControlBtn" onClick={() => triggerAction(CAMERA_ACTIONS.ROTATE_RIGHT)}>
-                Rotate right
+              <button
+                type="button"
+                className="mannequinPreviewControlBtn"
+                onClick={() => triggerAction(CAMERA_ACTIONS.ROTATE_RIGHT)}
+                title="Rotate right"
+                aria-label="Rotate right"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 12a9 9 0 1 1-3-6.7" />
+                  <polyline points="21 4 21 9 16 9" />
+                </svg>
+                <span>Rotate R</span>
               </button>
-              <button type="button" className="mannequinPreviewControlBtn" onClick={() => triggerAction(CAMERA_ACTIONS.ZOOM_IN)}>
-                Zoom in
+              <button
+                type="button"
+                className="mannequinPreviewControlBtn"
+                onClick={() => triggerAction(CAMERA_ACTIONS.ZOOM_IN)}
+                title="Zoom in"
+                aria-label="Zoom in"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  <line x1="11" y1="8" x2="11" y2="14" />
+                  <line x1="8" y1="11" x2="14" y2="11" />
+                </svg>
+                <span>Zoom in</span>
               </button>
-              <button type="button" className="mannequinPreviewControlBtn" onClick={() => triggerAction(CAMERA_ACTIONS.ZOOM_OUT)}>
-                Zoom out
+              <button
+                type="button"
+                className="mannequinPreviewControlBtn"
+                onClick={() => triggerAction(CAMERA_ACTIONS.ZOOM_OUT)}
+                title="Zoom out"
+                aria-label="Zoom out"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  <line x1="8" y1="11" x2="14" y2="11" />
+                </svg>
+                <span>Zoom out</span>
               </button>
-              <button type="button" className="mannequinPreviewControlBtn isAccent" onClick={() => triggerAction(CAMERA_ACTIONS.RESET)}>
-                Reset view
+              <button
+                type="button"
+                className="mannequinPreviewControlBtn isAccent"
+                onClick={() => triggerAction(CAMERA_ACTIONS.RESET)}
+                title="Reset view"
+                aria-label="Reset view"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="1 4 1 10 7 10" />
+                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                </svg>
+                <span>Reset</span>
               </button>
             </div>
           </div>
