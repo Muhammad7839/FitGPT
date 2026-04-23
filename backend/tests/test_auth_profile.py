@@ -401,8 +401,11 @@ def test_google_login_invalid_or_expired_token_handling(client, monkeypatch, cap
     monkeypatch.setattr("app.routes.verify_google_id_token", invalid_verify)
     invalid_response = client.post("/login/google", json={"id_token": "bad-token-value-2222222222"})
     assert invalid_response.status_code == 400
-    assert invalid_response.json()["detail"] == "Invalid Google token audience"
+    # Detail is sanitized to a generic message so internal validator
+    # categories never reach the client. Full detail stays in server logs.
+    assert invalid_response.json()["detail"] == "Invalid Google credentials."
     assert "category=invalid_audience" in caplog.text
+    assert "detail=Invalid Google token audience" in caplog.text
 
     def expired_verify(_: str):
         raise GoogleTokenValidationError(
@@ -414,7 +417,7 @@ def test_google_login_invalid_or_expired_token_handling(client, monkeypatch, cap
     monkeypatch.setattr("app.routes.verify_google_id_token", expired_verify)
     expired_response = client.post("/login/google", json={"id_token": "expired-token-value-33333333"})
     assert expired_response.status_code == 401
-    assert expired_response.json()["detail"] == "Google token has expired"
+    assert expired_response.json()["detail"] == "Google session expired. Please sign in again."
     assert "category=expired_token" in caplog.text
 
 

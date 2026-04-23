@@ -198,3 +198,45 @@ Verified each Explore-agent claim before editing. Many flagged items were alread
 | Web `CI=true npm test` | 594 passed / 22 suites |
 
 ---
+
+## Step 5 — Security fixes
+
+### CORS tightening (`backend/app/main.py`)
+
+- `allow_methods=["*"]` → explicit `["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]`.
+- `allow_headers=["*"]` → explicit list of what the client actually sends: `Authorization, Content-Type, X-Requested-With, X-Auth-Attempt-Id`.
+- Added `expose_headers=["Content-Type"]` and `max_age=600` to let browsers cache preflights (reduces CORS chatter).
+- `allow_credentials=True` retained; `CORS_ORIGINS` already an allow-list (never `["*"]`).
+
+### Security response headers (`backend/app/main.py`)
+
+Added an HTTP middleware that sets on every response (via `setdefault` so an inner handler can override):
+
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: no-referrer`
+
+### Error-detail sanitization
+
+- `backend/app/routes.py` `login_with_google`: was surfacing `str(GoogleTokenValidationError)` to the client — messages like `"Invalid Google token audience"` leak the internal validator category. Replaced with two generic client messages (`"Invalid Google credentials."` and `"Google session expired. Please sign in again."`). Full exception detail stays in the server log (already written at WARNING level).
+- `tests/test_auth_profile.py::test_google_login_invalid_or_expired_token_handling`: updated to assert the new sanitized messages *and* that the full internal detail is still emitted to logs (so ops can diagnose).
+
+### Verified safe, no change
+
+- `backend/app/config.py:104-105`: already hard-fails at import if `ENVIRONMENT == "production"` and `SECRET_KEY == "dev-only-change-me"`. Already correct.
+- Upload filenames: server-generated (`f"{prefix}_{user_id}_{uuid4().hex}{ext}"`), no user-controlled path components. No traversal risk.
+- Other `str(exc)` sites in `routes.py` (weather endpoints, recommendations) surface `WeatherLookupError` / `AiProviderError` messages that were *authored* for client consumption — safe.
+
+### Flagged for follow-up (not fixed)
+
+- `backend/app/routes.py:833` `create_wardrobe_item` async-handler-with-sync-body performance issue (see Step 3 log).
+- Android: `BuildConfig` fields already client-safe (`GOOGLE_WEB_CLIENT_ID` is public, no API secrets).
+
+### Test status after Step 5
+
+| Suite | Result |
+|-------|--------|
+| Backend `pytest -q` | 169 passed |
+| Web `CI=true npm test` | 594 passed / 22 suites |
+
+---

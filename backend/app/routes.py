@@ -630,7 +630,8 @@ def login_with_google(
             exc.category,
             str(exc),
         )
-        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        client_detail = "Google session expired. Please sign in again." if exc.is_expired else "Invalid Google credentials."
+        raise HTTPException(status_code=status_code, detail=client_detail) from exc
     logger.info(
         "GOOGLE_AUTH attempt_id=%s token verification success email=%s",
         attempt_id,
