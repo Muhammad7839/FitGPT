@@ -69,7 +69,20 @@ def _record_rate_limit_hit(bucket: dict[str, list[float]], key: str, now: float)
     recent_hits = [value for value in bucket.get(key, []) if now - value < FORGOT_PASSWORD_WINDOW_SECONDS]
     recent_hits.append(now)
     bucket[key] = recent_hits
+    _prune_rate_limit_bucket(bucket, now)
     return len(recent_hits)
+
+
+def _prune_rate_limit_bucket(bucket: dict[str, list[float]], now: float) -> None:
+    """Drop stale keys whose hits are all outside the window, so buckets don't grow unbounded."""
+    window = FORGOT_PASSWORD_WINDOW_SECONDS
+    stale_keys = [
+        existing_key
+        for existing_key, hits in bucket.items()
+        if not hits or (now - hits[-1]) >= window
+    ]
+    for existing_key in stale_keys:
+        bucket.pop(existing_key, None)
 
 
 def _enforce_forgot_password_throttle(email: str, request: Request) -> None:

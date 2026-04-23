@@ -121,21 +121,26 @@ def _request_openweather(endpoint: str, *, city: Optional[str], lat: Optional[fl
     except requests.RequestException as exc:
         raise WeatherLookupError("Weather network unavailable", status_code=503) from exc
 
-    if response.status_code == 404:
-        raise WeatherLookupError("Requested location was not found", status_code=400)
-    if response.status_code in {401, 403}:
-        raise WeatherLookupError("Weather service authentication failed", status_code=502)
-    if response.status_code == 429:
-        raise WeatherLookupError("Weather service quota exceeded", status_code=503)
-    if response.status_code >= 500:
-        raise WeatherLookupError("Weather provider is unavailable", status_code=503)
-    if not response.ok:
-        raise WeatherLookupError("Weather lookup failed", status_code=400)
-
     try:
-        return response.json()
-    except ValueError as exc:
-        raise WeatherLookupError("Weather provider returned invalid data", status_code=502) from exc
+        if response.status_code == 404:
+            raise WeatherLookupError("Requested location was not found", status_code=400)
+        if response.status_code in {401, 403}:
+            raise WeatherLookupError("Weather service authentication failed", status_code=502)
+        if response.status_code == 429:
+            raise WeatherLookupError("Weather service quota exceeded", status_code=503)
+        if response.status_code >= 500:
+            raise WeatherLookupError("Weather provider is unavailable", status_code=503)
+        if not response.ok:
+            raise WeatherLookupError("Weather lookup failed", status_code=400)
+
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise WeatherLookupError("Weather provider returned invalid data", status_code=502) from exc
+    finally:
+        close = getattr(response, "close", None)
+        if callable(close):
+            close()
 
 
 def _safe_float(value: Any, *, fallback: float = 0.0) -> float:

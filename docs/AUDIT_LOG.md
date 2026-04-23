@@ -170,3 +170,31 @@ Verified each Explore-agent claim before editing. Many flagged items were alread
 | Web | (unchanged since Step 2) |
 
 ---
+
+## Step 4 — Memory & resource leak fixes
+
+### Backend
+
+- `backend/app/weather.py` `_request_openweather`: the `requests.Response` object was relying on garbage collection for socket close. Wrapped the body in `try/…finally: response.close()` so the underlying connection is returned to the pool promptly (also works under MagicMock in tests — `with response:` was tried first but fails on MagicMock without `__enter__`).
+- `backend/app/ai/provider.py` Groq call: same pattern — explicit `try/…finally: response.close()`.
+- `backend/app/routes.py` forgot-password rate-limit buckets: previously each unique email/IP added a permanent dict entry that only pruned its own timestamps. Added `_prune_rate_limit_bucket(...)` that drops keys whose most recent hit is older than the window on every bucket write. Unbounded growth → O(active keys).
+- `backend/app/receipt_ocr.py`: Groq Python client is a structured (non-streaming) call; the response object doesn't hold an HTTP connection the way raw `requests` does. No change needed.
+
+### Web
+
+- Added `web/src/hooks/useManagedTimeouts.js` — tracks `setTimeout` IDs in a `useRef` Set and clears them on unmount.
+- `web/src/components/Wardrobe.js`: imported the hook, instantiated `toastTimeouts = useManagedTimeouts()`, and replaced **22** `window.setTimeout(() => setToast(""), N)` sites with `toastTimeouts.set(() => setToast(""), N)`. The one remaining `window.setTimeout` (line 727, 50 ms micro-delay for focus) is too short to leak meaningfully.
+- Other components: `Dashboard.js`, `Profile.js`, `SavedOutfits.js`, `Chatbot.js` already use proper `useEffect` cleanup on their timers / listeners (verified via grep and inspection).
+
+### Android
+
+- Already uses `viewModelScope.launch` (no `GlobalScope`) across all ViewModels, so coroutine cleanup is tied to ViewModel lifecycle. No change.
+
+### Test status after Step 4
+
+| Suite | Result |
+|-------|--------|
+| Backend `pytest -q` | 169 passed |
+| Web `CI=true npm test` | 594 passed / 22 suites |
+
+---
