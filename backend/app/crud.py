@@ -16,7 +16,6 @@ from app import models, schemas
 from app.ai import deterministic, history
 from app.auth import hash_password
 from app.config import RESET_TOKEN_EXPIRE_MINUTES
-from app.weather import map_temperature_to_category
 
 PROMPT_DEFAULT_COOLDOWN_SECONDS = 24 * 60 * 60
 PROMPT_IGNORE_COOLDOWN_SECONDS = 72 * 60 * 60
@@ -1011,16 +1010,6 @@ def _tokenize(value: Optional[str]) -> set[str]:
         return set()
     normalized = "".join(char if char.isalnum() else " " for char in value.lower())
     return {token for token in normalized.split() if len(token) >= 2}
-
-
-def _jaccard_similarity(left: set[str], right: set[str]) -> float:
-    if not left or not right:
-        return 0.0
-    overlap = left & right
-    union = left | right
-    if not union:
-        return 0.0
-    return len(overlap) / len(union)
 
 
 def _duplicate_similarity(item: models.ClothingItem, other: models.ClothingItem) -> tuple[float, list[str]]:

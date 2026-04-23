@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
 from app.database.database import engine, Base
-from app import models
+from app import models  # noqa: F401  # imported for SQLAlchemy table registration side effect
 from app.config import CORS_ORIGINS, log_optional_config_warnings
 from app.routes import router
 
