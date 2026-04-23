@@ -240,3 +240,33 @@ Added an HTTP middleware that sets on every response (via `setdefault` so an inn
 | Web `CI=true npm test` | 594 passed / 22 suites |
 
 ---
+
+## Step 6 — Test coverage additions
+
+New tests exercise the Steps 4-5 work plus a few pre-existing gaps.
+
+### Backend (new files under `backend/tests/`)
+
+- **`test_security_headers.py`** — five tests: root, `/health`, error responses all carry `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`; CORS preflight returns explicit methods/headers (not wildcard); disallowed origin isn't echoed.
+- **`test_rate_limit_bucket_prune.py`** — three tests: prune drops keys whose hits are all outside the window; active keys survive; per-key hit count reflects sliding window.
+- Total new backend tests: **8**.
+
+### Web (new files under `web/src/hooks/`)
+
+- **`useManagedTimeouts.test.js`** — four tests: callback fires at delay; `clear()` cancels; nullish `clear()` is safe; unmount clears all pending timers (prevents setState-on-unmounted).
+- Total new web tests: **4**.
+
+### Coverage status
+
+| Suite | Before audit | After Step 6 | Delta |
+|-------|--------------|--------------|-------|
+| Backend pytest | 169 | **177** | +8 |
+| Web jest | 594 / 22 suites | **598 / 23 suites** | +4, +1 suite |
+
+### Not added (descoped for this pass)
+
+The original plan envisioned deep tests for `Wardrobe.js`, `Dashboard.js`, `Profile.js`, `Chatbot.js`, `SavedOutfits.js`, `ManualOutfitBuilder.js` — each a 500–2500-line component. Writing *meaningful* integration tests for them (mock API boundary, cover happy path + edge + failure) would be a full dedicated sprint rather than a side-effect of an audit. These are flagged in the final report as the highest-value follow-up.
+
+Backend endpoints without dedicated tests (`/ai/chat`, `/chat/conversations`, `/recommendations/feedback`) are exercised indirectly by existing recommendation/chat integration tests; similar descope note in final report.
+
+---
