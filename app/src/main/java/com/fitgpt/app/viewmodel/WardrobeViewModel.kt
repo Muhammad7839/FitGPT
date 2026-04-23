@@ -260,7 +260,8 @@ class WardrobeViewModel(
                     limit = limit
                 )
                 _duplicateCandidatesState.value = UiState.Success(duplicates)
-            } catch (_: Exception) {
+            } catch (exception: Exception) {
+                Log.e(wardrobeLogTag, "duplicate-candidate scan failed", exception)
                 _duplicateCandidatesState.value = UiState.Error("Failed to scan for duplicate items")
             }
         }

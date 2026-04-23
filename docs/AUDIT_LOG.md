@@ -126,3 +126,47 @@ Used `pyflakes`, CRA eslint (`react-app` config), and targeted grep. Verified ea
 | Web `CI=true npm test` | 594 passed / 22 suites |
 
 ---
+
+## Step 3 — Bug hunt & fixes
+
+Verified each Explore-agent claim before editing. Many flagged items were already correct.
+
+### Backend — fixed
+
+- `backend/app/routes.py` `_store_uploaded_image` (around line 311): the `except Exception: destination.unlink(…); raise` pattern is structurally correct (cleans up partial file, re-raises), but swallowed the exception context for diagnostics. Added `logger.exception(...)` before unlink so ops can see *why* the write failed (disk full, permission, etc.).
+- `backend/app/routes.py` packing-list weather fallback (lines 1873, 1884): outer `WeatherLookupError` already logs at warning level; inner fallback (`fetch_current_weather` also fails) silently produced empty `forecast_days`. Added a `logger.warning` on the inner catch so a dual-failure weather outage is visible in logs, not just reflected as an empty forecast.
+
+### Backend — verified safe, no change
+
+- `backend/app/routes.py:199-200` `_timestamp_to_iso` catching `(OSError, TypeError, ValueError)` and returning `""`. This is a display helper with intentional best-effort semantics; silent fallback is correct and logging would be noise.
+- `backend/app/routes.py:358-365` `_read_form_int` catches `ValueError` and returns the default. Form-parse defaults are the intended behavior; no log needed.
+- `backend/app/routes.py:857` `except Exception: # noqa: BLE001` on JSON body parse. Already annotated noqa; converts arbitrary JSON-decode failures into a 400 HTTPException. Correct.
+- `backend/app/ai/provider.py:130-140` — `choices[0]` access. Explore-agent flagged as potentially unguarded. **Verified safe**: `choices[0].get(...) if choices else {}` short-circuits on empty list. No change.
+- `backend/app/routes.py:65` `request.client.host`. Already guarded (`if request.client and request.client.host else "unknown"`). Verified safe. No change.
+
+### Backend — async/sync mismatch flagged, NOT fixed
+
+- `routes.py:833` `create_wardrobe_item` is the only `async def` endpoint, and it calls synchronous blocking functions (`_store_uploaded_image` does sync file I/O, `crud.create_clothing_item` does sync SQLAlchemy) inline. This blocks the event loop under load. The proper fix is either (a) make the handler `def` (FastAPI runs sync handlers in a threadpool) — but that conflicts with `await request.form()` / `await request.json()` in-body; or (b) wrap the blocking sections in `asyncio.to_thread(...)`. Both are larger refactors with test implications. **Flagged in final report as follow-up; not fixed here.**
+
+### Android — fixed
+
+- `app/src/main/java/com/fitgpt/app/viewmodel/WardrobeViewModel.kt` line 263: `fetchDuplicateCandidates` caught `Exception` without logging. The user sees the error via `UiState.Error`, but the root cause was invisible. Replaced `catch (_: Exception) {` with `catch (exception: Exception) { Log.e(wardrobeLogTag, "duplicate-candidate scan failed", exception); … }`.
+
+### Android — not fixed (pattern observation)
+
+- `WardrobeViewModel.kt` has ~20 other `catch (_: Exception)` blocks that convert to `UiState.Error("Failed to …")`. The user-facing behavior is correct; the lack of `Log.e` is a diagnosability gap rather than a bug. Fixing all 20+ uniformly would be a mechanical refactor better done in a dedicated pass. **Flagged in final report as follow-up.**
+
+### Web — audit findings
+
+- `Dashboard.js`, `Wardrobe.js`, `Chatbot.js` use consistent `.catch(() => {...})` or `try/catch + setState` patterns around async calls — no unhandled promise rejections found in source files.
+- `Profile.js:40` Explore-agent suggested adding `|| {}` fallback on `effectiveUser`. **Verified unnecessary**: every downstream access uses optional chaining (`effectiveUser?.foo`). Adding `|| {}` would change falsy semantics elsewhere. No change.
+- `Wardrobe.js` `setTimeout` toast timers — addressed in Step 4 (resource leaks).
+
+### Test status after Step 3
+
+| Suite | Result |
+|-------|--------|
+| Backend `pytest -q` | 169 passed |
+| Web | (unchanged since Step 2) |
+
+---

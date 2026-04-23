@@ -309,6 +309,7 @@ def _store_uploaded_image(
                     )
                 output.write(chunk)
     except Exception:
+        logger.exception("Image upload write failed user_id=%s file=%s", user_id, filename)
         destination.unlink(missing_ok=True)
         raise
     finally:
@@ -1880,7 +1881,12 @@ def generate_trip_packing_list(
                     "description": current_weather.description,
                 }
             ]
-        except WeatherLookupError:
+        except WeatherLookupError as exc:
+            logger.warning(
+                "Packing list current-weather fallback also failed city=%s error=%s",
+                payload.destination_city,
+                exc,
+            )
             forecast_days = []
 
     result = crud.generate_trip_packing_list(
