@@ -32,6 +32,18 @@ object BackendEnvironmentResolver {
         return validateApiBaseUrl(apiBaseUrl)
     }
 
+    fun isLocalDevelopmentBaseUrl(baseUrl: String): Boolean {
+        val parsed = normalizeOrBlank(baseUrl).toHttpUrlOrNull() ?: return false
+        if (parsed.scheme != "http") return false
+
+        val host = parsed.host.lowercase()
+        if (host == "localhost" || host == "10.0.2.2" || host.startsWith("127.")) {
+            return true
+        }
+
+        return isPrivateLanHost(host)
+    }
+
     private fun currentDeviceInfo(): DeviceInfo {
         return DeviceInfo(
             fingerprint = Build.FINGERPRINT.orEmpty(),
@@ -84,5 +96,19 @@ object BackendEnvironmentResolver {
         val trimmed = baseUrl.trim()
         if (trimmed.isBlank()) return ""
         return if (trimmed.endsWith("/")) trimmed else "$trimmed/"
+    }
+
+    private fun isPrivateLanHost(host: String): Boolean {
+        val parts = host.split('.')
+        if (parts.size != 4) return false
+        val octets = parts.map { part ->
+            part.toIntOrNull()?.takeIf { it in 0..255 } ?: return false
+        }
+
+        val first = octets[0]
+        val second = octets[1]
+        return first == 10 ||
+            (first == 172 && second in 16..31) ||
+            (first == 192 && second == 168)
     }
 }

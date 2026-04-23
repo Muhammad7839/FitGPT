@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.fitgpt.app.BuildConfig
+import com.fitgpt.app.data.network.BackendEnvironmentResolver
 import com.fitgpt.app.ui.common.BrandingBackgroundLayer
 import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.AuthState
@@ -58,7 +59,7 @@ private const val GOOGLE_AUTH_DEBUG_LOG_TAG = "GOOGLE_AUTH_DEBUG"
 
 fun debugGoogleConfig(context: Context) {
     val account = GoogleSignIn.getLastSignedInAccount(context)
-    Log.d(GOOGLE_AUTH_DEBUG_LOG_TAG, "last_account=${account?.email}")
+    Log.d(GOOGLE_AUTH_DEBUG_LOG_TAG, "last_account_present=${account != null}")
 }
 
 private suspend fun clearGoogleSignInSession(client: GoogleSignInClient): Boolean {
@@ -92,6 +93,15 @@ fun LoginScreen(
     val scope = rememberCoroutineScope()
     val googleClientId = BuildConfig.GOOGLE_CLIENT_ID
     val showGoogleSignIn = shouldShowGoogleSignInButton(googleClientId)
+    val showQuickLoginDev = remember {
+        BuildConfig.DEBUG && runCatching {
+            val activeBaseUrl = BackendEnvironmentResolver.resolveBaseUrl(
+                apiBaseUrl = BuildConfig.API_BASE_URL,
+                physicalLanBaseUrl = BuildConfig.API_LAN_BASE_URL
+            )
+            BackendEnvironmentResolver.isLocalDevelopmentBaseUrl(activeBaseUrl)
+        }.getOrDefault(false)
+    }
 
     val googleSignInClient = remember(context, googleClientId) {
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -141,7 +151,6 @@ fun LoginScreen(
 
             when (outcome) {
                 is GoogleSignInOutcome.Success -> {
-                    Log.d(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId account email=${outcome.email}")
                     Log.d(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId idToken_present=true")
                     googleErrorMessage = null
                     viewModel.loginWithGoogleToken(
@@ -151,7 +160,6 @@ fun LoginScreen(
                 }
 
                 is GoogleSignInOutcome.Failure -> {
-                    Log.d(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId account email=${outcome.email}")
                     Log.d(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId idToken_present=${outcome.tokenPresent}")
                     Log.w(
                         GOOGLE_AUTH_LOG_TAG,
@@ -279,7 +287,7 @@ fun LoginScreen(
                         }
                     }
 
-                    if (BuildConfig.DEBUG) {
+                    if (showQuickLoginDev) {
                         Spacer(modifier = Modifier.height(10.dp))
                         OutlinedButton(
                             onClick = { viewModel.quickLoginDev() },

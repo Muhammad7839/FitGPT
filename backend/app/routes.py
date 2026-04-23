@@ -633,9 +633,8 @@ def login_with_google(
         client_detail = "Google session expired. Please sign in again." if exc.is_expired else "Invalid Google credentials."
         raise HTTPException(status_code=status_code, detail=client_detail) from exc
     logger.info(
-        "GOOGLE_AUTH attempt_id=%s token verification success email=%s",
+        "GOOGLE_AUTH attempt_id=%s token verification success",
         attempt_id,
-        identity.email,
     )
 
     user = crud.get_or_create_google_user(
@@ -644,10 +643,9 @@ def login_with_google(
         full_name=identity.full_name,
     )
     logger.info(
-        "GOOGLE_AUTH attempt_id=%s user lookup/create success user_id=%s email=%s",
+        "GOOGLE_AUTH attempt_id=%s user lookup/create success user_id=%s",
         attempt_id,
         user.id,
-        user.email,
     )
     access_token = create_access_token(
         data={"sub": str(user.id)},

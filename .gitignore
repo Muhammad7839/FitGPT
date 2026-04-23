@@ -39,14 +39,18 @@ local.properties
 # Env files
 .env.*
 !.env.example
+backend/.env.*
+!backend/.env.example
 
 .codex/
+tmp/
 fitgpt.db
 uploads/
 
 # Database files (all environments)
 *.db
 *.sqlite3
+*.db-journal
 fitgpt_debug.db
 fitgpt_receipt_debug.db
 fitgpt_test.db

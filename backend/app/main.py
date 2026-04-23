@@ -39,6 +39,7 @@ Base.metadata.create_all(bind=engine)
 
 def _ensure_runtime_schema() -> None:
     """Apply minimal additive schema changes for local environments without migrations."""
+    # TODO: Replace this startup schema patching with reviewed migrations before production hardening.
     inspector = inspect(engine)
     table_names = set(inspector.get_table_names())
     if "users" not in table_names:

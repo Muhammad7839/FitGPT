@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fitgpt.app.BuildConfig
 import com.fitgpt.app.data.auth.AuthSessionStore
+import com.fitgpt.app.data.network.BackendEnvironmentResolver
 import com.fitgpt.app.data.repository.AuthRepository
 import com.fitgpt.app.data.repository.ProfileRepository
 import java.io.IOException
@@ -88,7 +89,8 @@ class AuthViewModel(
     }
 
     fun quickLoginDev() {
-        if (!BuildConfig.DEBUG) {
+        if (!isQuickLoginDevAllowed()) {
+            _loginState.value = AuthState.Error("Quick login is only available with a local debug backend.")
             return
         }
 
@@ -143,6 +145,18 @@ class AuthViewModel(
                 )
             }
         }
+    }
+
+    private fun isQuickLoginDevAllowed(): Boolean {
+        if (!BuildConfig.DEBUG) return false
+        val activeBaseUrl = runCatching {
+            BackendEnvironmentResolver.resolveBaseUrl(
+                apiBaseUrl = BuildConfig.API_BASE_URL,
+                physicalLanBaseUrl = BuildConfig.API_LAN_BASE_URL
+            )
+        }.getOrNull() ?: return false
+
+        return BackendEnvironmentResolver.isLocalDevelopmentBaseUrl(activeBaseUrl)
     }
 
     fun loginWithGoogleToken(idToken: String, attemptId: String) {

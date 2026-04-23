@@ -4,6 +4,7 @@
 package com.fitgpt.app.data.network
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -162,6 +163,25 @@ class BackendEnvironmentResolverTest {
 
         assertTrue(error is IllegalStateException)
         assertTrue(error?.message?.contains("API_BASE_URL host") == true)
+    }
+
+    @Test
+    fun localDevelopmentBaseUrlAllowsLoopbackEmulatorAndPrivateLanHosts() {
+        assertTrue(BackendEnvironmentResolver.isLocalDevelopmentBaseUrl("http://10.0.2.2:8000/"))
+        assertTrue(BackendEnvironmentResolver.isLocalDevelopmentBaseUrl("http://127.0.0.1:8000/"))
+        assertTrue(BackendEnvironmentResolver.isLocalDevelopmentBaseUrl("http://localhost:8000/"))
+        assertTrue(BackendEnvironmentResolver.isLocalDevelopmentBaseUrl("http://10.1.2.3:8000/"))
+        assertTrue(BackendEnvironmentResolver.isLocalDevelopmentBaseUrl("http://172.16.0.10:8000/"))
+        assertTrue(BackendEnvironmentResolver.isLocalDevelopmentBaseUrl("http://172.31.255.10:8000/"))
+        assertTrue(BackendEnvironmentResolver.isLocalDevelopmentBaseUrl("http://192.168.1.220:8000/"))
+    }
+
+    @Test
+    fun localDevelopmentBaseUrlRejectsRemoteAndNonHttpHosts() {
+        assertFalse(BackendEnvironmentResolver.isLocalDevelopmentBaseUrl("https://fitgpt-api.onrender.com/"))
+        assertFalse(BackendEnvironmentResolver.isLocalDevelopmentBaseUrl("http://172.32.0.10:8000/"))
+        assertFalse(BackendEnvironmentResolver.isLocalDevelopmentBaseUrl("http://8.8.8.8:8000/"))
+        assertFalse(BackendEnvironmentResolver.isLocalDevelopmentBaseUrl("not-a-url"))
     }
 
     private fun physicalDeviceInfo(): BackendEnvironmentResolver.DeviceInfo {
