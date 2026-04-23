@@ -270,3 +270,44 @@ The original plan envisioned deep tests for `Wardrobe.js`, `Dashboard.js`, `Prof
 Backend endpoints without dedicated tests (`/ai/chat`, `/chat/conversations`, `/recommendations/feedback`) are exercised indirectly by existing recommendation/chat integration tests; similar descope note in final report.
 
 ---
+
+## Step 7 — Stabilization
+
+Full-suite run after all prior commits:
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Backend | `pytest -q` in `backend/` | **177 passed** in ~59s |
+| Web tests | `CI=true npm test -- --watchAll=false` in `web/` | **598 passed / 23 suites** in ~1.4s |
+| Web build | `npm run build` in `web/` | green (only a third-party source-map warning unrelated to our code) |
+| Backend import smoke | `python -c "from app.main import app"` | 80 routes register cleanly |
+
+No regressions introduced anywhere in Steps 2–6. Baseline (169 backend / 594 web) preserved and extended (+8 backend, +4 web).
+
+---
+
+## Step 8 — Final report
+
+- Wrote `docs/AUDIT_REPORT.md` (the deliverable).
+- Refreshed top-level `README.md` to reflect current feature set (receipt OCR, voice chat, barcode scanner, analytics), add running-the-tests section, document the security posture that came out of the audit, and link to the audit docs.
+- Final commit bundled both files plus this log update.
+
+### End-of-audit test matrix
+
+| Suite | Before | After |
+|-------|--------|-------|
+| Backend pytest | 169 | 177 |
+| Web Jest | 594 / 22 | 598 / 23 |
+| CI workflow | green | green |
+
+### Commits in this audit (on `main`)
+
+1. `d69c7d2` — chore: remove dead code and unused imports across backend/web
+2. `55ae97e` — fix: add diagnostic logging on silent exception paths
+3. `179d69b` — fix: close HTTP responses, prune rate-limit buckets, manage toast timers
+4. `e44d396` — security: tighten CORS, add security headers, sanitize Google auth errors
+5. `eec69bd` — test: add coverage for security headers, rate-limit prune, managed timeouts
+6. final — docs: add AUDIT_REPORT.md, refresh README
+
+Audit closed.
+
