@@ -17516,3 +17516,161 @@ html[data-hc="true"] .dashAiParagraph {
 [data-theme="dark"] .mannequinPreviewInfoCard { border-left-color: rgba(255,255,255,0.06); }
 [data-theme="dark"] .mannequinPreviewNotice { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.5); }
 [data-theme="dark"] .mannequinPreviewStatusPill.muted { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.4); }
+
+/* ── Download page ────────────────────────────────────────────────── */
+.downloadPage {
+  min-height: calc(100vh - 76px);
+  padding: 34px clamp(18px, 4vw, 48px) 48px;
+  color: var(--text);
+}
+
+.downloadHero {
+  max-width: 760px;
+  margin: 0 auto 22px;
+  text-align: center;
+}
+
+.downloadHero h1 {
+  margin: 0;
+  font-size: clamp(34px, 7vw, 58px);
+  line-height: 1;
+}
+
+.downloadHero p:last-child {
+  max-width: 520px;
+  margin: 14px auto 0;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.downloadGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.downloadCard {
+  display: flex;
+  min-height: 280px;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 22px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.downloadCard h2 {
+  margin: 0 0 10px;
+  font-size: 24px;
+}
+
+.downloadCard p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.downloadButton {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  border: 1px solid var(--accent-outline);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.downloadButton.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.downloadButton:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.downloadQr {
+  max-width: 820px;
+  margin: 16px auto 0;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--accent-soft-2);
+  color: var(--text);
+}
+
+.downloadQr h2 {
+  margin: 0 0 10px;
+  font-size: 24px;
+}
+
+.downloadQrGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.downloadQrItem {
+  display: grid;
+  gap: 10px;
+}
+
+.downloadQrItem h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.downloadQrItem p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.downloadQr a {
+  color: var(--accent);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.downloadQrItem img {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px;
+}
+
+.downloadSupportNote {
+  max-width: 820px;
+  margin: 14px auto 0;
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+@media (max-width: 860px) {
+  .downloadGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .downloadCard {
+    min-height: 0;
+  }
+
+  .downloadQrGrid {
+    grid-template-columns: 1fr;
+  }
+}
