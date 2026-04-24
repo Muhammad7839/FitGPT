@@ -70,7 +70,7 @@ All core logic lives in one place so the platforms don't drift.
 
 **Mobile (Android):** Kotlin, Jetpack Compose, Retrofit + OkHttp, Play Services Auth, Coil.
 
-**Backend:** Python 3.12, FastAPI, SQLAlchemy 2.0, passlib[bcrypt] + python-jose (JWT), pydantic 2, requests, google-auth.
+**Backend:** Python 3.12, FastAPI, SQLAlchemy 2.0, bcrypt + PyJWT (auth), pydantic 2, requests, google-auth.
 
 **Third-party services:** Google Sign-In, OpenWeather, Groq (LLM + vision).
 
@@ -163,11 +163,41 @@ npm run build
 
 ## Documentation
 
-- [`docs/AUDIT_REPORT.md`](docs/AUDIT_REPORT.md) — most recent full-codebase audit (bugs, leaks, security, tests, follow-ups).
-- [`docs/AUDIT_LOG.md`](docs/AUDIT_LOG.md) — running step-by-step log for the audit.
-- [`docs/web_android_parity_matrix.md`](docs/web_android_parity_matrix.md) — feature parity between surfaces.
-- [`docs/branch_comparison_summary.md`](docs/branch_comparison_summary.md) — history of branch consolidation.
-- [`AGENTS.md`](AGENTS.md) — working conventions for this repo.
+All docs live in [`docs/`](docs/README.md), split into two folders:
+
+**[`docs/features/`](docs/features/)** — product and feature documentation (start here)
+
+| Doc | Description |
+|-----|-------------|
+| [system_overview.md](docs/features/system_overview.md) | What FitGPT is and how all the parts connect |
+| [architecture.md](docs/features/architecture.md) | Tech stack, system layers, API contract, data flow |
+| [authentication.md](docs/features/authentication.md) | Login, Google OAuth, JWT, password reset |
+| [api_endpoints.md](docs/features/api_endpoints.md) | All backend REST endpoints |
+| [recommendation_engine.md](docs/features/recommendation_engine.md) | Outfit scoring, personalization, and feedback learning |
+| [ai_logic.md](docs/features/ai_logic.md) | AURA chatbot, Groq LLM, receipt OCR, image classifier |
+| [dashboard.md](docs/features/dashboard.md) | Dashboard, outfit cards, weather context |
+| [wardrobe_management.md](docs/features/wardrobe_management.md) | Wardrobe CRUD, uploads, tagging, duplicate detection |
+| [outfit_preview.md](docs/features/outfit_preview.md) | 3D mannequin viewer, drag-and-drop outfit builder |
+| [planner.md](docs/features/planner.md) | Weekly planner, trip packing, planning calendar |
+| [onboarding_personalization.md](docs/features/onboarding_personalization.md) | Onboarding flow and preference settings |
+| [user_engagement.md](docs/features/user_engagement.md) | Feedback, wear history, rotation insights |
+| [accessibility.md](docs/features/accessibility.md) | High-contrast themes, large text mode |
+| [weather_and_time_context.md](docs/features/weather_and_time_context.md) | Weather fetch, normalization, and time-of-day context |
+
+**[`docs/internal/`](docs/internal/)** — team process, audits, and release checklists
+
+| Doc | Description |
+|-----|-------------|
+| [AUDIT_REPORT.md](docs/internal/AUDIT_REPORT.md) | Full-codebase audit: bugs, security fixes, test gaps |
+| [AUDIT_LOG.md](docs/internal/AUDIT_LOG.md) | Step-by-step audit log |
+| [features_checklist.md](docs/internal/features_checklist.md) | Feature implementation checklist across all platforms |
+| [branch_validation_checklist.md](docs/internal/branch_validation_checklist.md) | Branch hardening and validation commands |
+| [branch_comparison_summary.md](docs/internal/branch_comparison_summary.md) | History of branch consolidation |
+| [web_android_parity_matrix.md](docs/internal/web_android_parity_matrix.md) | Web vs Android feature parity matrix |
+| [android_ux_reliability_hardening.md](docs/internal/android_ux_reliability_hardening.md) | Android-specific UX hardening notes |
+| [final_manual_acceptance_script.md](docs/internal/final_manual_acceptance_script.md) | Pre-release manual acceptance test script |
+
+See also: [`AGENTS.md`](AGENTS.md) — working conventions for this repo.
 
 ---
 
