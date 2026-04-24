@@ -3,13 +3,21 @@
  */
 package com.fitgpt.app.data.repository
 
+import android.util.Log
 import com.fitgpt.app.data.model.AiRecommendationResult
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.data.model.DuplicateCandidate
+import com.fitgpt.app.data.model.ForecastRecommendationResult
+import com.fitgpt.app.data.model.ForecastWeatherContext
 import com.fitgpt.app.data.model.OutfitOption
 import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.data.model.PlannedOutfit
 import com.fitgpt.app.data.model.SavedOutfit
+import com.fitgpt.app.data.model.TagSuggestion
+import com.fitgpt.app.data.model.UnderusedAlertsResult
+import com.fitgpt.app.data.model.TripPackingResult
 import com.fitgpt.app.data.model.UploadResult
+import com.fitgpt.app.data.model.WardrobeGapAnalysis
 import com.fitgpt.app.data.model.WeatherSnapshot
 import com.fitgpt.app.data.remote.ApiService
 import com.fitgpt.app.data.remote.toCreateRequest
@@ -17,10 +25,15 @@ import com.fitgpt.app.data.remote.toDomain
 import com.fitgpt.app.data.remote.dto.BulkCreateClothingItemsRequestDto
 import com.fitgpt.app.data.remote.dto.FavoriteToggleRequestDto
 import com.fitgpt.app.data.remote.dto.OutfitHistoryRequest
+import com.fitgpt.app.data.remote.dto.OutfitHistoryUpdateRequestDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitAssignmentRequestDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitCreateRequest
+import com.fitgpt.app.data.remote.dto.PromptFeedbackEventRequestDto
+import com.fitgpt.app.data.remote.dto.RecommendationFeedbackRequestDto
+import com.fitgpt.app.data.remote.dto.RejectOutfitRequestDto
 import com.fitgpt.app.data.remote.dto.SavedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.AiRecommendationRequestDto
+import com.fitgpt.app.data.remote.dto.TripPackingRequestDto
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -30,6 +43,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 class RemoteWardrobeRepository(
     private val api: ApiService
 ) : WardrobeRepository {
+    private val logTag = "WARDROBE_DEBUG"
     private var cachedItemsById = emptyMap<Int, ClothingItem>()
 
     override suspend fun getWardrobeItems(
@@ -72,8 +86,12 @@ class RemoteWardrobeRepository(
         return items
     }
 
-    override suspend fun addItem(item: ClothingItem) {
-        api.addWardrobeItem(item.toCreateRequest())
+    override suspend fun addItem(item: ClothingItem): ClothingItem {
+        val response = api.addWardrobeItem(item.toCreateRequest())
+        val created = response.toDomain().copy(imageUrl = resolveApiUrl(response.imageUrl))
+        cachedItemsById = cachedItemsById + (created.id to created)
+        Log.d(logTag, "API response: $created")
+        return created
     }
 
     override suspend fun addItemWithPhoto(item: ClothingItem, photo: UploadImagePayload): ClothingItem {
@@ -82,18 +100,40 @@ class RemoteWardrobeRepository(
             filename = photo.fileName,
             body = photo.bytes.toRequestBody(photo.mimeType.toMediaTypeOrNull())
         )
-        val created = api.addWardrobeItemMultipart(
+        val response = api.addWardrobeItemMultipart(
             payload = buildMultipartItemFields(item),
             image = imagePart
-        ).toDomain()
-        return created.copy(imageUrl = resolveApiUrl(created.imageUrl))
+        )
+        val created = response.toDomain().copy(imageUrl = resolveApiUrl(response.imageUrl))
+        cachedItemsById = cachedItemsById + (created.id to created)
+        Log.d(logTag, "API response: $created")
+        return created
     }
 
     override suspend fun addItemsBulk(items: List<ClothingItem>): List<ClothingItem> {
         val response = api.addWardrobeItemsBulk(
             BulkCreateClothingItemsRequestDto(items = items.map { it.toCreateRequest() })
         )
-        return response.results.mapNotNull { it.item?.toDomain() }
+        val createdItems = response.results.mapNotNull { result ->
+            result.item?.let { dto -> dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl)) }
+        }
+        cachedItemsById = cachedItemsById + createdItems.associateBy { it.id }
+        return createdItems
+    }
+
+    override suspend fun suggestTags(item: ClothingItem): TagSuggestion {
+        return api.suggestWardrobeTags(item.toCreateRequest()).toDomain()
+    }
+
+    override suspend fun getItemTagSuggestions(itemId: Int): TagSuggestion {
+        return api.getWardrobeItemTagSuggestions(itemId).toDomain()
+    }
+
+    override suspend fun applyItemTagSuggestions(itemId: Int): ClothingItem {
+        val response = api.applyWardrobeItemTagSuggestions(itemId)
+        val updated = response.toDomain().copy(imageUrl = resolveApiUrl(response.imageUrl))
+        cachedItemsById = cachedItemsById + (updated.id to updated)
+        return updated
     }
 
     override suspend fun uploadImage(bytes: ByteArray, fileName: String, mimeType: String): String {
@@ -126,22 +166,66 @@ class RemoteWardrobeRepository(
 
     override suspend fun deleteItem(item: ClothingItem) {
         api.deleteWardrobeItem(item.id)
+        cachedItemsById = cachedItemsById - item.id
     }
 
-    override suspend fun updateItem(item: ClothingItem) {
-        api.updateWardrobeItem(item.id, item.toCreateRequest())
+    override suspend fun updateItem(item: ClothingItem): ClothingItem {
+        val response = api.updateWardrobeItem(item.id, item.toCreateRequest())
+        val updated = response.toDomain().copy(imageUrl = resolveApiUrl(response.imageUrl))
+        cachedItemsById = cachedItemsById + (updated.id to updated)
+        Log.d(logTag, "API response: $updated")
+        return updated
     }
 
     override suspend fun setFavorite(itemId: Int, isFavorite: Boolean): ClothingItem {
-        return api.toggleWardrobeFavorite(
+        val response = api.toggleWardrobeFavorite(
             itemId = itemId,
             payload = FavoriteToggleRequestDto(isFavorite = isFavorite)
-        ).toDomain()
+        )
+        val updated = response.toDomain().copy(
+            imageUrl = resolveApiUrl(response.imageUrl) ?: cachedItemsById[itemId]?.imageUrl
+        )
+        cachedItemsById = cachedItemsById + (updated.id to updated)
+        Log.d(logTag, "API response: $updated")
+        return updated
     }
 
     override suspend fun getFavoriteItems(): List<ClothingItem> {
         return api.getFavoriteWardrobeItems().map { dto ->
             dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl))
+        }
+    }
+
+    override suspend fun getWardrobeGaps(): WardrobeGapAnalysis {
+        return api.getWardrobeGaps().toDomain()
+    }
+
+    override suspend fun getUnderusedAlerts(analysisWindowDays: Int, maxResults: Int): UnderusedAlertsResult {
+        return api.getUnderusedAlerts(
+            analysisWindowDays = analysisWindowDays,
+            maxResults = maxResults
+        ).toDomain()
+    }
+
+    override suspend fun getDuplicateCandidates(threshold: Float, limit: Int): List<DuplicateCandidate> {
+        val activeItems = if (cachedItemsById.isEmpty()) {
+            getWardrobeItems(includeArchived = true)
+        } else {
+            cachedItemsById.values.toList()
+        }
+        val itemsById = activeItems.associateBy { it.id }
+        return api.getDuplicateCandidates(
+            threshold = threshold,
+            limit = limit
+        ).candidates.mapNotNull { candidate ->
+            val primary = itemsById[candidate.itemId] ?: return@mapNotNull null
+            val duplicate = itemsById[candidate.duplicateItemId] ?: return@mapNotNull null
+            DuplicateCandidate(
+                item = primary,
+                duplicateItem = duplicate,
+                similarityScore = candidate.similarityScore,
+                reasons = candidate.reasons
+            )
         }
     }
 
@@ -198,7 +282,7 @@ class RemoteWardrobeRepository(
             OutfitOption(
                 items = option.items.map { dto -> dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl)) },
                 explanation = option.explanation,
-                outfitScore = option.outfitScore
+                outfitScore = option.confidenceScore ?: option.outfitScore
             )
         }
     }
@@ -238,6 +322,81 @@ class RemoteWardrobeRepository(
         )
     }
 
+    override suspend fun rejectRecommendation(itemIds: List<Int>, suggestionId: String?) {
+        api.rejectRecommendation(
+            RejectOutfitRequestDto(
+                itemIds = itemIds,
+                suggestionId = suggestionId
+            )
+        )
+    }
+
+    override suspend fun recordPromptFeedbackEvent(eventType: String, suggestionId: String?) {
+        api.recordPromptFeedbackEvent(
+            PromptFeedbackEventRequestDto(
+                eventType = eventType,
+                suggestionId = suggestionId
+            )
+        )
+    }
+
+    override suspend fun submitRecommendationFeedback(
+        suggestionId: String,
+        signal: String,
+        itemIds: List<Int>?
+    ) {
+        api.submitRecommendationFeedback(
+            RecommendationFeedbackRequestDto(
+                suggestionId = suggestionId,
+                signal = signal,
+                itemIds = itemIds
+            )
+        )
+    }
+
+    override suspend fun getForecastRecommendation(
+        city: String?,
+        hoursAhead: Int,
+        manualTemp: Int?,
+        weatherCategory: String?,
+        occasion: String?,
+        exclude: String?,
+        stylePreference: String?,
+        preferredSeasons: List<String>
+    ): ForecastRecommendationResult {
+        val response = api.getForecastRecommendation(
+            city = city?.trim()?.takeIf { it.isNotEmpty() },
+            hoursAhead = hoursAhead,
+            manualTemp = manualTemp,
+            weatherCategory = weatherCategory,
+            occasion = occasion,
+            exclude = exclude,
+            stylePreference = stylePreference,
+            preferredSeasons = preferredSeasons
+        )
+        return ForecastRecommendationResult(
+            items = response.items.map { dto -> dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl)) },
+            explanation = response.explanation,
+            outfitScore = response.outfitScore,
+            source = response.source,
+            fallbackUsed = response.fallbackUsed,
+            warning = response.warning,
+            suggestionId = response.suggestionId,
+            forecast = ForecastWeatherContext(
+                city = response.forecast.city,
+                forecastTimestamp = response.forecast.forecastTimestamp,
+                temperatureF = response.forecast.temperatureF,
+                weatherCategory = response.forecast.weatherCategory,
+                condition = response.forecast.condition,
+                description = response.forecast.description,
+                windMph = response.forecast.windMph,
+                rainMm = response.forecast.rainMm,
+                snowMm = response.forecast.snowMm,
+                source = response.forecast.source
+            )
+        )
+    }
+
     override suspend fun getCurrentWeather(city: String?, lat: Double?, lon: Double?): WeatherSnapshot {
         val response = api.getCurrentWeather(city = city, lat = lat, lon = lon)
         return WeatherSnapshot(
@@ -245,7 +404,9 @@ class RemoteWardrobeRepository(
             temperatureF = response.temperatureF,
             weatherCategory = response.weatherCategory,
             condition = response.condition,
-            description = response.description
+            description = response.description,
+            available = response.available,
+            detail = response.detail
         )
     }
 
@@ -268,6 +429,31 @@ class RemoteWardrobeRepository(
         }
     }
 
+    override suspend fun getOutfitHistoryInRange(startDate: String, endDate: String): List<OutfitHistoryEntry> {
+        return api.getOutfitHistoryInRange(startDate = startDate, endDate = endDate).history.map { entry ->
+            OutfitHistoryEntry(
+                id = entry.id.toLong(),
+                items = mapItemIds(entry.itemIds),
+                wornAtTimestamp = entry.wornAtTimestamp
+            )
+        }
+    }
+
+    override suspend fun updateOutfitHistoryEntry(historyId: Long, itemIds: List<Int>?, wornAtTimestamp: Long?) {
+        val updated = api.updateOutfitHistoryEntry(
+            historyId = historyId,
+            payload = OutfitHistoryUpdateRequestDto(
+                itemIds = itemIds,
+                wornAtTimestamp = wornAtTimestamp
+            )
+        )
+        cachedItemsById = cachedItemsById + mapItemIds(updated.itemIds).associateBy { it.id }
+    }
+
+    override suspend fun deleteOutfitHistoryEntry(historyId: Long) {
+        api.deleteOutfitHistoryEntry(historyId)
+    }
+
     override suspend fun clearOutfitHistory() {
         api.clearOutfitHistory()
     }
@@ -285,7 +471,8 @@ class RemoteWardrobeRepository(
         return api.getSavedOutfits().outfits.map { outfit ->
             SavedOutfit(
                 id = outfit.id,
-                items = mapItemIds(outfit.itemIds)
+                items = mapItemIds(outfit.itemIds),
+                savedAtTimestamp = outfit.savedAtTimestamp
             )
         }
     }
@@ -318,6 +505,20 @@ class RemoteWardrobeRepository(
                 replaceExisting = replaceExisting
             )
         )
+    }
+
+    override suspend fun generateTripPackingList(
+        destinationCity: String,
+        startDate: String,
+        tripDays: Int
+    ): TripPackingResult {
+        return api.generateTripPackingList(
+            TripPackingRequestDto(
+                destinationCity = destinationCity,
+                startDate = startDate,
+                tripDays = tripDays
+            )
+        ).toDomain()
     }
 
     override suspend fun getPlannedOutfits(): List<PlannedOutfit> {

@@ -1851,72 +1851,6 @@ a {
   font-size: 12px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  border-color: rgba(139, 30, 30, 0.22);
-  background: rgba(17, 24, 39, 0.92);
-  color: #fff;
-  font-weight: 800;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
-}
-
-.authShowBtn:hover {
-  background: rgba(139, 30, 30, 0.92);
-  border-color: rgba(139, 30, 30, 0.34);
-}
-
-.authShowBtn:disabled {
-  opacity: 0.55;
-}
-
-[data-theme="dark"] .authShowBtn {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 225, 225, 0.18);
-  color: rgba(255, 255, 255, 0.96);
-}
-
-[data-theme="dark"] .authShowBtn:hover {
-  background: rgba(196, 60, 60, 0.18);
-}
-
-.authGoogleSection {
-  display: grid;
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.authGoogleTitle {
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.authGoogleButtonWrap {
-  min-height: 44px;
-  padding: 10px 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: rgba(255, 255, 255, 0.86);
-}
-
-.authGoogleUnavailable {
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px dashed rgba(139, 30, 30, 0.22);
-  background: rgba(139, 30, 30, 0.05);
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-[data-theme="dark"] .authGoogleButtonWrap {
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-[data-theme="dark"] .authGoogleUnavailable {
-  border-color: rgba(255, 203, 203, 0.18);
-  background: rgba(196, 60, 60, 0.08);
 }
 
 .authForgotRow {
@@ -3676,9 +3610,6 @@ img.dashSquareImg {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(139, 30, 30, 0.10);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
 }
 .topNavProfilePic {
   width: 22px;
@@ -3706,40 +3637,25 @@ img.dashSquareImg {
   margin-left: 8px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .topNavAuthBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 38px;
-  padding: 0 16px;
+  padding: 7px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(139, 30, 30, 0.16);
-  background: rgba(255, 255, 255, 0.88);
-  color: var(--text);
+  border: 1px solid var(--accent-outline);
+  background: var(--accent-soft);
+  color: var(--accent);
+  text-decoration: none;
   font-size: 13px;
   font-weight: 800;
-  text-decoration: none;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease;
 }
 
 .topNavAuthBtn:hover {
-  transform: translateY(-1px);
-  border-color: rgba(139, 30, 30, 0.26);
-  background: rgba(255, 255, 255, 0.96);
-}
-
-[data-theme="dark"] .topNavProfileLink {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 203, 203, 0.12);
-}
-
-[data-theme="dark"] .topNavAuthBtn {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 203, 203, 0.18);
-  color: rgba(255, 255, 255, 0.95);
+  background: var(--accent-soft-2);
+  color: var(--text);
 }
 
 /* When ThemePicker is inside the TopNav, remove fixed positioning */
@@ -3851,48 +3767,12 @@ img.dashSquareImg {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-direction: column;
-  gap: 8px;
-  background:
-    radial-gradient(circle at 28% 24%, rgba(248, 180, 95, 0.2), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 242, 239, 0.94));
+  background: rgba(139, 30, 30, 0.08);
   color: var(--muted, #888);
-  border: 1px solid rgba(139, 30, 30, 0.16);
 }
 [data-theme="dark"] .profileAvatarPlaceholder {
-  background:
-    radial-gradient(circle at 28% 24%, rgba(248, 180, 95, 0.12), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
-  color: rgba(255, 255, 255, 0.82);
-}
-
-.profileAvatarPlaceholderBadge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(139, 30, 30, 0.10);
-  color: rgba(139, 30, 30, 0.92);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.profileAvatarPlaceholderText {
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--text);
-}
-
-[data-theme="dark"] .profileAvatarPlaceholderBadge {
-  background: rgba(196, 60, 60, 0.18);
-  color: rgba(255, 225, 225, 0.96);
-}
-
-[data-theme="dark"] .profileAvatarPlaceholderText {
-  color: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.45);
 }
 
 .profileTitle {
@@ -3956,29 +3836,6 @@ img.dashSquareImg {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-}
-
-.profileLogoutBtn {
-  min-width: 112px;
-}
-
-.profileBodyTypeCard {
-  padding: 12px 14px;
-}
-
-.profileBodyTypeRow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.profileBodyTypeCopy {
-  display: grid;
-  gap: 4px;
-}
-
-.profileBodyTypeCard .optionNote {
-  margin-top: 0;
 }
 
 .profilePrefLabel {
@@ -4833,7 +4690,6 @@ img.dashSquareImg {
   left: 50%;
   transform: translateX(-50%);
   bottom: 86px;
-  z-index: 10001;
   background: rgba(17, 24, 39, 0.92);
   color: #fff;
   padding: 12px 14px;
@@ -4904,52 +4760,6 @@ img.dashSquareImg {
   border-radius: 16px;
   padding: 14px;
   background: rgba(255, 255, 255, 0.96);
-  color: var(--text);
-}
-
-.bulkUploadModalCard {
-  background:
-    radial-gradient(circle at top right, rgba(139, 30, 30, 0.08), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 244, 244, 0.98));
-}
-
-.bulkUploadItemPreview {
-  width: 80px;
-  height: 80px;
-  border-radius: 12px;
-  object-fit: cover;
-  display: block;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: rgba(255, 255, 255, 0.82);
-}
-
-.bulkUploadFieldStack {
-  display: grid;
-  gap: 8px;
-}
-
-.bulkUploadTwoColumn {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 1fr 1fr;
-}
-
-.bulkUploadRelative {
-  position: relative;
-}
-
-.bulkUploadSetRow {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-}
-
-.bulkUploadCheckboxLabel {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
   color: var(--text);
 }
 
@@ -5409,17 +5219,6 @@ img.dashSquareImg {
   background: var(--surface-input);
   border-color: rgba(255, 255, 255, 0.10);
   color: var(--text);
-}
-
-[data-theme="dark"] .bulkUploadModalCard {
-  background:
-    radial-gradient(circle at top right, rgba(196, 60, 60, 0.14), transparent 34%),
-    linear-gradient(180deg, rgba(24, 24, 30, 0.98), rgba(18, 18, 24, 0.98));
-}
-
-[data-theme="dark"] .bulkUploadItemPreview {
-  border-color: rgba(255, 255, 255, 0.10);
-  background: rgba(255, 255, 255, 0.04);
 }
 
 [data-theme="dark"] .duplicateScanBanner {
@@ -8659,89 +8458,6 @@ img.dashSquareImg {
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(253, 247, 244, 0.98));
 }
 
-.tripBuilderModalCard {
-  width: min(920px, 92vw);
-  max-height: calc(100vh - 28px);
-  padding: 0;
-  overflow: visible;
-  background:
-    radial-gradient(circle at top right, rgba(139, 30, 30, 0.12), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(247, 240, 237, 0.99));
-}
-
-.tripBuilderModalPanel {
-  margin-top: 0;
-  border: 0;
-  border-radius: 18px;
-  box-shadow: none;
-  padding: 16px;
-  max-height: calc(100vh - 28px);
-  overflow-y: auto;
-  overflow-x: visible;
-}
-
-.tripBuilderStepRow {
-  margin-top: 18px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.tripBuilderStepPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 42px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(139, 30, 30, 0.12);
-  background: rgba(255, 255, 255, 0.7);
-  color: rgba(17, 24, 39, 0.72);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.tripBuilderStepPill.active {
-  border-color: rgba(139, 30, 30, 0.24);
-  background: rgba(139, 30, 30, 0.08);
-  color: rgba(110, 22, 22, 0.96);
-}
-
-.tripBuilderStepPill.complete {
-  border-color: rgba(34, 197, 94, 0.18);
-  background: rgba(34, 197, 94, 0.08);
-  color: #167c4a;
-}
-
-.tripBuilderStepNumber {
-  display: inline-grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  background: rgba(17, 24, 39, 0.08);
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.tripBuilderStepDivider {
-  flex: 1 1 56px;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(139, 30, 30, 0.1), rgba(139, 30, 30, 0.24));
-}
-
-.tripBuilderStepDivider.active {
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.16), rgba(139, 30, 30, 0.24));
-}
-
-.tripBuilderShowcaseBasics {
-  align-items: stretch;
-}
-
-.tripBuilderSectionPrimary {
-  margin-top: 20px;
-}
-
 .tripBuilderTop {
   display: flex;
   align-items: flex-start;
@@ -8765,10 +8481,10 @@ img.dashSquareImg {
 }
 
 .tripBuilderShowcase {
-  margin-top: 14px;
+  margin-top: 18px;
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(220px, 0.72fr);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 14px;
 }
 
 .tripBuilderPreview,
@@ -9032,10 +8748,10 @@ img.dashSquareImg {
 }
 
 .tripBuilderGrid {
-  margin-top: 14px;
+  margin-top: 18px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
 
 .tripBuilderGridRequired {
@@ -9103,7 +8819,7 @@ img.dashSquareImg {
   border: 1px solid rgba(139, 30, 30, 0.18);
   border-radius: 20px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 235, 232, 0.98));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 246, 243, 0.96));
   box-shadow: 0 14px 28px rgba(17, 24, 39, 0.08);
   display: flex;
   align-items: center;
@@ -9380,8 +9096,8 @@ img.dashSquareImg {
 }
 
 .tripBuilderSection {
-  margin-top: 14px;
-  padding: 16px;
+  margin-top: 18px;
+  padding: 18px;
   border: 1px solid rgba(139, 30, 30, 0.08);
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.34);
@@ -9527,60 +9243,6 @@ img.dashSquareImg {
   background: linear-gradient(180deg, rgba(139, 30, 30, 0.16), rgba(248, 180, 95, 0.16));
   border-color: rgba(139, 30, 30, 0.24);
   color: rgba(110, 22, 22, 0.94);
-}
-
-.tripPlannerHistorySection {
-  margin-top: 18px;
-  padding: 18px;
-  border: 1px solid rgba(139, 30, 30, 0.12);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.76);
-}
-
-.tripPlannerHistoryHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.tripPlannerHistoryTitle {
-  margin-top: 4px;
-  font-size: 20px;
-  font-weight: 950;
-}
-
-.tripPlannerHistoryList {
-  margin-top: 14px;
-  display: grid;
-  gap: 12px;
-}
-
-.tripPlannerHistoryCard {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(139, 30, 30, 0.12);
-  background: rgba(255, 255, 255, 0.88);
-}
-
-.tripPlannerHistoryDestination {
-  font-size: 16px;
-  font-weight: 900;
-}
-
-.tripPlannerHistoryDates {
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.tripConfirmModal {
-  width: min(420px, 100%);
 }
 
 .tripActivityInputRow {
@@ -10462,7 +10124,7 @@ img.dashSquareImg {
 }
 
 [data-theme="dark"] .tripFieldInput {
-  background: linear-gradient(180deg, rgba(18, 18, 24, 0.98), rgba(8, 8, 12, 0.98));
+  background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 203, 203, 0.24);
   color: rgba(255, 255, 255, 0.97);
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.24);
@@ -10472,31 +10134,6 @@ img.dashSquareImg {
   background: linear-gradient(180deg, rgba(38, 38, 48, 0.96), rgba(24, 24, 31, 0.98));
   border-color: rgba(255, 203, 203, 0.22);
   box-shadow: 0 18px 30px rgba(0, 0, 0, 0.24);
-}
-
-[data-theme="dark"] .tripPlannerHistorySection,
-[data-theme="dark"] .tripPlannerHistoryCard,
-[data-theme="dark"] .planningCalendarItemCard,
-[data-theme="dark"] .tripConfirmModal {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 203, 203, 0.18);
-}
-
-[data-theme="dark"] .planningCalendarItemCard:hover,
-[data-theme="dark"] .planningCalendarItemCard:focus-visible,
-[data-theme="dark"] .planningCalendarItemCard.selected {
-  background: rgba(196, 60, 60, 0.12);
-}
-
-[data-theme="dark"] .planningCalendarItemMeta,
-[data-theme="dark"] .tripPlannerHistoryDates {
-  color: rgba(232, 230, 227, 0.72);
-}
-
-[data-theme="dark"] .planningCalendarItemName,
-[data-theme="dark"] .tripPlannerHistoryDestination,
-[data-theme="dark"] .tripPlannerHistoryTitle {
-  color: rgba(255, 255, 255, 0.96);
 }
 
 [data-theme="dark"] .tripDateTrigger:hover {
@@ -10607,36 +10244,6 @@ img.dashSquareImg {
   box-shadow: 0 18px 34px rgba(0, 0, 0, 0.24);
 }
 
-[data-theme="dark"] .tripBuilderModalCard {
-  background:
-    radial-gradient(circle at top right, rgba(196, 60, 60, 0.18), transparent 28%),
-    linear-gradient(180deg, rgba(24, 24, 30, 0.99), rgba(16, 16, 22, 0.99));
-  border-color: rgba(196, 60, 60, 0.24);
-}
-
-[data-theme="dark"] .tripBuilderStepPill {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 203, 203, 0.12);
-  color: rgba(232, 230, 227, 0.78);
-}
-
-[data-theme="dark"] .tripBuilderStepPill.active {
-  background: rgba(196, 60, 60, 0.14);
-  border-color: rgba(255, 203, 203, 0.22);
-  color: rgba(255, 225, 225, 0.96);
-}
-
-[data-theme="dark"] .tripBuilderStepPill.complete {
-  background: rgba(34, 197, 94, 0.14);
-  border-color: rgba(34, 197, 94, 0.2);
-  color: #b8f0d2;
-}
-
-[data-theme="dark"] .tripBuilderStepNumber {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.96);
-}
-
 [data-theme="dark"] .tripBuilderInfoItem {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 203, 203, 0.12);
@@ -10648,31 +10255,6 @@ img.dashSquareImg {
 
 [data-theme="dark"] .tripBuilderSection {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
-[data-theme="dark"] .tripBuilderTitle,
-[data-theme="dark"] .tripBuilderInfoTitle {
-  color: rgba(255, 255, 255, 0.96);
-}
-
-[data-theme="dark"] .tripBuilderSub,
-[data-theme="dark"] .tripBuilderSectionSub,
-[data-theme="dark"] .tripBuilderInfoFooter,
-[data-theme="dark"] .tripBuilderCalendarWeekday,
-[data-theme="dark"] .tripBuilderCalendarLabel {
-  color: rgba(232, 230, 227, 0.76);
-}
-
-[data-theme="dark"] .tripBuilderCalendarDay,
-[data-theme="dark"] .tripBuilderPreviewDestination,
-[data-theme="dark"] .tripBuilderSectionTitle {
-  color: rgba(255, 255, 255, 0.96);
-}
-
-[data-theme="dark"] .tripBuilderMiniPill,
-[data-theme="dark"] .tripBuilderPreviewPill,
-[data-theme="dark"] .tripBuilderStatusPill {
-  border-color: rgba(255, 203, 203, 0.18);
 }
 
 [data-theme="dark"] .tripLuggageIcon {
@@ -12644,6 +12226,68 @@ select:focus-visible {
   cursor: not-allowed;
   transform: none;
 }
+.chatbot-mic {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  border-radius: 50%;
+  border: none;
+  background: var(--border, #ddd);
+  color: var(--text-muted, #999);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .2s, color .2s, transform .15s, box-shadow .2s;
+  flex-shrink: 0;
+  position: relative;
+}
+.chatbot-mic:hover {
+  background: var(--hover-bg, #e6e6e6);
+  color: var(--text, #222);
+}
+.chatbot-mic:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+  transform: none;
+}
+.chatbot-mic--on {
+  background: var(--accent, #4f8cff);
+  color: #fff;
+}
+.chatbot-mic--on:hover {
+  background: var(--accent-hover, #3a6fdb);
+  color: #fff;
+}
+.chatbot-mic--listening {
+  box-shadow: 0 0 0 0 rgba(79, 140, 255, 0.55);
+  animation: chatbot-mic-pulse 1.4s ease-out infinite;
+}
+.chatbot-mic--speaking {
+  background: #22c55e;
+  color: #fff;
+}
+.chatbot-mic--speaking:hover {
+  background: #16a34a;
+  color: #fff;
+}
+@keyframes chatbot-mic-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(79, 140, 255, 0.55); }
+  70%  { box-shadow: 0 0 0 10px rgba(79, 140, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(79, 140, 255, 0); }
+}
+[data-theme="dark"] .chatbot-mic {
+  background: var(--bg, #141414);
+  color: var(--text-muted, #999);
+}
+[data-theme="dark"] .chatbot-mic:hover {
+  background: var(--hover-bg, #2a2a2a);
+  color: var(--text, #eee);
+}
+[data-theme="dark"] .chatbot-mic--on {
+  background: var(--accent, #4f8cff);
+  color: #fff;
+}
 .chatbot-composer-meta {
   margin-top: 8px;
   padding: 0 4px;
@@ -13583,18 +13227,6 @@ select:focus-visible {
 .bodyTypeSvg {
   width: 86px;
   height: 86px;
-}
-
-.bodyTypeFigureCompact {
-  width: 64px;
-  min-height: 78px;
-  border-radius: 18px;
-  padding: 6px;
-}
-
-.bodyTypeSvgCompact {
-  width: 52px;
-  height: 58px;
 }
 
 .bodyTypeAura {
@@ -16572,26 +16204,6 @@ select:focus-visible {
   gap: 6px;
 }
 
-.planningCalendarDayPreview {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.planningCalendarDayThumb {
-  width: 26px;
-  height: 26px;
-  border-radius: 9px;
-  object-fit: cover;
-  display: block;
-  border: 1px solid rgba(17, 24, 39, 0.10);
-  background: rgba(255, 255, 255, 0.84);
-}
-
-.planningCalendarDayThumbPh {
-  background: linear-gradient(135deg, rgba(139, 30, 30, 0.10), rgba(17, 24, 39, 0.05));
-}
-
 .planningCalendarChip {
   display: inline-flex;
   align-items: center;
@@ -16637,17 +16249,6 @@ select:focus-visible {
   flex-wrap: wrap;
 }
 
-.planningCalendarDetailsHeaderActions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.planningCalendarAddBtn {
-  white-space: nowrap;
-}
-
 .planningCalendarDetailsTitle {
   margin-top: 4px;
   font-size: 18px;
@@ -16678,68 +16279,6 @@ select:focus-visible {
 
 .planningCalendarColumn {
   min-width: 0;
-}
-
-.planningCalendarModal {
-  width: min(840px, 100%);
-}
-
-.planningCalendarModalLabel {
-  margin-top: 14px;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.planningCalendarItemGrid {
-  margin-top: 12px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
-  gap: 12px;
-  max-height: 380px;
-  overflow: auto;
-}
-
-.planningCalendarItemCard {
-  display: grid;
-  gap: 8px;
-  padding: 10px;
-  border-radius: 18px;
-  border: 1px solid rgba(37, 99, 235, 0.12);
-  background: rgba(255, 255, 255, 0.88);
-  text-align: left;
-}
-
-.planningCalendarItemCard:hover,
-.planningCalendarItemCard:focus-visible,
-.planningCalendarItemCard.selected {
-  outline: none;
-  border-color: rgba(37, 99, 235, 0.32);
-  background: linear-gradient(180deg, rgba(37, 99, 235, 0.10), rgba(255, 255, 255, 0.95));
-}
-
-.planningCalendarItemImg {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
-  border-radius: 14px;
-  background: rgba(15, 23, 42, 0.06);
-}
-
-.planningCalendarItemImgPh {
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.05), rgba(15, 23, 42, 0.11));
-}
-
-.planningCalendarItemName {
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.planningCalendarItemMeta {
-  font-size: 12px;
-  color: var(--muted);
 }
 
 .planningCalendarEntryList {
@@ -16985,11 +16524,6 @@ select:focus-visible {
   border-color: rgba(196, 60, 60, 0.22);
 }
 
-[data-theme="dark"] .planningCalendarDayThumb {
-  border-color: rgba(255, 255, 255, 0.10);
-  background: rgba(255, 255, 255, 0.06);
-}
-
 @media (max-width: 760px) {
   .planningSectionToggle,
   .planningTimelineHeader,
@@ -17030,16 +16564,15 @@ select:focus-visible {
   }
 }
 
-/* ─── 3D Mannequin Viewer ─── */
 .mannequinViewerContainer {
+  position: relative;
   width: 100%;
   height: 480px;
-  border-radius: 16px;
-  background: linear-gradient(160deg, #faf8f5 0%, #f0ebe4 50%, #e8e0d8 100%);
-  border: 1px solid rgba(0, 0, 0, 0.07);
-  box-shadow: 0 10px 32px rgba(17, 24, 39, 0.08);
-  position: relative;
   overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: linear-gradient(160deg, #faf8f5 0%, #f0ebe4 50%, #e8e0d8 100%);
+  box-shadow: 0 10px 32px rgba(17, 24, 39, 0.08);
 }
 
 [data-theme="dark"] .mannequinViewerContainer {
@@ -17049,65 +16582,18 @@ select:focus-visible {
 
 .mannequinHint {
   position: absolute;
-  bottom: 12px;
   left: 50%;
+  bottom: 12px;
   transform: translateX(-50%);
+  color: rgba(100, 80, 60, 0.56);
   font-size: 11px;
-  font-weight: 600;
-  color: rgba(100, 80, 60, 0.5);
-  letter-spacing: 0.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   pointer-events: none;
-  white-space: nowrap;
 }
 
 [data-theme="dark"] .mannequinHint {
-  color: rgba(200, 180, 160, 0.4);
-}
-
-.dashViewToggle {
-  display: flex;
-  gap: 4px;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 8px;
-  padding: 3px;
-}
-
-[data-theme="dark"] .dashViewToggle {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.dashViewToggleBtn {
-  padding: 6px 14px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  font-size: 12px;
-  font-weight: 700;
-  color: rgba(0, 0, 0, 0.45);
-  cursor: pointer;
-  transition: all 160ms ease;
-  letter-spacing: 0.3px;
-}
-
-[data-theme="dark"] .dashViewToggleBtn {
-  color: rgba(255, 255, 255, 0.45);
-}
-
-.dashViewToggleBtn.active {
-  background: #fff;
-  color: rgba(0, 0, 0, 0.85);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-}
-
-[data-theme="dark"] .dashViewToggleBtn.active {
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.mannequinSaveBtnRow {
-  display: flex;
-  justify-content: center;
-  margin-top: 14px;
+  color: rgba(220, 204, 189, 0.5);
 }
 
 .mannequinLegend {
@@ -17116,7 +16602,7 @@ select:focus-visible {
   right: 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   pointer-events: none;
 }
 
@@ -17124,18 +16610,17 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-radius: 10px;
+  min-width: 172px;
   padding: 6px 10px;
+  border-radius: 10px;
   border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 [data-theme="dark"] .mannequinLegendItem {
-  background: rgba(30, 26, 22, 0.85);
   border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(30, 26, 22, 0.88);
 }
 
 .mannequinLegendThumb {
@@ -17151,52 +16636,49 @@ select:focus-visible {
 }
 
 .mannequinLegendInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+  display: grid;
+  gap: 2px;
 }
 
 .mannequinLegendName {
+  color: rgba(0, 0, 0, 0.82);
   font-size: 11px;
   font-weight: 700;
   line-height: 1.2;
-  color: rgba(0, 0, 0, 0.8);
 }
 
 [data-theme="dark"] .mannequinLegendName {
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .mannequinLegendCat {
+  color: rgba(0, 0, 0, 0.45);
   font-size: 9px;
-  font-weight: 600;
-  color: rgba(0, 0, 0, 0.4);
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 [data-theme="dark"] .mannequinLegendCat {
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.45);
 }
 
 .mannequinConflictBanner {
   position: absolute;
   top: 12px;
   left: 12px;
-  max-width: 60%;
+  max-width: min(60%, 320px);
   display: flex;
-  gap: 8px;
   align-items: flex-start;
+  gap: 8px;
   padding: 8px 12px;
-  background: rgba(255, 237, 200, 0.94);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid rgba(196, 130, 40, 0.26);
+  background: rgba(255, 237, 200, 0.94);
+  color: rgba(90, 60, 10, 0.92);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   font-size: 11.5px;
   line-height: 1.35;
-  color: rgba(90, 60, 10, 0.92);
   pointer-events: none;
 }
 
@@ -17207,29 +16689,75 @@ select:focus-visible {
 }
 
 .mannequinConflictIcon {
-  flex-shrink: 0;
   width: 18px;
   height: 18px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
   border-radius: 50%;
   background: rgba(196, 130, 40, 0.9);
   color: #fff;
-  font-weight: 800;
   font-size: 12px;
-  display: grid;
-  place-items: center;
-  line-height: 1;
+  font-weight: 900;
 }
 
 .mannequinConflictList {
   margin: 0;
   padding: 0;
   list-style: none;
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 2px;
 }
 
-/* ─── Outfit Builder ─── */
+.dashViewToggle {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .dashViewToggle {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dashViewToggleBtn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+[data-theme="dark"] .dashViewToggleBtn {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.dashViewToggleBtn.active {
+  background: #fff;
+  color: rgba(0, 0, 0, 0.85);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .dashViewToggleBtn.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.mannequinSaveBtnRow {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
 .outfitBuilder {
   max-width: 1280px;
   margin: 0 auto;
@@ -17249,17 +16777,17 @@ select:focus-visible {
 
 .outfitBuilderTitle {
   margin: 0;
+  color: var(--text);
   font-size: 28px;
   font-weight: 800;
-  letter-spacing: -0.4px;
-  color: var(--text);
+  letter-spacing: -0.02em;
 }
 
 .outfitBuilderSub {
-  margin: 6px 0 0;
-  color: var(--text-muted, rgba(0,0,0,0.6));
-  font-size: 13.5px;
   max-width: 640px;
+  margin: 6px 0 0;
+  color: rgba(0, 0, 0, 0.6);
+  font-size: 13.5px;
   line-height: 1.5;
 }
 
@@ -17275,17 +16803,17 @@ select:focus-visible {
 .outfitBuilderMsg {
   align-self: flex-start;
   padding: 8px 14px;
-  border-radius: 8px;
-  background: rgba(139, 30, 30, 0.08);
+  border-radius: 10px;
   border: 1px solid rgba(139, 30, 30, 0.2);
+  background: rgba(139, 30, 30, 0.08);
   color: rgba(90, 20, 20, 0.9);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 [data-theme="dark"] .outfitBuilderMsg {
-  background: rgba(255, 120, 120, 0.12);
   border-color: rgba(255, 120, 120, 0.28);
+  background: rgba(255, 120, 120, 0.12);
   color: rgba(255, 205, 205, 0.95);
 }
 
@@ -17302,27 +16830,39 @@ select:focus-visible {
   }
 }
 
+.outfitBuilderWardrobe,
+.outfitBuilderCanvas {
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--surface, #fff);
+}
+
 .outfitBuilderWardrobe {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 18px;
-  border-radius: 14px;
-  background: var(--surface, #fff);
-  border: 1px solid rgba(0, 0, 0, 0.08);
   max-height: 720px;
   overflow-y: auto;
 }
 
-[data-theme="dark"] .outfitBuilderWardrobe {
+.outfitBuilderCanvas {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 560px;
+}
+
+[data-theme="dark"] .outfitBuilderWardrobe,
+[data-theme="dark"] .outfitBuilderCanvas {
+  border-color: rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.10);
 }
 
 .outfitBuilderEmpty {
   padding: 22px 8px;
-  text-align: center;
   color: rgba(0, 0, 0, 0.55);
+  text-align: center;
   font-size: 13px;
 }
 
@@ -17338,11 +16878,11 @@ select:focus-visible {
 
 .outfitBuilderGroupTitle {
   margin: 0;
+  color: rgba(0, 0, 0, 0.56);
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 1.2px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.55);
 }
 
 [data-theme="dark"] .outfitBuilderGroupTitle {
@@ -17357,7 +16897,6 @@ select:focus-visible {
 
 .outfitBuilderItem {
   all: unset;
-  cursor: grab;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -17365,6 +16904,7 @@ select:focus-visible {
   border-radius: 10px;
   border: 1px solid rgba(0, 0, 0, 0.08);
   background: rgba(0, 0, 0, 0.02);
+  cursor: grab;
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
@@ -17384,12 +16924,8 @@ select:focus-visible {
 }
 
 [data-theme="dark"] .outfitBuilderItem {
-  border-color: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.04);
-}
-
-[data-theme="dark"] .outfitBuilderItem:hover {
-  border-color: rgba(255, 170, 170, 0.3);
 }
 
 [data-theme="dark"] .outfitBuilderItem.selected {
@@ -17397,11 +16933,12 @@ select:focus-visible {
   background: rgba(196, 60, 60, 0.18);
 }
 
-.outfitBuilderItemImg {
+.outfitBuilderItemImg,
+.outfitBuilderSelectedImg {
   width: 100%;
   aspect-ratio: 1 / 1;
+  border-radius: 8px;
   object-fit: cover;
-  border-radius: 6px;
   background: rgba(0, 0, 0, 0.04);
 }
 
@@ -17417,12 +16954,12 @@ select:focus-visible {
 }
 
 .outfitBuilderItemName {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .outfitBuilderItemColor {
@@ -17433,22 +16970,6 @@ select:focus-visible {
   flex-shrink: 0;
 }
 
-.outfitBuilderCanvas {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 18px;
-  border-radius: 14px;
-  background: var(--surface, #fff);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  min-height: 560px;
-}
-
-[data-theme="dark"] .outfitBuilderCanvas {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.10);
-}
-
 .outfitBuilderCanvasHead {
   display: flex;
   justify-content: space-between;
@@ -17457,31 +16978,31 @@ select:focus-visible {
 }
 
 .outfitBuilderCanvasLabel {
+  color: var(--text);
   font-size: 13px;
   font-weight: 700;
-  color: var(--text);
 }
 
 .outfitBuilderConflicts {
   padding: 10px 14px;
   border-radius: 10px;
-  background: rgba(255, 237, 200, 0.9);
   border: 1px solid rgba(196, 130, 40, 0.3);
+  background: rgba(255, 237, 200, 0.9);
   color: rgba(90, 60, 10, 0.94);
 }
 
 [data-theme="dark"] .outfitBuilderConflicts {
-  background: rgba(40, 32, 22, 0.8);
   border-color: rgba(255, 196, 120, 0.3);
+  background: rgba(40, 32, 22, 0.8);
   color: rgba(255, 222, 180, 0.95);
 }
 
 .outfitBuilderConflictTitle {
+  margin-bottom: 4px;
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  margin-bottom: 4px;
 }
 
 .outfitBuilderConflictList {
@@ -17494,10 +17015,10 @@ select:focus-visible {
 .outfitBuilderDropZone {
   flex: 1;
   display: flex;
+  min-height: 420px;
   padding: 14px;
   border-radius: 12px;
   border: 2px dashed rgba(0, 0, 0, 0.12);
-  min-height: 420px;
   transition: border-color 160ms ease, background 160ms ease;
 }
 
@@ -17516,11 +17037,11 @@ select:focus-visible {
 }
 
 .outfitBuilderDropHint {
-  margin: auto;
-  text-align: center;
-  color: rgba(0, 0, 0, 0.45);
-  font-size: 13px;
   max-width: 320px;
+  margin: auto;
+  color: rgba(0, 0, 0, 0.45);
+  text-align: center;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -17548,7 +17069,7 @@ select:focus-visible {
 }
 
 [data-theme="dark"] .outfitBuilderSelectedTile {
-  border-color: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.04);
 }
 
@@ -17558,6 +17079,8 @@ select:focus-visible {
   right: 4px;
   width: 22px;
   height: 22px;
+  display: grid;
+  place-items: center;
   border: none;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.65);
@@ -17565,21 +17088,10 @@ select:focus-visible {
   font-size: 15px;
   line-height: 1;
   cursor: pointer;
-  display: grid;
-  place-items: center;
-  transition: background 160ms ease;
 }
 
 .outfitBuilderSelectedRemove:hover {
   background: rgba(139, 30, 30, 0.85);
-}
-
-.outfitBuilderSelectedImg {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.04);
 }
 
 .outfitBuilderSelectedMeta {
@@ -17589,30 +17101,27 @@ select:focus-visible {
 }
 
 .outfitBuilderSelectedName {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 700;
 }
 
 .outfitBuilderSelectedSlot {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
   color: rgba(0, 0, 0, 0.5);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 [data-theme="dark"] .outfitBuilderSelectedSlot {
   color: rgba(232, 230, 227, 0.6);
 }
 
-/* ─── Accessibility: Large text mode ───
-   Scales up text in AI-surfaced content, chat, and buttons so dense
-   generated paragraphs become readable. Ordinary chrome (small labels,
-   status text) scales lightly to keep layout stable. */
+/* Accessibility: large text mode */
 html[data-text-size="large"] body,
 html[data-text-size="large"] .btn,
 html[data-text-size="large"] button,
@@ -17631,50 +17140,42 @@ html[data-text-size="xlarge"] textarea {
   font-size: 18.5px;
 }
 
-/* AI-generated and long-form text — most important to scale clearly */
-html[data-text-size="large"] .dashWhyText,
 html[data-text-size="large"] .dashAiReveal,
-html[data-text-size="large"] .chatMessageBubble,
-html[data-text-size="large"] .chatMessageText,
-html[data-text-size="large"] .outfitBuilderSub,
-html[data-text-size="large"] .dashExplanationBody,
-html[data-text-size="large"] .outfitBuilderConflictList {
+html[data-text-size="large"] .dashWhyLead,
+html[data-text-size="large"] .dashWhyCardText,
+html[data-text-size="large"] .chatbot-bubble,
+html[data-text-size="large"] .chatbot-text {
   font-size: 16.5px;
   line-height: 1.6;
   letter-spacing: 0.05px;
 }
 
-html[data-text-size="xlarge"] .dashWhyText,
 html[data-text-size="xlarge"] .dashAiReveal,
-html[data-text-size="xlarge"] .chatMessageBubble,
-html[data-text-size="xlarge"] .chatMessageText,
-html[data-text-size="xlarge"] .outfitBuilderSub,
-html[data-text-size="xlarge"] .dashExplanationBody,
-html[data-text-size="xlarge"] .outfitBuilderConflictList {
+html[data-text-size="xlarge"] .dashWhyLead,
+html[data-text-size="xlarge"] .dashWhyCardText,
+html[data-text-size="xlarge"] .chatbot-bubble,
+html[data-text-size="xlarge"] .chatbot-text {
   font-size: 19px;
   line-height: 1.7;
   letter-spacing: 0.1px;
 }
 
-/* Chat composer text — must scale too */
-html[data-text-size="large"] .chatInput,
-html[data-text-size="large"] .chatSend {
+html[data-text-size="large"] .chatbot-textarea,
+html[data-text-size="large"] .chatbot-send {
   font-size: 16px;
 }
 
-html[data-text-size="xlarge"] .chatInput,
-html[data-text-size="xlarge"] .chatSend {
+html[data-text-size="xlarge"] .chatbot-textarea,
+html[data-text-size="xlarge"] .chatbot-send {
   font-size: 18px;
 }
 
-/* Ensure paragraphs wrap comfortably even on dense cards */
-html[data-text-size="large"] .chatMessageBubble,
-html[data-text-size="xlarge"] .chatMessageBubble {
+html[data-text-size="large"] .chatbot-bubble,
+html[data-text-size="xlarge"] .chatbot-bubble {
   max-width: min(78vw, 560px);
   padding: 12px 16px;
 }
 
-/* Accessibility settings panel in Profile */
 .profileAccessibilitySection {
   display: flex;
   flex-direction: column;
@@ -17731,11 +17232,7 @@ html[data-text-size="xlarge"] .chatMessageBubble {
   color: rgba(232, 230, 227, 0.68);
 }
 
-/* ─── Accessibility: High-contrast theme overrides ───
-   The HC preset themes supply pure black/white palettes. These rules
-   layer on top to strengthen borders where subtle dividers normally
-   rely on low-opacity whites/blacks, so cards and chat bubbles stay
-   clearly separated against the page background. */
+/* Accessibility: high-contrast themes */
 html[data-hc="true"] .dashOutfitOption,
 html[data-hc="true"] .dashSquareTile,
 html[data-hc="true"] .outfitBuilderItem,
@@ -17777,9 +17274,9 @@ html[data-hc="true"] .chatbot-bubble {
   color: var(--text) !important;
 }
 
-html[data-hc="true"] .chatMessageBubble,
 html[data-hc="true"] .dashAiReveal,
-html[data-hc="true"] .dashWhyText {
+html[data-hc="true"] .dashWhyLead,
+html[data-hc="true"] .dashWhyCardText {
   line-height: 1.7;
   letter-spacing: 0.1px;
 }

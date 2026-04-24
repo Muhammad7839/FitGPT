@@ -17,37 +17,50 @@ const HEADWEAR_PATTERN = /(hat|cap|beanie|beret|helmet|visor|fedora|hood)/i;
 
 export function getItemSlot(item) {
   if (!item) return null;
-  const cat = normalizeCategory(item.category);
-  const layer = (item.layer_type || "").toString().toLowerCase();
+
+  const category = normalizeCategory(item.category);
+  const layerType = (item.layer_type || "").toString().trim().toLowerCase();
 
   if (item.is_one_piece) return SLOTS.ONE_PIECE;
 
-  if (cat === "Tops") {
-    if (layer === "mid") return SLOTS.MID_TOP;
-    if (layer === "outer") return SLOTS.OUTER_TOP;
+  if (category === "Tops") {
+    if (layerType === "mid") return SLOTS.MID_TOP;
+    if (layerType === "outer") return SLOTS.OUTER_TOP;
     return SLOTS.BASE_TOP;
   }
-  if (cat === "Outerwear") return SLOTS.OUTER_TOP;
-  if (cat === "Bottoms") return SLOTS.BOTTOM;
-  if (cat === "Shoes") return SLOTS.SHOES;
-  if (cat === "Accessories") {
+
+  if (category === "Outerwear") return SLOTS.OUTER_TOP;
+  if (category === "Bottoms") return SLOTS.BOTTOM;
+  if (category === "Shoes") return SLOTS.SHOES;
+
+  if (category === "Accessories") {
     if (HEADWEAR_PATTERN.test(item.name || "")) return SLOTS.HEADWEAR;
     return SLOTS.ACCESSORY;
   }
+
   return null;
 }
 
 export function slotLabel(slot) {
   switch (slot) {
-    case SLOTS.BASE_TOP: return "base top";
-    case SLOTS.MID_TOP: return "mid layer";
-    case SLOTS.OUTER_TOP: return "outer layer";
-    case SLOTS.BOTTOM: return "bottom";
-    case SLOTS.ONE_PIECE: return "one-piece";
-    case SLOTS.SHOES: return "shoes";
-    case SLOTS.HEADWEAR: return "headwear";
-    case SLOTS.ACCESSORY: return "accessory";
-    default: return slot || "";
+    case SLOTS.BASE_TOP:
+      return "base top";
+    case SLOTS.MID_TOP:
+      return "mid layer";
+    case SLOTS.OUTER_TOP:
+      return "outer layer";
+    case SLOTS.BOTTOM:
+      return "bottom";
+    case SLOTS.ONE_PIECE:
+      return "one-piece";
+    case SLOTS.SHOES:
+      return "shoes";
+    case SLOTS.HEADWEAR:
+      return "headwear";
+    case SLOTS.ACCESSORY:
+      return "accessory";
+    default:
+      return slot || "";
   }
 }
 
@@ -65,9 +78,9 @@ const LAYER_RANK = {
 export function layerOrdered(outfit) {
   const items = Array.isArray(outfit) ? outfit : [];
   return [...items].sort((a, b) => {
-    const ra = LAYER_RANK[getItemSlot(a)] ?? 99;
-    const rb = LAYER_RANK[getItemSlot(b)] ?? 99;
-    return ra - rb;
+    const aRank = LAYER_RANK[getItemSlot(a)] ?? 99;
+    const bRank = LAYER_RANK[getItemSlot(b)] ?? 99;
+    return aRank - bRank;
   });
 }
 
@@ -93,34 +106,39 @@ export function validateOutfit(outfit) {
         slot,
         itemIds: [bySlot[slot].id, item.id],
         itemNames: [bySlot[slot].name || "item", item.name || "item"],
-        message: `Two items in the ${slotLabel(slot)} slot: ${bySlot[slot].name || "item"} and ${item.name || "item"}.`,
+        message: `Two items are using the ${slotLabel(slot)} slot: ${bySlot[slot].name || "item"} and ${item.name || "item"}.`,
       });
-    } else {
-      bySlot[slot] = item;
+      continue;
     }
+
+    bySlot[slot] = item;
   }
 
   if (bySlot[SLOTS.ONE_PIECE]) {
-    for (const conflictSlot of [SLOTS.BASE_TOP, SLOTS.MID_TOP, SLOTS.BOTTOM]) {
-      if (bySlot[conflictSlot]) {
-        conflicts.push({
-          type: "one_piece_conflict",
-          slot: conflictSlot,
-          itemIds: [bySlot[SLOTS.ONE_PIECE].id, bySlot[conflictSlot].id],
-          itemNames: [bySlot[SLOTS.ONE_PIECE].name || "one-piece", bySlot[conflictSlot].name || "item"],
-          message: `One-piece (${bySlot[SLOTS.ONE_PIECE].name || "dress"}) can't be layered with a separate ${slotLabel(conflictSlot)}.`,
-        });
-      }
+    for (const slot of [SLOTS.BASE_TOP, SLOTS.MID_TOP, SLOTS.BOTTOM]) {
+      if (!bySlot[slot]) continue;
+      conflicts.push({
+        type: "one_piece_conflict",
+        slot,
+        itemIds: [bySlot[SLOTS.ONE_PIECE].id, bySlot[slot].id],
+        itemNames: [bySlot[SLOTS.ONE_PIECE].name || "one-piece", bySlot[slot].name || "item"],
+        message: `${bySlot[SLOTS.ONE_PIECE].name || "One-piece"} cannot be layered with a separate ${slotLabel(slot)}.`,
+      });
     }
   }
 
-  if (bySlot[SLOTS.OUTER_TOP] && !bySlot[SLOTS.BASE_TOP] && !bySlot[SLOTS.MID_TOP] && !bySlot[SLOTS.ONE_PIECE]) {
+  if (
+    bySlot[SLOTS.OUTER_TOP] &&
+    !bySlot[SLOTS.BASE_TOP] &&
+    !bySlot[SLOTS.MID_TOP] &&
+    !bySlot[SLOTS.ONE_PIECE]
+  ) {
     conflicts.push({
       type: "outer_without_base",
       slot: SLOTS.OUTER_TOP,
       itemIds: [bySlot[SLOTS.OUTER_TOP].id],
       itemNames: [bySlot[SLOTS.OUTER_TOP].name || "outer layer"],
-      message: `${bySlot[SLOTS.OUTER_TOP].name || "Outer layer"} should be worn over a shirt or one-piece.`,
+      message: `${bySlot[SLOTS.OUTER_TOP].name || "Outer layer"} should sit over a shirt or one-piece.`,
     });
   }
 
@@ -128,8 +146,8 @@ export function validateOutfit(outfit) {
     conflicts.push({
       type: "too_many_accessories",
       slot: SLOTS.ACCESSORY,
-      itemIds: accessories.map((a) => a.id),
-      itemNames: accessories.map((a) => a.name || "accessory"),
+      itemIds: accessories.map((item) => item.id),
+      itemNames: accessories.map((item) => item.name || "accessory"),
       message: `Too many accessories (${accessories.length}). Max recommended: ${MAX_ACCESSORIES}.`,
     });
   }
@@ -140,17 +158,4 @@ export function validateOutfit(outfit) {
     bySlot,
     accessories,
   };
-}
-
-export function canAdd(outfit, newItem) {
-  const items = Array.isArray(outfit) ? outfit : [];
-  return validateOutfit([...items, newItem]);
-}
-
-export function isCompleteOutfit(outfit) {
-  const { bySlot } = validateOutfit(outfit);
-  const hasTop = !!bySlot[SLOTS.BASE_TOP] || !!bySlot[SLOTS.ONE_PIECE];
-  const hasBottom = !!bySlot[SLOTS.BOTTOM] || !!bySlot[SLOTS.ONE_PIECE];
-  const hasShoes = !!bySlot[SLOTS.SHOES];
-  return hasTop && hasBottom && hasShoes;
 }

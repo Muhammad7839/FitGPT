@@ -34,6 +34,22 @@ describe("outfitHistoryApi.recordWorn", () => {
     const result = await outfitHistoryApi.recordWorn({ item_ids: [] }, TEST_USER);
     expect(result.created).toBe(false);
   });
+
+  test("marks local-only history updates when authenticated remote sync fails", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      headers: { get: () => "application/json" },
+      json: async () => ({ detail: "backend offline" }),
+      text: async () => "",
+    });
+
+    const result = await outfitHistoryApi.recordWorn({ item_ids: ["shirt-1"] }, TEST_USER);
+
+    expect(result.created).toBe(true);
+    expect(result.localOnly).toBe(true);
+    expect(result.syncError).toBe(true);
+  });
 });
 
 describe("outfitHistoryApi.listHistory", () => {
@@ -102,5 +118,24 @@ describe("outfitHistoryApi.clearHistory", () => {
     await outfitHistoryApi.clearHistory(TEST_USER);
     const result = await outfitHistoryApi.listHistory(TEST_USER);
     expect(result.history).toEqual([]);
+  });
+
+  test("marks local-only clear when remote delete fails", async () => {
+    await outfitHistoryApi.recordWorn({ item_ids: ["a"] }, TEST_USER);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      headers: { get: () => "application/json" },
+      json: async () => ({ detail: "clear failed" }),
+      text: async () => "",
+    });
+
+    const result = await outfitHistoryApi.clearHistory(TEST_USER);
+
+    expect(result).toMatchObject({
+      cleared: true,
+      localOnly: true,
+      syncError: true,
+    });
   });
 });

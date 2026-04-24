@@ -3,7 +3,7 @@
 import json
 from typing import Optional
 
-from sqlalchemy import Column, Index, Integer, String, ForeignKey, Boolean
+from sqlalchemy import Boolean, Column, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.database.database import Base
@@ -23,6 +23,11 @@ class User(Base):
     body_type = Column(String, default="unspecified")
     lifestyle = Column(String, default="casual")
     comfort_preference = Column(String, default="medium")
+    style_preferences_json = Column(String, nullable=False, default="[]")
+    comfort_preferences_json = Column(String, nullable=False, default="[]")
+    dress_for_json = Column(String, nullable=False, default="[]")
+    gender = Column(String, default="")
+    height_cm = Column(Integer, nullable=True)
 
     is_active = Column(Boolean, default=True)
     onboarding_complete = Column(Boolean, default=False)
@@ -36,9 +41,68 @@ class User(Base):
         cascade="all, delete-orphan"
     )
 
+    @staticmethod
+    def _decode_json_list(raw: Optional[str]) -> list[str]:
+        if not raw:
+            return []
+        try:
+            value = json.loads(raw)
+        except (TypeError, ValueError):
+            return []
+        if not isinstance(value, list):
+            return []
+        normalized: list[str] = []
+        for entry in value:
+            text = str(entry).strip()
+            if text:
+                normalized.append(text)
+        return normalized
+
+    @staticmethod
+    def _encode_json_list(values: list[str]) -> str:
+        return json.dumps(values, ensure_ascii=False)
+
+    @property
+    def style_preferences(self) -> list[str]:
+        values = self._decode_json_list(self.style_preferences_json)
+        if values:
+            return values
+        if self.lifestyle and self.lifestyle.strip() and self.lifestyle.strip().lower() != "casual":
+            return [self.lifestyle.strip()]
+        return []
+
+    @style_preferences.setter
+    def style_preferences(self, values: list[str]) -> None:
+        self.style_preferences_json = self._encode_json_list(values)
+
+    @property
+    def comfort_preferences(self) -> list[str]:
+        values = self._decode_json_list(self.comfort_preferences_json)
+        if values:
+            return values
+        if self.comfort_preference and self.comfort_preference.strip():
+            return [self.comfort_preference.strip()]
+        return []
+
+    @comfort_preferences.setter
+    def comfort_preferences(self, values: list[str]) -> None:
+        self.comfort_preferences_json = self._encode_json_list(values)
+
+    @property
+    def dress_for(self) -> list[str]:
+        return self._decode_json_list(self.dress_for_json)
+
+    @dress_for.setter
+    def dress_for(self, values: list[str]) -> None:
+        self.dress_for_json = self._encode_json_list(values)
+
 
 class ClothingItem(Base):
     __tablename__ = "clothing_items"
+    __table_args__ = (
+        Index("ix_clothing_items_owner_archived", "owner_id", "is_archived"),
+        Index("ix_clothing_items_owner_last_worn", "owner_id", "last_worn_timestamp"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 
@@ -55,6 +119,12 @@ class ClothingItem(Base):
     season_tags_json = Column(String, nullable=False, default="[]")
     style_tags_json = Column(String, nullable=False, default="[]")
     occasion_tags_json = Column(String, nullable=False, default="[]")
+    suggested_clothing_type = Column(String, nullable=True)
+    suggested_fit_tag = Column(String, nullable=True)
+    suggested_colors_json = Column(String, nullable=False, default="[]")
+    suggested_season_tags_json = Column(String, nullable=False, default="[]")
+    suggested_style_tags_json = Column(String, nullable=False, default="[]")
+    suggested_occasion_tags_json = Column(String, nullable=False, default="[]")
     accessory_type = Column(String, nullable=True)
     comfort_level = Column(Integer, nullable=False, default=3)
     image_url = Column(String, nullable=True)
@@ -64,14 +134,9 @@ class ClothingItem(Base):
     is_archived = Column(Boolean, nullable=False, default=False)
     last_worn_timestamp = Column(Integer, nullable=True)
 
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     owner = relationship("User", back_populates="wardrobe_items")
-
-    __table_args__ = (
-        Index("ix_clothing_items_owner_archived", "owner_id", "is_archived"),
-        Index("ix_clothing_items_owner_favorite", "owner_id", "is_favorite"),
-    )
 
     @staticmethod
     def _decode_json_list(raw: Optional[str]) -> list[str]:
@@ -136,30 +201,71 @@ class ClothingItem(Base):
     def occasion_tags(self, values: list[str]) -> None:
         self.occasion_tags_json = self._encode_json_list(values)
 
+    @property
+    def suggested_colors(self) -> list[str]:
+        return self._decode_json_list(self.suggested_colors_json)
+
+    @suggested_colors.setter
+    def suggested_colors(self, values: list[str]) -> None:
+        self.suggested_colors_json = self._encode_json_list(values)
+
+    @property
+    def suggested_season_tags(self) -> list[str]:
+        return self._decode_json_list(self.suggested_season_tags_json)
+
+    @suggested_season_tags.setter
+    def suggested_season_tags(self, values: list[str]) -> None:
+        self.suggested_season_tags_json = self._encode_json_list(values)
+
+    @property
+    def suggested_style_tags(self) -> list[str]:
+        return self._decode_json_list(self.suggested_style_tags_json)
+
+    @suggested_style_tags.setter
+    def suggested_style_tags(self, values: list[str]) -> None:
+        self.suggested_style_tags_json = self._encode_json_list(values)
+
+    @property
+    def suggested_occasion_tags(self) -> list[str]:
+        return self._decode_json_list(self.suggested_occasion_tags_json)
+
+    @suggested_occasion_tags.setter
+    def suggested_occasion_tags(self, values: list[str]) -> None:
+        self.suggested_occasion_tags_json = self._encode_json_list(values)
+
 
 class OutfitHistory(Base):
     __tablename__ = "outfit_history"
+    __table_args__ = (
+        Index("ix_outfit_history_owner_worn_at", "owner_id", "worn_at_timestamp"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     item_ids_csv = Column(String, nullable=False)
     worn_at_timestamp = Column(Integer, nullable=False)
 
 
 class SavedOutfit(Base):
     __tablename__ = "saved_outfits"
+    __table_args__ = (
+        Index("ix_saved_outfits_owner_saved_at", "owner_id", "saved_at_timestamp"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     item_ids_csv = Column(String, nullable=False)
     saved_at_timestamp = Column(Integer, nullable=False)
 
 
 class PlannedOutfit(Base):
     __tablename__ = "planned_outfits"
+    __table_args__ = (
+        Index("ix_planned_outfits_owner_date", "owner_id", "planned_date"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     item_ids_csv = Column(String, nullable=False)
     planned_date = Column(String, nullable=False)
     occasion = Column(String, nullable=True)
@@ -174,4 +280,59 @@ class RecommendationFingerprint(Base):
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     fingerprint = Column(String, nullable=False, index=True)
+    created_at_timestamp = Column(Integer, nullable=False, index=True)
+
+
+class RejectedOutfit(Base):
+    """Tracks rejected recommendation signatures per user for future filtering."""
+
+    __tablename__ = "rejected_outfits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    fingerprint = Column(String, nullable=False, index=True)
+    similarity_key = Column(String, nullable=False, index=True)
+    item_ids_csv = Column(String, nullable=False)
+    rejected_at_timestamp = Column(Integer, nullable=False, index=True)
+
+
+class FeedbackPromptEvent(Base):
+    """Stores user-scoped feedback prompt exposure and interaction events."""
+
+    __tablename__ = "feedback_prompt_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    event_type = Column(String, nullable=False, index=True)
+    suggestion_id = Column(String, nullable=True, index=True)
+    event_timestamp = Column(Integer, nullable=False, index=True)
+
+
+class RecommendationFeedback(Base):
+    """Stores explicit recommendation feedback signals per user and suggestion fingerprint."""
+
+    __tablename__ = "recommendation_feedback"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "suggestion_id", name="uq_recommendation_feedback_owner_suggestion"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    suggestion_id = Column(String, nullable=False, index=True)
+    signal = Column(String, nullable=False)
+    item_ids_csv = Column(String, nullable=True)
+    created_at_timestamp = Column(Integer, nullable=False)
+    updated_at_timestamp = Column(Integer, nullable=False)
+
+
+class RecommendationInteraction(Base):
+    """Stores user recommendation interactions for personalization over time."""
+
+    __tablename__ = "recommendation_interactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    suggestion_id = Column(String, nullable=False, index=True)
+    signal = Column(String, nullable=False, index=True)
+    item_ids_csv = Column(String, nullable=True)
     created_at_timestamp = Column(Integer, nullable=False, index=True)

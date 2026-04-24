@@ -34,19 +34,18 @@ import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.RemoteImagePreview
 import com.fitgpt.app.ui.common.SelectableField
 import com.fitgpt.app.ui.common.SectionHeader
-import com.fitgpt.app.ui.common.WebBadge
 import com.fitgpt.app.ui.common.WebCard
-import com.fitgpt.app.ui.common.recommendationScoreLabel
-import com.fitgpt.app.ui.common.recommendationSourceLabel
-import com.fitgpt.app.ui.common.recommendationWarningLabel
+import com.fitgpt.app.ui.common.WebBadge
 import com.fitgpt.app.ui.common.weatherStatusMessage
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import com.fitgpt.app.viewmodel.WeatherRequestSource
+import com.fitgpt.app.viewmodel.WeatherStatusType
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-private const val LOCATION_LOG_TAG = "FitGPTLocation"
+private const val LOCATION_LOG_TAG = "LOCATION_DEBUG"
+private const val WEATHER_DEBUG_LOG_TAG = "WEATHER_DEBUG"
 
 @Composable
 fun RecommendationScreen(
@@ -56,6 +55,9 @@ fun RecommendationScreen(
     val state by viewModel.recommendationState.collectAsState()
     val recommendationMeta by viewModel.recommendationMeta.collectAsState()
     val recommendationOptions by viewModel.recommendationOptionsState.collectAsState()
+    val saveOutfitState by viewModel.saveOutfitState.collectAsState()
+    val wearOutfitState by viewModel.wearOutfitState.collectAsState()
+    val planRecommendationState by viewModel.planRecommendationState.collectAsState()
     val weatherState by viewModel.weatherState.collectAsState()
     val weatherCity by viewModel.weatherCityState.collectAsState()
     val weatherUiStatus by viewModel.weatherUiStatus.collectAsState()
@@ -77,6 +79,10 @@ fun RecommendationScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val gpsLocationProvider = remember(context) { GpsLocationProvider(context) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val isSavingOutfit = saveOutfitState is UiState.Loading
+    val isWearingOutfit = wearOutfitState is UiState.Loading
+    val isPlanningRecommendation = planRecommendationState is UiState.Loading
 
     fun applyContextRequest(
         city: String?,
@@ -90,17 +96,33 @@ fun RecommendationScreen(
             .toBackendWeatherCategoryOrNull()
         val resolvedSeason = seasonSelection.resolveSelectedValue(seasonCustom)
         val preferredSeasons = if (resolvedSeason.isNullOrBlank()) {
-            emptyList()
+            listOf(currentSeasonTag())
         } else {
             listOf(resolvedSeason.lowercase())
         }
 
-        city?.trim()?.takeIf { it.isNotEmpty() }?.let { viewModel.setWeatherCityInput(it) }
+        val hasFreshCoordinates = lat != null && lon != null
+        val cachedCity = viewModel.getCachedWeatherCity()
+        val resolvedCity = city?.trim()?.takeIf { it.isNotEmpty() }
+            ?: if (hasFreshCoordinates) null else cachedCity
+        val resolvedLat = if (resolvedCity == null) lat else null
+        val resolvedLon = if (resolvedCity == null) lon else null
 
-        if (lat != null && lon != null) {
-            viewModel.fetchWeather(lat = lat, lon = lon, source = WeatherRequestSource.LOCATION)
-        } else if (city != null) {
-            viewModel.fetchWeather(city = city, source = WeatherRequestSource.MANUAL_CITY)
+        resolvedCity?.let { viewModel.setWeatherCityInput(it) }
+        viewModel.updateLocationDebugInfo(
+            lat = lat,
+            lon = lon,
+            city = city?.trim()?.takeIf { it.isNotEmpty() } ?: resolvedCity
+        )
+        Log.d(WEATHER_DEBUG_LOG_TAG, "Using city=${resolvedCity.orEmpty()}")
+
+        if (resolvedCity != null) {
+            viewModel.fetchWeather(
+                city = resolvedCity,
+                source = if (lat != null && lon != null) WeatherRequestSource.LOCATION else WeatherRequestSource.MANUAL_CITY
+            )
+        } else if (resolvedLat != null && resolvedLon != null) {
+            viewModel.fetchWeather(lat = resolvedLat, lon = resolvedLon, source = WeatherRequestSource.LOCATION)
         }
 
         viewModel.fetchRecommendations(
@@ -108,9 +130,9 @@ fun RecommendationScreen(
             timeContext = timeContext.nullIfBlank(),
             planDate = planDate.nullIfBlank(),
             exclude = exclude.nullIfBlank(),
-            weatherCity = city,
-            weatherLat = lat,
-            weatherLon = lon,
+            weatherCity = resolvedCity,
+            weatherLat = resolvedLat,
+            weatherLon = resolvedLon,
             weatherCategory = resolvedWeatherCategory,
             occasion = resolvedOccasion,
             stylePreference = resolvedStylePreference,
@@ -121,7 +143,7 @@ fun RecommendationScreen(
     fun loadUsingCurrentLocation() {
         scope.launch {
             locationMessage = "Detecting location..."
-            Log.i(LOCATION_LOG_TAG, "recommendation screen location requested")
+            Log.d(LOCATION_LOG_TAG, "recommendation screen location requested")
             val locationContext = gpsLocationProvider.getCurrentLocationContext()
             if (locationContext == null) {
                 locationMessage = "Location unavailable. You can still use city manually."
@@ -129,12 +151,38 @@ fun RecommendationScreen(
                 Log.w(LOCATION_LOG_TAG, "recommendation location unavailable")
                 return@launch
             }
+            Log.d(LOCATION_LOG_TAG, "lat=${locationContext.lat} lon=${locationContext.lon}")
             val cityLabel = locationContext.city?.takeIf { it.isNotBlank() }
-            locationMessage = cityLabel?.let { "Using current location: $it" } ?: "Using current location weather."
+            locationMessage = cityLabel?.let { "Using current location: $it" } ?: "Location found. Using coordinates while city resolves."
             cityLabel?.let { viewModel.setWeatherCityInput(it) }
-            Log.i(LOCATION_LOG_TAG, "recommendation location resolved")
+            viewModel.updateLocationDebugInfo(
+                lat = locationContext.lat,
+                lon = locationContext.lon,
+                city = cityLabel
+            )
+            Log.d(LOCATION_LOG_TAG, "recommendation location resolved")
             applyContextRequest(city = cityLabel, lat = locationContext.lat, lon = locationContext.lon)
         }
+    }
+
+    fun retryLocationWeather() {
+        val cachedCity = viewModel.getCachedWeatherCity()?.takeIf { it.isNotBlank() }
+        if (cachedCity != null) {
+            locationMessage = "Retrying weather for $cachedCity..."
+            applyContextRequest(city = cachedCity, lat = null, lon = null)
+        } else {
+            locationMessage = "Retrying location..."
+            loadUsingCurrentLocation()
+        }
+    }
+
+    fun submitFeedbackAndRefresh(signal: String) {
+        viewModel.submitRecommendationFeedback(signal)
+        applyContextRequest(
+            city = weatherCity.nullIfBlank(),
+            lat = null,
+            lon = null
+        )
     }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -175,13 +223,62 @@ fun RecommendationScreen(
         }
     }
 
+    LaunchedEffect(saveOutfitState) {
+        when (val currentSaveState = saveOutfitState) {
+            UiState.Loading -> Unit
+            is UiState.Error -> {
+                snackbarHostState.showSnackbar(currentSaveState.message)
+                viewModel.clearSaveOutfitState()
+            }
+            is UiState.Success -> {
+                if (currentSaveState.data == true) {
+                    snackbarHostState.showSnackbar("Outfit saved to your collection.")
+                    viewModel.clearSaveOutfitState()
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(wearOutfitState) {
+        when (val currentWearState = wearOutfitState) {
+            UiState.Loading -> Unit
+            is UiState.Error -> {
+                snackbarHostState.showSnackbar(currentWearState.message)
+                viewModel.clearWearOutfitState()
+            }
+            is UiState.Success -> {
+                if (currentWearState.data == true) {
+                    viewModel.clearWearOutfitState()
+                    navController.navigateToSecondary(Routes.HISTORY)
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(planRecommendationState) {
+        when (val currentPlanState = planRecommendationState) {
+            UiState.Loading -> Unit
+            is UiState.Error -> {
+                snackbarHostState.showSnackbar(currentPlanState.message)
+                viewModel.clearPlanRecommendationState()
+            }
+            is UiState.Success -> {
+                if (currentPlanState.data == true) {
+                    viewModel.clearPlanRecommendationState()
+                    navController.navigateToSecondary(Routes.PLANS)
+                }
+            }
+        }
+    }
+
     when (state) {
 
         is UiState.Loading -> {
             FitGptScaffold(
                 navController = navController,
                 currentRoute = Routes.RECOMMENDATION,
-                title = "Outfit Recommendation"
+                title = "Outfit Recommendation",
+                snackbarHost = { SnackbarHost(snackbarHostState) }
             ) { paddingValues ->
                 Box(
                     modifier = Modifier
@@ -198,7 +295,8 @@ fun RecommendationScreen(
             FitGptScaffold(
                 navController = navController,
                 currentRoute = Routes.RECOMMENDATION,
-                title = "Outfit Recommendation"
+                title = "Outfit Recommendation",
+                snackbarHost = { SnackbarHost(snackbarHostState) }
             ) { paddingValues ->
                 Column(
                     modifier = Modifier
@@ -228,7 +326,8 @@ fun RecommendationScreen(
             FitGptScaffold(
                 navController = navController,
                 currentRoute = Routes.RECOMMENDATION,
-                title = "Outfit Recommendation"
+                title = "Outfit Recommendation",
+                snackbarHost = { SnackbarHost(snackbarHostState) }
             ) { paddingValues ->
 
                 Column(
@@ -241,29 +340,8 @@ fun RecommendationScreen(
 
                     SectionHeader(
                         title = "Recommended for you",
-                        subtitle = "Live context + wardrobe history driven picks"
+                        subtitle = "Built around your weather, plans, and saved style profile."
                     )
-                    if (recommendedItems.isNotEmpty()) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            WebBadge(
-                                text = recommendationSourceLabel(
-                                    source = recommendationMeta.source,
-                                    fallbackUsed = recommendationMeta.fallbackUsed
-                                )
-                            )
-                            recommendationWarningLabel(recommendationMeta.warning)?.let { warningLabel ->
-                                WebBadge(text = warningLabel)
-                            }
-                            recommendationScoreLabel(
-                                score = recommendationMeta.outfitScore,
-                                fallbackUsed = recommendationMeta.fallbackUsed
-                            )?.let { scoreLabel ->
-                                WebBadge(text = scoreLabel)
-                            }
-                        }
-                    }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -274,7 +352,7 @@ fun RecommendationScreen(
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    text = "Why this outfit was recommended",
+                                    text = "Why this works",
                                     style = MaterialTheme.typography.titleSmall
                                 )
                                 buildRecommendationReasons(
@@ -295,20 +373,91 @@ fun RecommendationScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                     }
 
+                    WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "Recommendation context",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                WebBadge(text = "Source: ${recommendationMeta.source}")
+                                WebBadge(text = "Score: ${String.format("%.2f", recommendationMeta.outfitScore)}")
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                recommendationMeta.weatherCategory?.takeIf { it.isNotBlank() }?.let {
+                                    WebBadge(text = "Weather: $it")
+                                }
+                                recommendationMeta.occasion?.takeIf { it.isNotBlank() }?.let {
+                                    WebBadge(text = "Occasion: $it")
+                                }
+                                if (recommendationMeta.fallbackUsed) {
+                                    WebBadge(text = "Fallback")
+                                }
+                            }
+                            recommendationMeta.warning?.takeIf { it.isNotBlank() }?.let { warning ->
+                                Text(
+                                    text = warning,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    recommendationMeta.promptFeedback?.takeIf { it.shouldPrompt }?.let { promptMeta ->
+                        WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "Quick feedback",
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Text(
+                                    text = "Was this recommendation useful for your style?",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    TextButton(onClick = { viewModel.recordPromptInteraction("accepted") }) {
+                                        Text("Yes")
+                                    }
+                                    TextButton(onClick = { viewModel.recordPromptInteraction("ignored") }) {
+                                        Text("Not now")
+                                    }
+                                }
+                                if (promptMeta.cooldownSecondsRemaining > 0) {
+                                    Text(
+                                        text = "Prompt cooldown active.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
                     WebCard(modifier = Modifier.fillMaxWidth()) {
                         Column(
                             modifier = Modifier.padding(12.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "Context controls",
+                                text = "Adjust this look",
                                 style = MaterialTheme.typography.titleSmall
                             )
 
                             OutlinedTextField(
                                 value = weatherCity,
                                 onValueChange = { viewModel.setWeatherCityInput(it) },
-                                label = { Text("Weather city") },
+                                label = { Text("City") },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
@@ -327,9 +476,9 @@ fun RecommendationScreen(
                             ) {
                                 Text(
                                     if (showAdvancedControls) {
-                                        "Hide advanced controls"
+                                        "Hide extra options"
                                     } else {
-                                        "Show advanced controls"
+                                        "Customize details"
                                     }
                                 )
                             }
@@ -338,12 +487,12 @@ fun RecommendationScreen(
                                 OutlinedTextField(
                                     value = manualTempInput,
                                     onValueChange = { manualTempInput = it },
-                                    label = { Text("Manual temperature (F)") },
+                                    label = { Text("Manual temperature (°F)") },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true
                                 )
                                 SelectableField(
-                                    label = "Weather preference",
+                                    label = "Temperature feel",
                                     selectedValue = weatherCategorySelection,
                                     onValueChange = { weatherCategorySelection = it },
                                     options = FormOptionCatalog.weatherCategoryOptions,
@@ -353,21 +502,21 @@ fun RecommendationScreen(
                                 OutlinedTextField(
                                     value = timeContext,
                                     onValueChange = { timeContext = it },
-                                    label = { Text("Time context (morning/evening)") },
+                                    label = { Text("Time of day") },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true
                                 )
                                 OutlinedTextField(
                                     value = planDate,
                                     onValueChange = { planDate = it },
-                                    label = { Text("Plan date (YYYY-MM-DD)") },
+                                    label = { Text("Planned date (YYYY-MM-DD)") },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true
                                 )
                                 OutlinedTextField(
                                     value = exclude,
                                     onValueChange = { exclude = it },
-                                    label = { Text("Exclude keywords (comma-separated)") },
+                                    label = { Text("Avoid") },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true
                                 )
@@ -428,6 +577,21 @@ fun RecommendationScreen(
                                 Text("Use Current Location")
                             }
 
+                            if (
+                                weatherUiStatus.type == WeatherStatusType.LOCATION_READY_WEATHER_UNAVAILABLE ||
+                                weatherUiStatus.type == WeatherStatusType.UNAVAILABLE ||
+                                weatherUiStatus.type == WeatherStatusType.STALE_WEATHER
+                            ) {
+                                OutlinedButton(
+                                    onClick = { retryLocationWeather() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Retry Weather")
+                                }
+                            }
+
                             locationMessage?.let { message ->
                                 Text(
                                     text = message,
@@ -475,15 +639,24 @@ fun RecommendationScreen(
                                             text = "Live Weather • ${weather.city}",
                                             style = MaterialTheme.typography.titleSmall
                                         )
-                                        Text(
-                                            text = "${weather.temperatureF}F • ${weather.condition} • ${weather.weatherCategory}",
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                        Text(
-                                            text = weather.description,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                        if (weather.available && weather.temperatureF != null) {
+                                            Text(
+                                                text = buildWeatherSummary(weather),
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                            weather.description?.takeIf { it.isNotBlank() }?.let { description ->
+                                                Text(
+                                                    text = description,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        } else {
+                                            Text(
+                                                text = "Weather is unavailable right now. Recommendations can still use season and occasion.",
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        }
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(12.dp))
@@ -497,7 +670,7 @@ fun RecommendationScreen(
                             accentTop = false
                         ) {
                             Text(
-                                text = "No recommendation yet. Tap Apply context or Use Current Location.",
+                                text = "Add at least a top, bottom, and shoes to unlock a full outfit suggestion. You can also tap Use Current Location to refresh around live conditions.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(14.dp)
                             )
@@ -518,9 +691,12 @@ fun RecommendationScreen(
                                             },
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            val selected = if (index == selectedOptionIndex) " (selected)" else ""
                                             Text(
-                                                "Option ${index + 1} • ${"%.2f".format(option.outfitScore)}$selected"
+                                                buildOptionTitle(
+                                                    index = index,
+                                                    weatherCategory = recommendationMeta.weatherCategory,
+                                                    occasion = recommendationMeta.occasion
+                                                ) + if (index == selectedOptionIndex) " • Selected" else ""
                                             )
                                         }
                                     }
@@ -542,16 +718,53 @@ fun RecommendationScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
+                    if (recommendedItems.isNotEmpty() && !recommendationMeta.suggestionId.isNullOrBlank()) {
+                        WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Quick feedback",
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = { submitFeedbackAndRefresh("like") },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Like")
+                                    }
+                                    OutlinedButton(
+                                        onClick = { submitFeedbackAndRefresh("dislike") },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Not for me")
+                                    }
+                                    OutlinedButton(
+                                        onClick = { submitFeedbackAndRefresh("reject") },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Hide")
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
                     Button(
                         onClick = {
                             if (recommendedItems.isEmpty()) return@Button
                             viewModel.markOutfitAsWorn(recommendedItems)
-                            navController.navigateToSecondary(Routes.HISTORY)
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = recommendedItems.isNotEmpty()
+                        enabled = recommendedItems.isNotEmpty() && !isWearingOutfit
                     ) {
-                        Text("Wear This Outfit")
+                        Text(if (isWearingOutfit) "Saving Wear History..." else "Wear This Outfit")
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -562,11 +775,24 @@ fun RecommendationScreen(
                             viewModel.saveOutfit(recommendedItems)
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = recommendedItems.isNotEmpty()
+                        enabled = recommendedItems.isNotEmpty() && !isSavingOutfit
                     ) {
                         Icon(Icons.Default.Star, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Save Outfit")
+                        Text(if (isSavingOutfit) "Saving..." else "Save Outfit")
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            if (recommendedItems.isEmpty()) return@OutlinedButton
+                            viewModel.rejectCurrentRecommendation()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = recommendedItems.isNotEmpty()
+                    ) {
+                        Text("Not for me")
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -576,14 +802,13 @@ fun RecommendationScreen(
                             if (recommendedItems.isEmpty()) return@Button
                             val today = java.time.LocalDate.now().plusDays(1).toString()
                             viewModel.planCurrentRecommendation(today, "Planned from recommendation")
-                            navController.navigateToSecondary(Routes.PLANS)
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = recommendedItems.isNotEmpty()
+                        enabled = recommendedItems.isNotEmpty() && !isPlanningRecommendation
                     ) {
                         Icon(Icons.Default.DateRange, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Plan for Tomorrow")
+                        Text(if (isPlanningRecommendation) "Planning..." else "Plan for Tomorrow")
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -630,6 +855,15 @@ private fun String?.toBackendWeatherCategoryOrNull(): String? {
     }
 }
 
+private fun currentSeasonTag(): String {
+    return when (java.time.LocalDate.now().monthValue) {
+        12, 1, 2 -> "winter"
+        3, 4, 5 -> "spring"
+        6, 7, 8 -> "summer"
+        else -> "fall"
+    }
+}
+
 private fun buildRecommendationReasons(
     summary: String,
     weatherState: UiState<*>,
@@ -649,6 +883,26 @@ private fun buildRecommendationReasons(
     }
     reasons += summary
     return reasons
+}
+
+private fun buildOptionTitle(
+    index: Int,
+    weatherCategory: String?,
+    occasion: String?
+): String {
+    val occasionText = occasion?.trim()?.takeIf { it.isNotEmpty() }
+    val weatherText = weatherCategory?.trim()?.takeIf { it.isNotEmpty() }
+    return when {
+        occasionText != null -> "$occasionText option ${index + 1}"
+        weatherText != null -> "${weatherText.replaceFirstChar { it.uppercase() }} option ${index + 1}"
+        else -> "Option ${index + 1}"
+    }
+}
+
+private fun buildWeatherSummary(weather: com.fitgpt.app.data.model.WeatherSnapshot): String {
+    val temperature = weather.temperatureF?.let { "${it}°F" }
+    val condition = weather.condition?.trim()?.takeIf { it.isNotEmpty() }
+    return listOfNotNull(temperature, condition).joinToString(" • ")
 }
 
 @Composable

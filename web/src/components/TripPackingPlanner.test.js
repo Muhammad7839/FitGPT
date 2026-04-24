@@ -59,17 +59,18 @@ describe("TripPackingPlanner", () => {
     jest.clearAllMocks();
   });
 
-  test("surfaces required trip inputs clearly in the builder", async () => {
+  test("surfaces required and optional trip inputs clearly in the builder", async () => {
     render(<TripPackingPlanner wardrobe={wardrobe} user={null} answers={{}} />);
 
     expect(await screen.findByText("Pack for the trip you are excited to take")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /add trip/i }));
 
+    expect(screen.getByText("Required to generate")).toBeInTheDocument();
     expect(screen.getByText("Destination and travel dates")).toBeInTheDocument();
+    expect(screen.getByText("Optional trip context")).toBeInTheDocument();
+    expect(screen.getByText("Shape the vibe of the trip")).toBeInTheDocument();
     expect(screen.getByText("Destination + dates needed")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/city, region, or destination/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /continue to trip details/i })).toBeInTheDocument();
   });
 
   test("generates and displays a fallback packing list with the approved copy", async () => {
@@ -85,8 +86,6 @@ describe("TripPackingPlanner", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /end date:/i }));
     fireEvent.click(screen.getByRole("button", { name: "Monday, April 13, 2026" }));
-
-    fireEvent.click(screen.getByRole("button", { name: /continue to trip details/i }));
 
     fireEvent.click(screen.getByRole("button", { name: /generate packing list/i }));
 

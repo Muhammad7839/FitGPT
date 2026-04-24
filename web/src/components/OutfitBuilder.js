@@ -1,132 +1,111 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useAuth } from "../auth/AuthProvider";
-import { loadWardrobe } from "../utils/userStorage";
+import React, { useCallback, useMemo, useState } from "react";
+
 import { savedOutfitsApi } from "../api/savedOutfitsApi";
-import { EVT_WARDROBE_CHANGED } from "../utils/constants";
-import { normalizeCategory, colorToCss } from "../utils/recommendationEngine";
-import { validateOutfit, layerOrdered, getItemSlot, SLOTS, slotLabel } from "../utils/outfitLayering";
-import MannequinViewer from "./MannequinViewer";
+import { useAuth } from "../auth/AuthProvider";
+import useWardrobe from "../hooks/useWardrobe";
+import { colorToCss, normalizeCategory } from "../utils/recommendationEngine";
+import { getItemSlot, layerOrdered, slotLabel, validateOutfit } from "../utils/outfitLayering";
 import ErrorBoundary from "./ErrorBoundary";
+import MannequinViewer from "./MannequinViewer";
 
 const CATEGORY_ORDER = ["Tops", "Bottoms", "Outerwear", "Shoes", "Accessories"];
 
 function groupByCategory(items) {
-  const groups = Object.fromEntries(CATEGORY_ORDER.map((c) => [c, []]));
-  for (const item of items) {
-    const cat = normalizeCategory(item?.category) || "Other";
-    if (!groups[cat]) groups[cat] = [];
-    groups[cat].push(item);
+  const groups = Object.fromEntries(CATEGORY_ORDER.map((category) => [category, []]));
+
+  for (const item of Array.isArray(items) ? items : []) {
+    const category = normalizeCategory(item?.category) || "Accessories";
+    if (!groups[category]) groups[category] = [];
+    groups[category].push(item);
   }
+
   return groups;
 }
 
 export default function OutfitBuilder() {
   const { user } = useAuth();
-  const [wardrobe, setWardrobe] = useState(() => loadWardrobe(user));
+  const wardrobe = useWardrobe(user);
   const [selectedIds, setSelectedIds] = useState([]);
   const [previewMode, setPreviewMode] = useState("grid");
   const [dragOver, setDragOver] = useState(false);
-  const [saveMsg, setSaveMsg] = useState("");
+  const [saveMessage, setSaveMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    const refresh = () => setWardrobe(loadWardrobe(user));
-    window.addEventListener(EVT_WARDROBE_CHANGED, refresh);
-    return () => window.removeEventListener(EVT_WARDROBE_CHANGED, refresh);
-  }, [user]);
-
-  useEffect(() => {
-    setWardrobe(loadWardrobe(user));
-  }, [user]);
-
   const itemsById = useMemo(() => {
-    const map = new Map();
-    for (const item of wardrobe) map.set(String(item.id), item);
-    return map;
+    const next = new Map();
+    for (const item of wardrobe) {
+      next.set(String(item.id), item);
+    }
+    return next;
   }, [wardrobe]);
+
+  const groupedWardrobe = useMemo(() => groupByCategory(wardrobe), [wardrobe]);
 
   const selectedItems = useMemo(
     () => selectedIds.map((id) => itemsById.get(String(id))).filter(Boolean),
-    [selectedIds, itemsById]
+    [itemsById, selectedIds]
   );
-
-  const groups = useMemo(() => groupByCategory(wardrobe), [wardrobe]);
+  const layeredItems = useMemo(() => layerOrdered(selectedItems), [selectedItems]);
   const validation = useMemo(() => validateOutfit(selectedItems), [selectedItems]);
+  const bodyType = user?.body_type || user?.bodyType || "rectangle";
 
-  const bodyTypeId = useMemo(() => "rectangle", []);
-
-  const addItem = useCallback((item) => {
+  const toggleItem = useCallback((item) => {
     if (!item) return;
-    setSelectedIds((prev) => {
-      const idStr = String(item.id);
-      if (prev.includes(idStr)) return prev;
-      return [...prev, idStr];
-    });
+
+    const itemId = String(item.id);
+    setSelectedIds((current) => (
+      current.includes(itemId)
+        ? current.filter((id) => id !== itemId)
+        : [...current, itemId]
+    ));
   }, []);
 
-  const removeItem = useCallback((id) => {
-    setSelectedIds((prev) => prev.filter((x) => x !== String(id)));
-  }, []);
-
-  const clearAll = useCallback(() => {
-    setSelectedIds([]);
-    setSaveMsg("");
-  }, []);
-
-  const onDragStart = (e, item) => {
-    e.dataTransfer.setData("text/plain", String(item.id));
-    e.dataTransfer.effectAllowed = "copy";
-  };
-
-  const onDragOver = (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
-    if (!dragOver) setDragOver(true);
-  };
-
-  const onDragLeave = () => setDragOver(false);
-
-  const onDrop = (e) => {
-    e.preventDefault();
+  const handleDrop = useCallback((event) => {
+    event.preventDefault();
     setDragOver(false);
-    const id = e.dataTransfer.getData("text/plain");
-    if (!id) return;
-    const item = itemsById.get(String(id));
-    if (item) addItem(item);
-  };
+
+    const rawId = event.dataTransfer.getData("text/plain");
+    const item = itemsById.get(String(rawId));
+    if (item) toggleItem(item);
+  }, [itemsById, toggleItem]);
 
   const handleSave = useCallback(async () => {
-    if (!selectedIds.length) {
-      setSaveMsg("Add at least one item first.");
+    if (!selectedItems.length) {
+      setSaveMessage("Add at least one item first.");
       return;
     }
+
     if (!validation.valid) {
-      setSaveMsg("Resolve layering conflicts before saving.");
+      setSaveMessage("Resolve layering conflicts before saving.");
       return;
     }
+
     setSaving(true);
-    setSaveMsg("");
+    setSaveMessage("");
+
     try {
-      const res = await savedOutfitsApi.saveOutfit(
+      const result = await savedOutfitsApi.saveOutfit(
         {
           items: selectedIds,
           source: "user_built",
-          context: { builder: true, built_at: new Date().toISOString() },
-          item_details: selectedItems.map((i) => ({
-            id: i.id, name: i.name, category: i.category, color: i.color,
+          context: { builder: true },
+          item_details: selectedItems.map((item) => ({
+            id: item.id,
+            name: item.name,
+            category: item.category,
+            color: item.color,
           })),
         },
         user
       );
-      setSaveMsg(res?.message || (res?.created ? "Saved." : "Already saved."));
-    } catch (e) {
-      setSaveMsg(e?.message || "Could not save outfit.");
+
+      setSaveMessage(result?.message || (result?.created ? "Saved." : "Already saved."));
+    } catch (error) {
+      setSaveMessage(error?.message || "Could not save outfit.");
     } finally {
       setSaving(false);
     }
-  }, [selectedIds, selectedItems, validation.valid, user]);
-
-  const layeredPreview = useMemo(() => layerOrdered(selectedItems), [selectedItems]);
+  }, [selectedIds, selectedItems, user, validation.valid]);
 
   return (
     <div className="outfitBuilder">
@@ -134,59 +113,55 @@ export default function OutfitBuilder() {
         <div>
           <h1 className="outfitBuilderTitle">Outfit Builder</h1>
           <p className="outfitBuilderSub">
-            Drag items from your wardrobe onto the canvas to compose an outfit. Conflicts are flagged live.
+            Drag pieces from your wardrobe into the canvas, check layering conflicts, and save a presentation-ready look.
           </p>
         </div>
         <div className="outfitBuilderActions">
-          <button type="button" className="btn" onClick={clearAll} disabled={selectedIds.length === 0}>
+          <button type="button" className="btn" onClick={() => { setSelectedIds([]); setSaveMessage(""); }} disabled={selectedIds.length === 0}>
             Clear
           </button>
-          <button
-            type="button"
-            className="btn primary"
-            onClick={handleSave}
-            disabled={saving || selectedIds.length === 0 || !validation.valid}
-          >
+          <button type="button" className="btn primary" onClick={handleSave} disabled={saving || selectedIds.length === 0 || !validation.valid}>
             {saving ? "Saving..." : "Save outfit"}
           </button>
         </div>
       </div>
 
-      {saveMsg && <div className="outfitBuilderMsg">{saveMsg}</div>}
+      {saveMessage ? <div className="outfitBuilderMsg">{saveMessage}</div> : null}
 
       <div className="outfitBuilderGrid">
         <aside className="outfitBuilderWardrobe" aria-label="Wardrobe items">
           {wardrobe.length === 0 ? (
-            <div className="outfitBuilderEmpty">
-              Your wardrobe is empty. Add items in the Wardrobe tab first.
-            </div>
+            <div className="outfitBuilderEmpty">Your wardrobe is empty. Add items in the wardrobe screen first.</div>
           ) : (
-            CATEGORY_ORDER.map((cat) => {
-              const group = groups[cat] || [];
-              if (group.length === 0) return null;
+            CATEGORY_ORDER.map((category) => {
+              const items = groupedWardrobe[category] || [];
+              if (!items.length) return null;
+
               return (
-                <section key={cat} className="outfitBuilderGroup">
-                  <h2 className="outfitBuilderGroupTitle">{cat}</h2>
+                <section key={category} className="outfitBuilderGroup">
+                  <h2 className="outfitBuilderGroupTitle">{category}</h2>
                   <div className="outfitBuilderGroupItems">
-                    {group.map((item) => {
-                      const selected = selectedIds.includes(String(item.id));
+                    {items.map((item) => {
+                      const isSelected = selectedIds.includes(String(item.id));
                       return (
                         <button
                           key={item.id}
                           type="button"
-                          className={"outfitBuilderItem" + (selected ? " selected" : "")}
+                          className={`outfitBuilderItem${isSelected ? " selected" : ""}`}
                           draggable
-                          onDragStart={(e) => onDragStart(e, item)}
-                          onClick={() => (selected ? removeItem(item.id) : addItem(item))}
-                          title={selected ? "Click to remove from outfit" : "Click or drag to add"}
+                          onClick={() => toggleItem(item)}
+                          onDragStart={(event) => {
+                            event.dataTransfer.setData("text/plain", String(item.id));
+                            event.dataTransfer.effectAllowed = "copy";
+                          }}
                         >
                           {item.image_url ? (
-                            <img src={item.image_url} alt={item.name} className="outfitBuilderItemImg" />
+                            <img className="outfitBuilderItemImg" src={item.image_url} alt={item.name || "Wardrobe item"} />
                           ) : (
                             <div className="outfitBuilderItemImg outfitBuilderItemPlaceholder" />
                           )}
                           <div className="outfitBuilderItemInfo">
-                            <span className="outfitBuilderItemName">{item.name}</span>
+                            <span className="outfitBuilderItemName">{item.name || "Unnamed item"}</span>
                             <span className="outfitBuilderItemColor" style={{ background: colorToCss(item.color) }} />
                           </div>
                         </button>
@@ -199,20 +174,22 @@ export default function OutfitBuilder() {
           )}
         </aside>
 
-        <section className="outfitBuilderCanvas" aria-label="Current outfit">
+        <section className="outfitBuilderCanvas" aria-label="Current outfit preview">
           <div className="outfitBuilderCanvasHead">
-            <span className="outfitBuilderCanvasLabel">Your outfit · {selectedIds.length} item{selectedIds.length === 1 ? "" : "s"}</span>
+            <span className="outfitBuilderCanvasLabel">
+              Your outfit · {selectedItems.length} item{selectedItems.length === 1 ? "" : "s"}
+            </span>
             <div className="dashViewToggle">
               <button
                 type="button"
-                className={"dashViewToggleBtn" + (previewMode === "grid" ? " active" : "")}
+                className={`dashViewToggleBtn${previewMode === "grid" ? " active" : ""}`}
                 onClick={() => setPreviewMode("grid")}
               >
                 Grid
               </button>
               <button
                 type="button"
-                className={"dashViewToggleBtn" + (previewMode === "mannequin" ? " active" : "")}
+                className={`dashViewToggleBtn${previewMode === "mannequin" ? " active" : ""}`}
                 onClick={() => setPreviewMode("mannequin")}
               >
                 3D
@@ -220,57 +197,58 @@ export default function OutfitBuilder() {
             </div>
           </div>
 
-          {!validation.valid && validation.conflicts.length > 0 && (
+          {validation.conflicts.length > 0 ? (
             <div className="outfitBuilderConflicts" role="status">
               <div className="outfitBuilderConflictTitle">Layering conflicts</div>
               <ul className="outfitBuilderConflictList">
-                {validation.conflicts.map((c, i) => (
-                  <li key={i}>{c.message}</li>
+                {validation.conflicts.map((conflict, index) => (
+                  <li key={`${conflict.type}-${index}`}>{conflict.message}</li>
                 ))}
               </ul>
             </div>
-          )}
+          ) : null}
 
           <div
-            className={"outfitBuilderDropZone" + (dragOver ? " dragOver" : "")}
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            onDrop={onDrop}
+            className={`outfitBuilderDropZone${dragOver ? " dragOver" : ""}`}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
           >
-            {selectedIds.length === 0 ? (
+            {!selectedItems.length ? (
               <div className="outfitBuilderDropHint">
                 Drag clothing here or click items on the left to build an outfit.
               </div>
             ) : previewMode === "mannequin" ? (
-              <ErrorBoundary fallback={<div style={{ padding: 24, textAlign: "center" }}>3D view unavailable</div>}>
-                <MannequinViewer outfit={selectedItems} bodyType={bodyTypeId} />
+              <ErrorBoundary fallback={<div className="outfitBuilderDropHint">3D preview unavailable.</div>}>
+                <MannequinViewer outfit={selectedItems} bodyType={bodyType} />
               </ErrorBoundary>
             ) : (
               <div className="outfitBuilderSelectedGrid">
-                {layeredPreview.map((item) => {
-                  const slot = getItemSlot(item);
-                  return (
-                    <div key={item.id} className="outfitBuilderSelectedTile">
-                      <button
-                        type="button"
-                        className="outfitBuilderSelectedRemove"
-                        onClick={() => removeItem(item.id)}
-                        aria-label={`Remove ${item.name}`}
-                      >
-                        &times;
-                      </button>
-                      {item.image_url ? (
-                        <img src={item.image_url} alt={item.name} className="outfitBuilderSelectedImg" />
-                      ) : (
-                        <div className="outfitBuilderSelectedImg outfitBuilderItemPlaceholder" />
-                      )}
-                      <div className="outfitBuilderSelectedMeta">
-                        <span className="outfitBuilderSelectedName">{item.name}</span>
-                        <span className="outfitBuilderSelectedSlot">{slotLabel(slot) || normalizeCategory(item.category)}</span>
-                      </div>
+                {layeredItems.map((item) => (
+                  <div key={item.id} className="outfitBuilderSelectedTile">
+                    <button
+                      type="button"
+                      className="outfitBuilderSelectedRemove"
+                      onClick={() => toggleItem(item)}
+                      aria-label={`Remove ${item.name || "item"}`}
+                    >
+                      ×
+                    </button>
+                    {item.image_url ? (
+                      <img className="outfitBuilderSelectedImg" src={item.image_url} alt={item.name || "Selected item"} />
+                    ) : (
+                      <div className="outfitBuilderSelectedImg outfitBuilderItemPlaceholder" />
+                    )}
+                    <div className="outfitBuilderSelectedMeta">
+                      <div className="outfitBuilderSelectedName">{item.name || "Unnamed item"}</div>
+                      <div className="outfitBuilderSelectedSlot">{slotLabel(getItemSlot(item)) || "item"}</div>
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -279,5 +257,3 @@ export default function OutfitBuilder() {
     </div>
   );
 }
-
-export { SLOTS };

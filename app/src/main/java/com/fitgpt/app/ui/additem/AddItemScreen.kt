@@ -42,6 +42,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -65,9 +66,13 @@ import com.fitgpt.app.viewmodel.ImageUploadTarget
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val UPLOAD_LOG_TAG = "FitGPTUpload"
 private const val AUTO_FILL_UNKNOWN = "Unknown"
+private const val CATEGORY_CONFIRMATION_THRESHOLD = 0.9f
 
 private enum class PhotoFlowState {
     IDLE,
@@ -122,32 +127,36 @@ fun AddItemScreen(
     var needsCategoryConfirmation by remember { mutableStateOf(false) }
     var categorySuggestionNotice by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val uiScope = rememberCoroutineScope()
 
     val context = LocalContext.current
     val imageUploadState by viewModel.addItemImageUploadState.collectAsState()
     val batchUploadState by viewModel.batchImageUploadState.collectAsState()
     val itemSaveState by viewModel.itemSaveState.collectAsState()
     val bulkItemSaveState by viewModel.bulkItemSaveState.collectAsState()
+    val tagSuggestionState by viewModel.tagSuggestionState.collectAsState()
     val isSavingItem = itemSaveState is UiState.Loading || bulkItemSaveState is UiState.Loading
 
     LaunchedEffect(Unit) {
         viewModel.clearImageUploadState(ImageUploadTarget.ADD_ITEM)
         viewModel.clearItemSaveState()
         viewModel.clearBulkItemSaveState()
+        viewModel.clearTagSuggestionState()
     }
 
     fun applyImageAutoFill(bytes: ByteArray, sourceName: String) {
         val inferredFromName = inferFromFileName(sourceName)
+        val inferredColor = inferDominantColorName(bytes) ?: inferColorFromFileName(sourceName)
         detectedCategory = inferredFromName.category
         detectionConfidence = inferredFromName.confidence
-        if (inferredFromName.confidence < 0.66f) {
+        if (inferredFromName.category.isNullOrBlank() || inferredFromName.confidence < CATEGORY_CONFIRMATION_THRESHOLD) {
             needsCategoryConfirmation = true
-            categorySuggestionNotice = "Detected category may be inaccurate. Review if needed before saving."
+            categorySuggestionNotice = "Auto-detected category is only a draft. Confirm it before saving."
         } else {
             needsCategoryConfirmation = false
-            categorySuggestionNotice = null
+            categorySuggestionNotice = "Auto-detected details look strong, but you can still change them before saving."
         }
-        category = category.ifBlank { inferredFromName.category ?: "Top" }
+        category = category.ifBlank { inferredFromName.category.orEmpty() }
         if (clothingType.isBlank()) {
             clothingType = inferredFromName.clothingType.orEmpty()
         }
@@ -158,7 +167,10 @@ fun AddItemScreen(
             season = inferredFromName.season ?: "All"
         }
         if (color.isBlank()) {
-            color = inferDominantColorName(bytes) ?: AUTO_FILL_UNKNOWN
+            color = inferredColor ?: AUTO_FILL_UNKNOWN
+        }
+        if (colors.isBlank() && inferredColor != null) {
+            colors = inferredColor
         }
         if (comfort.isBlank()) {
             comfort = inferredFromName.comfortLevel?.toString().orEmpty()
@@ -170,7 +182,14 @@ fun AddItemScreen(
 
     fun saveCurrentItem() {
         formError = null
-        val resolvedCategory = category.resolveSelectedValue(categoryCustom).ifBlank { "Top" }
+        if (needsCategoryConfirmation) {
+            formError = "Confirm the category before saving this item."
+            return
+        }
+        val resolvedCategory = category.resolveSelectedValue(categoryCustom).ifBlank {
+            formError = "Choose a category before saving this item."
+            return
+        }
         val resolvedClothingType = clothingType.resolveSelectedValue(clothingTypeCustom)
         val resolvedFitTag = fitTag.resolveSelectedValue(fitTagCustom)
         val resolvedColor = color.resolveSelectedValue(colorCustom).ifBlank { AUTO_FILL_UNKNOWN }
@@ -204,6 +223,33 @@ fun AddItemScreen(
         } else {
             viewModel.addItem(draftItem)
         }
+    }
+
+    fun requestTagSuggestion() {
+        val resolvedCategory = category.resolveSelectedValue(categoryCustom).ifBlank {
+            formError = "Choose a category before requesting suggestions."
+            return
+        }
+        val resolvedClothingType = clothingType.resolveSelectedValue(clothingTypeCustom)
+        val resolvedFitTag = fitTag.resolveSelectedValue(fitTagCustom)
+        val resolvedColor = color.resolveSelectedValue(colorCustom).ifBlank { AUTO_FILL_UNKNOWN }
+        val resolvedSeason = season.resolveSelectedValue(seasonCustom).ifBlank { "All" }
+        val resolvedComfort = parseComfortLevel(comfort)
+        val draftItem = ClothingItem(
+            id = -1,
+            name = name.trim().takeIf { it.isNotBlank() },
+            category = resolvedCategory,
+            clothingType = resolvedClothingType.takeIf { it.isNotBlank() },
+            fitTag = resolvedFitTag.takeIf { it.isNotBlank() },
+            color = resolvedColor,
+            colors = colors.toCsvList(),
+            season = resolvedSeason,
+            seasonTags = seasonTags.toCsvList(),
+            styleTags = styleTags.toCsvList(),
+            occasionTags = occasionTags.toCsvList(),
+            comfortLevel = resolvedComfort
+        )
+        viewModel.suggestTagsForDraft(draftItem)
     }
 
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
@@ -295,45 +341,31 @@ fun AddItemScreen(
             return@rememberLauncherForActivityResult
         }
 
-        val hints = mutableMapOf<String, ImageAutoFillHint>()
         selectedPhotoPayload = null
-        val payloads = uris.mapIndexedNotNull { index, uri ->
-            val bytes = readBytes(context, uri) ?: return@mapIndexedNotNull null
-            if (!isImagePayloadAllowed(bytes.size)) {
-                Log.w(UPLOAD_LOG_TAG, "batch image rejected size=${bytes.size}")
-                return@mapIndexedNotNull null
+        batchAutoCreateMessage = "Preparing selected photos..."
+        uiScope.launch {
+            val prepared = withContext(Dispatchers.IO) {
+                prepareBatchUploadSelection(context, uris)
             }
-            val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-            val extension = when (mimeType) {
-                "image/png" -> ".png"
-                "image/webp" -> ".webp"
-                else -> ".jpg"
+            batchAutoFillHints = prepared.hints
+            Log.i(
+                UPLOAD_LOG_TAG,
+                "batch upload selected count=${prepared.payloads.size} oversized=${prepared.oversizedCount} unreadable=${prepared.unreadableCount}"
+            )
+            if (prepared.payloads.isEmpty()) {
+                photoFlowState = PhotoFlowState.ERROR
+                batchAutoCreateMessage = when {
+                    prepared.oversizedCount > 0 && prepared.unreadableCount == 0 ->
+                        "All selected images were too large (max ${MAX_LOCAL_IMAGE_BYTES / (1024 * 1024)}MB)."
+                    prepared.unreadableCount > 0 && prepared.oversizedCount == 0 ->
+                        "Could not read the selected images."
+                    else -> "No valid images were selected."
+                }
+                return@launch
             }
-            val fileName = "batch_${System.currentTimeMillis()}_${index}$extension"
-            val sourceName = resolveDisplayName(context, uri) ?: fileName
-            val inferredFromName = inferFromFileName(sourceName)
-            hints[fileName] = ImageAutoFillHint(
-                category = inferredFromName.category,
-                clothingType = inferredFromName.clothingType,
-                color = inferDominantColorName(bytes),
-                fitTag = inferredFromName.fitTag,
-                season = inferredFromName.season,
-                comfortLevel = inferredFromName.comfortLevel
-            )
-            UploadImagePayload(
-                bytes = bytes,
-                fileName = fileName,
-                mimeType = mimeType
-            )
+            batchAutoCreateMessage = buildBatchPreparationMessage(prepared)
+            viewModel.uploadImagesBatch(prepared.payloads)
         }
-        batchAutoFillHints = hints
-        Log.i(UPLOAD_LOG_TAG, "batch upload selected count=${payloads.size}")
-        if (payloads.isEmpty()) {
-            photoFlowState = PhotoFlowState.ERROR
-            batchAutoCreateMessage = "No valid images were selected."
-            return@rememberLauncherForActivityResult
-        }
-        viewModel.uploadImagesBatch(payloads)
     }
 
     LaunchedEffect(imageUploadState) {
@@ -344,6 +376,46 @@ fun AddItemScreen(
             Log.i(UPLOAD_LOG_TAG, "single upload success urlSet=true")
         } else if (upload is UiState.Error) {
             photoFlowState = PhotoFlowState.ERROR
+        }
+    }
+
+    LaunchedEffect(tagSuggestionState) {
+        when (val suggestionState = tagSuggestionState) {
+            is UiState.Success -> {
+                val suggestion = suggestionState.data ?: return@LaunchedEffect
+                if (!suggestion.generated) {
+                    snackbarHostState.showSnackbar("No suggested tags were generated for this item.")
+                    viewModel.clearTagSuggestionState()
+                    return@LaunchedEffect
+                }
+                if (clothingType.isBlank()) {
+                    clothingType = suggestion.suggestedClothingType.orEmpty()
+                }
+                if (fitTag.isBlank()) {
+                    fitTag = suggestion.suggestedFitTag.orEmpty()
+                }
+                if (colors.isBlank()) {
+                    colors = suggestion.suggestedColors.joinToString(",")
+                }
+                if (seasonTags.isBlank()) {
+                    seasonTags = suggestion.suggestedSeasonTags.joinToString(",")
+                }
+                if (styleTags.isBlank()) {
+                    styleTags = suggestion.suggestedStyleTags.joinToString(",")
+                }
+                if (occasionTags.isBlank()) {
+                    occasionTags = suggestion.suggestedOccasionTags.joinToString(",")
+                }
+                snackbarHostState.showSnackbar("Suggested tags applied to empty fields.")
+                viewModel.clearTagSuggestionState()
+            }
+
+            is UiState.Error -> {
+                snackbarHostState.showSnackbar(suggestionState.message)
+                viewModel.clearTagSuggestionState()
+            }
+
+            UiState.Loading -> Unit
         }
     }
 
@@ -376,7 +448,10 @@ fun AddItemScreen(
         val items = successfulEntries.mapIndexedNotNull { index, entry ->
             val url = entry.imageUrl?.trim()?.takeIf(String::isNotEmpty) ?: return@mapIndexedNotNull null
             val hint = batchAutoFillHints[entry.fileName]
-            val resolvedCategory = typedCategory.ifBlank { hint?.category ?: "Top" }
+            val resolvedCategory = typedCategory.ifBlank { hint?.category.orEmpty() }
+            if (resolvedCategory.isBlank()) {
+                return@mapIndexedNotNull null
+            }
             val resolvedClothingType = typedClothingType ?: hint?.clothingType
             val resolvedColor = typedColor.ifBlank { hint?.color ?: AUTO_FILL_UNKNOWN }
             val resolvedSeason = typedSeason.ifBlank { hint?.season ?: "All" }
@@ -538,7 +613,7 @@ fun AddItemScreen(
 
             SectionHeader(
                 title = "Add New Item",
-                subtitle = "Capture or upload clothing, then save to your wardrobe"
+                subtitle = "Upload a photo, confirm the basics, then save."
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -602,6 +677,11 @@ fun AddItemScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Text(
+                        text = "Tip: if the photo guess looks wrong, change the category or color here before saving.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
                     SelectableField(
                         label = "Clothing Type",
@@ -610,15 +690,6 @@ fun AddItemScreen(
                         options = FormOptionCatalog.clothingTypes,
                         customValue = clothingTypeCustom,
                         onCustomValueChange = { clothingTypeCustom = it }
-                    )
-
-                    SelectableField(
-                        label = "Fit Type",
-                        selectedValue = fitTag,
-                        onValueChange = { fitTag = it },
-                        options = FormOptionCatalog.fitTypeOptions,
-                        customValue = fitTagCustom,
-                        onCustomValueChange = { fitTagCustom = it }
                     )
 
                     SelectableField(
@@ -639,28 +710,34 @@ fun AddItemScreen(
                         onCustomValueChange = { seasonCustom = it }
                     )
 
-                    OutlinedTextField(
-                        value = comfort,
-                        onValueChange = { comfort = it },
-                        label = { Text("Comfort Level (1–5)") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = brand,
-                        onValueChange = { brand = it },
-                        label = { Text("Brand (optional)") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
                     Button(
                         onClick = { showAdvancedMetadata = !showAdvancedMetadata },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (showAdvancedMetadata) "Hide advanced metadata" else "Show advanced metadata")
+                        Text(if (showAdvancedMetadata) "Hide optional details" else "Add optional details")
                     }
 
                     if (showAdvancedMetadata) {
+                        SelectableField(
+                            label = "Fit Type",
+                            selectedValue = fitTag,
+                            onValueChange = { fitTag = it },
+                            options = FormOptionCatalog.fitTypeOptions,
+                            customValue = fitTagCustom,
+                            onCustomValueChange = { fitTagCustom = it }
+                        )
+                        OutlinedTextField(
+                            value = comfort,
+                            onValueChange = { comfort = it },
+                            label = { Text("Comfort Level (1–5)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = brand,
+                            onValueChange = { brand = it },
+                            label = { Text("Brand (optional)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                         SelectableField(
                             label = "Layer Type",
                             selectedValue = layerType,
@@ -711,13 +788,31 @@ fun AddItemScreen(
                         ) {
                             Text(if (onePiece) "One-piece: ON" else "One-piece: OFF")
                         }
+
+                        Button(
+                            onClick = {
+                                if (!isSavingItem && tagSuggestionState !is UiState.Loading) {
+                                    requestTagSuggestion()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isSavingItem && tagSuggestionState !is UiState.Loading,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            val label = if (tagSuggestionState is UiState.Loading) {
+                                "Suggesting tags..."
+                            } else {
+                                "Suggest Tags"
+                            }
+                            Text(label)
+                        }
                     }
 
                     Button(
                         onClick = { showPhotoOptions = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Add Photo")
+                        Text(if (imageUrl.isBlank()) "Add Photo" else "Change Photo")
                     }
 
                     when (val upload = imageUploadState) {
@@ -749,19 +844,13 @@ fun AddItemScreen(
                         is UiState.Success -> {
                             if (!imageUrl.isNullOrBlank()) {
                                 Text(
-                                    text = "Photo uploaded. Tap Save Item to finish.",
+                                    text = "Photo uploaded. We filled in the basics from the image so you can confirm and save.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
                     }
-
-                    Text(
-                        text = "Photo state: ${photoFlowState.name.lowercase().replace('_', ' ')}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
 
                     cameraMessage?.let {
                         Text(
@@ -786,16 +875,6 @@ fun AddItemScreen(
                                 .fillMaxWidth()
                                 .height(180.dp)
                         )
-                        Button(
-                            onClick = {
-                                if (!isSavingItem) saveCurrentItem()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !isSavingItem,
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(if (isSavingItem) "Saving..." else "Quick Save Photo")
-                        }
                     }
 
                     when (val batch = batchUploadState) {
@@ -847,6 +926,80 @@ private fun readBytes(context: Context, uri: Uri): ByteArray? {
     return context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
 }
 
+private data class PreparedBatchUploadSelection(
+    val payloads: List<UploadImagePayload>,
+    val hints: Map<String, ImageAutoFillHint>,
+    val oversizedCount: Int,
+    val unreadableCount: Int
+)
+
+private fun prepareBatchUploadSelection(
+    context: Context,
+    uris: List<Uri>
+): PreparedBatchUploadSelection {
+    val hints = mutableMapOf<String, ImageAutoFillHint>()
+    val payloads = mutableListOf<UploadImagePayload>()
+    var oversizedCount = 0
+    var unreadableCount = 0
+
+    uris.forEachIndexed { index, uri ->
+        val bytes = readBytes(context, uri)
+        if (bytes == null) {
+            unreadableCount += 1
+            return@forEachIndexed
+        }
+        if (!isImagePayloadAllowed(bytes.size)) {
+            oversizedCount += 1
+            Log.w(UPLOAD_LOG_TAG, "batch image rejected size=${bytes.size}")
+            return@forEachIndexed
+        }
+        val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+        val extension = when (mimeType) {
+            "image/png" -> ".png"
+            "image/webp" -> ".webp"
+            else -> ".jpg"
+        }
+        val fileName = "batch_${System.currentTimeMillis()}_${index}$extension"
+        val sourceName = resolveDisplayName(context, uri) ?: fileName
+        val inferredFromName = inferFromFileName(sourceName)
+        hints[fileName] = ImageAutoFillHint(
+            category = inferredFromName.category,
+            clothingType = inferredFromName.clothingType,
+            color = inferDominantColorName(bytes),
+            fitTag = inferredFromName.fitTag,
+            season = inferredFromName.season,
+            comfortLevel = inferredFromName.comfortLevel
+        )
+        payloads += UploadImagePayload(
+            bytes = bytes,
+            fileName = fileName,
+            mimeType = mimeType
+        )
+    }
+
+    return PreparedBatchUploadSelection(
+        payloads = payloads,
+        hints = hints,
+        oversizedCount = oversizedCount,
+        unreadableCount = unreadableCount
+    )
+}
+
+private fun buildBatchPreparationMessage(prepared: PreparedBatchUploadSelection): String? {
+    val notes = mutableListOf<String>()
+    if (prepared.oversizedCount > 0) {
+        notes += "Skipped ${prepared.oversizedCount} oversized image(s)."
+    }
+    if (prepared.unreadableCount > 0) {
+        notes += "Skipped ${prepared.unreadableCount} unreadable image(s)."
+    }
+    if (notes.isEmpty()) {
+        return null
+    }
+    notes += "Uploading ${prepared.payloads.size} image(s)..."
+    return notes.joinToString(" ")
+}
+
 private fun resolveDisplayName(context: Context, uri: Uri): String? {
     val projection = arrayOf(OpenableColumns.DISPLAY_NAME)
     return context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
@@ -893,7 +1046,7 @@ private fun String.resolveSelectedValue(customValue: String): String {
     return normalized
 }
 
-private fun inferLayerTypeFromCategory(category: String?): String {
+internal fun inferLayerTypeFromCategory(category: String?): String {
     val normalized = category?.trim()?.lowercase().orEmpty()
     return when {
         normalized.contains("outer") || normalized.contains("jacket") || normalized.contains("coat") -> "outer"
@@ -902,7 +1055,7 @@ private fun inferLayerTypeFromCategory(category: String?): String {
     }
 }
 
-private data class InferredNameHint(
+internal data class InferredNameHint(
     val category: String?,
     val clothingType: String?,
     val fitTag: String? = null,
@@ -911,7 +1064,7 @@ private data class InferredNameHint(
     val confidence: Float = 0.4f
 )
 
-private data class ImageAutoFillHint(
+internal data class ImageAutoFillHint(
     val category: String?,
     val clothingType: String?,
     val color: String?,
@@ -920,40 +1073,66 @@ private data class ImageAutoFillHint(
     val comfortLevel: Int?
 )
 
-private fun inferFromFileName(fileName: String): InferredNameHint {
+internal fun inferFromFileName(fileName: String): InferredNameHint {
     val normalized = fileName.lowercase()
+    val searchableTokens = normalized
+        .split(Regex("[^a-z0-9]+"))
+        .flatMap { token ->
+            val cleaned = token.trim()
+            if (cleaned.isBlank()) {
+                emptyList()
+            } else {
+                listOf(cleaned, cleaned.removeSuffix("s"))
+            }
+        }
+        .filter { it.isNotBlank() }
+        .toSet()
     val keywordHints = listOf(
-        "jacket" to InferredNameHint(category = "Outerwear", clothingType = "Jacket", season = "Winter", comfortLevel = 4, confidence = 0.86f),
-        "coat" to InferredNameHint(category = "Outerwear", clothingType = "Coat", season = "Winter", comfortLevel = 4, confidence = 0.86f),
-        "hoodie" to InferredNameHint(category = "Outerwear", clothingType = "Hoodie", season = "Fall", comfortLevel = 4, confidence = 0.82f),
-        "sweater" to InferredNameHint(category = "Top", clothingType = "Sweater", season = "Fall", comfortLevel = 4, confidence = 0.82f),
-        "shirt" to InferredNameHint(category = "Top", clothingType = "Shirt", season = "All", comfortLevel = 3, confidence = 0.74f),
-        "tshirt" to InferredNameHint(category = "Top", clothingType = "T-Shirt", season = "Summer", comfortLevel = 4, confidence = 0.75f),
-        "tee" to InferredNameHint(category = "Top", clothingType = "T-Shirt", season = "Summer", comfortLevel = 4, confidence = 0.72f),
-        "blouse" to InferredNameHint(category = "Top", clothingType = "Blouse", season = "Spring", comfortLevel = 3, confidence = 0.74f),
-        "jeans" to InferredNameHint(category = "Bottom", clothingType = "Jeans", season = "All", comfortLevel = 3, confidence = 0.88f),
-        "pants" to InferredNameHint(category = "Bottom", clothingType = "Pants", season = "All", comfortLevel = 3, confidence = 0.82f),
-        "trouser" to InferredNameHint(category = "Bottom", clothingType = "Trousers", season = "All", comfortLevel = 3, confidence = 0.82f),
-        "shorts" to InferredNameHint(category = "Bottom", clothingType = "Shorts", season = "Summer", comfortLevel = 4, confidence = 0.84f),
-        "skirt" to InferredNameHint(category = "Bottom", clothingType = "Skirt", season = "Spring", comfortLevel = 3, confidence = 0.82f),
-        "shoe" to InferredNameHint(category = "Shoes", clothingType = "Shoes", season = "All", comfortLevel = 3, confidence = 0.84f),
-        "sneaker" to InferredNameHint(category = "Shoes", clothingType = "Sneakers", season = "All", comfortLevel = 4, confidence = 0.86f),
-        "boot" to InferredNameHint(category = "Shoes", clothingType = "Boots", season = "Winter", comfortLevel = 3, confidence = 0.84f),
-        "sandal" to InferredNameHint(category = "Shoes", clothingType = "Sandals", season = "Summer", comfortLevel = 4, confidence = 0.84f),
-        "hat" to InferredNameHint(category = "Accessories", clothingType = "Hat", season = "All", comfortLevel = 3, confidence = 0.76f),
-        "cap" to InferredNameHint(category = "Accessories", clothingType = "Cap", season = "Summer", comfortLevel = 3, confidence = 0.76f),
-        "scarf" to InferredNameHint(category = "Accessories", clothingType = "Scarf", season = "Winter", comfortLevel = 3, confidence = 0.76f),
-        "watch" to InferredNameHint(category = "Accessories", clothingType = "Watch", season = "All", comfortLevel = 3, confidence = 0.74f),
-        "bag" to InferredNameHint(category = "Accessories", clothingType = "Bag", season = "All", comfortLevel = 3, confidence = 0.78f),
+        setOf("jacket", "blazer", "coat", "cardigan", "hoodie", "sweatshirt", "puffer", "windbreaker", "parka", "anorak") to
+            InferredNameHint(category = "Outerwear", clothingType = "Jacket", season = "Winter", comfortLevel = 4, confidence = 0.88f),
+        setOf("sweater", "knit", "pullover", "shirt", "tshirt", "tee", "polo", "blouse", "tank", "top", "cami", "camisole", "henley", "jersey") to
+            InferredNameHint(category = "Top", clothingType = "Shirt", season = "All", comfortLevel = 3, confidence = 0.82f),
+        setOf("dress", "gown", "romper", "jumpsuit") to
+            InferredNameHint(category = "Top", clothingType = "Dress", season = "Spring", comfortLevel = 3, confidence = 0.84f),
+        setOf("jean", "pant", "trouser", "short", "skirt", "legging", "jogger", "chino", "cargo", "slack", "sweatpant") to
+            InferredNameHint(category = "Bottom", clothingType = "Pants", season = "All", comfortLevel = 3, confidence = 0.86f),
+        setOf("shoe", "sneaker", "boot", "sandal", "loafer", "heel", "flat", "trainer", "oxford", "mule", "slipper") to
+            InferredNameHint(category = "Shoes", clothingType = "Shoes", season = "All", comfortLevel = 3, confidence = 0.86f),
+        setOf("hat", "cap", "beanie", "scarf", "watch", "bag", "belt", "necklace", "ring", "bracelet", "wallet", "earring", "sunglass") to
+            InferredNameHint(category = "Accessories", clothingType = "Accessory", season = "All", comfortLevel = 3, confidence = 0.8f),
     )
-    val baseHint = keywordHints.firstOrNull { (keyword, _) ->
-        normalized.contains(keyword)
-    }?.second ?: InferredNameHint(
-        category = "Top",
+    val baseHint = keywordHints.firstOrNull { (keywords, _) ->
+        keywords.any { keyword -> keyword in searchableTokens || normalized.contains(keyword) }
+    }?.let { (keywords, hint) ->
+        val matchedKeyword = keywords.firstOrNull { keyword -> keyword in searchableTokens || normalized.contains(keyword) }
+        when (matchedKeyword) {
+            "tshirt", "tee" -> hint.copy(clothingType = "T-Shirt", season = "Summer", comfortLevel = 4, confidence = 0.84f)
+            "polo" -> hint.copy(clothingType = "Polo", season = "Summer", confidence = 0.82f)
+            "blouse" -> hint.copy(clothingType = "Blouse", season = "Spring", confidence = 0.8f)
+            "tank" -> hint.copy(clothingType = "T-Shirt", season = "Summer", confidence = 0.8f)
+            "sweater", "knit", "pullover" -> hint.copy(clothingType = "Sweater", season = "Fall", comfortLevel = 4, confidence = 0.84f)
+            "hoodie" -> hint.copy(clothingType = "Hoodie", season = "Fall", comfortLevel = 4, confidence = 0.84f)
+            "coat" -> hint.copy(clothingType = "Coat")
+            "cardigan" -> hint.copy(clothingType = "Cardigan", season = "Fall", confidence = 0.82f)
+            "blazer" -> hint.copy(clothingType = "Jacket", confidence = 0.84f)
+            "jean" -> hint.copy(clothingType = "Jeans")
+            "short" -> hint.copy(clothingType = "Shorts", season = "Summer", comfortLevel = 4)
+            "skirt" -> hint.copy(clothingType = "Skirt", season = "Spring")
+            "legging" -> hint.copy(clothingType = "Leggings", comfortLevel = 4)
+            "jogger", "chino", "pant", "slack", "cargo", "sweatpant" -> hint.copy(clothingType = "Trousers")
+            "sneaker", "trainer" -> hint.copy(clothingType = "Sneakers", comfortLevel = 4)
+            "boot" -> hint.copy(clothingType = "Boots", season = "Winter")
+            "sandal" -> hint.copy(clothingType = "Sandals", season = "Summer", comfortLevel = 4)
+            "bag" -> hint.copy(clothingType = "Bag")
+            "cap", "beanie", "hat" -> hint.copy(clothingType = "Hat")
+            else -> hint
+        }
+    } ?: InferredNameHint(
+        category = null,
         clothingType = null,
-        season = "All",
-        comfortLevel = 3,
-        confidence = 0.42f
+        season = null,
+        comfortLevel = null,
+        confidence = 0.18f
     )
 
     val inferredFitTag = when {
@@ -965,61 +1144,131 @@ private fun inferFromFileName(fileName: String): InferredNameHint {
     return baseHint.copy(fitTag = baseHint.fitTag ?: inferredFitTag)
 }
 
-private fun inferDominantColorName(bytes: ByteArray): String? {
+internal fun inferColorFromFileName(fileName: String): String? {
+    val normalized = fileName.lowercase()
+    val colorMap = linkedMapOf(
+        "black" to "Black",
+        "white" to "White",
+        "gray" to "Gray",
+        "grey" to "Gray",
+        "navy" to "Navy",
+        "blue" to "Blue",
+        "brown" to "Brown",
+        "tan" to "Brown",
+        "beige" to "Brown",
+        "green" to "Green",
+        "olive" to "Green",
+        "red" to "Red",
+        "pink" to "Pink",
+        "purple" to "Purple",
+        "yellow" to "Yellow",
+        "orange" to "Orange"
+    )
+    return colorMap.entries.firstOrNull { (keyword, _) ->
+        normalized.contains(keyword)
+    }?.value
+}
+
+internal fun inferDominantColorName(bytes: ByteArray): String? {
     val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
     val width = bitmap.width
     val height = bitmap.height
     if (width <= 0 || height <= 0) return null
 
-    val stepX = (width / 24).coerceAtLeast(1)
-    val stepY = (height / 24).coerceAtLeast(1)
-    var redTotal = 0L
-    var greenTotal = 0L
-    var blueTotal = 0L
-    var countedPixels = 0L
+    val startX = (width * 0.1f).toInt()
+    val endX = (width * 0.9f).toInt().coerceAtLeast(startX + 1)
+    val startY = (height * 0.1f).toInt()
+    val endY = (height * 0.9f).toInt().coerceAtLeast(startY + 1)
+    val stepX = ((endX - startX) / 24).coerceAtLeast(1)
+    val stepY = ((endY - startY) / 24).coerceAtLeast(1)
+    val centerX = (startX + endX) / 2f
+    val centerY = (startY + endY) / 2f
+    val maxDistance = kotlin.math.sqrt(
+        ((endX - startX).toFloat() * (endX - startX).toFloat()) +
+            ((endY - startY).toFloat() * (endY - startY).toFloat())
+    ).coerceAtLeast(1f)
+    val colorScores = linkedMapOf<String, Float>()
+    var countedPixels = 0
 
-    var y = 0
-    while (y < height) {
-        var x = 0
-        while (x < width) {
+    var y = startY
+    while (y < endY) {
+        var x = startX
+        while (x < endX) {
             val pixel = bitmap.getPixel(x, y)
             if (Color.alpha(pixel) >= 24) {
-                redTotal += Color.red(pixel)
-                greenTotal += Color.green(pixel)
-                blueTotal += Color.blue(pixel)
-                countedPixels += 1
+                val red = Color.red(pixel)
+                val green = Color.green(pixel)
+                val blue = Color.blue(pixel)
+                val hsv = rgbToHsv(red, green, blue)
+                if (!(hsv[1] < 0.08f && hsv[2] > 0.95f)) {
+                    val colorName = mapRgbToColorName(red, green, blue)
+                    if (colorName != null) {
+                        val distance = kotlin.math.sqrt(
+                            ((x - centerX) * (x - centerX)) + ((y - centerY) * (y - centerY))
+                        )
+                        val centerWeight = 1f - (distance / maxDistance).coerceIn(0f, 1f)
+                        val score = 1f + centerWeight + (hsv[1] * 0.8f)
+                        colorScores[colorName] = (colorScores[colorName] ?: 0f) + score
+                        countedPixels += 1
+                    }
+                }
             }
             x += stepX
         }
         y += stepY
     }
 
-    if (countedPixels == 0L) return null
-    val red = (redTotal / countedPixels).toInt()
-    val green = (greenTotal / countedPixels).toInt()
-    val blue = (blueTotal / countedPixels).toInt()
-    return mapRgbToColorName(red, green, blue)
+    if (countedPixels == 0) return null
+    val colorfulMatch = colorScores
+        .filterKeys { it !in setOf("White", "Gray", "Beige") }
+        .maxByOrNull { it.value }
+    if (colorfulMatch != null) {
+        val whiteCount = colorScores["White"] ?: 0f
+        if (colorfulMatch.value >= (whiteCount * 0.7f)) {
+            return colorfulMatch.key
+        }
+    }
+    return colorScores.maxByOrNull { it.value }?.key
 }
 
-private fun mapRgbToColorName(red: Int, green: Int, blue: Int): String {
-    val hsv = FloatArray(3)
-    Color.RGBToHSV(red, green, blue, hsv)
+internal fun mapRgbToColorName(red: Int, green: Int, blue: Int): String? {
+    val hsv = rgbToHsv(red, green, blue)
     val hue = hsv[0]
     val saturation = hsv[1]
     val value = hsv[2]
 
     if (value < 0.15f) return "Black"
+    if (saturation < 0.06f && value > 0.94f) return null
     if (saturation < 0.10f && value > 0.88f) return "White"
     if (saturation < 0.14f) return "Gray"
+    if (value > 0.75f && saturation < 0.22f && hue in 25f..55f) return "Beige"
 
     if (hue < 15f || hue >= 345f) return "Red"
     if (hue < 35f) return if (value < 0.58f) "Brown" else "Orange"
     if (hue < 55f) return "Yellow"
     if (hue < 90f) return "Green"
     if (hue < 145f) return "Green"
-    if (hue < 210f) return "Blue"
+    if (hue < 210f) return if (value < 0.48f) "Navy" else "Blue"
     if (hue < 270f) return "Purple"
     if (hue < 330f) return "Pink"
 
-    return AUTO_FILL_UNKNOWN
+    return null
+}
+
+private fun rgbToHsv(red: Int, green: Int, blue: Int): FloatArray {
+    val r = (red.coerceIn(0, 255) / 255f)
+    val g = (green.coerceIn(0, 255) / 255f)
+    val b = (blue.coerceIn(0, 255) / 255f)
+    val max = maxOf(r, g, b)
+    val min = minOf(r, g, b)
+    val delta = max - min
+
+    val hue = when {
+        delta == 0f -> 0f
+        max == r -> ((g - b) / delta).let { if (it < 0f) it + 6f else it } * 60f
+        max == g -> (((b - r) / delta) + 2f) * 60f
+        else -> (((r - g) / delta) + 4f) * 60f
+    }
+    val saturation = if (max == 0f) 0f else delta / max
+    return floatArrayOf(hue, saturation, max)
 }

@@ -1,27 +1,30 @@
 # Python
 backend/venv/
 backend/.venv/
+.venv/
 backend/.env
-backend/.env.*
-!backend/.env.example
 .env
-.env.*
-!.env.example
 backend/__pycache__/
 backend/*.db
 backend/*.sqlite3
 backend/uploads/
 fitgpt_test.db
-.pytest_cache/
-*.egg-info/
-dist/
 
 # Python cache
 __pycache__/
 *.pyc
+*.pyo
+.pytest_cache/
+.coverage
 
 # macOS
 .DS_Store
+
+# Node / web
+node_modules/
+web/node_modules/
+dist/
+coverage/
 
 # Android build
 build/
@@ -29,24 +32,30 @@ build/
 .kotlin/
 local.properties
 
-node_modules
-web/build/
-web/.env
-web/.env.*
-!web/.env.example
-.vscode/
-package-lock.json
-*.log
-*.tmp
-# Android Studio
-
+# IDE
 .idea/
 .vscode/
 
-# Node
-node_modules/
-package-lock.json
+# Env files
+.env.*
+!.env.example
+backend/.env.*
+!backend/.env.example
 
-# Misc
-nul
-.claude/
+.codex/
+tmp/
+fitgpt.db
+uploads/
+
+# Database files (all environments)
+*.db
+*.sqlite3
+*.db-journal
+fitgpt_debug.db
+fitgpt_receipt_debug.db
+fitgpt_test.db
+
+# Generated reports
+*.docx
+FitGPT_Branch_Analysis.docx
+.vercel

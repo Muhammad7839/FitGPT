@@ -19,6 +19,13 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
     @field_validator("password")
     @classmethod
     def validate_password(cls, value: str) -> str:
@@ -31,6 +38,13 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
 
     @field_validator("password")
     @classmethod
@@ -48,7 +62,20 @@ class UserResponse(BaseModel):
     body_type: str
     lifestyle: str
     comfort_preference: str
+    style_preferences: list[str] = Field(default_factory=list)
+    comfort_preferences: list[str] = Field(default_factory=list)
+    dress_for: list[str] = Field(default_factory=list)
+    gender: Optional[str] = None
+    height_cm: Optional[int] = None
     onboarding_complete: bool
+
+    @field_validator("gender", mode="before")
+    @classmethod
+    def normalize_response_gender(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -61,6 +88,11 @@ class UserProfileSummaryResponse(BaseModel):
     body_type: str
     lifestyle: str
     comfort_preference: str
+    style_preferences: list[str] = Field(default_factory=list)
+    comfort_preferences: list[str] = Field(default_factory=list)
+    dress_for: list[str] = Field(default_factory=list)
+    gender: Optional[str] = None
+    height_cm: Optional[int] = None
     onboarding_complete: bool
     wardrobe_count: int
     active_wardrobe_count: int
@@ -69,20 +101,51 @@ class UserProfileSummaryResponse(BaseModel):
     planned_outfit_count: int
     history_count: int
 
+    @field_validator("gender", mode="before")
+    @classmethod
+    def normalize_summary_gender(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
 
 class UserProfileUpdate(BaseModel):
     body_type: Optional[str] = Field(default=None, max_length=64)
     lifestyle: Optional[str] = Field(default=None, max_length=64)
     comfort_preference: Optional[str] = Field(default=None, max_length=64)
+    style_preferences: Optional[list[str]] = Field(default=None, max_length=8)
+    comfort_preferences: Optional[list[str]] = Field(default=None, max_length=8)
+    dress_for: Optional[list[str]] = Field(default=None, max_length=8)
+    gender: Optional[str] = Field(default=None, max_length=32)
+    height_cm: Optional[int] = Field(default=None, ge=80, le=260)
     onboarding_complete: Optional[bool] = None
 
-    @field_validator("body_type", "lifestyle", "comfort_preference")
+    @field_validator("body_type", "lifestyle", "comfort_preference", "gender")
     @classmethod
     def normalize_optional_profile_text(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return value
         cleaned = value.strip()
         return cleaned or None
+
+    @field_validator("style_preferences", "comfort_preferences", "dress_for")
+    @classmethod
+    def normalize_profile_tag_list(cls, value: Optional[list[str]]) -> Optional[list[str]]:
+        if value is None:
+            return value
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            cleaned = raw.strip()
+            if not cleaned:
+                continue
+            key = cleaned.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(cleaned)
+        return normalized
 
 
 # =============================
@@ -99,11 +162,18 @@ class TokenData(BaseModel):
 
 
 class GoogleLoginRequest(BaseModel):
-    id_token: str = Field(min_length=20, max_length=4096)
+    id_token: str = Field(min_length=1, max_length=4096)
 
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
 
 
 class ForgotPasswordResponse(BaseModel):
@@ -215,6 +285,12 @@ class ClothingItemResponse(BaseModel):
     season_tags: list[str] = Field(default_factory=list)
     style_tags: list[str] = Field(default_factory=list)
     occasion_tags: list[str] = Field(default_factory=list)
+    suggested_clothing_type: Optional[str] = None
+    suggested_fit_tag: Optional[str] = None
+    suggested_colors: list[str] = Field(default_factory=list)
+    suggested_season_tags: list[str] = Field(default_factory=list)
+    suggested_style_tags: list[str] = Field(default_factory=list)
+    suggested_occasion_tags: list[str] = Field(default_factory=list)
     accessory_type: Optional[str] = None
     comfort_level: int
     image_url: Optional[str] = None
@@ -289,6 +365,8 @@ class ClothingItemUpdate(BaseModel):
             cleaned = raw.strip()
             if not cleaned:
                 continue
+            if len(cleaned) > 64:
+                raise ValueError("tag must be 64 characters or fewer")
             key = cleaned.lower()
             if key in seen:
                 continue
@@ -316,6 +394,18 @@ class BulkCreateClothingItemsResponse(BaseModel):
     results: list[BulkCreateItemResult]
 
 
+class DuplicateCandidateResponse(BaseModel):
+    item_id: int
+    duplicate_item_id: int
+    similarity_score: float = Field(ge=0.0, le=1.0)
+    reasons: list[str] = Field(default_factory=list)
+
+
+class DuplicateCandidatesResponse(BaseModel):
+    threshold: float = Field(ge=0.0, le=1.0)
+    candidates: list[DuplicateCandidateResponse]
+
+
 class ImageUploadResponse(BaseModel):
     image_url: str
 
@@ -335,24 +425,125 @@ class ImageBatchUploadResponse(BaseModel):
     results: list[ImageBatchUploadEntry]
 
 
+class TagSuggestionsResponse(BaseModel):
+    item_id: Optional[int] = None
+    generated: bool
+    suggested_clothing_type: Optional[str] = None
+    suggested_fit_tag: Optional[str] = None
+    suggested_colors: list[str] = Field(default_factory=list)
+    suggested_season_tags: list[str] = Field(default_factory=list)
+    suggested_style_tags: list[str] = Field(default_factory=list)
+    suggested_occasion_tags: list[str] = Field(default_factory=list)
+
+
+class WardrobeGapSuggestion(BaseModel):
+    category: str
+    item_name: str
+    reason: str
+    image_url: Optional[str] = None
+    shopping_link: str
+
+
+class WardrobeGapResponse(BaseModel):
+    baseline_categories: list[str] = Field(default_factory=list)
+    category_counts: dict[str, int] = Field(default_factory=dict)
+    missing_categories: list[str] = Field(default_factory=list)
+    suggestions: list[WardrobeGapSuggestion] = Field(default_factory=list)
+    insufficient_data: bool = False
+
+
+class UnderusedItemAlert(BaseModel):
+    item_id: int
+    item_name: str
+    category: str
+    wear_count: int
+    last_worn_timestamp: Optional[int] = None
+    days_since_worn: Optional[int] = None
+    alert_level: str
+
+
+class UnderusedAlertsResponse(BaseModel):
+    generated_at_timestamp: int
+    analysis_window_days: int
+    alerts: list[UnderusedItemAlert] = Field(default_factory=list)
+    insufficient_data: bool = False
+
+
 class RecommendationResponse(BaseModel):
     items: list[ClothingItemResponse]
     explanation: str
     outfit_score: float = 0.0
+    confidence_score: float = 0.0
     weather_category: Optional[str] = None
+    weather_available: bool = True
     occasion: Optional[str] = None
+    prompt_feedback: Optional["FeedbackPromptMetadata"] = None
 
 
 class OutfitOptionResponse(BaseModel):
     items: list[ClothingItemResponse]
     explanation: str
     outfit_score: float
+    confidence_score: float
 
 
 class RecommendationOptionsResponse(BaseModel):
     outfits: list[OutfitOptionResponse]
     weather_category: str
+    weather_available: bool = True
     occasion: Optional[str] = None
+
+
+class RejectOutfitRequest(BaseModel):
+    item_ids: list[int] = Field(min_length=1, max_length=12)
+    suggestion_id: Optional[str] = Field(default=None, max_length=128)
+    reason: Optional[str] = Field(default=None, max_length=160)
+
+    @field_validator("suggestion_id", "reason")
+    @classmethod
+    def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        cleaned = value.strip()
+        return cleaned or None
+
+
+class FeedbackPromptMetadata(BaseModel):
+    should_prompt: bool
+    reason: str
+    cooldown_seconds_remaining: int = 0
+
+
+class FeedbackPromptEventCreate(BaseModel):
+    event_type: str = Field(min_length=1, max_length=32)
+    suggestion_id: Optional[str] = Field(default=None, max_length=128)
+
+    @field_validator("event_type")
+    @classmethod
+    def validate_event_type(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"shown", "ignored", "dismissed", "accepted"}:
+            raise ValueError("event_type must be shown/ignored/dismissed/accepted")
+        return normalized
+
+    @field_validator("suggestion_id")
+    @classmethod
+    def normalize_suggestion_id(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        cleaned = value.strip()
+        return cleaned or None
+
+
+class RejectOutfitResponse(BaseModel):
+    detail: str
+    fingerprint: str
+    similarity_key: str
+    created: bool
+
+
+class FeedbackPromptEventResponse(BaseModel):
+    detail: str
 
 
 class ChatMessage(BaseModel):
@@ -376,15 +567,8 @@ class ChatMessage(BaseModel):
         return cleaned
 
 
-class ChatContext(BaseModel):
-    wardrobe_summary: str = ""
-    preferences: str = ""
-    recommendations_summary: str = ""
-
-
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=20)
-    context: Optional[ChatContext] = None
 
 
 class ChatResponse(BaseModel):
@@ -392,6 +576,28 @@ class ChatResponse(BaseModel):
     source: str
     fallback_used: bool = False
     warning: Optional[str] = None
+
+
+class ChatConversationRecord(BaseModel):
+    id: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=1, max_length=120)
+    messages: list[ChatMessage] = Field(default_factory=list, max_length=100)
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChatConversationsResponse(BaseModel):
+    conversations: list[ChatConversationRecord] = Field(default_factory=list)
+    local_only: bool = False
+
+
+class ChatConversationsSyncRequest(BaseModel):
+    conversations: list[ChatConversationRecord] = Field(default_factory=list, max_length=100)
+
+
+class ChatConversationsSyncResponse(BaseModel):
+    saved: bool
+    local_only: bool = False
 
 
 class AiRecommendationRequest(BaseModel):
@@ -464,7 +670,9 @@ class AiRecommendationResponse(BaseModel):
     items: list[ClothingItemResponse]
     explanation: str
     outfit_score: float = 0.0
+    confidence_score: float = 0.0
     weather_category: str
+    weather_available: bool = True
     occasion: Optional[str] = None
     source: str
     fallback_used: bool = False
@@ -472,6 +680,86 @@ class AiRecommendationResponse(BaseModel):
     suggestion_id: str
     item_explanations: list[AiRecommendationItemExplanation] = Field(default_factory=list)
     outfit_options: list[OutfitOptionResponse] = Field(default_factory=list)
+    prompt_feedback: Optional[FeedbackPromptMetadata] = None
+
+
+class RecommendationFeedbackCreate(BaseModel):
+    suggestion_id: str = Field(min_length=3, max_length=256)
+    signal: str = Field(min_length=4, max_length=16)
+    item_ids: Optional[list[int]] = Field(default=None, min_length=1, max_length=32)
+
+    @field_validator("suggestion_id")
+    @classmethod
+    def normalize_suggestion_id(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("suggestion_id cannot be blank")
+        return cleaned
+
+    @field_validator("signal")
+    @classmethod
+    def normalize_signal(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"like", "dislike", "reject"}:
+            raise ValueError("signal must be like/dislike/reject")
+        return normalized
+
+    @field_validator("item_ids")
+    @classmethod
+    def validate_optional_item_ids(cls, value: Optional[list[int]]) -> Optional[list[int]]:
+        if value is None:
+            return value
+        if len(set(value)) != len(value):
+            raise ValueError("item_ids must be unique")
+        if any(item_id <= 0 for item_id in value):
+            raise ValueError("item_ids must contain positive integers")
+        return value
+
+
+class RecommendationFeedbackResponse(BaseModel):
+    detail: str
+    suggestion_id: str
+    signal: str
+
+
+class RecommendationInteractionCreate(BaseModel):
+    suggestion_id: str = Field(min_length=3, max_length=256)
+    signal: str = Field(min_length=4, max_length=16)
+    item_ids: Optional[list[int]] = Field(default=None, min_length=1, max_length=32)
+
+    @field_validator("suggestion_id")
+    @classmethod
+    def normalize_suggestion_id(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("suggestion_id cannot be blank")
+        return cleaned
+
+    @field_validator("signal")
+    @classmethod
+    def normalize_signal(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"like", "dislike", "reject", "save", "wear"}:
+            raise ValueError("signal must be like/dislike/reject/save/wear")
+        return normalized
+
+    @field_validator("item_ids")
+    @classmethod
+    def validate_optional_item_ids(cls, value: Optional[list[int]]) -> Optional[list[int]]:
+        if value is None:
+            return value
+        if len(set(value)) != len(value):
+            raise ValueError("item_ids must be unique")
+        if any(item_id <= 0 for item_id in value):
+            raise ValueError("item_ids must contain positive integers")
+        return value
+
+
+class RecommendationInteractionResponse(BaseModel):
+    detail: str
+    suggestion_id: str
+    signal: str
+    created_at_timestamp: int
 
 
 class DashboardContextWeather(BaseModel):
@@ -560,10 +848,93 @@ class CompatAiRecommendationResponse(BaseModel):
 
 class WeatherCurrentResponse(BaseModel):
     city: str
+    temperature_f: Optional[int] = None
+    weather_category: Optional[str] = None
+    condition: Optional[str] = None
+    description: Optional[str] = None
+    available: bool = True
+    detail: Optional[str] = None
+
+
+class TripPackingRequest(BaseModel):
+    destination_city: str = Field(min_length=1, max_length=128)
+    start_date: str = Field(min_length=10, max_length=10)
+    trip_days: int = Field(ge=1, le=30)
+
+    @field_validator("destination_city")
+    @classmethod
+    def validate_destination_city(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("destination_city cannot be blank")
+        return cleaned
+
+    @field_validator("start_date")
+    @classmethod
+    def validate_start_date(cls, value: str) -> str:
+        cleaned = value.strip()
+        try:
+            datetime.strptime(cleaned, "%Y-%m-%d")
+        except ValueError as exc:
+            raise ValueError("start_date must be in YYYY-MM-DD format") from exc
+        return cleaned
+
+
+class TripPackingItem(BaseModel):
+    category: str
+    recommended_quantity: int
+    selected_item_ids: list[int] = Field(default_factory=list)
+    selected_item_names: list[str] = Field(default_factory=list)
+    missing_quantity: int = 0
+
+
+class TripPackingResponse(BaseModel):
+    destination_city: str
+    start_date: str
+    trip_days: int
+    weather_summary: str
+    items: list[TripPackingItem] = Field(default_factory=list)
+    generated_at_timestamp: int
+    insufficient_data: bool = False
+
+
+class WeatherForecastResponse(BaseModel):
+    city: str
+    forecast_timestamp: int
     temperature_f: int
     weather_category: str
     condition: str
     description: str
+    wind_mph: float
+    rain_mm: float
+    snow_mm: float
+    source: str = "forecast"
+
+
+class DailyWeatherForecastItem(BaseModel):
+    date: str
+    temperature_f: int
+    weather_category: str
+    condition: str
+    description: str
+
+
+class DailyWeatherForecastResponse(BaseModel):
+    city: str
+    days: list[DailyWeatherForecastItem] = Field(default_factory=list)
+
+
+class ForecastRecommendationResponse(BaseModel):
+    items: list[ClothingItemResponse]
+    explanation: str
+    outfit_score: float = 0.0
+    weather_category: str
+    occasion: Optional[str] = None
+    source: str
+    fallback_used: bool = False
+    warning: Optional[str] = None
+    suggestion_id: str
+    forecast: WeatherForecastResponse
 
 
 class OutfitHistoryCreate(BaseModel):
@@ -573,6 +944,22 @@ class OutfitHistoryCreate(BaseModel):
     @field_validator("item_ids")
     @classmethod
     def validate_item_ids(cls, value: list[int]) -> list[int]:
+        if len(set(value)) != len(value):
+            raise ValueError("item_ids must be unique")
+        if any(item_id <= 0 for item_id in value):
+            raise ValueError("item_ids must contain positive integers")
+        return value
+
+
+class OutfitHistoryUpdate(BaseModel):
+    item_ids: Optional[list[int]] = Field(default=None, min_length=1, max_length=32)
+    worn_at_timestamp: Optional[int] = Field(default=None, gt=0)
+
+    @field_validator("item_ids")
+    @classmethod
+    def validate_optional_item_ids(cls, value: Optional[list[int]]) -> Optional[list[int]]:
+        if value is None:
+            return value
         if len(set(value)) != len(value):
             raise ValueError("item_ids must be unique")
         if any(item_id <= 0 for item_id in value):
@@ -709,3 +1096,16 @@ class PlannedOutfitAssignmentResponse(BaseModel):
     detail: str
     planned_dates: list[str]
     outfits: list[PlannedOutfitEntry]
+
+
+class ReceiptOcrItem(BaseModel):
+    name: str = Field(max_length=128)
+    category: str = Field(max_length=32)
+    color: str = Field(default="", max_length=64)
+    price: float = Field(default=0.0, ge=0)
+
+
+class ReceiptOcrResponse(BaseModel):
+    items: list[ReceiptOcrItem]
+    source: str
+    warning: Optional[str] = None

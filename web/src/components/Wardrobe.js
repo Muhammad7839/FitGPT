@@ -25,6 +25,8 @@ import ItemFormFields, { CATEGORIES as ITEM_CATEGORIES, FIT_TAG_OPTIONS } from "
 import WardrobeItemCard from "./WardrobeItemCard";
 import BulkUploadModal from "./BulkUploadModal";
 import DuplicateReviewModal from "./DuplicateReviewModal";
+import ReceiptScannerModal from "./ReceiptScannerModal";
+import useManagedTimeouts from "../hooks/useManagedTimeouts";
 
 const CATEGORIES = ["All Items", ...ITEM_CATEGORIES];
 
@@ -227,6 +229,7 @@ export default function Wardrobe() {
   const filterRef = useRef(null);
   const localEditRef = useRef(false);
   const addCategoryTouchedRef = useRef(false);
+  const toastTimeouts = useManagedTimeouts();
   const setItemsAndSave = useCallback((updater) => {
     setItems((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
@@ -265,6 +268,7 @@ export default function Wardrobe() {
   const [toast, setToast] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [showUploadPanel, setShowUploadPanel] = useState(false);
+  const [receiptScannerOpen, setReceiptScannerOpen] = useState(false);
   const [showCategoryTabs, setShowCategoryTabs] = useState(false);
 
   const [filterOpen, setFilterOpen] = useState(false);
@@ -328,8 +332,6 @@ export default function Wardrobe() {
   const [pendingDuplicateAction, setPendingDuplicateAction] = useState(null);
   const [ignoredDuplicateKeys, setIgnoredDuplicateKeys] = useState(() => loadIgnoredDuplicateKeys(user));
   const duplicateScanRef = useRef(0);
-  const bulkRunRef = useRef(0);
-  useEffect(() => () => { bulkRunRef.current = -1; }, []);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -764,7 +766,7 @@ export default function Wardrobe() {
       setShowUploadPanel(true);
       setUploadError(message);
       setToast(message);
-      window.setTimeout(() => setToast(""), 2500);
+      toastTimeouts.set(() => setToast(""), 2500);
       return;
     }
 
@@ -833,7 +835,7 @@ export default function Wardrobe() {
       setShowUploadPanel(true);
       setUploadError("Upload failed. Try again.");
       setToast("Upload failed. Try again.");
-      window.setTimeout(() => setToast(""), 2500);
+      toastTimeouts.set(() => setToast(""), 2500);
     }
   };
 
@@ -847,7 +849,7 @@ export default function Wardrobe() {
         setShowUploadPanel(true);
         setUploadError(message);
         setToast(message);
-        window.setTimeout(() => setToast(""), 2500);
+        toastTimeouts.set(() => setToast(""), 2500);
       }
       return;
     }
@@ -857,7 +859,7 @@ export default function Wardrobe() {
       setShowUploadPanel(true);
       setUploadError(message);
       setToast(message);
-      window.setTimeout(() => setToast(""), 2800);
+      toastTimeouts.set(() => setToast(""), 2800);
     } else {
       setUploadError("");
     }
@@ -896,16 +898,12 @@ export default function Wardrobe() {
       setBulkError("");
       setBulkOpen(true);
 
-      const runId = bulkRunRef.current + 1;
-      bulkRunRef.current = runId;
-
       for (const entry of entries) {
         generateItemTagSuggestions({
           imageUrl: entry.preview,
           fileName: entry.file?.name || entry.name,
           fallbackCategory: entry.category,
         }).then((result) => {
-          if (bulkRunRef.current !== runId) return;
           setBulkItems((prev) =>
             prev.map((e) => {
               if (e._key !== entry._key) return e;
@@ -913,7 +911,6 @@ export default function Wardrobe() {
             })
           );
         }).catch(() => {
-          if (bulkRunRef.current !== runId) return;
           setBulkItems((prev) =>
             prev.map((e) => e._key === entry._key ? {
               ...e,
@@ -929,6 +926,50 @@ export default function Wardrobe() {
 
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
+  const handleReceiptResult = useCallback(({ items: extractedItems }) => {
+    setReceiptScannerOpen(false);
+    if (!Array.isArray(extractedItems) || !extractedItems.length) return;
+
+    const categoryMap = {
+      Top: "Tops",
+      Bottom: "Bottoms",
+      Outerwear: "Outerwear",
+      Shoes: "Shoes",
+      Accessory: "Accessories",
+    };
+
+    const entries = extractedItems.map((item) => {
+      const name = (item?.name || "").toString().trim();
+      return {
+        _key: makeId(),
+        file: null,
+        preview: "",
+        name,
+        category: categoryMap[(item?.category || "").toString().trim()] || guessCategoryFromName(name),
+        color: (item?.color || "").toString().trim(),
+        fitTag: "unknown",
+        clothingType: "",
+        layerType: "",
+        isOnePiece: false,
+        setId: "",
+        styleTags: [],
+        occasionTags: [],
+        seasonTags: [],
+        classifying: false,
+        taggingState: "idle",
+        taggingMessage: "",
+        suggestedTags: null,
+        userOverrode: false,
+      };
+    });
+
+    setBulkItems(entries);
+    setBulkError("");
+    setBulkOpen(true);
+    setToast(`Extracted ${entries.length} item${entries.length > 1 ? "s" : ""} from receipt. Review before saving.`);
+    toastTimeouts.set(() => setToast(""), 3500);
+  }, []);
 
   const onDrop = (e) => {
     e.preventDefault();
@@ -993,7 +1034,7 @@ export default function Wardrobe() {
         resetAddForm();
 
         setToast("Item added for this session. Sign in to save it permanently.");
-        window.setTimeout(() => setToast(""), 2000);
+        toastTimeouts.set(() => setToast(""), 2000);
         return;
       }
 
@@ -1043,7 +1084,7 @@ export default function Wardrobe() {
       resetAddForm();
 
       setToast("Item added.");
-      window.setTimeout(() => setToast(""), 2000);
+      toastTimeouts.set(() => setToast(""), 2000);
     } catch (e) {
       if (isNetworkError(e)) {
         setBackendOffline(true);
@@ -1077,7 +1118,7 @@ export default function Wardrobe() {
         resetAddForm();
 
         setToast("Backend offline. Saved locally for demo.");
-        window.setTimeout(() => setToast(""), 2200);
+        toastTimeouts.set(() => setToast(""), 2200);
         return;
       }
 
@@ -1110,7 +1151,7 @@ export default function Wardrobe() {
       resetAddForm();
 
       setToast("Saved locally.");
-      window.setTimeout(() => setToast(""), 2000);
+      toastTimeouts.set(() => setToast(""), 2000);
     }
   };
 
@@ -1137,7 +1178,6 @@ export default function Wardrobe() {
 
   const cancelBulk = () => {
     if (isBulkSaving) return;
-    bulkRunRef.current += 1;
     setBulkOpen(false);
     setBulkItems([]);
     setBulkError("");
@@ -1212,7 +1252,7 @@ export default function Wardrobe() {
       setBulkItems([]);
 
       setToast(isGuestMode ? `${newItems.length} item${newItems.length > 1 ? "s added for this session" : " added for this session"}.` : `${newItems.length} item${newItems.length > 1 ? "s" : ""} added.`);
-      window.setTimeout(() => setToast(""), 2000);
+      toastTimeouts.set(() => setToast(""), 2000);
     } catch (e) {
       setIsBulkSaving(false);
       setBulkError(e?.message || "Bulk upload failed. Please try again.");
@@ -1242,7 +1282,7 @@ export default function Wardrobe() {
     removeDuplicateFinding(finding.pairKey);
     setPendingDuplicateAction(null);
     setToast("We will stop flagging this pair as a duplicate.");
-    window.setTimeout(() => setToast(""), 2200);
+    toastTimeouts.set(() => setToast(""), 2200);
   };
 
   const handleDuplicateActionChange = (nextAction) => {
@@ -1274,14 +1314,14 @@ export default function Wardrobe() {
       if (!effectiveSignedIn) {
         removeLocally();
         setToast(backendOffline ? "Deleted (demo)." : "Deleted (guest mode).");
-        window.setTimeout(() => setToast(""), 2000);
+        toastTimeouts.set(() => setToast(""), 2000);
         return;
       }
 
       await wardrobeApi.deleteItem(pendingDeleteId);
       removeLocally();
       setToast("Deleted.");
-      window.setTimeout(() => setToast(""), 2000);
+      toastTimeouts.set(() => setToast(""), 2000);
     } catch (e) {
       removeLocally();
 
@@ -1291,8 +1331,8 @@ export default function Wardrobe() {
       } else {
         setToast("Deleted locally.");
       }
-      window.setTimeout(() => setToast(""), 2200);
-      window.setTimeout(() => setToast(""), 2500);
+      toastTimeouts.set(() => setToast(""), 2200);
+      toastTimeouts.set(() => setToast(""), 2500);
     }
   };
 
@@ -1305,7 +1345,7 @@ export default function Wardrobe() {
 
     setItemsAndSave((prev) => prev.map((x) => (x.id === id ? { ...x, is_active: false } : x)));
     setToast("Archived.");
-    window.setTimeout(() => setToast(""), 2000);
+    toastTimeouts.set(() => setToast(""), 2000);
 
     if (tab === "active" && activeCategory !== "All Items") {
       const stillHas = items.some((x) => x.id !== id && x.is_active !== false && x.category === activeCategory);
@@ -1330,7 +1370,7 @@ export default function Wardrobe() {
 
     setItemsAndSave((prev) => prev.map((x) => (x.id === id ? { ...x, is_active: true } : x)));
     setToast("Unarchived.");
-    window.setTimeout(() => setToast(""), 2000);
+    toastTimeouts.set(() => setToast(""), 2000);
 
     try {
       if (effectiveSignedIn) await wardrobeApi.unarchiveItem(id);
@@ -1397,7 +1437,7 @@ export default function Wardrobe() {
           else setDuplicateScan({ status: "clear", findings: [], scannedIds: [], scannedAt: Date.now() });
           setPendingDuplicateAction(null);
           setToast("Duplicate item removed.");
-          window.setTimeout(() => setToast(""), 2200);
+          toastTimeouts.set(() => setToast(""), 2200);
         }
         return;
       }
@@ -1423,7 +1463,7 @@ export default function Wardrobe() {
           applyDuplicateScanResult(nextItems, [mergedItem], { openOnFound: false });
           setPendingDuplicateAction(null);
           setToast("Items merged into one wardrobe entry.");
-          window.setTimeout(() => setToast(""), 2200);
+          toastTimeouts.set(() => setToast(""), 2200);
         }
       }
     }
@@ -1504,7 +1544,7 @@ export default function Wardrobe() {
     setIsUpdating(false);
     setEditOpen(false);
     setToast("Changes saved.");
-    window.setTimeout(() => setToast(""), 2000);
+    toastTimeouts.set(() => setToast(""), 2000);
 
     try {
       if (effectiveSignedIn) {
@@ -1529,7 +1569,7 @@ export default function Wardrobe() {
   const toggleFavorite = async (id) => {
     if (isGuestMode) {
       setToast("Sign in to use favorites.");
-      window.setTimeout(() => setToast(""), 2200);
+      toastTimeouts.set(() => setToast(""), 2200);
       return;
     }
 
@@ -1538,7 +1578,7 @@ export default function Wardrobe() {
 
     setItemsAndSave((prev) => prev.map((it) => (it.id === id ? { ...it, is_favorite: nextVal } : it)));
     setToast(nextVal ? "Added to favorites." : "Removed from favorites.");
-    window.setTimeout(() => setToast(""), 1500);
+    toastTimeouts.set(() => setToast(""), 1500);
 
     try {
       if (effectiveSignedIn) {
@@ -1641,6 +1681,13 @@ export default function Wardrobe() {
         <div className="wardrobeActionButtons">
           <button type="button" className="wardrobeChooseBtn" onClick={openPicker}>
             Upload Photos
+          </button>
+          <button
+            type="button"
+            className="wardrobeChipBtn"
+            onClick={() => setReceiptScannerOpen(true)}
+          >
+            Scan receipt
           </button>
           <button
             type="button"
@@ -2060,6 +2107,12 @@ export default function Wardrobe() {
           error={bulkError}
         />
       ) : null}
+
+      <ReceiptScannerModal
+        open={receiptScannerOpen}
+        onClose={() => setReceiptScannerOpen(false)}
+        onResult={handleReceiptResult}
+      />
 
       <DuplicateReviewModal
         open={duplicateReviewOpen}

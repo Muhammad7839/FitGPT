@@ -10,10 +10,14 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -36,7 +40,6 @@ import com.fitgpt.app.ui.edititem.EditItemScreen
 import com.fitgpt.app.ui.favorites.FavoritesScreen
 import com.fitgpt.app.ui.history.HistoryScreen
 import com.fitgpt.app.ui.more.MoreScreen
-import com.fitgpt.app.ui.onboarding.PostLoginTutorialScreen
 import com.fitgpt.app.ui.onboarding.WelcomeScreen
 import com.fitgpt.app.ui.plans.PlansScreen
 import com.fitgpt.app.ui.profile.ProfileScreen
@@ -54,9 +57,12 @@ import com.fitgpt.app.viewmodel.ProfileViewModel
 import com.fitgpt.app.viewmodel.ProfileViewModelFactory
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 import com.fitgpt.app.viewmodel.WardrobeViewModelFactory
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 private const val NAV_LOG_TAG = "FitGPTNav"
+private const val GOOGLE_AUTH_LOG_TAG = "GOOGLE_AUTH"
 
 object Routes {
     const val ONBOARDING_WELCOME = "onboarding_welcome"
@@ -93,12 +99,12 @@ fun AppNavHost(
     val onboardingViewModel: OnboardingViewModel =
         viewModel(factory = OnboardingViewModelFactory(prefs))
 
-    var isReady by remember { mutableStateOf(false) }
-    var completed by remember { mutableStateOf(false) }
-    var authReady by remember { mutableStateOf(false) }
+    var startDestination by remember { mutableStateOf<String?>(null) }
     var hasToken by remember { mutableStateOf(false) }
-    var tutorialReady by remember { mutableStateOf(false) }
-    var tutorialCompleted by remember { mutableStateOf(false) }
+    var loginPrefillEmail by rememberSaveable { mutableStateOf("") }
+    var loginInfoMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var onboardingSubmitting by remember { mutableStateOf(false) }
+    var onboardingError by remember { mutableStateOf<String?>(null) }
 
     val wardrobeRepository = remember { ServiceLocator.provideWardrobeRepository(context) }
     val wardrobeViewModel: WardrobeViewModel? =
@@ -108,9 +114,9 @@ fun AppNavHost(
             null
         }
     val authRepository = remember { ServiceLocator.provideAuthRepository(context) }
-    val authViewModel: AuthViewModel =
-        viewModel(factory = AuthViewModelFactory(authRepository, tokenStore))
     val profileRepository = remember { ServiceLocator.provideProfileRepository(context) }
+    val authViewModel: AuthViewModel =
+        viewModel(factory = AuthViewModelFactory(authRepository, tokenStore, profileRepository))
     val profileViewModel: ProfileViewModel? =
         if (hasToken) {
             viewModel(factory = ProfileViewModelFactory(profileRepository))
@@ -118,12 +124,8 @@ fun AppNavHost(
             null
         }
     val chatRepository = remember { ServiceLocator.provideChatRepository(context) }
-    val chatViewModel: ChatViewModel? =
-        if (hasToken) {
-            viewModel(factory = ChatViewModelFactory(chatRepository))
-        } else {
-            null
-        }
+    val chatViewModel: ChatViewModel =
+        viewModel(factory = ChatViewModelFactory(chatRepository))
 
     DisposableEffect(navController) {
         val listener = androidx.navigation.NavController.OnDestinationChangedListener { _, destination, _ ->
@@ -135,41 +137,79 @@ fun AppNavHost(
         }
     }
 
-    LaunchedEffect(Unit) {
-        // Start route waits until onboarding completion and auth validity are known.
-        onboardingViewModel.completed.collect { value ->
-            completed = value
-            isReady = true
-        }
-    }
-
-    LaunchedEffect(Unit) {
+    suspend fun resolveSessionRoute(): String {
         val token = tokenStore.getAccessToken()
         if (token.isNullOrBlank()) {
-            hasToken = false
-        } else {
-            hasToken = authRepository.hasValidSession()
-            if (!hasToken) {
-                tokenStore.clearToken()
-            }
+            val decision = resolveSessionBootstrapDecision(
+                hasStoredToken = false,
+                localOnboardingComplete = false,
+                status = SessionBootstrapStatus.NO_TOKEN
+            )
+            hasToken = decision.hasToken
+            return decision.route
         }
-        authReady = true
+
+        var localOnboardingComplete = prefs.onboardingCompleted.first()
+        return try {
+            val profile = profileRepository.getProfile()
+            val decision = resolveSessionBootstrapDecision(
+                hasStoredToken = true,
+                localOnboardingComplete = localOnboardingComplete,
+                remoteOnboardingComplete = profile.onboardingComplete,
+                status = SessionBootstrapStatus.VALID_PROFILE
+            )
+            if (decision.shouldMarkOnboardingComplete) {
+                prefs.setOnboardingCompleted()
+                localOnboardingComplete = true
+            }
+            hasToken = decision.hasToken
+            decision.route
+        } catch (exception: HttpException) {
+            if (exception.code() == 401 || exception.code() == 403) {
+                val decision = resolveSessionBootstrapDecision(
+                    hasStoredToken = true,
+                    localOnboardingComplete = localOnboardingComplete,
+                    status = SessionBootstrapStatus.INVALID_SESSION
+                )
+                if (decision.shouldClearToken) {
+                    tokenStore.clearToken()
+                }
+                hasToken = decision.hasToken
+                decision.route
+            } else {
+                val decision = resolveSessionBootstrapDecision(
+                    hasStoredToken = true,
+                    localOnboardingComplete = localOnboardingComplete,
+                    status = SessionBootstrapStatus.PROFILE_UNAVAILABLE
+                )
+                hasToken = decision.hasToken
+                decision.route
+            }
+        } catch (_: Exception) {
+            val decision = resolveSessionBootstrapDecision(
+                hasStoredToken = true,
+                localOnboardingComplete = localOnboardingComplete,
+                status = SessionBootstrapStatus.PROFILE_UNAVAILABLE
+            )
+            hasToken = decision.hasToken
+            decision.route
+        }
     }
 
     LaunchedEffect(Unit) {
-        prefs.tutorialCompleted.collect { completedTutorial ->
-            tutorialCompleted = completedTutorial
-            tutorialReady = true
-        }
+        startDestination = resolveSessionRoute()
     }
 
-    if (!isReady || !authReady || !tutorialReady) return
+    if (startDestination == null) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
 
-    val startDestination =
-        if (!completed) Routes.ONBOARDING_WELCOME
-        else if (hasToken && !tutorialCompleted) Routes.POST_LOGIN_TUTORIAL
-        else if (hasToken) Routes.DASHBOARD
-        else Routes.LOGIN
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRouteBase = routeBase(currentBackStackEntry?.destination?.route)
     val topLevelTabHistory = remember { TopLevelTabHistory(homeRoute = Routes.DASHBOARD) }
@@ -206,67 +246,101 @@ fun AppNavHost(
 
     NavHost(
         navController = navController,
-        startDestination = startDestination,
+        startDestination = startDestination ?: Routes.LOGIN,
         enterTransition = {
-            slideInHorizontally(
-                initialOffsetX = { width -> width / 8 },
-                animationSpec = tween(220)
-            ) + fadeIn(animationSpec = tween(220))
+            fadeIn(animationSpec = tween(180))
         },
         exitTransition = {
-            slideOutHorizontally(
-                targetOffsetX = { width -> -(width / 10) },
-                animationSpec = tween(180)
-            ) + fadeOut(animationSpec = tween(180))
+            fadeOut(animationSpec = tween(140))
         },
         popEnterTransition = {
-            slideInHorizontally(
-                initialOffsetX = { width -> -(width / 8) },
-                animationSpec = tween(220)
-            ) + fadeIn(animationSpec = tween(220))
+            fadeIn(animationSpec = tween(180))
         },
         popExitTransition = {
-            slideOutHorizontally(
-                targetOffsetX = { width -> width / 10 },
-                animationSpec = tween(180)
-            ) + fadeOut(animationSpec = tween(180))
+            fadeOut(animationSpec = tween(140))
         }
     ) {
 
         composable(Routes.ONBOARDING_WELCOME) {
             WelcomeScreen(
-                navController = navController,
-                viewModel = onboardingViewModel
+                viewModel = onboardingViewModel,
+                isSubmitting = onboardingSubmitting,
+                submitError = onboardingError,
+                onComplete = { answers ->
+                    onboardingError = null
+                    onboardingSubmitting = true
+                    appScope.launch {
+                        try {
+                            profileRepository.completeOnboarding(
+                                stylePreferences = answers.stylePreferences,
+                                comfortPreferences = answers.comfortPreferences,
+                                dressFor = answers.dressFor,
+                                bodyType = answers.bodyType,
+                                gender = answers.gender,
+                                heightCm = answers.heightCm
+                            )
+                            onboardingViewModel.completeOnboarding(answers)
+                            hasToken = true
+                            startDestination = Routes.DASHBOARD
+                            navController.navigate(Routes.DASHBOARD) {
+                                popUpTo(Routes.ONBOARDING_WELCOME) { inclusive = true }
+                            }
+                        } catch (_: Exception) {
+                            onboardingError = "Unable to finish onboarding. Please try again."
+                        } finally {
+                            onboardingSubmitting = false
+                        }
+                    }
+                }
             )
         }
 
         composable(Routes.LOGIN) {
             LoginScreen(
                 viewModel = authViewModel,
-                onLoginSuccess = {
-                    hasToken = true
-                    val target = if (tutorialCompleted) Routes.DASHBOARD else Routes.POST_LOGIN_TUTORIAL
-                    navController.navigate(target) {
-                        popUpTo(Routes.LOGIN) { inclusive = true }
+                onLoginSuccess = { googleAttemptId ->
+                    loginInfoMessage = null
+                    loginPrefillEmail = ""
+                    appScope.launch {
+                        val target = resolveSessionRoute()
+                        if (googleAttemptId != null) {
+                            Log.i(
+                                GOOGLE_AUTH_LOG_TAG,
+                                "attempt_id=$googleAttemptId post-login navigation target=$target"
+                            )
+                        }
+                        startDestination = target
+                        navController.navigate(target) {
+                            popUpTo(Routes.LOGIN) { inclusive = true }
+                        }
                     }
                 },
                 onCreateAccountClick = {
+                    loginInfoMessage = null
+                    loginPrefillEmail = ""
                     navController.navigate(Routes.SIGNUP)
                 },
                 onForgotPasswordClick = {
                     navController.navigate(Routes.FORGOT_PASSWORD)
-                }
+                },
+                onContinueAsGuestClick = {
+                    navController.navigate(Routes.CHAT)
+                },
+                initialEmail = loginPrefillEmail,
+                infoMessage = loginInfoMessage
             )
         }
 
         composable(Routes.SIGNUP) {
             SignupScreen(
                 viewModel = authViewModel,
-                onSignupSuccess = {
-                    hasToken = true
-                    val target = if (tutorialCompleted) Routes.DASHBOARD else Routes.POST_LOGIN_TUTORIAL
-                    navController.navigate(target) {
-                        popUpTo(Routes.LOGIN) { inclusive = true }
+                onSignupSuccess = { registeredEmail ->
+                    hasToken = false
+                    loginPrefillEmail = registeredEmail
+                    loginInfoMessage = "Account created. Sign in to continue."
+                    startDestination = Routes.LOGIN
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(Routes.SIGNUP) { inclusive = true }
                     }
                 },
                 onBackToLoginClick = {
@@ -296,21 +370,6 @@ fun AppNavHost(
                 navController = navController,
                 viewModel = authViewModel,
                 initialToken = backStackEntry.arguments?.getString("token").orEmpty()
-            )
-        }
-
-        composable(Routes.POST_LOGIN_TUTORIAL) {
-            PostLoginTutorialScreen(
-                onComplete = {
-                    if (!tutorialCompleted) {
-                        appScope.launch {
-                            prefs.markTutorialSeen()
-                        }
-                    }
-                    navController.navigate(Routes.DASHBOARD) {
-                        popUpTo(Routes.POST_LOGIN_TUTORIAL) { inclusive = true }
-                    }
-                }
             )
         }
 
@@ -375,10 +434,9 @@ fun AppNavHost(
         }
 
         composable(Routes.CHAT) {
-            val vm = chatViewModel ?: return@composable
             ChatScreen(
                 navController = navController,
-                viewModel = vm
+                viewModel = chatViewModel
             )
         }
 

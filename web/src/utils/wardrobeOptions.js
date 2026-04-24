@@ -34,8 +34,8 @@ export const SEASON_TAG_OPTIONS = [
 ];
 
 export const CLOTHING_TYPE_OPTIONS = {
-  Tops: ["t-shirt", "button-up", "flannel", "long sleeve shirt", "sweater", "hoodie", "dress shirt", "tank top", "polo", "blouse"],
-  Bottoms: ["jeans", "cargo pants", "dress pants", "shorts", "skirt", "leggings", "joggers", "sweatpants"],
+  Tops: ["t-shirt", "long sleeve shirt", "sweater", "hoodie", "dress shirt", "tank top", "polo", "blouse"],
+  Bottoms: ["jeans", "dress pants", "shorts", "skirt", "leggings", "joggers", "sweatpants"],
   Outerwear: ["jacket", "coat", "blazer", "cardigan", "windbreaker", "parka"],
   Shoes: ["sneakers", "boots", "sandals", "dress shoes", "heels", "flats"],
   Accessories: ["hat", "scarf", "watch", "belt", "jewelry", "sunglasses", "bag"],

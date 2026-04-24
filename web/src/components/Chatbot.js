@@ -19,6 +19,13 @@ import {
   userKey,
 } from "../utils/userStorage";
 import { readAccessibilityPrefs, adaptAiText, effectiveAccessibilityPrefs } from "../utils/accessibilityPrefs";
+import {
+  cancelSpeech,
+  getSpeechRecognitionClass,
+  isVoiceChatSupported,
+  preloadVoices,
+  speakText,
+} from "../utils/speech";
 
 const GREETING =
   "Hi! I'm AURA. Ask me about outfits, styling, color pairing, or what to wear for any occasion.";
@@ -484,8 +491,7 @@ function TypewriterMessage({ text, onDone }) {
   );
 }
 
-export default function Chatbot() {
-  const { user } = useAuth();
+function AuthenticatedChatbot({ user }) {
   const { theme } = useTheme() || {};
   const demoUser = readDemoAuth();
   const effectiveUser = user || demoUser;
@@ -501,7 +507,11 @@ export default function Chatbot() {
   const [loading, setLoading] = useState(false);
   const [typingIdx, setTypingIdx] = useState(-1);
   const [composerStatus, setComposerStatus] = useState("");
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(effectiveUser));
+  const voiceSupported = useMemo(() => isVoiceChatSupported(), []);
 
   useEffect(() => {
     setAccessibilityPrefs(readAccessibilityPrefs(effectiveUser));
@@ -517,6 +527,11 @@ export default function Chatbot() {
   const remoteHydratedRef = useRef(false);
   const lastSyncedPayloadRef = useRef("");
   const lastFocusedElementRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const voiceModeRef = useRef(false);
+  const spokenMessageIdRef = useRef(null);
+  const ttsHandleRef = useRef(null);
+  const messagesRef = useRef([]);
 
   if (!initialChatStateRef.current) {
     initialChatStateRef.current = getInitialChatState(effectiveUser);
@@ -680,15 +695,15 @@ export default function Chatbot() {
           { id: makeMessageId(), role: "assistant", content },
         ],
       }));
-      setTypingIdx(assistantIndex);
+      setTypingIdx(voiceModeRef.current ? -1 : assistantIndex);
     },
     [updateActiveChat]
   );
 
-  const send = useCallback(async () => {
+  const submitText = useCallback(async (rawText) => {
     if (loading || typingIdx >= 0 || submitLockRef.current) return;
 
-    const text = input.trim();
+    const text = (rawText || "").trim();
     if (!text) {
       setComposerStatus("");
       appendAssistantMessage(EMPTY_PROMPT, messages.length);
@@ -742,12 +757,169 @@ export default function Chatbot() {
   }, [
     appendAssistantMessage,
     effectiveUser,
-    input,
     loading,
     messages,
     typingIdx,
     updateActiveChat,
   ]);
+
+  const send = useCallback(() => submitText(input), [submitText, input]);
+
+  const submitTextRef = useRef(submitText);
+  useEffect(() => {
+    submitTextRef.current = submitText;
+  }, [submitText]);
+
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+  }, [voiceMode]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    preloadVoices();
+    return () => {
+      try { recognitionRef.current?.abort(); } catch {}
+      recognitionRef.current = null;
+      ttsHandleRef.current?.cancel?.();
+      cancelSpeech();
+    };
+  }, []);
+
+  const startListening = useCallback(() => {
+    const RecognitionClass = getSpeechRecognitionClass();
+    if (!RecognitionClass) return;
+    if (recognitionRef.current) return;
+
+    const recognition = new RecognitionClass();
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.maxAlternatives = 1;
+
+    let finalTranscript = "";
+
+    recognition.onresult = (event) => {
+      let running = "";
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const part = event.results[i][0].transcript;
+        running += part;
+        if (event.results[i].isFinal) finalTranscript += part;
+      }
+      setInput((finalTranscript + running.slice(finalTranscript.length)).trim());
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error === "no-speech" || event.error === "aborted") return;
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        setComposerStatus("Microphone access was blocked. Allow it in your browser settings.");
+        setVoiceMode(false);
+      } else {
+        setComposerStatus("Voice input failed. Try again.");
+      }
+    };
+
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      setListening(false);
+      const clean = finalTranscript.trim();
+      if (clean) {
+        setInput("");
+        submitTextRef.current?.(clean);
+      } else if (voiceModeRef.current) {
+        setTimeout(() => {
+          if (voiceModeRef.current && !recognitionRef.current) startListening();
+        }, 400);
+      }
+    };
+
+    try {
+      recognition.start();
+      recognitionRef.current = recognition;
+      setListening(true);
+      setComposerStatus("");
+    } catch {
+      recognitionRef.current = null;
+      setListening(false);
+    }
+  }, []);
+
+  const stopListening = useCallback(() => {
+    try { recognitionRef.current?.abort(); } catch {}
+    recognitionRef.current = null;
+    setListening(false);
+  }, []);
+
+  const toggleVoiceMode = useCallback(() => {
+    if (!voiceSupported) {
+      setComposerStatus("Voice chat isn't supported in this browser. Try Chrome, Edge, or Safari.");
+      return;
+    }
+    setVoiceMode((prev) => {
+      const next = !prev;
+      if (next) {
+        const lastAssistantId = [...messagesRef.current].reverse().find((m) => m.role === "assistant")?.id;
+        spokenMessageIdRef.current = lastAssistantId || null;
+        setComposerStatus("");
+        startListening();
+      } else {
+        stopListening();
+        ttsHandleRef.current?.cancel?.();
+        ttsHandleRef.current = null;
+        cancelSpeech();
+        setSpeaking(false);
+      }
+      return next;
+    });
+  }, [startListening, stopListening, voiceSupported]);
+
+  useEffect(() => {
+    if (!voiceMode) return;
+    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+    if (!lastAssistant) return;
+    if (spokenMessageIdRef.current === lastAssistant.id) return;
+    spokenMessageIdRef.current = lastAssistant.id;
+
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch {}
+      recognitionRef.current = null;
+      setListening(false);
+    }
+
+    ttsHandleRef.current = speakText(lastAssistant.content, {
+      onStart: () => setSpeaking(true),
+      onEnd: () => {
+        setSpeaking(false);
+        if (voiceModeRef.current && !recognitionRef.current) startListening();
+      },
+      onError: () => {
+        setSpeaking(false);
+        if (voiceModeRef.current && !recognitionRef.current) startListening();
+      },
+    });
+  }, [messages, voiceMode, startListening]);
+
+  useEffect(() => {
+    ttsHandleRef.current?.cancel?.();
+    ttsHandleRef.current = null;
+    cancelSpeech();
+    setSpeaking(false);
+    const lastAssistantId = [...messagesRef.current].reverse().find((m) => m.role === "assistant")?.id;
+    spokenMessageIdRef.current = lastAssistantId || null;
+  }, [activeChatId]);
+
+  useEffect(() => {
+    if (!open && voiceMode) {
+      setVoiceMode(false);
+      stopListening();
+      ttsHandleRef.current?.cancel?.();
+      ttsHandleRef.current = null;
+      cancelSpeech();
+      setSpeaking(false);
+    }
+  }, [open, voiceMode, stopListening]);
 
   const handleKey = useCallback(
     (event) => {
@@ -1068,12 +1240,50 @@ export default function Chatbot() {
                     onChange={(event) => {
                       setInput(event.target.value);
                       if (composerStatus) setComposerStatus("");
+                      if (listening) stopListening();
                     }}
                     onKeyDown={handleKey}
                     disabled={loading || typingIdx >= 0}
                     inputRef={inputRef}
                     helperTextId={helperTextId}
                   />
+                  <button
+                    type="button"
+                    className={`chatbot-mic${voiceMode ? " chatbot-mic--on" : ""}${listening ? " chatbot-mic--listening" : ""}${speaking ? " chatbot-mic--speaking" : ""}`}
+                    onClick={toggleVoiceMode}
+                    disabled={!voiceSupported}
+                    aria-pressed={voiceMode}
+                    aria-label={voiceMode ? "Turn off voice chat" : "Turn on voice chat"}
+                    title={
+                      voiceSupported
+                        ? voiceMode
+                          ? "Stop voice chat"
+                          : "Start voice chat"
+                        : "Voice chat not supported in this browser"
+                    }
+                  >
+                    {voiceMode ? (
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                        <rect x="4" y="4" width="8" height="8" rx="1.5" />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <rect x="6" y="2" width="4" height="8" rx="2" />
+                        <path d="M3.5 7.5a4.5 4.5 0 0 0 9 0" />
+                        <line x1="8" y1="12" x2="8" y2="14.5" />
+                      </svg>
+                    )}
+                  </button>
                   <button
                     type="button"
                     className={`chatbot-send${input.trim() ? " chatbot-send--ready" : ""}`}
@@ -1101,7 +1311,14 @@ export default function Chatbot() {
                   role={composerStatus ? "alert" : "status"}
                   aria-live={composerStatus ? "assertive" : "polite"}
                 >
-                  {composerStatus || "Press Enter to send. Shift+Enter adds a new line."}
+                  {composerStatus
+                    || (voiceMode && speaking
+                      ? "AURA is speaking..."
+                      : voiceMode && listening
+                        ? "Listening... speak now."
+                        : voiceMode
+                          ? "Voice chat on — tap the stop icon to exit."
+                          : "Press Enter to send. Shift+Enter adds a new line.")}
                 </div>
               </div>
             </>
@@ -1111,4 +1328,10 @@ export default function Chatbot() {
       )}
     </>
   );
+}
+
+export default function Chatbot() {
+  const { user } = useAuth();
+  if (!user) return null;
+  return <AuthenticatedChatbot user={user} />;
 }

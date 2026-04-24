@@ -9,9 +9,20 @@ interface ProfileRepository {
     suspend fun getProfile(): UserProfile
     suspend fun updateProfile(
         bodyType: String,
-        lifestyle: String,
-        comfortPreference: String,
+        stylePreferences: List<String>,
+        comfortPreferences: List<String>,
+        dressFor: List<String>,
+        gender: String?,
+        heightCm: Int?,
         onboardingComplete: Boolean
+    ): UserProfile
+    suspend fun completeOnboarding(
+        stylePreferences: List<String>,
+        comfortPreferences: List<String>,
+        dressFor: List<String>,
+        bodyType: String?,
+        gender: String?,
+        heightCm: Int?
     ): UserProfile
     suspend fun uploadAvatar(bytes: ByteArray, fileName: String, mimeType: String): String
 }

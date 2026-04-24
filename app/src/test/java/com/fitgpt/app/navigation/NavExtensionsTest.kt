@@ -19,6 +19,9 @@ class NavExtensionsTest {
     @Test
     fun isTopLevelRoute_matchesOnlyPrimaryTabs() {
         assertTrue(isTopLevelRoute(Routes.DASHBOARD))
+        assertTrue(isTopLevelRoute(Routes.WARDROBE))
+        assertTrue(isTopLevelRoute(Routes.HISTORY))
+        assertTrue(isTopLevelRoute(Routes.PLANS))
         assertTrue(isTopLevelRoute(Routes.PROFILE))
         assertFalse(isTopLevelRoute(Routes.MORE))
         assertFalse(isTopLevelRoute("${Routes.EDIT_ITEM}/21"))

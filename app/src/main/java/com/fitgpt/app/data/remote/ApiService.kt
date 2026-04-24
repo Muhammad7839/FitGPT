@@ -10,6 +10,7 @@ import com.fitgpt.app.data.remote.dto.ChatResponseDto
 import com.fitgpt.app.data.remote.dto.BulkCreateClothingItemsRequestDto
 import com.fitgpt.app.data.remote.dto.BulkCreateClothingItemsResponseDto
 import com.fitgpt.app.data.remote.dto.FavoriteToggleRequestDto
+import com.fitgpt.app.data.remote.dto.ForecastRecommendationResponseDto
 import com.fitgpt.app.data.remote.dto.ForgotPasswordRequest
 import com.fitgpt.app.data.remote.dto.ForgotPasswordResponse
 import com.fitgpt.app.data.remote.dto.GoogleLoginRequest
@@ -18,29 +19,44 @@ import com.fitgpt.app.data.remote.dto.ImageUploadResponseDto
 import com.fitgpt.app.data.remote.dto.MessageResponse
 import com.fitgpt.app.data.remote.dto.OutfitHistoryRequest
 import com.fitgpt.app.data.remote.dto.OutfitHistoryListResponseDto
+import com.fitgpt.app.data.remote.dto.OutfitHistoryEntryDto
+import com.fitgpt.app.data.remote.dto.OutfitHistoryUpdateRequestDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitAssignmentRequestDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitAssignmentResponseDto
 import com.fitgpt.app.data.remote.dto.PlannedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.PlannedOutfitListResponseDto
+import com.fitgpt.app.data.remote.dto.PromptFeedbackEventRequestDto
+import com.fitgpt.app.data.remote.dto.PromptFeedbackEventResponseDto
 import com.fitgpt.app.data.remote.dto.RecommendationResponseDto
 import com.fitgpt.app.data.remote.dto.RecommendationOptionsResponseDto
 import com.fitgpt.app.data.remote.dto.AiRecommendationRequestDto
 import com.fitgpt.app.data.remote.dto.AiRecommendationResponseDto
+import com.fitgpt.app.data.remote.dto.RecommendationFeedbackRequestDto
+import com.fitgpt.app.data.remote.dto.RecommendationFeedbackResponseDto
+import com.fitgpt.app.data.remote.dto.TagSuggestionResponseDto
+import com.fitgpt.app.data.remote.dto.RejectOutfitRequestDto
+import com.fitgpt.app.data.remote.dto.RejectOutfitResponseDto
+import com.fitgpt.app.data.remote.dto.DuplicateCandidatesResponseDto
+import com.fitgpt.app.data.remote.dto.UnderusedAlertsResponseDto
 import com.fitgpt.app.data.remote.dto.RegisterRequest
 import com.fitgpt.app.data.remote.dto.ResetPasswordRequest
 import com.fitgpt.app.data.remote.dto.SavedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.SavedOutfitListResponseDto
 import com.fitgpt.app.data.remote.dto.TokenResponse
+import com.fitgpt.app.data.remote.dto.TripPackingRequestDto
+import com.fitgpt.app.data.remote.dto.TripPackingResponseDto
 import com.fitgpt.app.data.remote.dto.AvatarUploadResponse
 import com.fitgpt.app.data.remote.dto.UserProfileSummaryResponse
 import com.fitgpt.app.data.remote.dto.UserProfileUpdateRequest
 import com.fitgpt.app.data.remote.dto.UserResponse
+import com.fitgpt.app.data.remote.dto.WardrobeGapResponseDto
 import com.fitgpt.app.data.remote.dto.WeatherCurrentResponseDto
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.Field
 import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
@@ -67,7 +83,8 @@ interface ApiService {
 
     @POST("login/google")
     suspend fun loginWithGoogle(
-        @Body payload: GoogleLoginRequest
+        @Body payload: GoogleLoginRequest,
+        @Header("X-Auth-Attempt-Id") attemptId: String? = null
     ): TokenResponse
 
     @POST("forgot-password")
@@ -124,6 +141,21 @@ interface ApiService {
     @GET("wardrobe/items/favorites")
     suspend fun getFavoriteWardrobeItems(): List<ClothingItemDto>
 
+    @GET("wardrobe/gaps")
+    suspend fun getWardrobeGaps(): WardrobeGapResponseDto
+
+    @GET("wardrobe/underused-alerts")
+    suspend fun getUnderusedAlerts(
+        @Query("analysis_window_days") analysisWindowDays: Int = 21,
+        @Query("max_results") maxResults: Int = 20
+    ): UnderusedAlertsResponseDto
+
+    @GET("wardrobe/duplicates")
+    suspend fun getDuplicateCandidates(
+        @Query("threshold") threshold: Float = 0.72f,
+        @Query("limit") limit: Int = 20
+    ): DuplicateCandidatesResponseDto
+
     @POST("wardrobe/items")
     suspend fun addWardrobeItem(
         @Body payload: ClothingItemCreateRequest
@@ -140,6 +172,11 @@ interface ApiService {
     suspend fun addWardrobeItemsBulk(
         @Body payload: BulkCreateClothingItemsRequestDto
     ): BulkCreateClothingItemsResponseDto
+
+    @POST("wardrobe/tags/suggest")
+    suspend fun suggestWardrobeTags(
+        @Body payload: ClothingItemCreateRequest
+    ): TagSuggestionResponseDto
 
     @Multipart
     @POST("wardrobe/items/image")
@@ -163,6 +200,16 @@ interface ApiService {
     suspend fun toggleWardrobeFavorite(
         @Path("itemId") itemId: Int,
         @Body payload: FavoriteToggleRequestDto
+    ): ClothingItemDto
+
+    @GET("wardrobe/items/{itemId}/tag-suggestions")
+    suspend fun getWardrobeItemTagSuggestions(
+        @Path("itemId") itemId: Int
+    ): TagSuggestionResponseDto
+
+    @POST("wardrobe/items/{itemId}/tag-suggestions/apply")
+    suspend fun applyWardrobeItemTagSuggestions(
+        @Path("itemId") itemId: Int
     ): ClothingItemDto
 
     @DELETE("wardrobe/items/{itemId}")
@@ -202,6 +249,33 @@ interface ApiService {
         @Body payload: AiRecommendationRequestDto
     ): AiRecommendationResponseDto
 
+    @POST("recommendations/reject")
+    suspend fun rejectRecommendation(
+        @Body payload: RejectOutfitRequestDto
+    ): RejectOutfitResponseDto
+
+    @POST("feedback/prompts/event")
+    suspend fun recordPromptFeedbackEvent(
+        @Body payload: PromptFeedbackEventRequestDto
+    ): PromptFeedbackEventResponseDto
+
+    @POST("recommendations/feedback")
+    suspend fun submitRecommendationFeedback(
+        @Body payload: RecommendationFeedbackRequestDto
+    ): RecommendationFeedbackResponseDto
+
+    @GET("recommendations/forecast")
+    suspend fun getForecastRecommendation(
+        @Query("city") city: String? = null,
+        @Query("hours_ahead") hoursAhead: Int = 24,
+        @Query("manual_temp") manualTemp: Int? = null,
+        @Query("weather_category") weatherCategory: String? = null,
+        @Query("occasion") occasion: String? = null,
+        @Query("exclude") exclude: String? = null,
+        @Query("style_preference") stylePreference: String? = null,
+        @Query("preferred_seasons") preferredSeasons: List<String> = emptyList()
+    ): ForecastRecommendationResponseDto
+
     @POST("ai/chat")
     suspend fun sendChatMessage(
         @Body payload: ChatRequestDto
@@ -222,8 +296,25 @@ interface ApiService {
     @GET("outfits/history")
     suspend fun getOutfitHistory(): OutfitHistoryListResponseDto
 
+    @GET("outfits/history/range")
+    suspend fun getOutfitHistoryInRange(
+        @Query("start_date") startDate: String,
+        @Query("end_date") endDate: String
+    ): OutfitHistoryListResponseDto
+
     @DELETE("outfits/history")
     suspend fun clearOutfitHistory()
+
+    @PUT("outfits/history/{historyId}")
+    suspend fun updateOutfitHistoryEntry(
+        @Path("historyId") historyId: Long,
+        @Body payload: OutfitHistoryUpdateRequestDto
+    ): OutfitHistoryEntryDto
+
+    @DELETE("outfits/history/{historyId}")
+    suspend fun deleteOutfitHistoryEntry(
+        @Path("historyId") historyId: Long
+    ): MessageResponse
 
     @GET("outfits/saved")
     suspend fun getSavedOutfits(): SavedOutfitListResponseDto
@@ -255,4 +346,9 @@ interface ApiService {
     suspend fun deletePlannedOutfit(
         @Path("outfitId") outfitId: Long
     ): PlannedOutfitListResponseDto
+
+    @POST("plans/packing-list")
+    suspend fun generateTripPackingList(
+        @Body payload: TripPackingRequestDto
+    ): TripPackingResponseDto
 }

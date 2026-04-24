@@ -33,6 +33,25 @@ describe("plannedOutfitsApi.planOutfit", () => {
     const result = await plannedOutfitsApi.planOutfit({ item_ids: [] }, TEST_USER);
     expect(result.created).toBe(false);
   });
+
+  test("marks local-only plan creation when authenticated remote sync fails", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      headers: { get: () => "application/json" },
+      json: async () => ({ detail: "backend offline" }),
+      text: async () => "",
+    });
+
+    const result = await plannedOutfitsApi.planOutfit(
+      { item_ids: ["shirt-1"], planned_date: "2026-04-20" },
+      TEST_USER
+    );
+
+    expect(result.created).toBe(true);
+    expect(result.localOnly).toBe(true);
+    expect(result.syncError).toBe(true);
+  });
 });
 
 describe("plannedOutfitsApi.listPlanned", () => {
@@ -60,13 +79,12 @@ describe("plannedOutfitsApi.listPlanned", () => {
         status: 200,
         headers: { get: () => "application/json" },
         json: async () => ({
-          planned_outfits: [
+          outfits: [
             {
-              planned_id: "77",
+              id: 77,
               item_ids: ["server-look"],
-              outfit_signature: "server-look",
               planned_date: "2026-03-24",
-              created_at: "2026-03-23T12:00:00.000Z",
+              created_at_timestamp: 1774267200,
             },
           ],
         }),
@@ -91,5 +109,74 @@ describe("plannedOutfitsApi.removePlanned", () => {
     await plannedOutfitsApi.removePlanned(planned_outfit.planned_id, TEST_USER);
     const result = await plannedOutfitsApi.listPlanned(TEST_USER);
     expect(result.planned_outfits).toHaveLength(0);
+  });
+
+  test("uses the canonical backend planned outfit route and normalizes the response", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => "application/json" },
+      json: async () => ({
+        outfits: [
+          {
+            id: 9,
+            item_ids: ["shirt-1", "pants-2"],
+            planned_date: "2026-04-20",
+            occasion: "office",
+            created_at_timestamp: 1776672000,
+          },
+        ],
+      }),
+    });
+
+    const result = await plannedOutfitsApi.planOutfit(
+      {
+        item_ids: ["pants-2", "shirt-1"],
+        planned_date: "2026-04-20",
+        occasion: "office",
+      },
+      TEST_USER
+    );
+
+    const [url, request] = global.fetch.mock.calls[0];
+    expect(url).toBe("http://127.0.0.1:8000/outfits/planned");
+    expect(request.method).toBe("POST");
+    expect(result.created).toBe(true);
+    expect(result.planned_outfit).toMatchObject({
+      planned_id: "9",
+      item_ids: ["pants-2", "shirt-1"],
+      planned_date: "2026-04-20",
+      occasion: "office",
+      outfit_signature: "pants-2|shirt-1",
+    });
+  });
+
+  test("marks local-only plan removal when remote delete fails", async () => {
+    localStorage.setItem(
+      "fitgpt_planned_outfits_v1_test-user-789",
+      JSON.stringify([
+        {
+          planned_id: "9",
+          item_ids: ["shirt-1"],
+          planned_date: "2026-04-20",
+          outfit_signature: "shirt-1",
+        },
+      ])
+    );
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      headers: { get: () => "application/json" },
+      json: async () => ({ detail: "delete failed" }),
+      text: async () => "",
+    });
+
+    const result = await plannedOutfitsApi.removePlanned("9", TEST_USER);
+
+    expect(result).toMatchObject({
+      deleted: true,
+      localOnly: true,
+      syncError: true,
+    });
   });
 });

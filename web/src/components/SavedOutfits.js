@@ -17,6 +17,7 @@ export default function SavedOutfits() {
   const [saved, setSaved] = useState([]);
   const [msg, setMsg] = useState("");
   const [confirmUnsave, setConfirmUnsave] = useState(null);
+  const [plannedOutfit, setPlannedOutfit] = useState(null);
 
 
   const wardrobe = useMemo(() => loadWardrobe(user), [user]);
@@ -25,7 +26,6 @@ export default function SavedOutfits() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    setMsg("");
 
     try {
       const res = await savedOutfitsApi.listSaved(user);
@@ -82,13 +82,21 @@ export default function SavedOutfits() {
     if (!sig) return;
 
     try {
-      await savedOutfitsApi.unsaveOutfit(sig, user);
+      const result = await savedOutfitsApi.unsaveOutfit(sig, user);
       setSaved((prev) => prev.filter((o) => (o?.outfit_signature || "") !== sig));
-      setMsg("Outfit removed.");
-      window.setTimeout(() => setMsg(""), 2500);
+      setPlannedOutfit(null);
+      setMsg(result?.localOnly ? "Outfit removed locally only. Backend sync failed." : "Outfit removed.");
+      window.setTimeout(() => {
+        setMsg("");
+        setPlannedOutfit(null);
+      }, 2500);
     } catch (e) {
+      setPlannedOutfit(null);
       setMsg(e?.message || "Could not remove outfit.");
-      window.setTimeout(() => setMsg(""), 2500);
+      window.setTimeout(() => {
+        setMsg("");
+        setPlannedOutfit(null);
+      }, 2500);
     }
     setConfirmUnsave(null);
   }
@@ -105,7 +113,7 @@ export default function SavedOutfits() {
     return { id: trimmed, name: "Item", image_url: "" };
   }
 
-  function handlePlanForLater(outfit) {
+  async function handlePlanForLater(outfit) {
     const date = tomorrowDateStr();
     const occasion = outfit?.context?.occasion || "";
 
@@ -128,17 +136,25 @@ export default function SavedOutfits() {
     });
     window.open(calUrl, "_blank", "noopener");
 
-   
-    plannedOutfitsApi.planOutfit({
+    const result = await plannedOutfitsApi.planOutfit({
       item_ids: itemIds,
       item_details: itemDetails,
       planned_date: date,
       occasion,
       source: "planner",
-    }, user).catch(() => {});
+    }, user).catch(() => null);
 
-    setMsg("Opening Google Calendar...");
-    window.setTimeout(() => setMsg(""), 2500);
+    if (result?.created) {
+      setPlannedOutfit(result?.planned_outfit || null);
+      setMsg(result?.localOnly ? "Outfit planned successfully. Backend sync is pending." : "Outfit planned successfully.");
+    } else {
+      setPlannedOutfit(null);
+      setMsg(result?.message || "Could not plan outfit.");
+    }
+    window.setTimeout(() => {
+      setMsg("");
+      setPlannedOutfit(null);
+    }, 2500);
   }
 
   const onHoloMove = useCallback((e) => {
@@ -154,12 +170,13 @@ export default function SavedOutfits() {
   if (!user) {
     return (
       <div className="onboarding onboardingPage">
-      <div className="historyTopBar">
-        <div>
-          <div className="historyTitle">Saved Outfits</div>
+        <div className="historyTopBar">
+          <div>
+            <div className="historyTitle">Saved Outfits</div>
+            <div className="historySub">Sign in to save and revisit outfit combinations</div>
+          </div>
         </div>
-      </div>
-      <GuestModeNotice compact />
+        <GuestModeNotice compact />
       </div>
     );
   }
@@ -182,7 +199,18 @@ export default function SavedOutfits() {
         </div>
       </div>
 
-      {msg && <div className="noteBox" style={{ marginTop: 12 }}>{msg}</div>}
+      {msg && (
+        <div className="noteBox" style={{ marginTop: 12 }} role="status" aria-live="polite">
+          <div>{msg}</div>
+          {plannedOutfit ? (
+            <div style={{ marginTop: 10 }}>
+              <button className="btn" type="button" onClick={() => navigate("/plans")}>
+                Open Plans
+              </button>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {confirmUnsave && (
         <div className="modalOverlay" role="dialog" aria-modal="true">
@@ -297,4 +325,3 @@ export default function SavedOutfits() {
     </div>
   );
 }
-

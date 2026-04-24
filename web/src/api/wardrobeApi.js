@@ -5,6 +5,7 @@ const PATHS = {
   create: "/wardrobe/items",
   update: (id) => `/wardrobe/items/${id}`,
   remove: (id) => `/wardrobe/items/${id}`,
+  favorite: (id) => `/wardrobe/items/${id}/favorite`,
 };
 
 function isServerItemId(id) {
@@ -78,8 +79,8 @@ export const wardrobeApi = {
   async setFavorite(id, is_favorite) {
     ensureApi();
     if (!isServerItemId(id)) return null;
-    return apiFetch(PATHS.update(id), {
-      method: "PUT",
+    return apiFetch(PATHS.favorite(id), {
+      method: "POST",
       body: JSON.stringify({ is_favorite }),
     });
   },
@@ -89,7 +90,7 @@ export const wardrobeApi = {
     if (!isServerItemId(id)) return null;
     return apiFetch(PATHS.update(id), {
       method: "PUT",
-      body: JSON.stringify({ is_active: false }),
+      body: JSON.stringify({ is_archived: true }),
     });
   },
 
@@ -98,7 +99,7 @@ export const wardrobeApi = {
     if (!isServerItemId(id)) return null;
     return apiFetch(PATHS.update(id), {
       method: "PUT",
-      body: JSON.stringify({ is_active: true }),
+      body: JSON.stringify({ is_archived: false }),
     });
   },
 };

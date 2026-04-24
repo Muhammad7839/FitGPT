@@ -2,10 +2,13 @@
 
 import hashlib
 import uuid
-from datetime import datetime, timezone
+from collections import defaultdict
+from datetime import datetime
+from itertools import combinations
 from typing import Optional
+from urllib.parse import quote_plus
 
-from sqlalchemy import case, func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,13 +16,45 @@ from app import models, schemas
 from app.ai import deterministic, history
 from app.auth import hash_password
 from app.config import RESET_TOKEN_EXPIRE_MINUTES
-from app.weather import map_temperature_to_category
+
+PROMPT_DEFAULT_COOLDOWN_SECONDS = 24 * 60 * 60
+PROMPT_IGNORE_COOLDOWN_SECONDS = 72 * 60 * 60
+
+
+def get_current_season_tag(*, reference_date: Optional[datetime] = None) -> str:
+    date = reference_date or datetime.utcnow()
+    month = date.month
+    if month in {12, 1, 2}:
+        return "winter"
+    if month in {3, 4, 5}:
+        return "spring"
+    if month in {6, 7, 8}:
+        return "summer"
+    return "fall"
+
+
+def resolve_preferred_seasons(preferred_seasons: Optional[list[str]]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for season in preferred_seasons or []:
+        cleaned = season.strip().lower()
+        if not cleaned or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        normalized.append(cleaned)
+    if normalized:
+        return normalized
+    return [get_current_season_tag()]
+
+
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
 
 
 def create_user(db: Session, user: schemas.UserCreate):
     hashed_password = hash_password(user.password)
     db_user = models.User(
-        email=user.email.lower().strip(),
+        email=normalize_email(user.email),
         hashed_password=hashed_password
     )
     _apply_default_preferences(db_user)
@@ -30,7 +65,7 @@ def create_user(db: Session, user: schemas.UserCreate):
 
 
 def get_or_create_google_user(db: Session, email: str, full_name: Optional[str]):
-    normalized_email = email.lower().strip()
+    normalized_email = normalize_email(email)
     existing_user = get_user_by_email(db, normalized_email)
     if existing_user:
         if full_name and not existing_user.full_name:
@@ -51,17 +86,17 @@ def get_or_create_google_user(db: Session, email: str, full_name: Optional[str])
         db.commit()
     except IntegrityError:
         db.rollback()
-        concurrent_user = get_user_by_email(db, normalized_email)
-        if concurrent_user is None:
-            raise
-        return concurrent_user
+        return get_user_by_email(db, email)
     db.refresh(db_user)
     return db_user
 
 
 def get_user_by_email(db: Session, email: str):
+    normalized_email = normalize_email(email)
     return db.query(models.User).filter(
-        models.User.email == email.lower().strip()
+        func.lower(models.User.email) == normalized_email
+    ).order_by(
+        models.User.id.asc()
     ).first()
 
 
@@ -71,7 +106,7 @@ def _hash_reset_token(token: str) -> str:
 
 def create_password_reset_token(db: Session, db_user: models.User) -> str:
     token = uuid.uuid4().hex
-    expires_at = int(datetime.now(timezone.utc).timestamp()) + (RESET_TOKEN_EXPIRE_MINUTES * 60)
+    expires_at = int(datetime.utcnow().timestamp()) + (RESET_TOKEN_EXPIRE_MINUTES * 60)
     db_user.reset_token_hash = _hash_reset_token(token)
     db_user.reset_token_expires_at = expires_at
     db.commit()
@@ -81,7 +116,7 @@ def create_password_reset_token(db: Session, db_user: models.User) -> str:
 
 def get_user_by_reset_token(db: Session, token: str):
     token_hash = _hash_reset_token(token)
-    now = int(datetime.now(timezone.utc).timestamp())
+    now = int(datetime.utcnow().timestamp())
     return db.query(models.User).filter(
         models.User.reset_token_hash == token_hash,
         models.User.reset_token_expires_at.is_not(None),
@@ -128,47 +163,187 @@ def _first_or_default(values: list[str], fallback: str) -> str:
     return fallback
 
 
+def _determine_suggested_clothing_type(
+    *,
+    category: str,
+    clothing_type: Optional[str],
+    name: Optional[str],
+) -> Optional[str]:
+    if clothing_type:
+        return _normalize_optional_text(clothing_type)
+    blob = f"{name or ''} {category}".lower()
+    keyword_to_type = (
+        ("blazer", "Blazer"),
+        ("hoodie", "Hoodie"),
+        ("sweater", "Sweater"),
+        ("shirt", "Shirt"),
+        ("tee", "T-Shirt"),
+        ("tshirt", "T-Shirt"),
+        ("jeans", "Jeans"),
+        ("shorts", "Shorts"),
+        ("boots", "Boots"),
+        ("sneakers", "Sneakers"),
+        ("sandal", "Sandals"),
+        ("coat", "Coat"),
+        ("jacket", "Jacket"),
+    )
+    for token, resolved in keyword_to_type:
+        if token in blob:
+            return resolved
+    normalized_category = _normalize_category(category)
+    fallback_map = {
+        "top": "Shirt",
+        "bottom": "Pants",
+        "shoes": "Shoes",
+        "outerwear": "Jacket",
+        "accessory": "Accessory",
+    }
+    return fallback_map.get(normalized_category)
+
+
+def _determine_suggested_fit_tag(*, fit_tag: Optional[str], name: Optional[str]) -> Optional[str]:
+    if fit_tag:
+        return _normalize_optional_text(fit_tag)
+    blob = (name or "").lower()
+    if any(token in blob for token in {"oversized", "baggy", "loose"}):
+        return "oversized"
+    if any(token in blob for token in {"slim", "skinny", "tailored"}):
+        return "slim"
+    if blob:
+        return "regular"
+    return None
+
+
+def _determine_suggested_season_tags(*, season: Optional[str], name: Optional[str], clothing_type: Optional[str]) -> list[str]:
+    if season and season.strip() and season.strip().lower() != "all":
+        return [season.strip()]
+    blob = f"{name or ''} {clothing_type or ''}".lower()
+    if any(token in blob for token in {"coat", "jacket", "hoodie", "sweater", "boots"}):
+        return ["Winter", "Fall"]
+    if any(token in blob for token in {"shorts", "tank", "sandal", "linen"}):
+        return ["Summer", "Spring"]
+    return []
+
+
+def _determine_suggested_style_tags(*, name: Optional[str], category: str, clothing_type: Optional[str]) -> list[str]:
+    blob = f"{name or ''} {category} {clothing_type or ''}".lower()
+    styles: list[str] = []
+    if any(token in blob for token in {"blazer", "dress", "formal", "tailored"}):
+        styles.append("formal")
+    if any(token in blob for token in {"running", "sport", "gym", "athletic", "training"}):
+        styles.append("athletic")
+    if any(token in blob for token in {"hoodie", "tee", "t-shirt", "jeans", "sneaker", "casual"}):
+        styles.append("casual")
+    if _normalize_category(category) == "outerwear" and "formal" not in styles:
+        styles.append("layered")
+    return _normalize_tag_list(styles)
+
+
+def _determine_suggested_occasion_tags(*, style_tags: list[str]) -> list[str]:
+    occasions: list[str] = []
+    lowered = {tag.lower() for tag in style_tags}
+    if "formal" in lowered:
+        occasions.extend(["work", "event"])
+    if "athletic" in lowered:
+        occasions.extend(["gym"])
+    if not occasions:
+        occasions.append("daily")
+    return _normalize_tag_list(occasions)
+
+
+def build_tag_suggestions(
+    *,
+    name: Optional[str],
+    category: str,
+    clothing_type: Optional[str],
+    fit_tag: Optional[str],
+    color: str,
+    colors: Optional[list[str]],
+    season: Optional[str],
+) -> dict:
+    suggested_clothing_type = _determine_suggested_clothing_type(
+        category=category,
+        clothing_type=clothing_type,
+        name=name,
+    )
+    suggested_fit_tag = _determine_suggested_fit_tag(fit_tag=fit_tag, name=name)
+    suggested_colors = _normalize_tag_list(colors or []) or _normalize_tag_list([color])
+    suggested_season_tags = _determine_suggested_season_tags(
+        season=season,
+        name=name,
+        clothing_type=suggested_clothing_type,
+    )
+    suggested_style_tags = _determine_suggested_style_tags(
+        name=name,
+        category=category,
+        clothing_type=suggested_clothing_type,
+    )
+    suggested_occasion_tags = _determine_suggested_occasion_tags(style_tags=suggested_style_tags)
+    generated = any(
+        [
+            bool(suggested_clothing_type),
+            bool(suggested_fit_tag),
+            bool(suggested_colors),
+            bool(suggested_season_tags),
+            bool(suggested_style_tags),
+            bool(suggested_occasion_tags),
+        ]
+    )
+    return {
+        "generated": generated,
+        "suggested_clothing_type": suggested_clothing_type,
+        "suggested_fit_tag": suggested_fit_tag,
+        "suggested_colors": suggested_colors,
+        "suggested_season_tags": suggested_season_tags,
+        "suggested_style_tags": suggested_style_tags,
+        "suggested_occasion_tags": suggested_occasion_tags,
+    }
+
+
+def _assign_suggested_tags(db_item: models.ClothingItem, suggestions: dict) -> None:
+    db_item.suggested_clothing_type = suggestions.get("suggested_clothing_type")
+    db_item.suggested_fit_tag = suggestions.get("suggested_fit_tag")
+    db_item.suggested_colors = suggestions.get("suggested_colors", [])
+    db_item.suggested_season_tags = suggestions.get("suggested_season_tags", [])
+    db_item.suggested_style_tags = suggestions.get("suggested_style_tags", [])
+    db_item.suggested_occasion_tags = suggestions.get("suggested_occasion_tags", [])
+
+
 def _apply_default_preferences(db_user: models.User) -> None:
     db_user.body_type = _normalize_optional_text(db_user.body_type) or schemas.DEFAULT_BODY_TYPE
     db_user.lifestyle = _normalize_optional_text(db_user.lifestyle) or schemas.DEFAULT_LIFESTYLE
     db_user.comfort_preference = (
         _normalize_optional_text(db_user.comfort_preference) or schemas.DEFAULT_COMFORT_PREFERENCE
     )
+    db_user.gender = _normalize_optional_text(db_user.gender) or ""
+    db_user.style_preferences = db_user.style_preferences
+    db_user.comfort_preferences = db_user.comfort_preferences
+    db_user.dress_for = db_user.dress_for
 
 
 def build_profile_summary(db: Session, db_user: models.User) -> dict:
     """Return a compact profile summary payload with preference + wardrobe stats."""
-    wardrobe_stats = db.query(
-        func.count(models.ClothingItem.id),
-        func.coalesce(
-            func.sum(case((models.ClothingItem.is_archived.is_(False), 1), else_=0)),
-            0,
-        ),
-        func.coalesce(
-            func.sum(
-                case(
-                    (
-                        (models.ClothingItem.is_archived.is_(False))
-                        & (models.ClothingItem.is_favorite.is_(True)),
-                        1,
-                    ),
-                    else_=0,
-                )
-            ),
-            0,
-        ),
-    ).filter(models.ClothingItem.owner_id == db_user.id).one()
-    wardrobe_count, active_wardrobe_count, favorite_count = (int(value) for value in wardrobe_stats)
-
-    saved_outfit_count = db.query(func.count(models.SavedOutfit.id)).filter(
+    wardrobe_count = db.query(models.ClothingItem).filter(
+        models.ClothingItem.owner_id == db_user.id
+    ).count()
+    active_wardrobe_count = db.query(models.ClothingItem).filter(
+        models.ClothingItem.owner_id == db_user.id,
+        models.ClothingItem.is_archived.is_(False),
+    ).count()
+    favorite_count = db.query(models.ClothingItem).filter(
+        models.ClothingItem.owner_id == db_user.id,
+        models.ClothingItem.is_favorite.is_(True),
+        models.ClothingItem.is_archived.is_(False),
+    ).count()
+    saved_outfit_count = db.query(models.SavedOutfit).filter(
         models.SavedOutfit.owner_id == db_user.id
-    ).scalar() or 0
-    planned_outfit_count = db.query(func.count(models.PlannedOutfit.id)).filter(
+    ).count()
+    planned_outfit_count = db.query(models.PlannedOutfit).filter(
         models.PlannedOutfit.owner_id == db_user.id
-    ).scalar() or 0
-    history_count = db.query(func.count(models.OutfitHistory.id)).filter(
+    ).count()
+    history_count = db.query(models.OutfitHistory).filter(
         models.OutfitHistory.owner_id == db_user.id
-    ).scalar() or 0
+    ).count()
 
     return {
         "id": db_user.id,
@@ -178,13 +353,18 @@ def build_profile_summary(db: Session, db_user: models.User) -> dict:
         "body_type": db_user.body_type,
         "lifestyle": db_user.lifestyle,
         "comfort_preference": db_user.comfort_preference,
+        "style_preferences": db_user.style_preferences,
+        "comfort_preferences": db_user.comfort_preferences,
+        "dress_for": db_user.dress_for,
+        "gender": db_user.gender or None,
+        "height_cm": db_user.height_cm,
         "onboarding_complete": db_user.onboarding_complete,
         "wardrobe_count": wardrobe_count,
         "active_wardrobe_count": active_wardrobe_count,
         "favorite_count": favorite_count,
-        "saved_outfit_count": int(saved_outfit_count),
-        "planned_outfit_count": int(planned_outfit_count),
-        "history_count": int(history_count),
+        "saved_outfit_count": saved_outfit_count,
+        "planned_outfit_count": planned_outfit_count,
+        "history_count": history_count,
     }
 
 
@@ -206,6 +386,25 @@ def update_user_profile(
     if updated_data.comfort_preference is not None:
         db_user.comfort_preference = updated_data.comfort_preference
 
+    if updated_data.style_preferences is not None:
+        db_user.style_preferences = updated_data.style_preferences
+        if updated_data.style_preferences:
+            db_user.lifestyle = updated_data.style_preferences[0]
+
+    if updated_data.comfort_preferences is not None:
+        db_user.comfort_preferences = updated_data.comfort_preferences
+        if updated_data.comfort_preferences:
+            db_user.comfort_preference = updated_data.comfort_preferences[0]
+
+    if updated_data.dress_for is not None:
+        db_user.dress_for = updated_data.dress_for
+
+    if updated_data.gender is not None:
+        db_user.gender = updated_data.gender
+
+    if updated_data.height_cm is not None:
+        db_user.height_cm = updated_data.height_cm
+
     if updated_data.onboarding_complete is not None:
         db_user.onboarding_complete = updated_data.onboarding_complete
 
@@ -220,6 +419,39 @@ def update_user_profile(
 # =============================
 # Clothing CRUD
 # =============================
+
+WARDROBE_GAP_BASELINE: dict[str, dict[str, object]] = {
+    "top": {
+        "min_count": 2,
+        "item_name": "Everyday top",
+        "image_url": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab",
+        "shopping_query": "everyday tops",
+    },
+    "bottom": {
+        "min_count": 2,
+        "item_name": "Versatile bottoms",
+        "image_url": "https://images.unsplash.com/photo-1541099649105-f69ad21f3246",
+        "shopping_query": "versatile bottoms",
+    },
+    "shoes": {
+        "min_count": 1,
+        "item_name": "Daily shoes",
+        "image_url": "https://images.unsplash.com/photo-1549298916-b41d501d3772",
+        "shopping_query": "daily shoes",
+    },
+    "outerwear": {
+        "min_count": 1,
+        "item_name": "Layering jacket",
+        "image_url": "https://images.unsplash.com/photo-1544441893-675973e31985",
+        "shopping_query": "lightweight jacket",
+    },
+}
+
+
+def _build_target_shopping_link(query: str) -> str:
+    encoded_query = quote_plus(query.strip())
+    return f"https://www.target.com/s?searchTerm={encoded_query}"
+
 
 def create_clothing_item(db: Session, item: schemas.ClothingItemCreate, user_id: int):
     colors = _normalize_tag_list(item.colors)
@@ -250,6 +482,18 @@ def create_clothing_item(db: Session, item: schemas.ClothingItemCreate, user_id:
     db_item.season_tags = season_tags
     db_item.style_tags = style_tags
     db_item.occasion_tags = occasion_tags
+    _assign_suggested_tags(
+        db_item,
+        build_tag_suggestions(
+            name=item.name,
+            category=item.category,
+            clothing_type=item.clothing_type,
+            fit_tag=item.fit_tag,
+            color=item.color,
+            colors=colors,
+            season=item.season,
+        ),
+    )
 
     db.add(db_item)
     db.commit()
@@ -385,10 +629,290 @@ def get_favorite_items_for_user(db: Session, user_id: int):
     )
 
 
+def get_wardrobe_gap_analysis(db: Session, user_id: int) -> dict:
+    items = get_clothing_items_for_user(
+        db=db,
+        user_id=user_id,
+        include_archived=False,
+    )
+    category_counts = {category: 0 for category in WARDROBE_GAP_BASELINE}
+
+    for item in items:
+        normalized_category = _normalize_category(item.category)
+        if normalized_category in category_counts:
+            category_counts[normalized_category] += 1
+
+    missing_categories: list[str] = []
+    suggestions: list[dict] = []
+    for category, config in WARDROBE_GAP_BASELINE.items():
+        min_count = int(config.get("min_count", 1))
+        current_count = category_counts.get(category, 0)
+        if current_count >= min_count:
+            continue
+        missing_categories.append(category)
+        item_name = str(config.get("item_name") or f"{category.title()} staple")
+        shopping_query = str(config.get("shopping_query") or f"{category} clothing")
+        suggestions.append(
+            {
+                "category": category,
+                "item_name": item_name,
+                "reason": f"Only {current_count} item(s) found. Target baseline is {min_count}.",
+                "image_url": str(config.get("image_url") or "").strip() or None,
+                "shopping_link": _build_target_shopping_link(shopping_query),
+            }
+        )
+
+    insufficient_data = len(items) < 3
+    return {
+        "baseline_categories": list(WARDROBE_GAP_BASELINE.keys()),
+        "category_counts": category_counts,
+        "missing_categories": missing_categories,
+        "suggestions": suggestions,
+        "insufficient_data": insufficient_data,
+    }
+
+
+def _build_similarity_key_for_items(items: list[models.ClothingItem]) -> str:
+    components: list[str] = []
+    for item in items:
+        category = _normalize_category(item.category) or "item"
+        clothing_type = (item.clothing_type or "").strip().lower()
+        components.append(f"{category}:{clothing_type}")
+    return "|".join(sorted(components))
+
+
+def _jaccard_similarity(left: set[str], right: set[str]) -> float:
+    if not left and not right:
+        return 0.0
+    intersection = len(left.intersection(right))
+    union = len(left.union(right))
+    if union == 0:
+        return 0.0
+    return intersection / union
+
+
+def _candidate_similarity(
+    left: deterministic.RecommendationCandidate,
+    right: deterministic.RecommendationCandidate,
+    item_map: dict[int, models.ClothingItem],
+) -> float:
+    left_ids = {str(item_id) for item_id in left.item_ids}
+    right_ids = {str(item_id) for item_id in right.item_ids}
+    item_overlap = _jaccard_similarity(left_ids, right_ids)
+
+    left_items = [item_map[item_id] for item_id in left.item_ids if item_id in item_map]
+    right_items = [item_map[item_id] for item_id in right.item_ids if item_id in item_map]
+    left_structure = {
+        component
+        for component in _build_similarity_key_for_items(left_items).split("|")
+        if component
+    }
+    right_structure = {
+        component
+        for component in _build_similarity_key_for_items(right_items).split("|")
+        if component
+    }
+    structure_overlap = _jaccard_similarity(left_structure, right_structure)
+    return max(item_overlap, structure_overlap)
+
+
+def _candidate_core_item_ids(
+    candidate: deterministic.RecommendationCandidate,
+    item_map: dict[int, models.ClothingItem],
+) -> set[int]:
+    core_ids: set[int] = set()
+    for item_id in candidate.item_ids:
+        item = item_map.get(item_id)
+        if item is None:
+            continue
+        if _normalize_category(item.category) == "accessory" or (item.accessory_type or "").strip():
+            continue
+        core_ids.add(item_id)
+    return core_ids
+
+
+def _select_diverse_candidates(
+    candidates: list[deterministic.RecommendationCandidate],
+    *,
+    item_map: dict[int, models.ClothingItem],
+    limit: int,
+) -> list[deterministic.RecommendationCandidate]:
+    if len(candidates) <= 1:
+        return candidates[:limit]
+
+    selected: list[deterministic.RecommendationCandidate] = []
+    used_core_ids: set[int] = set()
+    remaining = list(candidates)
+    while remaining and len(selected) < limit:
+        if not selected:
+            first = remaining.pop(0)
+            selected.append(first)
+            used_core_ids.update(_candidate_core_item_ids(first, item_map))
+            continue
+
+        ranked_remaining = sorted(
+            enumerate(remaining),
+            key=lambda pair: (
+                len(_candidate_core_item_ids(pair[1], item_map) - used_core_ids),
+                -max(_candidate_similarity(pair[1], chosen, item_map) for chosen in selected),
+                pair[1].score,
+            ),
+            reverse=True,
+        )
+        next_index, next_candidate = ranked_remaining[0]
+        selected.append(remaining.pop(next_index))
+        used_core_ids.update(_candidate_core_item_ids(next_candidate, item_map))
+    return selected
+
+
+def record_rejected_outfit(
+    db: Session,
+    *,
+    user_id: int,
+    item_ids: list[int],
+    suggestion_id: Optional[str] = None,
+) -> dict:
+    normalized_item_ids = sorted({int(item_id) for item_id in item_ids})
+    if not normalized_item_ids:
+        return {"created": False, "fingerprint": "", "similarity_key": ""}
+
+    items = db.query(models.ClothingItem).filter(
+        models.ClothingItem.owner_id == user_id,
+        models.ClothingItem.id.in_(normalized_item_ids),
+        models.ClothingItem.is_archived.is_(False),
+    ).all()
+    item_by_id = {item.id: item for item in items}
+    ordered_items = [item_by_id[item_id] for item_id in normalized_item_ids if item_id in item_by_id]
+    fingerprint = (suggestion_id or ",".join(str(item_id) for item_id in normalized_item_ids)).strip()
+    similarity_key = _build_similarity_key_for_items(ordered_items)
+
+    existing = db.query(models.RejectedOutfit).filter(
+        models.RejectedOutfit.owner_id == user_id,
+        models.RejectedOutfit.fingerprint == fingerprint,
+    ).first()
+    if existing:
+        return {
+            "created": False,
+            "fingerprint": existing.fingerprint,
+            "similarity_key": existing.similarity_key,
+        }
+
+    rejected = models.RejectedOutfit(
+        owner_id=user_id,
+        fingerprint=fingerprint,
+        similarity_key=similarity_key,
+        item_ids_csv=",".join(str(item_id) for item_id in normalized_item_ids),
+        rejected_at_timestamp=int(datetime.utcnow().timestamp()),
+    )
+    db.add(rejected)
+    db.commit()
+    db.refresh(rejected)
+    return {
+        "created": True,
+        "fingerprint": rejected.fingerprint,
+        "similarity_key": rejected.similarity_key,
+    }
+
+
+def get_rejected_outfit_filters(db: Session, user_id: int) -> tuple[set[str], set[str]]:
+    rows = db.query(models.RejectedOutfit).filter(
+        models.RejectedOutfit.owner_id == user_id
+    ).all()
+    fingerprints = {row.fingerprint for row in rows if row.fingerprint}
+    similarity_keys = {row.similarity_key for row in rows if row.similarity_key}
+    return fingerprints, similarity_keys
+
+
+def is_rejected_outfit(
+    db: Session,
+    *,
+    user_id: int,
+    items: list[models.ClothingItem],
+    fingerprint: str,
+) -> bool:
+    rejected_fingerprints, rejected_similarity_keys = get_rejected_outfit_filters(db, user_id)
+    if fingerprint in rejected_fingerprints:
+        return True
+    similarity_key = _build_similarity_key_for_items(items)
+    return bool(similarity_key and similarity_key in rejected_similarity_keys)
+
+
+def filter_rejected_candidates_for_user(
+    db: Session,
+    *,
+    user_id: int,
+    candidates: list[deterministic.RecommendationCandidate],
+    item_map: dict[int, models.ClothingItem],
+) -> list[deterministic.RecommendationCandidate]:
+    if not candidates:
+        return []
+    rejected_fingerprints, rejected_similarity_keys = get_rejected_outfit_filters(db, user_id)
+    if not rejected_fingerprints and not rejected_similarity_keys:
+        return candidates
+
+    preferred: list[deterministic.RecommendationCandidate] = []
+    deprioritized: list[deterministic.RecommendationCandidate] = []
+    for candidate in candidates:
+        if candidate.fingerprint in rejected_fingerprints:
+            continue
+        candidate_items = [item_map[item_id] for item_id in candidate.item_ids if item_id in item_map]
+        similarity_key = _build_similarity_key_for_items(candidate_items)
+        if similarity_key and similarity_key in rejected_similarity_keys:
+            deprioritized.append(candidate)
+        else:
+            preferred.append(candidate)
+    return preferred + deprioritized
+
+
 def get_clothing_item_by_id(db: Session, item_id: int):
     return db.query(models.ClothingItem).filter(
         models.ClothingItem.id == item_id
     ).first()
+
+
+def regenerate_item_tag_suggestions(db: Session, db_item: models.ClothingItem) -> dict:
+    suggestions = build_tag_suggestions(
+        name=db_item.name,
+        category=db_item.category,
+        clothing_type=db_item.clothing_type,
+        fit_tag=db_item.fit_tag,
+        color=db_item.color,
+        colors=db_item.colors,
+        season=db_item.season,
+    )
+    _assign_suggested_tags(db_item, suggestions)
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return suggestions
+
+
+def apply_suggested_tags(db: Session, db_item: models.ClothingItem) -> models.ClothingItem:
+    if not db_item.clothing_type and db_item.suggested_clothing_type:
+        db_item.clothing_type = db_item.suggested_clothing_type
+    if not db_item.fit_tag and db_item.suggested_fit_tag:
+        db_item.fit_tag = db_item.suggested_fit_tag
+    if not db_item.colors and db_item.suggested_colors:
+        db_item.colors = db_item.suggested_colors
+        db_item.color = _first_or_default(db_item.suggested_colors, db_item.color)
+    existing_season_tags = _normalize_tag_list(db_item.season_tags)
+    if (
+        db_item.suggested_season_tags
+        and (
+            not existing_season_tags
+            or (len(existing_season_tags) == 1 and existing_season_tags[0].lower() == "all")
+        )
+    ):
+        db_item.season_tags = db_item.suggested_season_tags
+        db_item.season = _first_or_default(db_item.suggested_season_tags, db_item.season)
+    if not db_item.style_tags and db_item.suggested_style_tags:
+        db_item.style_tags = db_item.suggested_style_tags
+    if not db_item.occasion_tags and db_item.suggested_occasion_tags:
+        db_item.occasion_tags = db_item.suggested_occasion_tags
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
 
 
 def update_clothing_item(
@@ -479,6 +1003,156 @@ def _item_matches_exclusions(item: models.ClothingItem, exclusions: list[str]) -
         return False
     blob = _item_text_blob(item)
     return any(token in blob for token in exclusions)
+
+
+def _tokenize(value: Optional[str]) -> set[str]:
+    if not value:
+        return set()
+    normalized = "".join(char if char.isalnum() else " " for char in value.lower())
+    return {token for token in normalized.split() if len(token) >= 2}
+
+
+def _duplicate_similarity(item: models.ClothingItem, other: models.ClothingItem) -> tuple[float, list[str]]:
+    if _normalize_category(item.category) != _normalize_category(other.category):
+        return 0.0, []
+
+    score = 0.0
+    reasons: list[str] = ["same category"]
+
+    left_type = (item.clothing_type or "").strip().lower()
+    right_type = (other.clothing_type or "").strip().lower()
+    if left_type and right_type and left_type == right_type:
+        score += 0.22
+        reasons.append("matching clothing type")
+
+    left_color = (item.color or "").strip().lower()
+    right_color = (other.color or "").strip().lower()
+    if left_color and right_color and left_color == right_color:
+        score += 0.22
+        reasons.append("matching color")
+
+    left_brand = (item.brand or "").strip().lower()
+    right_brand = (other.brand or "").strip().lower()
+    if left_brand and right_brand and left_brand == right_brand:
+        score += 0.12
+        reasons.append("matching brand")
+
+    style_overlap = _jaccard_similarity(
+        {value.lower() for value in item.style_tags},
+        {value.lower() for value in other.style_tags},
+    )
+    if style_overlap > 0:
+        score += 0.15 * style_overlap
+        reasons.append("style tags overlap")
+
+    season_overlap = _jaccard_similarity(
+        {value.lower() for value in item.season_tags},
+        {value.lower() for value in other.season_tags},
+    )
+    if season_overlap > 0:
+        score += 0.12 * season_overlap
+        reasons.append("season tags overlap")
+
+    left_tokens = _tokenize(item.name) | _tokenize(item.set_identifier) | _tokenize(item.fit_tag)
+    right_tokens = _tokenize(other.name) | _tokenize(other.set_identifier) | _tokenize(other.fit_tag)
+    name_similarity = _jaccard_similarity(left_tokens, right_tokens)
+    if name_similarity > 0:
+        score += 0.17 * name_similarity
+        reasons.append("name/details overlap")
+
+    return min(score, 1.0), reasons
+
+
+def get_duplicate_candidates_for_user(
+    db: Session,
+    user_id: int,
+    *,
+    threshold: float = 0.72,
+    limit: int = 50,
+) -> list[dict]:
+    normalized_threshold = max(0.0, min(threshold, 1.0))
+    normalized_limit = max(1, min(limit, 200))
+    items = get_clothing_items_for_user(
+        db=db,
+        user_id=user_id,
+        include_archived=False,
+    )
+    grouped: dict[str, list[models.ClothingItem]] = {}
+    for item in items:
+        grouped.setdefault(_normalize_category(item.category), []).append(item)
+
+    candidates: list[dict] = []
+    for group_items in grouped.values():
+        for first, second in combinations(group_items, 2):
+            score, reasons = _duplicate_similarity(first, second)
+            if score < normalized_threshold:
+                continue
+            item_id, duplicate_item_id = sorted([first.id, second.id])
+            candidates.append(
+                {
+                    "item_id": item_id,
+                    "duplicate_item_id": duplicate_item_id,
+                    "similarity_score": round(score, 3),
+                    "reasons": reasons,
+                }
+            )
+
+    candidates.sort(
+        key=lambda candidate: (
+            candidate["similarity_score"],
+            -candidate["item_id"],
+            -candidate["duplicate_item_id"],
+        ),
+        reverse=True,
+    )
+    return candidates[:normalized_limit]
+
+
+def get_duplicate_candidates_for_item(
+    db: Session,
+    user_id: int,
+    item_id: int,
+    *,
+    threshold: float = 0.72,
+    limit: int = 20,
+) -> list[dict]:
+    normalized_threshold = max(0.0, min(threshold, 1.0))
+    normalized_limit = max(1, min(limit, 100))
+    target_item = db.query(models.ClothingItem).filter(
+        models.ClothingItem.owner_id == user_id,
+        models.ClothingItem.id == item_id,
+        models.ClothingItem.is_archived.is_(False),
+    ).first()
+    if not target_item:
+        return []
+
+    peers = db.query(models.ClothingItem).filter(
+        models.ClothingItem.owner_id == user_id,
+        models.ClothingItem.id != item_id,
+        models.ClothingItem.is_archived.is_(False),
+    ).all()
+
+    candidates: list[dict] = []
+    for peer in peers:
+        score, reasons = _duplicate_similarity(target_item, peer)
+        if score < normalized_threshold:
+            continue
+        candidates.append(
+            {
+                "item_id": target_item.id,
+                "duplicate_item_id": peer.id,
+                "similarity_score": round(score, 3),
+                "reasons": reasons,
+            }
+        )
+    candidates.sort(
+        key=lambda candidate: (
+            candidate["similarity_score"],
+            -candidate["duplicate_item_id"],
+        ),
+        reverse=True,
+    )
+    return candidates[:normalized_limit]
 
 
 def _fit_penalty(item: models.ClothingItem, body_type: Optional[str]) -> int:
@@ -594,31 +1268,269 @@ def _choose_best(
     return available_candidates[0]
 
 
+def _build_feedback_signals(
+    db: Session,
+    *,
+    user_id: int,
+    items: list[models.ClothingItem],
+) -> dict:
+    favorite_item_ids = {
+        item.id
+        for item in items
+        if item.is_favorite and not item.is_archived
+    }
+    wear_counts: dict[int, int] = defaultdict(int)
+    history_rows = db.query(models.OutfitHistory).filter(
+        models.OutfitHistory.owner_id == user_id
+    ).order_by(models.OutfitHistory.worn_at_timestamp.desc()).limit(200).all()
+    for row in history_rows:
+        for raw_item_id in (row.item_ids_csv or "").split(","):
+            text = raw_item_id.strip()
+            if text.isdigit():
+                wear_counts[int(text)] += 1
+    return {
+        "favorite_item_ids": favorite_item_ids,
+        "wear_counts": wear_counts,
+    }
+
+
+def _feedback_adjustment_for_candidate(
+    candidate: deterministic.RecommendationCandidate,
+    *,
+    feedback_signals: dict,
+) -> float:
+    favorite_item_ids: set[int] = feedback_signals.get("favorite_item_ids", set())
+    wear_counts: dict[int, int] = feedback_signals.get("wear_counts", {})
+    if not favorite_item_ids and not wear_counts:
+        return 0.0
+
+    adjustment = 0.0
+    for item_id in candidate.item_ids:
+        if item_id in favorite_item_ids:
+            adjustment += 0.08
+        wear_count = wear_counts.get(item_id, 0)
+        if wear_count >= 4:
+            adjustment -= 0.12
+        elif wear_count >= 2:
+            adjustment -= 0.05
+    return round(adjustment, 3)
+
+
+_FEEDBACK_SCORE_DELTA = {
+    "like": 0.35,
+    "dislike": -0.45,
+    "reject": -1.5,
+}
+
+
+def recommendation_feedback_delta(signal: Optional[str]) -> float:
+    return _FEEDBACK_SCORE_DELTA.get((signal or "").strip().lower(), 0.0)
+
+
+def get_recommendation_feedback_signals_for_user(db: Session, user_id: int) -> dict[str, str]:
+    entries = db.query(models.RecommendationFeedback).filter(
+        models.RecommendationFeedback.owner_id == user_id
+    ).all()
+    return {
+        entry.suggestion_id: entry.signal
+        for entry in entries
+        if entry.suggestion_id and entry.signal
+    }
+
+
+def rank_candidates_with_feedback(
+    candidates: list[deterministic.RecommendationCandidate],
+    feedback_signals: dict[str, str],
+) -> list[deterministic.RecommendationCandidate]:
+    def sort_key(candidate: deterministic.RecommendationCandidate):
+        signal = feedback_signals.get(candidate.fingerprint)
+        reject_flag = 1 if signal == "reject" else 0
+        adjusted_score = candidate.score + recommendation_feedback_delta(signal)
+        return (reject_flag, adjusted_score, candidate.score)
+
+    ranked = sorted(candidates, key=sort_key, reverse=True)
+
+    # Keep rejected outfits at the tail when non-rejected options exist.
+    preferred = [candidate for candidate in ranked if feedback_signals.get(candidate.fingerprint) != "reject"]
+    rejected = [candidate for candidate in ranked if feedback_signals.get(candidate.fingerprint) == "reject"]
+    return preferred + rejected
+
+
+def upsert_recommendation_feedback(
+    db: Session,
+    *,
+    user_id: int,
+    suggestion_id: str,
+    signal: str,
+    item_ids: Optional[list[int]],
+) -> tuple[models.RecommendationFeedback, bool]:
+    timestamp = int(datetime.utcnow().timestamp())
+    entry = db.query(models.RecommendationFeedback).filter(
+        models.RecommendationFeedback.owner_id == user_id,
+        models.RecommendationFeedback.suggestion_id == suggestion_id,
+    ).first()
+    created = False
+    if entry is None:
+        created = True
+        entry = models.RecommendationFeedback(
+            owner_id=user_id,
+            suggestion_id=suggestion_id,
+            signal=signal,
+            item_ids_csv=",".join(str(item_id) for item_id in (item_ids or [])) or None,
+            created_at_timestamp=timestamp,
+            updated_at_timestamp=timestamp,
+        )
+    else:
+        entry.signal = signal
+        if item_ids is not None:
+            entry.item_ids_csv = ",".join(str(item_id) for item_id in item_ids) or None
+        entry.updated_at_timestamp = timestamp
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return entry, created
+
+
+_INTERACTION_SIGNAL_WEIGHT = {
+    "like": 0.45,
+    "save": 0.3,
+    "wear": 0.0,
+    "dislike": -0.55,
+    "reject": -0.9,
+}
+
+
+def record_recommendation_interaction(
+    db: Session,
+    *,
+    user_id: int,
+    suggestion_id: str,
+    signal: str,
+    item_ids: Optional[list[int]],
+) -> models.RecommendationInteraction:
+    timestamp = int(datetime.utcnow().timestamp())
+    interaction = models.RecommendationInteraction(
+        owner_id=user_id,
+        suggestion_id=suggestion_id,
+        signal=signal,
+        item_ids_csv=",".join(str(item_id) for item_id in (item_ids or [])) or None,
+        created_at_timestamp=timestamp,
+    )
+    db.add(interaction)
+    db.commit()
+    db.refresh(interaction)
+    return interaction
+
+
+def _parse_item_ids_csv(raw_value: Optional[str]) -> list[int]:
+    if not raw_value:
+        return []
+    item_ids: list[int] = []
+    for token in raw_value.split(","):
+        cleaned = token.strip()
+        if not cleaned:
+            continue
+        try:
+            parsed = int(cleaned)
+        except ValueError:
+            continue
+        if parsed > 0:
+            item_ids.append(parsed)
+    return item_ids
+
+
+def build_personalization_item_weights(db: Session, user_id: int) -> dict[int, float]:
+    weights: defaultdict[int, float] = defaultdict(float)
+
+    # Personalization weights are based on explicit interaction events only.
+    # Favorite/wear-history signals are already applied by existing feedback logic.
+    interactions = db.query(models.RecommendationInteraction).filter(
+        models.RecommendationInteraction.owner_id == user_id,
+    ).order_by(models.RecommendationInteraction.created_at_timestamp.desc()).limit(250).all()
+    for interaction in interactions:
+        signal_weight = _INTERACTION_SIGNAL_WEIGHT.get((interaction.signal or "").strip().lower(), 0.0)
+        if signal_weight == 0.0:
+            continue
+        for item_id in _parse_item_ids_csv(interaction.item_ids_csv):
+            weights[item_id] += signal_weight
+
+    # Clamp extreme values so sparse/conflicting signals remain stable.
+    clamped_weights = {
+        item_id: max(-1.2, min(weight, 1.2))
+        for item_id, weight in weights.items()
+    }
+    return clamped_weights
+
+
+def personalization_adjustment_for_candidate(item_ids: list[int], item_weights: dict[int, float]) -> float:
+    if not item_ids or not item_weights:
+        return 0.0
+    weighted_values = [item_weights.get(item_id, 0.0) for item_id in item_ids]
+    if not weighted_values:
+        return 0.0
+    return sum(weighted_values) / len(weighted_values)
+
+
 def get_recommendation_options_for_user(
     db: Session,
     user: models.User,
     manual_temp: Optional[int] = None,
     weather_category: Optional[str] = None,
     occasion: Optional[str] = None,
+    time_context: Optional[str] = None,
     exclude: Optional[str] = None,
     limit: int = 3,
+    preferred_seasons: Optional[list[str]] = None,
 ) -> list[dict]:
     normalized_limit = max(1, min(limit, 10))
     all_items = get_clothing_items_for_user(db, user.id)
     item_map = {item.id: item for item in all_items}
-    recent_fingerprints = set(history.get_recent_fingerprints(db, user.id))
+    recent_fingerprints = history.get_recent_fingerprints(db, user.id)
+    implicit_feedback_signals = _build_feedback_signals(
+        db,
+        user_id=user.id,
+        items=all_items,
+    )
+    effective_preferred_seasons = resolve_preferred_seasons(preferred_seasons)
+    explicit_feedback_signals = get_recommendation_feedback_signals_for_user(db, user.id)
+    personalization_weights = build_personalization_item_weights(db, user.id)
 
-    candidates = deterministic.recommend_many(
+    raw_candidates = deterministic.recommend_many(
         items=all_items,
         user=user,
         manual_temp=manual_temp,
         weather_category=weather_category,
         occasion=occasion,
+        time_context=time_context,
         exclude=exclude,
         style_preference=user.lifestyle,
-        preferred_seasons=[],
+        preferred_seasons=effective_preferred_seasons,
         recent_fingerprints=recent_fingerprints,
-        max_options=max(normalized_limit, 3),
+        max_options=max(normalized_limit * 5, 8),
+    )
+    candidates = filter_rejected_candidates_for_user(
+        db=db,
+        user_id=user.id,
+        candidates=raw_candidates,
+        item_map=item_map,
+    )
+    candidates = sorted(
+        candidates,
+        key=lambda candidate: (
+            candidate.score
+            + _feedback_adjustment_for_candidate(
+                candidate,
+                feedback_signals=implicit_feedback_signals,
+            )
+            + personalization_adjustment_for_candidate(candidate.item_ids, personalization_weights)
+        ),
+        reverse=True,
+    )
+    candidates = rank_candidates_with_feedback(candidates, explicit_feedback_signals)
+    candidates = _select_diverse_candidates(
+        candidates,
+        item_map=item_map,
+        limit=normalized_limit,
     )
 
     options: list[dict] = []
@@ -630,11 +1542,21 @@ def get_recommendation_options_for_user(
         if not outfit_items:
             continue
         seen_fingerprints.add(candidate.fingerprint)
+        adjusted_score = candidate.score + _feedback_adjustment_for_candidate(
+            candidate,
+            feedback_signals=implicit_feedback_signals,
+        )
+        adjusted_score += personalization_adjustment_for_candidate(
+            candidate.item_ids,
+            personalization_weights,
+        )
+        signal = explicit_feedback_signals.get(candidate.fingerprint)
+        adjusted_score += recommendation_feedback_delta(signal)
         options.append(
             {
                 "items": outfit_items,
                 "explanation": candidate.explanation,
-                "outfit_score": round(candidate.score, 3),
+                "outfit_score": round(adjusted_score, 3),
                 "weather_category": candidate.weather_category,
                 "fingerprint": candidate.fingerprint,
             }
@@ -666,6 +1588,252 @@ def get_recommendations_for_user(
     return options[0]["items"]
 
 
+def record_feedback_prompt_event(
+    db: Session,
+    *,
+    user_id: int,
+    event_type: str,
+    suggestion_id: Optional[str] = None,
+    event_timestamp: Optional[int] = None,
+):
+    timestamp = event_timestamp or int(datetime.utcnow().timestamp())
+    event = models.FeedbackPromptEvent(
+        owner_id=user_id,
+        event_type=event_type.strip().lower(),
+        suggestion_id=suggestion_id,
+        event_timestamp=timestamp,
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return event
+
+
+def build_feedback_prompt_metadata(
+    db: Session,
+    *,
+    user_id: int,
+    now_timestamp: Optional[int] = None,
+) -> dict:
+    now = now_timestamp or int(datetime.utcnow().timestamp())
+    recent_events = db.query(models.FeedbackPromptEvent).filter(
+        models.FeedbackPromptEvent.owner_id == user_id
+    ).order_by(models.FeedbackPromptEvent.event_timestamp.desc()).limit(20).all()
+
+    last_shown = next((event for event in recent_events if event.event_type == "shown"), None)
+    recent_interactions = [event for event in recent_events if event.event_type in {"ignored", "dismissed", "accepted"}]
+    recent_ignore_count = sum(1 for event in recent_interactions[:3] if event.event_type in {"ignored", "dismissed"})
+    cooldown_seconds = (
+        PROMPT_IGNORE_COOLDOWN_SECONDS if recent_ignore_count >= 3 else PROMPT_DEFAULT_COOLDOWN_SECONDS
+    )
+    if not last_shown:
+        return {
+            "should_prompt": True,
+            "reason": "no_previous_prompt",
+            "cooldown_seconds_remaining": 0,
+        }
+
+    elapsed = max(0, now - int(last_shown.event_timestamp))
+    remaining = max(0, cooldown_seconds - elapsed)
+    if remaining > 0:
+        reason = "cooldown_after_ignores" if recent_ignore_count >= 3 else "cooldown_active"
+        return {
+            "should_prompt": False,
+            "reason": reason,
+            "cooldown_seconds_remaining": remaining,
+        }
+
+    return {
+        "should_prompt": True,
+        "reason": "cadence_due",
+        "cooldown_seconds_remaining": 0,
+    }
+
+
+def maybe_record_feedback_prompt_impression(
+    db: Session,
+    *,
+    user_id: int,
+    suggestion_id: Optional[str],
+) -> dict:
+    metadata = build_feedback_prompt_metadata(db, user_id=user_id)
+    if metadata["should_prompt"]:
+        record_feedback_prompt_event(
+            db,
+            user_id=user_id,
+            event_type="shown",
+            suggestion_id=suggestion_id,
+        )
+    return metadata
+
+
+def get_underused_clothing_alerts(
+    db: Session,
+    *,
+    user_id: int,
+    analysis_window_days: int = 21,
+    max_results: int = 20,
+    reference_timestamp: Optional[int] = None,
+) -> dict:
+    now_timestamp = reference_timestamp or int(datetime.utcnow().timestamp())
+    window_days = max(1, min(analysis_window_days, 180))
+    active_items = get_clothing_items_for_user(
+        db=db,
+        user_id=user_id,
+        include_archived=False,
+    )
+    wear_counts: dict[int, int] = {}
+    latest_worn_by_item: dict[int, int] = {}
+
+    history_entries = get_outfit_history_for_user(db, user_id)
+    for entry in history_entries:
+        for raw_item_id in (entry.item_ids_csv or "").split(","):
+            text = raw_item_id.strip()
+            if not text.isdigit():
+                continue
+            item_id = int(text)
+            wear_counts[item_id] = wear_counts.get(item_id, 0) + 1
+            previous_latest = latest_worn_by_item.get(item_id, 0)
+            latest_worn_by_item[item_id] = max(previous_latest, entry.worn_at_timestamp)
+
+    alerts: list[dict] = []
+    for item in active_items:
+        wear_count = wear_counts.get(item.id, 0)
+        last_worn_timestamp = item.last_worn_timestamp or latest_worn_by_item.get(item.id)
+        days_since_worn: Optional[int] = None
+        if last_worn_timestamp:
+            days_since_worn = max(0, int((now_timestamp - int(last_worn_timestamp)) / 86400))
+
+        is_underused = False
+        if wear_count == 0:
+            is_underused = True
+        elif days_since_worn is None:
+            is_underused = True
+        elif days_since_worn >= window_days:
+            is_underused = True
+        elif wear_count == 1 and days_since_worn >= max(7, window_days // 2):
+            is_underused = True
+
+        if not is_underused:
+            continue
+
+        if days_since_worn is None:
+            alert_level = "high"
+        elif days_since_worn >= window_days * 2:
+            alert_level = "high"
+        elif days_since_worn >= window_days:
+            alert_level = "medium"
+        else:
+            alert_level = "low"
+
+        alerts.append(
+            {
+                "item_id": item.id,
+                "item_name": item.name or f"Item {item.id}",
+                "category": item.category,
+                "wear_count": wear_count,
+                "last_worn_timestamp": last_worn_timestamp,
+                "days_since_worn": days_since_worn,
+                "alert_level": alert_level,
+            }
+        )
+
+    alerts.sort(
+        key=lambda entry: (
+            0 if entry["days_since_worn"] is None else -entry["days_since_worn"],
+            entry["wear_count"],
+            entry["item_id"],
+        )
+    )
+    limited_alerts = alerts[: max(1, min(max_results, 100))]
+    return {
+        "generated_at_timestamp": now_timestamp,
+        "analysis_window_days": window_days,
+        "alerts": limited_alerts,
+        "insufficient_data": len(active_items) < 3,
+    }
+
+
+def generate_trip_packing_list(
+    db: Session,
+    *,
+    user_id: int,
+    destination_city: str,
+    start_date: str,
+    trip_days: int,
+    forecast_days: list[dict],
+) -> dict:
+    normalized_days = max(1, min(trip_days, 30))
+    wardrobe_items = [
+        item
+        for item in get_clothing_items_for_user(
+            db=db,
+            user_id=user_id,
+            include_archived=False,
+        )
+        if item.is_available
+    ]
+
+    by_category: dict[str, list[models.ClothingItem]] = {
+        "top": [],
+        "bottom": [],
+        "shoes": [],
+        "outerwear": [],
+        "accessory": [],
+    }
+    for item in wardrobe_items:
+        key = _normalize_category(item.category)
+        if key in by_category:
+            by_category[key].append(item)
+
+    weather_categories = {str(day.get("weather_category", "")).strip().lower() for day in forecast_days}
+    weather_descriptions = " ".join(str(day.get("description", "")).lower() for day in forecast_days)
+    needs_outerwear = (
+        bool(weather_categories.intersection({"cold", "cool"}))
+        or "rain" in weather_descriptions
+        or "snow" in weather_descriptions
+    )
+    recommended_quantities = {
+        "top": normalized_days,
+        "bottom": max(2, (normalized_days + 1) // 2),
+        "shoes": 1 if normalized_days <= 4 else 2,
+        "outerwear": 1 if needs_outerwear else 0,
+        "accessory": 1 if normalized_days >= 3 else 0,
+    }
+
+    items: list[dict] = []
+    for category, quantity in recommended_quantities.items():
+        if quantity <= 0:
+            continue
+        available = by_category.get(category, [])
+        selected = available[:quantity]
+        missing_quantity = max(0, quantity - len(selected))
+        items.append(
+            {
+                "category": category,
+                "recommended_quantity": quantity,
+                "selected_item_ids": [item.id for item in selected],
+                "selected_item_names": [item.name or f"Item {item.id}" for item in selected],
+                "missing_quantity": missing_quantity,
+            }
+        )
+
+    summary_parts = [
+        f"{day.get('date')}: {day.get('weather_category')} {day.get('description')}"
+        for day in forecast_days[:3]
+    ]
+    weather_summary = "; ".join(summary_parts) if summary_parts else "Forecast unavailable"
+    return {
+        "destination_city": destination_city,
+        "start_date": start_date,
+        "trip_days": normalized_days,
+        "weather_summary": weather_summary,
+        "items": items,
+        "generated_at_timestamp": int(datetime.utcnow().timestamp()),
+        "insufficient_data": len(wardrobe_items) < 3,
+    }
+
+
 def save_outfit_history(
     db: Session,
     user_id: int,
@@ -689,6 +1857,63 @@ def get_outfit_history_for_user(db: Session, user_id: int):
     ).order_by(models.OutfitHistory.worn_at_timestamp.desc()).all()
 
 
+def get_outfit_history_for_user_in_range(
+    db: Session,
+    user_id: int,
+    start_timestamp: int,
+    end_timestamp: int,
+):
+    # Support both second-based and millisecond-based timestamps.
+    start_millis = start_timestamp * 1000
+    end_millis = (end_timestamp * 1000) + 999
+    return db.query(models.OutfitHistory).filter(
+        models.OutfitHistory.owner_id == user_id,
+        or_(
+            and_(
+                models.OutfitHistory.worn_at_timestamp >= start_timestamp,
+                models.OutfitHistory.worn_at_timestamp <= end_timestamp,
+            ),
+            and_(
+                models.OutfitHistory.worn_at_timestamp >= start_millis,
+                models.OutfitHistory.worn_at_timestamp <= end_millis,
+            ),
+        ),
+    ).order_by(models.OutfitHistory.worn_at_timestamp.desc()).all()
+
+
+def update_outfit_history_entry(
+    db: Session,
+    *,
+    user_id: int,
+    history_id: int,
+    item_ids: Optional[list[int]] = None,
+    worn_at_timestamp: Optional[int] = None,
+) -> Optional[models.OutfitHistory]:
+    entry = db.query(models.OutfitHistory).filter(
+        models.OutfitHistory.owner_id == user_id,
+        models.OutfitHistory.id == history_id,
+    ).first()
+    if not entry:
+        return None
+    if item_ids is not None:
+        entry.item_ids_csv = ",".join(str(item_id) for item_id in item_ids)
+    if worn_at_timestamp is not None:
+        entry.worn_at_timestamp = worn_at_timestamp
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+
+def delete_outfit_history_entry(db: Session, *, user_id: int, history_id: int) -> bool:
+    deleted = db.query(models.OutfitHistory).filter(
+        models.OutfitHistory.owner_id == user_id,
+        models.OutfitHistory.id == history_id,
+    ).delete()
+    db.commit()
+    return deleted > 0
+
+
 def clear_outfit_history_for_user(db: Session, user_id: int):
     db.query(models.OutfitHistory).filter(
         models.OutfitHistory.owner_id == user_id
@@ -702,7 +1927,7 @@ def save_saved_outfit(
     item_ids: list[int],
     saved_at_timestamp: Optional[int] = None,
 ):
-    timestamp = saved_at_timestamp or int(datetime.now(timezone.utc).timestamp())
+    timestamp = saved_at_timestamp or int(datetime.utcnow().timestamp())
     outfit = models.SavedOutfit(
         owner_id=user_id,
         item_ids_csv=",".join(str(item_id) for item_id in item_ids),
@@ -737,7 +1962,7 @@ def save_planned_outfit(
     occasion: Optional[str] = None,
     created_at_timestamp: Optional[int] = None,
 ):
-    timestamp = created_at_timestamp or int(datetime.now(timezone.utc).timestamp())
+    timestamp = created_at_timestamp or int(datetime.utcnow().timestamp())
     outfit = models.PlannedOutfit(
         owner_id=user_id,
         item_ids_csv=",".join(str(item_id) for item_id in item_ids),

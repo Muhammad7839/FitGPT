@@ -6,9 +6,11 @@ import {
   readDemoAuth, writeDemoAuth,
   loadAnswers, saveAnswers, isOnboarded, clearOnboarding,
   loadProfilePic, saveProfilePic,
-  isTutorialDone, markTutorialDone,
+  isTutorialDone, markTutorialDone, clearTutorialDone,
+  isSplashSeen, markSplashSeen, clearSplashSeen,
+  isGuestMode, setGuestMode,
 } from "./userStorage";
-import { GUEST_WARDROBE_KEY, WARDROBE_KEY, SAVED_OUTFITS_KEY, PROFILE_KEY, REC_SEED_KEY, TIME_OVERRIDE_KEY, WEATHER_OVERRIDE_KEY, DEMO_AUTH_KEY, ONBOARDING_ANSWERS_KEY, ONBOARDED_KEY, PROFILE_PIC_KEY, EVT_PROFILE_PIC_CHANGED, TUTORIAL_DONE_KEY } from "./constants";
+import { GUEST_WARDROBE_KEY, WARDROBE_KEY, SAVED_OUTFITS_KEY, PROFILE_KEY, REC_SEED_KEY, TIME_OVERRIDE_KEY, WEATHER_OVERRIDE_KEY, DEMO_AUTH_KEY, ONBOARDING_ANSWERS_KEY, ONBOARDED_KEY, ONBOARDING_COMPLETE_KEY, PROFILE_PIC_KEY, EVT_PROFILE_PIC_CHANGED, TUTORIAL_DONE_KEY, TUTORIAL_COMPLETE_KEY, SPLASH_SEEN_KEY, GUEST_MODE_KEY } from "./constants";
 
 beforeEach(() => {
   localStorage.clear();
@@ -432,5 +434,49 @@ describe("isTutorialDone / markTutorialDone", () => {
   test("returns true after markTutorialDone", () => {
     markTutorialDone();
     expect(isTutorialDone()).toBe(true);
+    expect(localStorage.getItem(TUTORIAL_DONE_KEY)).toBe("1");
+    expect(localStorage.getItem(TUTORIAL_COMPLETE_KEY)).toBe("1");
+  });
+
+  test("preserves compatibility with either tutorial key", () => {
+    localStorage.setItem(TUTORIAL_COMPLETE_KEY, "1");
+    expect(isTutorialDone()).toBe(true);
+
+    clearTutorialDone();
+    expect(isTutorialDone()).toBe(false);
+  });
+});
+
+describe("first launch flags", () => {
+  test("tracks splash completion", () => {
+    expect(isSplashSeen()).toBe(false);
+    markSplashSeen();
+    expect(localStorage.getItem(SPLASH_SEEN_KEY)).toBe("1");
+    expect(isSplashSeen()).toBe(true);
+    clearSplashSeen();
+    expect(isSplashSeen()).toBe(false);
+  });
+
+  test("tracks guest mode only for unauthenticated users", () => {
+    expect(isGuestMode(null)).toBe(false);
+    setGuestMode(true);
+    expect(localStorage.getItem(GUEST_MODE_KEY)).toBe("1");
+    expect(isGuestMode(null)).toBe(true);
+    expect(isGuestMode({ id: "u1" })).toBe(false);
+
+    setGuestMode(false);
+    expect(isGuestMode(null)).toBe(false);
+  });
+
+  test("onboarding complete reads old and compatibility keys", () => {
+    localStorage.setItem(ONBOARDING_COMPLETE_KEY, "1");
+    expect(isOnboarded(null)).toBe(true);
+
+    clearOnboarding(null);
+    expect(isOnboarded(null)).toBe(false);
+
+    saveAnswers({ style: ["Classic"] }, null);
+    expect(localStorage.getItem(ONBOARDED_KEY)).toBe("1");
+    expect(localStorage.getItem(ONBOARDING_COMPLETE_KEY)).toBe("1");
   });
 });

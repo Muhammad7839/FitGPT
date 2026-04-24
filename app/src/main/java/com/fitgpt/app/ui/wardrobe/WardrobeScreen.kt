@@ -4,6 +4,7 @@
 package com.fitgpt.app.ui.wardrobe
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,11 +19,16 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.data.model.DuplicateCandidate
+import com.fitgpt.app.data.model.UnderusedAlertsResult
 import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.navigation.TopLevelReselectBus
 import com.fitgpt.app.navigation.navigateToSecondary
@@ -45,6 +51,8 @@ fun WardrobeScreen(
 ) {
 
     val uiState by viewModel.wardrobeState.collectAsState()
+    val underusedAlertsState by viewModel.underusedAlertsState.collectAsState()
+    val duplicateCandidatesState by viewModel.duplicateCandidatesState.collectAsState()
     var query by remember { mutableStateOf("") }
     var showArchived by remember { mutableStateOf(false) }
     var favoritesOnly by remember { mutableStateOf(false) }
@@ -265,6 +273,43 @@ fun WardrobeScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("All seasons", "Spring", "Summer", "Fall", "Winter").forEach { option ->
+                    val selected = if (option == "All seasons") {
+                        seasonFilter.isBlank()
+                    } else {
+                        seasonFilter.equals(option, ignoreCase = true)
+                    }
+                    FilterChip(
+                        selected = selected,
+                        onClick = {
+                            seasonFilter = if (option == "All seasons") "" else option
+                        },
+                        label = { Text(option) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            RotationVisibilityCard(
+                underusedAlertsState = underusedAlertsState,
+                onRefresh = { viewModel.fetchUnderusedAlerts() }
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            DuplicateReviewCard(
+                duplicateCandidatesState = duplicateCandidatesState,
+                onRefresh = { viewModel.fetchDuplicateCandidates() },
+                onArchiveDuplicate = { candidate -> viewModel.deleteItem(candidate.duplicateItem) }
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             val categoryFilters = listOf("All", "Top", "Bottom", "Shoes", "Outerwear", "Accessories")
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(categoryFilters) { category ->
@@ -308,7 +353,10 @@ fun WardrobeScreen(
                         LazyColumn(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(displayItems) { item ->
+                            items(
+                                items = displayItems,
+                                key = { it.id }
+                            ) { item ->
                                 WardrobeItemCard(
                                     item = item,
                                     viewModel = viewModel,
@@ -357,6 +405,151 @@ fun WardrobeScreen(
 }
 
 @Composable
+private fun RotationVisibilityCard(
+    underusedAlertsState: UiState<UnderusedAlertsResult?>,
+    onRefresh: () -> Unit
+) {
+    WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Wardrobe rotation", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "Surface underused pieces so your active wardrobe stays in rotation.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(onClick = onRefresh) {
+                    Text("Refresh")
+                }
+            }
+
+            when (underusedAlertsState) {
+                UiState.Loading -> CircularProgressIndicator()
+                is UiState.Error -> Text(
+                    text = underusedAlertsState.message,
+                    color = MaterialTheme.colorScheme.error
+                )
+                is UiState.Success -> {
+                    val alerts = underusedAlertsState.data?.alerts.orEmpty().take(3)
+                    if (alerts.isEmpty()) {
+                        Text(
+                            text = "No rotation alerts right now. Your recently worn pieces look balanced.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        alerts.forEach { alert ->
+                            WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = alert.itemName,
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(
+                                        text = "${alert.category} • ${alert.daysSinceWorn ?: 0} days since last wear",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    WebBadge(text = "Rotation ${alert.alertLevel}")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DuplicateReviewCard(
+    duplicateCandidatesState: UiState<List<DuplicateCandidate>>,
+    onRefresh: () -> Unit,
+    onArchiveDuplicate: (DuplicateCandidate) -> Unit
+) {
+    WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Duplicate review", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "Check near-identical wardrobe items before they clutter recommendations.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(onClick = onRefresh) {
+                    Text("Scan")
+                }
+            }
+
+            when (duplicateCandidatesState) {
+                UiState.Loading -> CircularProgressIndicator()
+                is UiState.Error -> Text(
+                    text = duplicateCandidatesState.message,
+                    color = MaterialTheme.colorScheme.error
+                )
+                is UiState.Success -> {
+                    val duplicates = duplicateCandidatesState.data.take(3)
+                    if (duplicates.isEmpty()) {
+                        Text(
+                            text = "No likely duplicates detected in the current wardrobe snapshot.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        duplicates.forEach { candidate ->
+                            WebCard(modifier = Modifier.fillMaxWidth(), accentTop = false) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "${candidate.item.name ?: candidate.item.category} vs ${candidate.duplicateItem.name ?: candidate.duplicateItem.category}",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(
+                                        text = "Match ${(candidate.similarityScore * 100).toInt()}% • ${candidate.reasons.joinToString().ifBlank { "similar metadata" }}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        WebBadge(text = candidate.item.category)
+                                        WebBadge(text = candidate.duplicateItem.category)
+                                    }
+                                    TextButton(onClick = { onArchiveDuplicate(candidate) }) {
+                                        Text("Archive second item")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun WardrobeItemCard(
     item: ClothingItem,
     viewModel: WardrobeViewModel,
@@ -368,74 +561,154 @@ fun WardrobeItemCard(
 ) {
 
     val explanation = viewModel.generateExplanation(item)
+    var actionsExpanded by rememberSaveable(item.id) { mutableStateOf(false) }
+    var revealDragDistance by remember(item.id) { mutableFloatStateOf(0f) }
 
     WebCard(
         modifier = Modifier.fillMaxWidth(),
         accentTop = false
     ) {
-        Row(
+        Column(
             modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize()
                 .padding(16.dp)
                 .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            RemoteImagePreview(
-                imageUrl = item.imageUrl,
-                contentDescription = item.category,
-                modifier = Modifier.size(72.dp)
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-
-                Text(
-                    text = "${item.name ?: item.category} • ${item.color}",
-                    style = MaterialTheme.typography.titleMedium
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RemoteImagePreview(
+                    imageUrl = item.imageUrl,
+                    contentDescription = item.category,
+                    modifier = Modifier.size(72.dp)
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
-                Text(
-                    text = "${item.season} • ${item.clothingType ?: "Type n/a"} • Fit ${item.fitTag ?: "n/a"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Column(modifier = Modifier.weight(1f)) {
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "${item.name ?: item.category} • ${item.color}",
+                        style = MaterialTheme.typography.titleMedium
+                    )
 
-                Text(
-                    text = explanation,
-                    style = MaterialTheme.typography.bodySmall
-                )
+                    Spacer(modifier = Modifier.height(4.dp))
 
-                if (showBodyFitAssist) {
+                    Text(
+                        text = "${item.season} • ${item.clothingType ?: "Type n/a"} • Fit ${item.fitTag ?: "n/a"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
                     Spacer(modifier = Modifier.height(8.dp))
-                    WebBadge(text = fitAssistLabel(item.fitTag))
+
+                    Text(
+                        text = explanation,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+
+                    if (showBodyFitAssist) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        WebBadge(text = fitAssistLabel(item.fitTag))
+                    }
+                    if (item.isOnePiece) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        WebBadge(text = "One-piece")
+                    }
+                    item.setIdentifier?.takeIf { it.isNotBlank() }?.let { setId ->
+                        Spacer(modifier = Modifier.height(6.dp))
+                        WebBadge(text = "Set: $setId")
+                    }
                 }
-                if (item.isOnePiece) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    WebBadge(text = "One-piece")
-                }
-                item.setIdentifier?.takeIf { it.isNotBlank() }?.let { setId ->
-                    Spacer(modifier = Modifier.height(6.dp))
-                    WebBadge(text = "Set: $setId")
+
+                IconButton(onClick = onToggleFavorite) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Favorite"
+                    )
                 }
             }
 
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Default.Edit, contentDescription = "Edit")
-            }
-
-            IconButton(onClick = onToggleFavorite) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = "Favorite"
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pointerInput(item.id) {
+                        detectVerticalDragGestures(
+                            onDragStart = {
+                                revealDragDistance = 0f
+                            },
+                            onVerticalDrag = { _, dragAmount ->
+                                revealDragDistance += dragAmount
+                            },
+                            onDragEnd = {
+                                when {
+                                    revealDragDistance <= -56f -> actionsExpanded = true
+                                    revealDragDistance >= 56f -> actionsExpanded = false
+                                }
+                                revealDragDistance = 0f
+                            },
+                            onDragCancel = {
+                                revealDragDistance = 0f
+                            }
+                        )
+                    },
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                shape = MaterialTheme.shapes.small
+            ) {
+                Text(
+                    text = if (actionsExpanded) "Swipe down here to hide actions" else "Swipe up here to reveal edit and delete",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
                 )
             }
 
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete")
+            AnimatedVisibility(visible = actionsExpanded) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onEdit,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Edit")
+                    }
+
+                    OutlinedButton(
+                        onClick = onDelete,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Delete")
+                    }
+                }
+            }
+
+            if (!actionsExpanded) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = { actionsExpanded = true }) {
+                        Text("Actions")
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = { actionsExpanded = false }) {
+                        Text("Hide")
+                    }
+                }
             }
         }
     }

@@ -195,6 +195,55 @@ const TUTORIAL_STEPS = [
   },
 ];
 
+const GUEST_TUTORIAL_STEPS = [
+  {
+    type: "spotlight",
+    route: "/dashboard",
+    selector: ".topNavInner",
+    title: "Welcome to FitGPT!",
+    description:
+      "Guest mode starts with Home and Wardrobe so you can preview outfit recommendations and build your closet before signing in.",
+  },
+  {
+    type: "spotlight",
+    route: "/dashboard",
+    selector: ".dashWeatherCard",
+    title: "Today's Outfit Context",
+    description:
+      "FitGPT uses weather, time, wardrobe items, and your onboarding preferences to shape guest recommendations.",
+  },
+  {
+    type: "navigate",
+    route: "/dashboard",
+    navHref: "/wardrobe",
+    title: "Build Your Closet",
+    description: "Click Wardrobe to add clothing items while browsing as a guest.",
+  },
+  {
+    type: "spotlight",
+    route: "/wardrobe",
+    selector: ".wardrobeUploadCard",
+    title: "Add Wardrobe Items",
+    description:
+      "Guest uploads stay local to this browser session. Sign in when you're ready to save and sync permanently.",
+  },
+  {
+    type: "spotlight",
+    route: "/wardrobe",
+    selector: ".topNavAuthBtn",
+    title: "Unlock Full FitGPT",
+    description:
+      "Use Sign in to unlock saved outfits, plans, history, profile, builder, and the full assistant experience.",
+  },
+  {
+    type: "done",
+    route: "/wardrobe",
+    title: "You're Ready",
+    description:
+      "Guest mode is set up. Home and Wardrobe stay available until you sign in.",
+  },
+];
+
 const PAD = 8;
 
 function queryTarget(selector) {
@@ -211,16 +260,23 @@ function getRect(el) {
   return el.getBoundingClientRect();
 }
 
-export default function GuidedTutorial({ show, onDismiss }) {
+export default function GuidedTutorial({ show, onDismiss, mode = "full" }) {
   const [step, setStep] = useState(0);
   const [targetRect, setTargetRect] = useState(null);
   const tooltipRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
 
-  const current = TUTORIAL_STEPS[step];
+  const steps = mode === "guest" ? GUEST_TUTORIAL_STEPS : TUTORIAL_STEPS;
+  const current = steps[Math.min(step, steps.length - 1)];
   const isFinal = current.type === "done";
   const isNav = current.type === "navigate";
+
+  useEffect(() => {
+    if (!show) return;
+    setStep(0);
+    setTargetRect(null);
+  }, [show, mode]);
 
   // Navigate when a step has navigateTo (e.g. switching tabs)
   useEffect(() => {
@@ -271,7 +327,7 @@ export default function GuidedTutorial({ show, onDismiss }) {
   const handleNext = () => {
     if (isFinal) {
       finish();
-      navigate("/wardrobe");
+      navigate(mode === "guest" ? "/dashboard" : "/wardrobe");
       return;
     }
     if (isNav) {
@@ -285,7 +341,7 @@ export default function GuidedTutorial({ show, onDismiss }) {
 
   const handleBack = () => {
     if (step <= 0) return;
-    const prevStep = TUTORIAL_STEPS[step - 1];
+    const prevStep = steps[step - 1];
     // Use navigateTo if the previous step has one, otherwise fall back to route
     if (prevStep.navigateTo) {
       navigate(prevStep.navigateTo);
@@ -295,7 +351,10 @@ export default function GuidedTutorial({ show, onDismiss }) {
     setStep((s) => s - 1);
   };
 
-  const handleSkip = () => finish();
+  const handleSkip = () => {
+    finish();
+    if (mode === "guest") navigate("/dashboard");
+  };
 
   // Measure actual tooltip height after render
   const [tooltipHeight, setTooltipHeight] = useState(0);
@@ -356,7 +415,7 @@ export default function GuidedTutorial({ show, onDismiss }) {
       ? targetRect.left + targetRect.width / 2 - (tooltipStyle.left || 0)
       : 0;
 
-  const totalNavSteps = TUTORIAL_STEPS.length - 1; // exclude "done"
+  const totalNavSteps = steps.length - 1; // exclude "done"
   const stepLabel = `${step + 1} / ${totalNavSteps}`;
 
   return ReactDOM.createPortal(

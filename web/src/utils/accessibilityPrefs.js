@@ -11,11 +11,11 @@ function normalize(prefs) {
   return { textSize };
 }
 
-export function readAccessibilityPrefs(user) {
+export function readAccessibilityPrefs(user = null) {
   return normalize(store.read(user));
 }
 
-export function writeAccessibilityPrefs(prefs, user) {
+export function writeAccessibilityPrefs(prefs, user = null) {
   const safe = normalize(prefs);
   store.write(safe, user);
   return safe;
@@ -25,11 +25,13 @@ export function applyAccessibilityToDocument(prefs) {
   const safe = normalize(prefs);
   const root = typeof document !== "undefined" ? document.documentElement : null;
   if (!root) return safe;
+
   if (safe.textSize === "default") {
     root.removeAttribute("data-text-size");
   } else {
     root.setAttribute("data-text-size", safe.textSize);
   }
+
   return safe;
 }
 
@@ -47,15 +49,9 @@ export function adaptAiText(text, prefs) {
     .trim();
 }
 
-/**
- * Returns the effective accessibility prefs, escalating the text-size
- * to "large" when a high-contrast theme is active so AI output is
- * structurally simplified alongside the stronger visual contrast.
- */
 export function effectiveAccessibilityPrefs(prefs, theme) {
   const safe = normalize(prefs);
-  const hcActive = !!(theme && theme.highContrast);
-  if (hcActive && safe.textSize === "default") {
+  if (theme?.highContrast && safe.textSize === "default") {
     return { ...safe, textSize: "large" };
   }
   return safe;
@@ -64,19 +60,23 @@ export function effectiveAccessibilityPrefs(prefs, theme) {
 function splitLongSentences(block, maxChars) {
   const normalized = block.replace(/\s+/g, " ").trim();
   if (!normalized) return "";
+
   const sentences = normalized.match(/[^.!?]+[.!?]*/g) || [normalized];
   const lines = [];
   let buffer = "";
+
   for (const sentence of sentences) {
-    const s = sentence.trim();
-    if (!s) continue;
-    if ((buffer + " " + s).trim().length > maxChars && buffer) {
+    const safeSentence = sentence.trim();
+    if (!safeSentence) continue;
+
+    if ((buffer + " " + safeSentence).trim().length > maxChars && buffer) {
       lines.push(buffer.trim());
-      buffer = s;
+      buffer = safeSentence;
     } else {
-      buffer = buffer ? `${buffer} ${s}` : s;
+      buffer = buffer ? `${buffer} ${safeSentence}` : safeSentence;
     }
   }
+
   if (buffer) lines.push(buffer.trim());
   return lines.join("\n\n");
 }

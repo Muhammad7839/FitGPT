@@ -59,7 +59,6 @@ describe("analyzeWardrobeRotation", () => {
       { id: "shirt-1", name: "Blue Oxford", category: "tops" },
     ];
 
-    const history = [];
     const dismissedAlerts = {
       "shirt-1": now - 24 * 60 * 60 * 1000,
     };

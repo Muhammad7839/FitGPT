@@ -3,7 +3,24 @@ import { Route, Routes, Navigate, useLocation, useNavigate } from "react-router-
 import PageTransition from "../components/PageTransition";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { useAuth } from "../auth/AuthProvider";
-import { loadAnswers, saveAnswers, isOnboarded, clearOnboarding, isTutorialDone } from "../utils/userStorage";
+import {
+  loadAnswers,
+  saveAnswers,
+  isOnboarded,
+  clearOnboarding,
+  isTutorialDone,
+  clearTutorialDone,
+  isSplashSeen,
+  markSplashSeen,
+  setGuestMode,
+} from "../utils/userStorage";
+import { completeOnboarding } from "../api/profileApi";
+import {
+  getGuestProtectedRedirect,
+  getStartupStage,
+  isGuestRouteAllowed,
+  shouldShowTutorial,
+} from "../utils/firstLaunchFlow";
 import GuidedTutorial from "../components/GuidedTutorial";
 import Login from "../components/Login";
 import Signup from "../components/Signup";
@@ -18,7 +35,12 @@ import Plans from "../components/Plans";
 import SavedOutfits from "../components/SavedOutfits";
 import OutfitBuilder from "../components/OutfitBuilder";
 
-function OnboardingWrapper({ onComplete, savedAnswers }) {
+function OnboardingWrapper({
+  onComplete,
+  savedAnswers,
+  showSplashOnLoad = true,
+  onSplashComplete,
+}) {
   const navigate = useNavigate();
 
   const handleComplete = useCallback(
@@ -29,22 +51,59 @@ function OnboardingWrapper({ onComplete, savedAnswers }) {
     [onComplete, navigate]
   );
 
-  return <Onboarding onComplete={handleComplete} initialAnswers={savedAnswers} />;
+  return (
+    <Onboarding
+      onComplete={handleComplete}
+      initialAnswers={savedAnswers}
+      showSplashOnLoad={showSplashOnLoad}
+      onSplashComplete={onSplashComplete}
+    />
+  );
+}
+
+function ProtectedRoute({ children }) {
+  const location = useLocation();
+  const { user } = useAuth();
+
+  if (!user) {
+    return <Navigate to={getGuestProtectedRedirect(location.pathname)} replace />;
+  }
+
+  return children;
 }
 
 export default function AppRoutes() {
   const location = useLocation();
-  const { pathname, search } = location;
-  const { user } = useAuth();
+  const { pathname, search, state } = location;
+  const { user, isChecking } = useAuth();
+  const navigate = useNavigate();
+  const remoteOnboarded = Boolean(user?.onboarding_complete ?? user?.onboardingComplete);
 
   const [answers, setAnswers] = useState(() => loadAnswers(user));
-  const [onboarded, setOnboarded] = useState(() => isOnboarded(user));
+  const [onboarded, setOnboarded] = useState(() => remoteOnboarded || isOnboarded(user));
   const [justOnboarded, setJustOnboarded] = useState(false);
-  const showTutorial = justOnboarded && !isTutorialDone();
+  const [splashSeen, setSplashSeen] = useState(() => isSplashSeen());
+  const [tutorialDone, setTutorialDone] = useState(() => isTutorialDone());
+  const tutorialEligiblePath = pathname === "/dashboard" || pathname === "/wardrobe";
+  const showTutorial =
+    tutorialEligiblePath &&
+    shouldShowTutorial({
+      user,
+      onboarded,
+      tutorialDone,
+      justOnboarded,
+    });
 
   useEffect(() => {
     setAnswers(loadAnswers(user));
-    setOnboarded(isOnboarded(user));
+    setOnboarded(remoteOnboarded || isOnboarded(user));
+    setTutorialDone(isTutorialDone());
+  }, [remoteOnboarded, user]);
+
+  useEffect(() => {
+    if (user) {
+      setGuestMode(false);
+    }
   }, [user]);
 
   useEffect(() => {
@@ -55,40 +114,73 @@ export default function AppRoutes() {
       .filter(
         (key) =>
           key.startsWith("fitgpt_onboarded_v1") ||
+          key.startsWith("fitgpt_onboarding_complete") ||
           key.startsWith("fitgpt_onboarding_answers_v1") ||
-          key.startsWith("fitgpt_tutorial_done_v1")
+          key.startsWith("fitgpt_tutorial_done_v1") ||
+          key.startsWith("fitgpt_tutorial_complete") ||
+          key.startsWith("fitgpt_splash_seen") ||
+          key.startsWith("fitgpt_guest_mode")
       )
       .forEach((key) => localStorage.removeItem(key));
 
     setAnswers(null);
     setOnboarded(false);
     setJustOnboarded(false);
+    setSplashSeen(false);
+    setTutorialDone(false);
 
     const nextParams = new URLSearchParams(search);
     nextParams.delete("resetOnboarding");
     const nextUrl = nextParams.toString() ? `/?${nextParams.toString()}` : "/";
-    window.location.replace(nextUrl);
-  }, [search]);
+    navigate(nextUrl, { replace: true, state: { skipOnboardingSplash: true } });
+  }, [navigate, search]);
 
   const handleOnboardingComplete = useCallback(
-    (finalAnswers) => {
+    async (finalAnswers) => {
       setAnswers(finalAnswers);
       saveAnswers(finalAnswers, user);
+      try {
+        if (user) {
+          await completeOnboarding(finalAnswers, user);
+        }
+      } catch {}
       setOnboarded(true);
       setJustOnboarded(true);
+      setTutorialDone(isTutorialDone());
     },
     [user]
   );
 
   const handleResetOnboarding = useCallback(() => {
     clearOnboarding(user);
+    clearTutorialDone();
     setAnswers(null);
     setOnboarded(false);
-  }, [user]);
+    setJustOnboarded(false);
+    setTutorialDone(false);
+    navigate("/", { replace: true, state: { skipOnboardingSplash: true } });
+  }, [navigate, user]);
+
+  const handleSplashComplete = useCallback(() => {
+    markSplashSeen();
+    setSplashSeen(true);
+  }, []);
 
   const handleTutorialDismiss = useCallback(() => {
+    setGuestMode(!user);
+    setTutorialDone(true);
     setJustOnboarded(false);
-  }, []);
+  }, [user]);
+
+  if (isChecking) return null;
+
+  const startupStage = getStartupStage({
+    user,
+    isChecking,
+    onboarded,
+    tutorialDone,
+    splashSeen,
+  });
 
   return (
     <>
@@ -97,12 +189,16 @@ export default function AppRoutes() {
           <Route
             path="/"
             element={
-              onboarded ? (
+              startupStage === "guest-home" ||
+              startupStage === "tutorial" ||
+              startupStage === "signed-in-home" ? (
                 <Navigate to="/dashboard" replace />
               ) : (
                 <OnboardingWrapper
                   onComplete={handleOnboardingComplete}
                   savedAnswers={answers}
+                  showSplashOnLoad={!user && !state?.skipOnboardingSplash && !splashSeen}
+                  onSplashComplete={handleSplashComplete}
                 />
               )
             }
@@ -134,51 +230,97 @@ export default function AppRoutes() {
           <Route
             path="/profile"
             element={
-              <ErrorBoundary resetKey={pathname}>
-                <Profile onResetOnboarding={handleResetOnboarding} />
-              </ErrorBoundary>
+              <ProtectedRoute>
+                <ErrorBoundary resetKey={pathname}>
+                  <Profile onResetOnboarding={handleResetOnboarding} />
+                </ErrorBoundary>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/history"
             element={
-              <ErrorBoundary resetKey={pathname}>
-                <HistoryAnalytics />
-              </ErrorBoundary>
+              <ProtectedRoute>
+                <ErrorBoundary resetKey={pathname}>
+                  <HistoryAnalytics />
+                </ErrorBoundary>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/plans"
             element={
-              <ErrorBoundary resetKey={pathname}>
-                <Plans />
-              </ErrorBoundary>
+              <ProtectedRoute>
+                <ErrorBoundary resetKey={pathname}>
+                  <Plans />
+                </ErrorBoundary>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/saved-outfits"
             element={
-              <ErrorBoundary resetKey={pathname}>
-                <SavedOutfits />
-              </ErrorBoundary>
+              <ProtectedRoute>
+                <ErrorBoundary resetKey={pathname}>
+                  <SavedOutfits />
+                </ErrorBoundary>
+              </ProtectedRoute>
             }
           />
           <Route
             path="/builder"
             element={
-              <ErrorBoundary resetKey={pathname}>
-                <OutfitBuilder />
-              </ErrorBoundary>
+              <ProtectedRoute>
+                <ErrorBoundary resetKey={pathname}>
+                  <OutfitBuilder />
+                </ErrorBoundary>
+              </ProtectedRoute>
             }
           />
-          <Route path="/analytics" element={<Navigate to="/history?tab=analytics" replace />} />
+          <Route
+            path="/analytics"
+            element={
+              user ? (
+                <Navigate to="/history?tab=analytics" replace />
+              ) : (
+                <Navigate to={getGuestProtectedRedirect("/analytics")} replace />
+              )
+            }
+          />
 
-          <Route path="/onboarding" element={<Navigate to="/" replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route
+            path="/onboarding"
+            element={
+              onboarded ? (
+                <Navigate to="/dashboard" replace />
+              ) : (
+                <OnboardingWrapper
+                  onComplete={handleOnboardingComplete}
+                  savedAnswers={answers}
+                  showSplashOnLoad={!user && !state?.skipOnboardingSplash && !splashSeen}
+                  onSplashComplete={handleSplashComplete}
+                />
+              )
+            }
+          />
+          <Route
+            path="*"
+            element={
+              !user && !isGuestRouteAllowed(pathname) ? (
+                <Navigate to={getGuestProtectedRedirect(pathname)} replace />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
         </Routes>
       </PageTransition>
 
-      <GuidedTutorial show={!!showTutorial} onDismiss={handleTutorialDismiss} />
+      <GuidedTutorial
+        show={!!showTutorial}
+        mode={user ? "full" : "guest"}
+        onDismiss={handleTutorialDismiss}
+      />
     </>
   );
 }

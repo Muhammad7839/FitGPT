@@ -28,6 +28,18 @@ data class ClothingItemDto(
     val styleTags: List<String> = emptyList(),
     @SerializedName("occasion_tags")
     val occasionTags: List<String> = emptyList(),
+    @SerializedName("suggested_clothing_type")
+    val suggestedClothingType: String? = null,
+    @SerializedName("suggested_fit_tag")
+    val suggestedFitTag: String? = null,
+    @SerializedName("suggested_colors")
+    val suggestedColors: List<String> = emptyList(),
+    @SerializedName("suggested_season_tags")
+    val suggestedSeasonTags: List<String> = emptyList(),
+    @SerializedName("suggested_style_tags")
+    val suggestedStyleTags: List<String> = emptyList(),
+    @SerializedName("suggested_occasion_tags")
+    val suggestedOccasionTags: List<String> = emptyList(),
     @SerializedName("accessory_type")
     val accessoryType: String? = null,
     @SerializedName("comfort_level")
@@ -89,6 +101,8 @@ data class RecommendationResponseDto(
     val explanation: String,
     @SerializedName("outfit_score")
     val outfitScore: Float,
+    @SerializedName("confidence_score")
+    val confidenceScore: Float? = null,
     @SerializedName("weather_category")
     val weatherCategory: String?,
     val occasion: String?
@@ -98,7 +112,9 @@ data class OutfitOptionDto(
     val items: List<ClothingItemDto>,
     val explanation: String,
     @SerializedName("outfit_score")
-    val outfitScore: Float
+    val outfitScore: Float,
+    @SerializedName("confidence_score")
+    val confidenceScore: Float? = null
 )
 
 data class RecommendationOptionsResponseDto(
@@ -111,11 +127,13 @@ data class RecommendationOptionsResponseDto(
 data class WeatherCurrentResponseDto(
     val city: String,
     @SerializedName("temperature_f")
-    val temperatureF: Int,
+    val temperatureF: Int? = null,
     @SerializedName("weather_category")
-    val weatherCategory: String,
-    val condition: String,
-    val description: String
+    val weatherCategory: String? = null,
+    val condition: String? = null,
+    val description: String? = null,
+    val available: Boolean = true,
+    val detail: String? = null
 )
 
 data class FavoriteToggleRequestDto(
@@ -128,6 +146,13 @@ data class OutfitHistoryRequest(
     val itemIds: List<Int>,
     @SerializedName("worn_at_timestamp")
     val wornAtTimestamp: Long
+)
+
+data class OutfitHistoryUpdateRequestDto(
+    @SerializedName("item_ids")
+    val itemIds: List<Int>? = null,
+    @SerializedName("worn_at_timestamp")
+    val wornAtTimestamp: Long? = null
 )
 
 data class OutfitHistoryEntryDto(
@@ -203,6 +228,43 @@ data class PlannedOutfitAssignmentResponseDto(
     val outfits: List<PlannedOutfitEntryDto>
 )
 
+data class TripPackingRequestDto(
+    @SerializedName("destination_city")
+    val destinationCity: String,
+    @SerializedName("start_date")
+    val startDate: String,
+    @SerializedName("trip_days")
+    val tripDays: Int
+)
+
+data class TripPackingItemDto(
+    val category: String,
+    @SerializedName("recommended_quantity")
+    val recommendedQuantity: Int,
+    @SerializedName("selected_item_ids")
+    val selectedItemIds: List<Int>,
+    @SerializedName("selected_item_names")
+    val selectedItemNames: List<String>,
+    @SerializedName("missing_quantity")
+    val missingQuantity: Int
+)
+
+data class TripPackingResponseDto(
+    @SerializedName("destination_city")
+    val destinationCity: String,
+    @SerializedName("start_date")
+    val startDate: String,
+    @SerializedName("trip_days")
+    val tripDays: Int,
+    @SerializedName("weather_summary")
+    val weatherSummary: String,
+    val items: List<TripPackingItemDto>,
+    @SerializedName("generated_at_timestamp")
+    val generatedAtTimestamp: Long,
+    @SerializedName("insufficient_data")
+    val insufficientData: Boolean
+)
+
 data class ImageUploadResponseDto(
     @SerializedName("image_url")
     val imageUrl: String
@@ -221,6 +283,22 @@ data class ImageBatchUploadResponseDto(
     val results: List<ImageBatchUploadEntryDto>
 )
 
+data class TagSuggestionResponseDto(
+    val generated: Boolean,
+    @SerializedName("suggested_clothing_type")
+    val suggestedClothingType: String?,
+    @SerializedName("suggested_fit_tag")
+    val suggestedFitTag: String?,
+    @SerializedName("suggested_colors")
+    val suggestedColors: List<String>,
+    @SerializedName("suggested_season_tags")
+    val suggestedSeasonTags: List<String>,
+    @SerializedName("suggested_style_tags")
+    val suggestedStyleTags: List<String>,
+    @SerializedName("suggested_occasion_tags")
+    val suggestedOccasionTags: List<String>
+)
+
 data class BulkCreateClothingItemsRequestDto(
     val items: List<ClothingItemCreateRequest>
 )
@@ -234,4 +312,69 @@ data class BulkCreateItemResultDto(
 
 data class BulkCreateClothingItemsResponseDto(
     val results: List<BulkCreateItemResultDto>
+)
+
+data class WardrobeGapSuggestionDto(
+    val category: String,
+    @SerializedName("item_name")
+    val itemName: String,
+    val reason: String,
+    @SerializedName("image_url")
+    val imageUrl: String?,
+    @SerializedName("shopping_link")
+    val shoppingLink: String
+)
+
+data class WardrobeGapResponseDto(
+    @SerializedName("baseline_categories")
+    val baselineCategories: List<String> = emptyList(),
+    @SerializedName("category_counts")
+    val categoryCounts: Map<String, Int> = emptyMap(),
+    @SerializedName("missing_categories")
+    val missingCategories: List<String> = emptyList(),
+    val suggestions: List<WardrobeGapSuggestionDto> = emptyList(),
+    @SerializedName("insufficient_data")
+    val insufficientData: Boolean = false
+)
+
+
+data class UnderusedItemAlertDto(
+    @SerializedName("item_id")
+    val itemId: Int,
+    @SerializedName("item_name")
+    val itemName: String,
+    val category: String,
+    @SerializedName("wear_count")
+    val wearCount: Int,
+    @SerializedName("last_worn_timestamp")
+    val lastWornTimestamp: Long?,
+    @SerializedName("days_since_worn")
+    val daysSinceWorn: Int?,
+    @SerializedName("alert_level")
+    val alertLevel: String
+)
+
+data class UnderusedAlertsResponseDto(
+    @SerializedName("generated_at_timestamp")
+    val generatedAtTimestamp: Long,
+    @SerializedName("analysis_window_days")
+    val analysisWindowDays: Int,
+    val alerts: List<UnderusedItemAlertDto>,
+    @SerializedName("insufficient_data")
+    val insufficientData: Boolean
+)
+
+data class DuplicateCandidateDto(
+    @SerializedName("item_id")
+    val itemId: Int,
+    @SerializedName("duplicate_item_id")
+    val duplicateItemId: Int,
+    @SerializedName("similarity_score")
+    val similarityScore: Float,
+    val reasons: List<String> = emptyList()
+)
+
+data class DuplicateCandidatesResponseDto(
+    val threshold: Float,
+    val candidates: List<DuplicateCandidateDto> = emptyList()
 )

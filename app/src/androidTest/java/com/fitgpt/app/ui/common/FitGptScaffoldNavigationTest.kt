@@ -88,6 +88,67 @@ class FitGptScaffoldNavigationTest {
         assertNodeWithTextExists("Reselect count: 1")
     }
 
+    @Test
+    fun switchingFromProfileToHome_restoresDashboardRoot() {
+        composeRule.setContent {
+            ScaffoldNavigationTestHost(trackDashboardReselect = false)
+        }
+
+        composeRule.onNodeWithText("Profile").performClick()
+        assertNodeWithTextExists("Screen:profile")
+
+        composeRule.onNodeWithText("Home").performClick()
+        assertNodeWithTextExists("Screen:dashboard")
+    }
+
+    @Test
+    fun switchingFromPlansToHome_restoresDashboardRoot() {
+        composeRule.setContent {
+            ScaffoldNavigationTestHost(trackDashboardReselect = false)
+        }
+
+        composeRule.onNodeWithText("Plans").performClick()
+        assertNodeWithTextExists("Screen:plans")
+
+        composeRule.onNodeWithText("Home").performClick()
+        assertNodeWithTextExists("Screen:dashboard")
+    }
+
+    @Test
+    fun switchingFromNestedSecondaryToProfile_reachesProfileRoot() {
+        composeRule.setContent {
+            ScaffoldNavigationTestHost(trackDashboardReselect = false)
+        }
+
+        composeRule.onNodeWithText("Open Add Item").performClick()
+        assertNodeWithTextExists("Screen:add_item")
+
+        composeRule.onNodeWithText("Profile").performClick()
+        assertNodeWithTextExists("Screen:profile")
+    }
+
+    @Test
+    fun repeatedTabSwitching_keepsWardrobeTabBoundToRootDestination() {
+        composeRule.setContent {
+            ScaffoldNavigationTestHost(trackDashboardReselect = false)
+        }
+
+        repeat(12) {
+            composeRule.onNodeWithText("Wardrobe").performClick()
+            assertNodeWithTextExists("Screen:wardrobe")
+            composeRule.onNodeWithText("Open Wardrobe Sub").performClick()
+            assertNodeWithTextExists("Screen:wardrobe_sub")
+            composeRule.onNodeWithText("Home").performClick()
+            assertNodeWithTextExists("Screen:dashboard")
+            composeRule.onNodeWithText("Wardrobe").performClick()
+            assertNodeWithTextExists("Screen:wardrobe")
+            composeRule.onNodeWithText("Plans").performClick()
+            assertNodeWithTextExists("Screen:plans")
+            composeRule.onNodeWithText("Wardrobe").performClick()
+            assertNodeWithTextExists("Screen:wardrobe")
+        }
+    }
+
     private fun assertNodeWithTextExists(text: String) {
         assertTrue(
             "Expected node with text '$text' to exist",
@@ -190,6 +251,16 @@ private fun ScaffoldNavigationTestHost(
                 currentRoute = Routes.PROFILE,
                 title = "Profile",
                 screenLabel = "profile",
+                reselectCount = if (trackDashboardReselect) dashboardReselectCount else null
+            )
+        }
+
+        composable(Routes.PLANS) {
+            TestScaffoldScreen(
+                navController = navController,
+                currentRoute = Routes.PLANS,
+                title = "Plans",
+                screenLabel = "plans",
                 reselectCount = if (trackDashboardReselect) dashboardReselectCount else null
             )
         }

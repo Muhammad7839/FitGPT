@@ -1,3 +1,4 @@
+import { apiFetch } from "./apiFetch";
 import { readWeatherOverride } from "../utils/userStorage";
 
 function tempCategoryFromF(tempF) {
@@ -8,18 +9,6 @@ function tempCategoryFromF(tempF) {
   if (t <= 70) return "mild";
   if (t <= 85) return "warm";
   return "hot";
-}
-
-function precipFromWmoCode(code) {
-  const c = Number(code);
-  if (!Number.isFinite(c)) return "clear";
-  if (c <= 48) return "clear";
-  if (c <= 57) return "rain";
-  if (c <= 67) return "rain";
-  if (c <= 77) return "snow";
-  if (c <= 82) return "rain";
-  if (c <= 86) return "snow";
-  return "storm";
 }
 
 async function getCoordsFromBrowser() {
@@ -39,22 +28,67 @@ async function getCoordsFromBrowser() {
   });
 }
 
-async function fetchOpenMeteoWeather({ lat, lon }) {
-  const url =
-    "https://api.open-meteo.com/v1/forecast" +
-    `?latitude=${encodeURIComponent(lat)}` +
-    `&longitude=${encodeURIComponent(lon)}` +
-    "&current=temperature_2m,weather_code" +
-    "&temperature_unit=fahrenheit";
+async function fetchBackendCurrentWeather({ lat, lon }) {
+  const params = new URLSearchParams({
+    lat: String(lat),
+    lon: String(lon),
+  });
+  const data = await apiFetch(`/weather/current?${params.toString()}`, {
+    method: "GET",
+  });
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Weather request failed.");
-  const data = await res.json();
+  if (!data?.available) {
+    throw new Error(data?.detail || "Weather unavailable.");
+  }
 
-  const tempF = data?.current?.temperature_2m;
-  if (typeof tempF !== "number") throw new Error("Weather data missing temperature.");
-  const weatherCode = data?.current?.weather_code;
-  return { tempF, precipCondition: precipFromWmoCode(weatherCode) };
+  const tempF = Number(data?.temperature_f);
+  if (!Number.isFinite(tempF)) {
+    throw new Error("Weather data missing temperature.");
+  }
+
+  const conditionText = `${data?.condition || ""} ${data?.description || ""}`.toLowerCase();
+  let precipCondition = "clear";
+  if (conditionText.includes("snow")) precipCondition = "snow";
+  else if (conditionText.includes("storm") || conditionText.includes("thunder")) precipCondition = "storm";
+  else if (conditionText.includes("rain") || conditionText.includes("drizzle")) precipCondition = "rain";
+
+  return {
+    tempF,
+    category: (data?.weather_category || tempCategoryFromF(tempF)).toString().trim().toLowerCase(),
+    precipCondition,
+  };
+}
+
+async function fetchBackendForecast({ lat, lon, days = 6 }) {
+  const params = new URLSearchParams({
+    lat: String(lat),
+    lon: String(lon),
+    days: String(Math.max(1, Math.min(Number(days) || 6, 10))),
+  });
+  const data = await apiFetch(`/weather/forecast?${params.toString()}`, {
+    method: "GET",
+  });
+  const backendDays = Array.isArray(data?.days) ? data.days : [];
+  return backendDays.map((day, index) => {
+    const averageTempF = safeNumber(day?.temperature_f);
+    const condition = conditionFromBackendText(day?.condition, day?.description);
+    return {
+      date: day?.date || "",
+      weatherCode: null,
+      condition: day?.condition || condition.label,
+      conditionKey: condition.key,
+      icon: condition.icon,
+      tempHighF: averageTempF,
+      tempLowF: averageTempF,
+      averageTempF,
+      precipitationChance: null,
+      precipitationIn: null,
+      windMph: null,
+      description: day?.description || "",
+      weatherCategory: (day?.weather_category || tempCategoryFromF(averageTempF)).toString().trim().toLowerCase(),
+      dayLabel: index === 0 ? "Today" : index === 1 ? "Tomorrow" : undefined,
+    };
+  }).filter((day) => day.date);
 }
 
 function buildForecastUrl({ lat, lon, days }) {
@@ -80,6 +114,23 @@ async function fetchOpenMeteoForecast({ lat, lon, days = 6 }) {
   const normalized = normalizeForecastDays(data, days);
   if (!normalized.length) throw new Error("Forecast data missing.");
   return normalized;
+}
+
+function conditionFromBackendText(condition, description) {
+  const joined = `${condition || ""} ${description || ""}`.toLowerCase();
+  if (joined.includes("storm") || joined.includes("thunder")) {
+    return { label: condition || "Storm", icon: "\u26C8\uFE0F", key: "storm" };
+  }
+  if (joined.includes("snow")) {
+    return { label: condition || "Snow", icon: "\u2744\uFE0F", key: "snow" };
+  }
+  if (joined.includes("rain") || joined.includes("drizzle")) {
+    return { label: condition || "Rain", icon: "\uD83C\uDF27\uFE0F", key: "rain" };
+  }
+  if (joined.includes("cloud")) {
+    return { label: condition || "Cloudy", icon: "\u2601\uFE0F", key: "cloudy" };
+  }
+  return { label: condition || "Clear", icon: "\u2600\uFE0F", key: "clear" };
 }
 
 export async function getWeatherContext() {
@@ -108,12 +159,12 @@ export async function getWeatherContext() {
   }
 
   try {
-    const weather = await fetchOpenMeteoWeather(coords);
+    const weather = await fetchBackendCurrentWeather(coords);
     return {
       status: "ok",
       source: "auto",
       tempF: weather.tempF,
-      category: tempCategoryFromF(weather.tempF),
+      category: weather.category || tempCategoryFromF(weather.tempF),
       precipCondition: weather.precipCondition,
       message: "",
     };
@@ -141,7 +192,15 @@ export async function getWeatherForecast(days = 6) {
   }
 
   try {
-    const forecastDays = await fetchOpenMeteoForecast({ ...coords, days });
+    let forecastDays = [];
+    try {
+      forecastDays = await fetchBackendForecast({ ...coords, days });
+    } catch {
+      forecastDays = [];
+    }
+    if (!forecastDays.length) {
+      forecastDays = await fetchOpenMeteoForecast({ ...coords, days });
+    }
     return {
       status: "ok",
       source: "auto",

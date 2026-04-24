@@ -13,65 +13,61 @@ beforeEach(() => {
 });
 
 describe("readAccessibilityPrefs / writeAccessibilityPrefs", () => {
-  test("returns defaults when nothing stored", () => {
-    const p = readAccessibilityPrefs(null);
-    expect(p.textSize).toBe("default");
+  test("returns defaults when nothing is stored", () => {
+    expect(readAccessibilityPrefs(null).textSize).toBe("default");
   });
 
-  test("round-trips textSize", () => {
+  test("round-trips valid text sizes", () => {
     writeAccessibilityPrefs({ textSize: "large" }, null);
-    const p = readAccessibilityPrefs(null);
-    expect(p.textSize).toBe("large");
+    expect(readAccessibilityPrefs(null).textSize).toBe("large");
   });
 
-  test("rejects invalid textSize", () => {
-    writeAccessibilityPrefs({ textSize: "nonsense" }, null);
-    const p = readAccessibilityPrefs(null);
-    expect(p.textSize).toBe("default");
+  test("rejects invalid text sizes", () => {
+    writeAccessibilityPrefs({ textSize: "invalid" }, null);
+    expect(readAccessibilityPrefs(null).textSize).toBe("default");
   });
 
-  test("exposes the allowed text-size set", () => {
+  test("exports supported text sizes", () => {
     expect(TEXT_SIZES).toEqual(expect.arrayContaining(["default", "large", "xlarge"]));
   });
 });
 
 describe("applyAccessibilityToDocument", () => {
-  test("removes attribute when default", () => {
+  test("removes the data-text-size attribute for default", () => {
     document.documentElement.setAttribute("data-text-size", "large");
     applyAccessibilityToDocument({ textSize: "default" });
     expect(document.documentElement.hasAttribute("data-text-size")).toBe(false);
   });
 
-  test("sets data-text-size attribute for large", () => {
+  test("sets data-text-size for large", () => {
     applyAccessibilityToDocument({ textSize: "large" });
     expect(document.documentElement.getAttribute("data-text-size")).toBe("large");
   });
 
-  test("sets data-text-size attribute for xlarge", () => {
+  test("sets data-text-size for xlarge", () => {
     applyAccessibilityToDocument({ textSize: "xlarge" });
     expect(document.documentElement.getAttribute("data-text-size")).toBe("xlarge");
   });
 });
 
 describe("adaptAiText", () => {
-  test("returns input unchanged when textSize is default", () => {
-    const text = "This is a very long sentence that goes on and on without any breaks and exceeds the threshold.";
+  test("returns input unchanged for default text size", () => {
+    const text = "This is a long AI response that should remain unchanged.";
     expect(adaptAiText(text, { textSize: "default" })).toBe(text);
   });
 
-  test("inserts paragraph breaks in long text for large", () => {
-    const longSentence = "A".repeat(100) + ".";
+  test("inserts paragraph breaks for large text", () => {
+    const longSentence = `${"A".repeat(100)}.`;
     const text = `${longSentence} ${longSentence} ${longSentence}`;
-    const out = adaptAiText(text, { textSize: "large" });
-    expect(out.split("\n\n").length).toBeGreaterThan(1);
+    expect(adaptAiText(text, { textSize: "large" }).split("\n\n").length).toBeGreaterThan(1);
   });
 
-  test("breaks more aggressively for xlarge than large", () => {
-    const longSentence = "A".repeat(80) + ".";
+  test("breaks more aggressively for xlarge", () => {
+    const longSentence = `${"A".repeat(80)}.`;
     const text = `${longSentence} ${longSentence} ${longSentence}`;
-    const forLarge = adaptAiText(text, { textSize: "large" });
-    const forXLarge = adaptAiText(text, { textSize: "xlarge" });
-    expect(forXLarge.split("\n\n").length).toBeGreaterThanOrEqual(forLarge.split("\n\n").length);
+    const large = adaptAiText(text, { textSize: "large" });
+    const xlarge = adaptAiText(text, { textSize: "xlarge" });
+    expect(xlarge.split("\n\n").length).toBeGreaterThanOrEqual(large.split("\n\n").length);
   });
 
   test("handles empty input", () => {
@@ -88,28 +84,20 @@ describe("adaptAiText", () => {
 });
 
 describe("effectiveAccessibilityPrefs", () => {
-  test("returns default when no HC theme and no text-size override", () => {
-    const eff = effectiveAccessibilityPrefs({ textSize: "default" }, { highContrast: false });
-    expect(eff.textSize).toBe("default");
+  test("keeps default when high contrast is inactive", () => {
+    expect(effectiveAccessibilityPrefs({ textSize: "default" }, { highContrast: false }).textSize).toBe("default");
   });
 
-  test("escalates to large when HC theme is active and pref is default", () => {
-    const eff = effectiveAccessibilityPrefs({ textSize: "default" }, { highContrast: true });
-    expect(eff.textSize).toBe("large");
+  test("escalates default to large for high contrast themes", () => {
+    expect(effectiveAccessibilityPrefs({ textSize: "default" }, { highContrast: true }).textSize).toBe("large");
   });
 
-  test("preserves xlarge when user already picked it, even with HC", () => {
-    const eff = effectiveAccessibilityPrefs({ textSize: "xlarge" }, { highContrast: true });
-    expect(eff.textSize).toBe("xlarge");
+  test("preserves explicit large and xlarge values", () => {
+    expect(effectiveAccessibilityPrefs({ textSize: "large" }, { highContrast: true }).textSize).toBe("large");
+    expect(effectiveAccessibilityPrefs({ textSize: "xlarge" }, { highContrast: true }).textSize).toBe("xlarge");
   });
 
-  test("preserves large when user already picked it, even with HC", () => {
-    const eff = effectiveAccessibilityPrefs({ textSize: "large" }, { highContrast: true });
-    expect(eff.textSize).toBe("large");
-  });
-
-  test("handles null theme safely", () => {
-    const eff = effectiveAccessibilityPrefs({ textSize: "default" }, null);
-    expect(eff.textSize).toBe("default");
+  test("handles null themes safely", () => {
+    expect(effectiveAccessibilityPrefs({ textSize: "default" }, null).textSize).toBe("default");
   });
 });

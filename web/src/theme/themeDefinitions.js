@@ -195,12 +195,6 @@ export const PRESET_THEMES = [
       "--wardrobe-blue-soft": "rgba(196, 181, 253, 0.12)",
     }),
   },
-
-  // Accessibility — high contrast (light + dark variants).
-  // Pure black/white colors, strong borders, minimized soft shadows so the
-  // UI remains legible for users who need maximum contrast. Marked with
-  // highContrast:true so accessibility helpers (e.g. adaptAiText) can
-  // trigger additional text-structure adjustments when active.
   {
     id: "contrast-light",
     name: "High Contrast Light",
@@ -260,7 +254,6 @@ export function getPresetTheme(id) {
   return PRESET_THEMES.find((t) => t.id === id) || PRESET_THEMES[0];
 }
 
-/** True if the given theme (preset or custom) is a high-contrast variant. */
 export function isHighContrast(theme) {
   return !!(theme && theme.highContrast);
 }

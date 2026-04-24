@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -41,7 +41,7 @@ def save_fingerprint(
     row = models.RecommendationFingerprint(
         owner_id=user_id,
         fingerprint=fingerprint,
-        created_at_timestamp=int(datetime.now(timezone.utc).timestamp()),
+        created_at_timestamp=int(datetime.utcnow().timestamp()),
     )
     db.add(row)
     db.commit()

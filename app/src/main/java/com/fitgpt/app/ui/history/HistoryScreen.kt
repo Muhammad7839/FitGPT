@@ -14,7 +14,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.fitgpt.app.data.model.ClothingItem
+import com.fitgpt.app.data.model.OutfitHistoryEntry
 import com.fitgpt.app.navigation.Routes
 import com.fitgpt.app.ui.common.EmptyStateCard
 import com.fitgpt.app.ui.common.FitGptScaffold
@@ -34,14 +37,28 @@ import com.fitgpt.app.ui.common.WebBadge
 import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 private enum class HistoryTab {
     HISTORY,
-    ANALYTICS
+    ANALYTICS,
+    LAUNDRY
 }
+
+private enum class HistoryRangeFilter {
+    LAST_7_DAYS,
+    LAST_30_DAYS,
+    ALL
+}
+
+private data class HistoryDateRange(
+    val startDate: String,
+    val endDate: String
+)
 
 /**
  * Combined History + Analytics screen mirroring the web tab structure.
@@ -57,11 +74,23 @@ fun HistoryScreen(
     val plannedOutfits by viewModel.plannedState.collectAsState()
 
     var activeTab by remember { mutableStateOf(HistoryTab.HISTORY) }
+    var rangeFilter by remember { mutableStateOf(HistoryRangeFilter.LAST_30_DAYS) }
+    val dateRange = remember(rangeFilter) { resolveRange(rangeFilter) }
+
+    LaunchedEffect(activeTab, rangeFilter) {
+        if (activeTab == HistoryTab.HISTORY) {
+            if (dateRange == null) {
+                viewModel.refreshHistory()
+            } else {
+                viewModel.refreshHistoryInRange(dateRange.startDate, dateRange.endDate)
+            }
+        }
+    }
 
     FitGptScaffold(
         navController = navController,
         currentRoute = Routes.HISTORY,
-        title = "History"
+        title = "Insights"
     ) { padding ->
         Column(
             modifier = Modifier
@@ -71,8 +100,16 @@ fun HistoryScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             SectionHeader(
-                title = "Outfit History",
-                subtitle = "Track what you wore and review your style patterns"
+                title = when (activeTab) {
+                    HistoryTab.HISTORY -> "Outfit History"
+                    HistoryTab.ANALYTICS -> "Analytics"
+                    HistoryTab.LAUNDRY -> "Laundry Insights"
+                },
+                subtitle = when (activeTab) {
+                    HistoryTab.HISTORY -> "Track what you wore and revisit outfit decisions."
+                    HistoryTab.ANALYTICS -> "Your style at a glance."
+                    HistoryTab.LAUNDRY -> "Estimate reuse cycles from outfit history and recent wear patterns."
+                }
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -86,6 +123,11 @@ fun HistoryScreen(
                     onClick = { activeTab = HistoryTab.ANALYTICS },
                     label = { Text("Analytics") }
                 )
+                FilterChip(
+                    selected = activeTab == HistoryTab.LAUNDRY,
+                    onClick = { activeTab = HistoryTab.LAUNDRY },
+                    label = { Text("Laundry") }
+                )
             }
 
             when (activeTab) {
@@ -95,6 +137,24 @@ fun HistoryScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Clear History")
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = rangeFilter == HistoryRangeFilter.LAST_7_DAYS,
+                            onClick = { rangeFilter = HistoryRangeFilter.LAST_7_DAYS },
+                            label = { Text("Last 7 days") }
+                        )
+                        FilterChip(
+                            selected = rangeFilter == HistoryRangeFilter.LAST_30_DAYS,
+                            onClick = { rangeFilter = HistoryRangeFilter.LAST_30_DAYS },
+                            label = { Text("Last 30 days") }
+                        )
+                        FilterChip(
+                            selected = rangeFilter == HistoryRangeFilter.ALL,
+                            onClick = { rangeFilter = HistoryRangeFilter.ALL },
+                            label = { Text("All") }
+                        )
                     }
 
                     if (history.isEmpty()) {
@@ -118,39 +178,66 @@ fun HistoryScreen(
                             .fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        items(history) { entry ->
-                            WebCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                accentTop = false
-                            ) {
-                                Column(modifier = Modifier.padding(14.dp)) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        entry.items.take(4).forEach { item ->
-                                            RemoteImagePreview(
-                                                imageUrl = item.imageUrl,
-                                                contentDescription = item.category,
-                                                modifier = Modifier.size(52.dp)
+                        val groupedHistory = history.groupBy { formatDayHeader(it.wornAtTimestamp) }
+                        groupedHistory.forEach { (dayLabel, entriesForDay) ->
+                            item {
+                                Text(
+                                    text = dayLabel,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            items(entriesForDay, key = { entry -> entry.id }) { entry ->
+                                WebCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    accentTop = false
+                                ) {
+                                    Column(modifier = Modifier.padding(14.dp)) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            entry.items.take(4).forEach { item ->
+                                                RemoteImagePreview(
+                                                    imageUrl = item.imageUrl,
+                                                    contentDescription = item.category,
+                                                    modifier = Modifier.size(52.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.size(8.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = entry.items.joinToString { it.category },
+                                                style = MaterialTheme.typography.titleMedium
+                                            )
+                                            WebBadge(
+                                                text = entry.source.replaceFirstChar { it.uppercase() }
                                             )
                                         }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = formatTimestamp(entry.wornAtTimestamp),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            TextButton(
+                                                onClick = {
+                                                    viewModel.deleteHistoryEntry(
+                                                        historyId = entry.id,
+                                                        startDate = dateRange?.startDate,
+                                                        endDate = dateRange?.endDate
+                                                    )
+                                                }
+                                            ) {
+                                                Text("Delete")
+                                            }
+                                        }
                                     }
-                                    Spacer(modifier = Modifier.size(8.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(
-                                            text = entry.items.joinToString { it.category },
-                                            style = MaterialTheme.typography.titleMedium
-                                        )
-                                        WebBadge(
-                                            text = entry.source.replaceFirstChar { it.uppercase() }
-                                        )
-                                    }
-                                    Text(
-                                        text = formatTimestamp(entry.wornAtTimestamp),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
                                 }
                             }
                         }
@@ -212,10 +299,88 @@ fun HistoryScreen(
                         }
                     }
                 }
+
+                HistoryTab.LAUNDRY -> {
+                    val wardrobeItems = (wardrobeState as? UiState.Success<List<ClothingItem>>)
+                        ?.data
+                        .orEmpty()
+                        .filter { !it.isArchived }
+                    val laundryInsights = remember(history, wardrobeItems) {
+                        buildLaundryInsights(wardrobeItems, history)
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        item {
+                            AnalyticsCard("Needs wash soon", laundryInsights.dueCount.toString())
+                        }
+                        item {
+                            AnalyticsCard("In rotation", laundryInsights.inRotationCount.toString())
+                        }
+                        item {
+                            AnalyticsCard("Tracked items", laundryInsights.items.size.toString())
+                        }
+                        if (laundryInsights.items.isEmpty()) {
+                            item {
+                                EmptyStateCard(
+                                    title = "No laundry insights yet",
+                                    subtitle = "Wear a few outfits so FitGPT can estimate reuse and wash timing."
+                                )
+                            }
+                        } else {
+                            items(laundryInsights.items, key = { insight -> insight.item.id }) { insight ->
+                                WebCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    accentTop = false
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = insight.item.name ?: insight.item.category,
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                        Text(
+                                            text = "${insight.item.category} • ${insight.wearCount} wear${if (insight.wearCount == 1) "" else "s"} tracked",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            WebBadge(text = insight.statusLabel)
+                                            WebBadge(text = "Threshold ${insight.threshold}")
+                                        }
+                                        Text(
+                                            text = "Last worn: ${insight.lastWornLabel}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
+
+private data class LaundryInsightItem(
+    val item: ClothingItem,
+    val wearCount: Int,
+    val threshold: Int,
+    val statusLabel: String,
+    val lastWornLabel: String
+)
+
+private data class LaundryInsightsSummary(
+    val dueCount: Int,
+    val inRotationCount: Int,
+    val items: List<LaundryInsightItem>
+)
 
 @Composable
 private fun AnalyticsCard(label: String, value: String) {
@@ -240,7 +405,89 @@ private fun AnalyticsCard(label: String, value: String) {
     }
 }
 
+private fun resolveRange(filter: HistoryRangeFilter): HistoryDateRange? {
+    if (filter == HistoryRangeFilter.ALL) {
+        return null
+    }
+    val now = LocalDate.now()
+    val start = when (filter) {
+        HistoryRangeFilter.LAST_7_DAYS -> now.minusDays(6)
+        HistoryRangeFilter.LAST_30_DAYS -> now.minusDays(29)
+        HistoryRangeFilter.ALL -> now
+    }
+    val formatter = DateTimeFormatter.ISO_LOCAL_DATE
+    return HistoryDateRange(
+        startDate = start.format(formatter),
+        endDate = now.format(formatter)
+    )
+}
+
+private fun formatDayHeader(timestamp: Long): String {
+    val formatter = SimpleDateFormat("EEEE, MMM d yyyy", Locale.getDefault())
+    return formatter.format(Date(normalizeTimestamp(timestamp)))
+}
+
 private fun formatTimestamp(timestamp: Long): String {
     val formatter = SimpleDateFormat("EEE, MMM d yyyy • h:mm a", Locale.getDefault())
-    return formatter.format(Date(timestamp))
+    return formatter.format(Date(normalizeTimestamp(timestamp)))
+}
+
+private fun normalizeTimestamp(timestamp: Long): Long {
+    return if (timestamp < 100_000_000_000L) {
+        timestamp * 1000
+    } else {
+        timestamp
+    }
+}
+
+private fun buildLaundryInsights(
+    wardrobeItems: List<ClothingItem>,
+    history: List<OutfitHistoryEntry>
+): LaundryInsightsSummary {
+    val wearCounts = history
+        .flatMap { entry -> entry.items.map { item -> item.id to entry.wornAtTimestamp } }
+        .groupBy(keySelector = { it.first }, valueTransform = { it.second })
+
+    val items = wardrobeItems
+        .mapNotNull { item ->
+            val timestamps = wearCounts[item.id].orEmpty().sortedDescending()
+            if (timestamps.isEmpty()) {
+                return@mapNotNull null
+            }
+            val threshold = laundryThresholdForCategory(item.category)
+            val wearCount = timestamps.size
+            val statusLabel = when {
+                wearCount >= threshold -> "Wash soon"
+                wearCount == threshold - 1 -> "Almost due"
+                else -> "In rotation"
+            }
+            LaundryInsightItem(
+                item = item,
+                wearCount = wearCount,
+                threshold = threshold,
+                statusLabel = statusLabel,
+                lastWornLabel = formatCardDate(timestamps.first())
+            )
+        }
+        .sortedWith(compareByDescending<LaundryInsightItem> { it.wearCount }.thenBy { it.item.name ?: it.item.category })
+
+    return LaundryInsightsSummary(
+        dueCount = items.count { it.statusLabel == "Wash soon" },
+        inRotationCount = items.count { it.statusLabel == "In rotation" },
+        items = items
+    )
+}
+
+private fun laundryThresholdForCategory(category: String): Int {
+    return when (category.trim().lowercase()) {
+        "top", "tops", "shirt", "t-shirt" -> 3
+        "bottom", "bottoms", "pants", "jeans", "skirt", "shorts" -> 5
+        "shoes", "shoe", "sneakers", "boots" -> 7
+        "outerwear", "jacket", "coat", "hoodie", "sweater" -> 6
+        else -> 4
+    }
+}
+
+private fun formatCardDate(timestamp: Long): String {
+    return SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(normalizeTimestamp(timestamp)))
 }

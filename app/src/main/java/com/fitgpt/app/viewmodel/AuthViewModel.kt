@@ -3,17 +3,23 @@
  */
 package com.fitgpt.app.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.fitgpt.app.data.auth.TokenStore
+import com.fitgpt.app.BuildConfig
+import com.fitgpt.app.data.auth.AuthSessionStore
+import com.fitgpt.app.data.network.BackendEnvironmentResolver
 import com.fitgpt.app.data.repository.AuthRepository
+import com.fitgpt.app.data.repository.ProfileRepository
 import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import retrofit2.HttpException
 
 /**
@@ -28,8 +34,15 @@ sealed class AuthState {
 
 class AuthViewModel(
     private val repository: AuthRepository,
-    private val tokenStore: TokenStore
+    private val tokenStore: AuthSessionStore,
+    private val profileRepository: ProfileRepository? = null,
 ) : ViewModel() {
+    companion object {
+        private const val DEV_QUICK_LOGIN_EMAIL = "dev.quicklogin@example.com"
+        private const val DEV_QUICK_LOGIN_PASSWORD = "Test1234"
+    }
+
+    private val authLogTag = "GOOGLE_AUTH"
 
     private val _loginState = MutableStateFlow<AuthState>(AuthState.Idle)
     val loginState: StateFlow<AuthState> = _loginState
@@ -47,7 +60,8 @@ class AuthViewModel(
     val lastResetToken: StateFlow<String?> = _lastResetToken
 
     fun login(email: String, password: String) {
-        if (email.isBlank() || password.isBlank()) {
+        val normalizedEmail = normalizeEmail(email)
+        if (normalizedEmail.isBlank() || password.isBlank()) {
             _loginState.value = AuthState.Error("Email and password are required")
             return
         }
@@ -55,12 +69,15 @@ class AuthViewModel(
         _loginState.value = AuthState.Loading
         viewModelScope.launch {
             try {
-                val token = repository.login(email = email, password = password)
-                tokenStore.saveToken(token)
-                _loginState.value = AuthState.Success
+                val token = repository.login(email = normalizedEmail, password = password)
+                if (persistSession(token)) {
+                    _loginState.value = AuthState.Success
+                } else {
+                    _loginState.value = AuthState.Error("Unable to save your session. Please try again.")
+                }
             } catch (e: HttpException) {
                 val message = if (e.code() == 401) {
-                    "Invalid email or password"
+                    "Incorrect email or password. If this account already exists, try resetting your password."
                 } else {
                     "Login failed (${e.code()})"
                 }
@@ -71,28 +88,134 @@ class AuthViewModel(
         }
     }
 
-    fun loginWithGoogleToken(idToken: String) {
-        if (idToken.isBlank()) {
-            _loginState.value = AuthState.Error("Google ID token is required")
+    fun quickLoginDev() {
+        if (!isQuickLoginDevAllowed()) {
+            _loginState.value = AuthState.Error("Quick login is only available with a local debug backend.")
             return
         }
 
         _loginState.value = AuthState.Loading
         viewModelScope.launch {
             try {
-                val token = repository.loginWithGoogle(idToken)
-                tokenStore.saveToken(token)
-                _loginState.value = AuthState.Success
+                Log.d(authLogTag, "DEV_QUICK_LOGIN attempting login")
+                val token = try {
+                    repository.login(
+                        email = DEV_QUICK_LOGIN_EMAIL,
+                        password = DEV_QUICK_LOGIN_PASSWORD
+                    )
+                } catch (exception: HttpException) {
+                    if (exception.code() != 401) {
+                        throw exception
+                    }
+
+                    Log.d(authLogTag, "DEV_QUICK_LOGIN account missing or rejected; attempting registration")
+                    try {
+                        repository.register(
+                            email = DEV_QUICK_LOGIN_EMAIL,
+                            password = DEV_QUICK_LOGIN_PASSWORD
+                        )
+                    } catch (registerException: HttpException) {
+                        if (registerException.code() != 400) {
+                            throw registerException
+                        }
+                    }
+
+                    repository.login(
+                        email = DEV_QUICK_LOGIN_EMAIL,
+                        password = DEV_QUICK_LOGIN_PASSWORD
+                    )
+                }
+
+                if (persistSession(token)) {
+                    ensureDevQuickLoginOnboardingComplete()
+                    _loginState.value = AuthState.Success
+                } else {
+                    _loginState.value = AuthState.Error("Unable to save your session. Please try again.")
+                }
+            } catch (exception: HttpException) {
+                val message = if (exception.code() == 401) {
+                    "Quick login failed. Reset the dev account or clear local backend data."
+                } else {
+                    "Quick login failed (${exception.code()})"
+                }
+                _loginState.value = AuthState.Error(message)
+            } catch (exception: Exception) {
+                _loginState.value = AuthState.Error(
+                    resolveNetworkAuthError(exception, action = "debug quick login")
+                )
+            }
+        }
+    }
+
+    private fun isQuickLoginDevAllowed(): Boolean {
+        if (!BuildConfig.DEBUG) return false
+        val activeBaseUrl = runCatching {
+            BackendEnvironmentResolver.resolveBaseUrl(
+                apiBaseUrl = BuildConfig.API_BASE_URL,
+                physicalLanBaseUrl = BuildConfig.API_LAN_BASE_URL
+            )
+        }.getOrNull() ?: return false
+
+        return BackendEnvironmentResolver.isLocalDevelopmentBaseUrl(activeBaseUrl)
+    }
+
+    fun loginWithGoogleToken(idToken: String, attemptId: String) {
+        Log.d(authLogTag, "attempt_id=$attemptId idToken_present=${idToken.isNotBlank()}")
+        if (idToken.isBlank()) {
+            Log.e(
+                authLogTag,
+                "attempt_id=$attemptId CONFIG_ERROR: ID_TOKEN_NULL"
+            )
+            Log.e(
+                authLogTag,
+                "attempt_id=$attemptId Google ID token missing before backend call"
+            )
+            _loginState.value = AuthState.Error(
+                "Google Sign-In failed: ID token missing (check client ID / SHA-1 config)"
+            )
+            return
+        }
+
+        _loginState.value = AuthState.Loading
+        viewModelScope.launch {
+            try {
+                Log.i(authLogTag, "attempt_id=$attemptId sending token to backend")
+                val token = repository.loginWithGoogle(idToken = idToken, attemptId = attemptId)
+                Log.i(authLogTag, "attempt_id=$attemptId backend login success")
+                val persisted = persistSession(token)
+                Log.i(authLogTag, "attempt_id=$attemptId session persisted=$persisted")
+                if (persisted) {
+                    _loginState.value = AuthState.Success
+                } else {
+                    _loginState.value = AuthState.Error("Unable to save your session. Please try again.")
+                }
             } catch (e: HttpException) {
-                _loginState.value = AuthState.Error("Google login failed (${e.code()})")
+                val responseDetail = extractHttpDetail(e)
+                Log.w(
+                    authLogTag,
+                    "attempt_id=$attemptId backend login failure code=${e.code()} detail=${responseDetail.orEmpty()}"
+                )
+                val message = when {
+                    e.code() == 401 && !responseDetail.isNullOrBlank() -> responseDetail
+                    e.code() == 401 -> "Google sign-in expired. Please try again."
+                    !responseDetail.isNullOrBlank() -> responseDetail
+                    e.code() == 400 -> "Google sign-in failed. Please try again."
+                    else -> "Google sign-in failed. Please try again."
+                }
+                _loginState.value = AuthState.Error(message)
             } catch (e: Exception) {
+                Log.e(
+                    authLogTag,
+                    "attempt_id=$attemptId backend login failure ${e::class.java.simpleName}: ${e.message.orEmpty()}"
+                )
                 _loginState.value = AuthState.Error(resolveNetworkAuthError(e, action = "Google login"))
             }
         }
     }
 
     fun register(email: String, password: String, confirmPassword: String) {
-        if (email.isBlank() || password.isBlank()) {
+        val normalizedEmail = normalizeEmail(email)
+        if (normalizedEmail.isBlank() || password.isBlank()) {
             _registerState.value = AuthState.Error("Email and password are required")
             return
         }
@@ -108,13 +231,11 @@ class AuthViewModel(
         _registerState.value = AuthState.Loading
         viewModelScope.launch {
             try {
-                repository.register(email = email, password = password)
-                val token = repository.login(email = email, password = password)
-                tokenStore.saveToken(token)
+                repository.register(email = normalizedEmail, password = password)
                 _registerState.value = AuthState.Success
             } catch (e: HttpException) {
                 val message = when (e.code()) {
-                    400 -> "Registration failed (email may already exist)"
+                    400 -> "An account with this email already exists. Sign in instead or reset your password."
                     else -> "Registration failed (${e.code()})"
                 }
                 _registerState.value = AuthState.Error(message)
@@ -125,7 +246,8 @@ class AuthViewModel(
     }
 
     fun forgotPassword(email: String) {
-        if (email.isBlank()) {
+        val normalizedEmail = normalizeEmail(email)
+        if (normalizedEmail.isBlank()) {
             _forgotPasswordState.value = AuthState.Error("Email is required")
             return
         }
@@ -133,7 +255,7 @@ class AuthViewModel(
         _forgotPasswordState.value = AuthState.Loading
         viewModelScope.launch {
             try {
-                val (_, resetToken) = repository.forgotPassword(email)
+                val (_, resetToken) = repository.forgotPassword(normalizedEmail)
                 _lastResetToken.value = resetToken
                 _forgotPasswordState.value = AuthState.Success
             } catch (e: HttpException) {
@@ -179,5 +301,45 @@ class AuthViewModel(
             is IOException -> "Network I/O error during $action"
             else -> "Unexpected network error during $action"
         }
+    }
+
+    private suspend fun persistSession(token: com.fitgpt.app.data.remote.dto.TokenResponse): Boolean {
+        tokenStore.saveToken(token)
+        return !tokenStore.getAccessToken().isNullOrBlank()
+    }
+
+    private suspend fun ensureDevQuickLoginOnboardingComplete() {
+        val repository = profileRepository ?: return
+        val profile = repository.getProfile()
+        if (profile.onboardingComplete) {
+            return
+        }
+
+        Log.d(authLogTag, "DEV_QUICK_LOGIN completing onboarding for dedicated dev account")
+        repository.completeOnboarding(
+            stylePreferences = emptyList(),
+            comfortPreferences = emptyList(),
+            dressFor = emptyList(),
+            bodyType = null,
+            gender = null,
+            heightCm = null
+        )
+    }
+
+    private fun extractHttpDetail(exception: HttpException): String? {
+        val payload = runCatching {
+            exception.response()?.errorBody()?.string().orEmpty()
+        }.getOrNull().orEmpty()
+        if (payload.isBlank()) {
+            return null
+        }
+        val detail = runCatching {
+            JSONObject(payload).optString("detail")
+        }.getOrNull().orEmpty().trim()
+        return detail.ifBlank { null }
+    }
+
+    private fun normalizeEmail(email: String): String {
+        return email.trim().lowercase(Locale.ROOT)
     }
 }

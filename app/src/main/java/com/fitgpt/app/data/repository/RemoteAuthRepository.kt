@@ -30,9 +30,10 @@ class RemoteAuthRepository(
         )
     }
 
-    override suspend fun loginWithGoogle(idToken: String): TokenResponse {
+    override suspend fun loginWithGoogle(idToken: String, attemptId: String?): TokenResponse {
         return api.loginWithGoogle(
-            GoogleLoginRequest(idToken = idToken)
+            payload = GoogleLoginRequest(idToken = idToken),
+            attemptId = attemptId
         )
     }
 

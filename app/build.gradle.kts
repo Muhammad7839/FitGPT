@@ -1,5 +1,27 @@
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.Properties
+
+fun projectPropertyOrLocal(project: Project, key: String, defaultValue: String = ""): String {
+    val envValue = System.getenv(key)?.trim().orEmpty()
+    if (envValue.isNotBlank()) {
+        return envValue
+    }
+
+    val directValue = (project.findProperty(key) as String?)?.trim().orEmpty()
+    if (directValue.isNotBlank()) {
+        return directValue
+    }
+
+    val localPropertiesFile = project.rootProject.file("local.properties")
+    if (!localPropertiesFile.exists()) {
+        return defaultValue
+    }
+
+    val properties = Properties()
+    localPropertiesFile.inputStream().use(properties::load)
+    return properties.getProperty(key)?.trim().takeUnless { it.isNullOrBlank() } ?: defaultValue
+}
 
 plugins {
     alias(libs.plugins.android.application)
@@ -19,13 +41,18 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
-        val googleWebClientId = project.findProperty("GOOGLE_WEB_CLIENT_ID") as String? ?: ""
-        val apiBaseUrlRaw = project.findProperty("API_BASE_URL") as String? ?: "http://10.0.2.2:8000/"
+        val googleWebClientId = projectPropertyOrLocal(
+            project,
+            "GOOGLE_WEB_CLIENT_ID",
+            projectPropertyOrLocal(project, "GOOGLE_CLIENT_ID")
+        )
+        val apiBaseUrlRaw = projectPropertyOrLocal(project, "API_BASE_URL")
         val apiBaseUrl = if (apiBaseUrlRaw.endsWith("/")) apiBaseUrlRaw else "$apiBaseUrlRaw/"
-        val apiLanBaseUrlRaw = project.findProperty("API_LAN_BASE_URL") as String? ?: ""
+        val apiLanBaseUrlRaw = projectPropertyOrLocal(project, "API_LAN_BASE_URL")
         val apiLanBaseUrl = apiLanBaseUrlRaw.trim().let { value ->
             if (value.isBlank()) "" else if (value.endsWith("/")) value else "$value/"
         }
+        buildConfigField("String", "GOOGLE_CLIENT_ID", "\"$googleWebClientId\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         buildConfigField("String", "API_LAN_BASE_URL", "\"$apiLanBaseUrl\"")
@@ -49,6 +76,11 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
     }
 }
 

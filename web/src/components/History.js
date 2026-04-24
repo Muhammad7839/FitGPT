@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
@@ -34,7 +34,7 @@ export function HistoryContent() {
 
   const wardrobeById = useMemo(() => buildWardrobeMap(wardrobe), [wardrobe]);
 
-  const refresh = useCallback(async () => {
+  const refresh = async () => {
     setLoading(true);
     setMsg("");
     try {
@@ -54,11 +54,12 @@ export function HistoryContent() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  };
 
   useEffect(() => {
     refresh();
-  }, [refresh]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const filtered = useMemo(() => {
     const d = range === "7" ? 7 : range === "30" ? 30 : 0;
@@ -143,9 +144,9 @@ export function HistoryContent() {
 
   const handleClearHistory = async () => {
     try {
-      await outfitHistoryApi.clearHistory(user);
+      const result = await outfitHistoryApi.clearHistory(user);
       setHistory([]);
-      setMsg("History cleared.");
+      setMsg(result?.localOnly ? "History cleared locally only. Backend sync failed." : "History cleared.");
     } catch {
       setMsg("Could not clear history.");
     }
@@ -335,4 +336,3 @@ export default function History() {
     </div>
   );
 }
-

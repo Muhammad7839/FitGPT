@@ -23,14 +23,22 @@ data class AiRecommendationResult(
     val fallbackUsed: Boolean,
     val warning: String?,
     val weatherCategory: String?,
+    val weatherAvailable: Boolean = true,
     val occasion: String?,
     val suggestionId: String?,
     val itemExplanations: Map<Int, String>,
-    val outfitOptions: List<OutfitOption> = emptyList()
+    val outfitOptions: List<OutfitOption> = emptyList(),
+    val promptFeedback: PromptFeedbackMetadata? = null
 )
 
 data class OutfitOption(
     val items: List<ClothingItem>,
     val explanation: String,
     val outfitScore: Float
+)
+
+data class PromptFeedbackMetadata(
+    val shouldPrompt: Boolean,
+    val reason: String,
+    val cooldownSecondsRemaining: Int
 )

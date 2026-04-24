@@ -43,6 +43,22 @@ describe("savedOutfitsApi.saveOutfit", () => {
     const result = await savedOutfitsApi.saveOutfit({ items: [] }, TEST_USER);
     expect(result.created).toBe(false);
   });
+
+  test("marks local-only save when authenticated remote sync fails", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      headers: { get: () => "application/json" },
+      json: async () => ({ detail: "backend offline" }),
+      text: async () => "",
+    });
+
+    const result = await savedOutfitsApi.saveOutfit({ items: ["shirt-1", "pants-2"] }, TEST_USER);
+
+    expect(result.created).toBe(true);
+    expect(result.localOnly).toBe(true);
+    expect(result.syncError).toBe(true);
+  });
 });
 
 describe("savedOutfitsApi.listSaved", () => {
@@ -102,5 +118,24 @@ describe("savedOutfitsApi.unsaveOutfit", () => {
   test("no-op for non-existent signature", async () => {
     const result = await savedOutfitsApi.unsaveOutfit("nonexistent", TEST_USER);
     expect(result.deleted).toBe(true);
+  });
+
+  test("marks local-only unsave when remote delete fails", async () => {
+    await savedOutfitsApi.saveOutfit({ items: ["a", "b"] }, TEST_USER);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      headers: { get: () => "application/json" },
+      json: async () => ({ detail: "delete failed" }),
+      text: async () => "",
+    });
+
+    const result = await savedOutfitsApi.unsaveOutfit("a|b", TEST_USER);
+
+    expect(result).toMatchObject({
+      deleted: true,
+      localOnly: true,
+      syncError: true,
+    });
   });
 });

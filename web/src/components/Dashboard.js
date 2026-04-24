@@ -2,14 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 
-import { useAuth } from "../auth/AuthProvider";
 import { useTheme } from "../App";
+import { useAuth } from "../auth/AuthProvider";
 import { savedOutfitsApi } from "../api/savedOutfitsApi";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
 import useWardrobe from "../hooks/useWardrobe";
 import { fetchAIRecommendations } from "../api/recommendationsApi";
 import { submitRecommendationFeedback } from "../api/recommendationFeedbackApi";
-import { readAccessibilityPrefs, adaptAiText, effectiveAccessibilityPrefs } from "../utils/accessibilityPrefs";
 import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 import ClothCard from "./ClothCard";
 import MannequinViewer from "./MannequinViewer";
@@ -22,9 +21,9 @@ import {
   REUSE_OUTFIT_KEY,
   CURRENT_RECS_KEY,
   EVT_OUTFIT_HISTORY_CHANGED,
+  EVT_ACCESSIBILITY_CHANGED,
   EVT_RECOMMENDATION_FEEDBACK_CHANGED,
   EVT_RECOMMENDATION_PERSONALIZATION_CHANGED,
-  EVT_ACCESSIBILITY_CHANGED,
   UNDERUSED_ALERTS_KEY,
 } from "../utils/constants";
 import {
@@ -42,6 +41,7 @@ import {
   loadRecommendationFeedback,
   saveRecommendationFeedback,
 } from "../utils/userStorage";
+import { adaptAiText, effectiveAccessibilityPrefs, readAccessibilityPrefs } from "../utils/accessibilityPrefs";
 import { safeParse, formatToday, normalizeFitTag, normalizeItems, buildGoogleCalendarUrl, onTiltMove, onTiltLeave, tomorrowDateStr } from "../utils/helpers";
 import { getWeatherContext } from "../api/weatherApi";
 import { analyzeWardrobeGaps } from "../utils/wardrobeGapInsights";
@@ -446,7 +446,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const isGuestMode = !user;
 
   const wardrobe = useWardrobe(user);
-  const [recSeed, setRecSeed] = useState(() => Date.now());
+  const [recSeed, setRecSeed] = useState(() => readRecSeed());
 
   const [saveMsg, setSaveMsg] = useState("");
   const [savingSig, setSavingSig] = useState("");
@@ -982,19 +982,18 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [viewMode, setViewMode] = useState("grid");
   const { theme } = useTheme() || {};
-  const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(user));
-
-  useEffect(() => {
-    setAccessibilityPrefs(readAccessibilityPrefs(user));
-    const onChange = () => setAccessibilityPrefs(readAccessibilityPrefs(user));
-    window.addEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
-    return () => window.removeEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
-  }, [user]);
-
-  const effectivePrefs = useMemo(
+  const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(null));
+  const effectiveAccessibility = useMemo(
     () => effectiveAccessibilityPrefs(accessibilityPrefs, theme),
     [accessibilityPrefs, theme]
   );
+
+  useEffect(() => {
+    setAccessibilityPrefs(readAccessibilityPrefs(null));
+    const onChange = () => setAccessibilityPrefs(readAccessibilityPrefs(null));
+    window.addEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
+    return () => window.removeEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
+  }, []);
 
   useEffect(() => {
     if (selectedIdx != null && selectedIdx >= outfits.length) {
@@ -1002,6 +1001,12 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     setShowWhyDetails(false);
     }
   }, [outfits.length, selectedIdx]);
+
+  useEffect(() => {
+    if (viewMode === "mannequin" && outfits.length > 0 && selectedIdx == null) {
+      setSelectedIdx(0);
+    }
+  }, [outfits.length, selectedIdx, viewMode]);
 
   /* Show nudge after sustained engagement with selected outfit */
   useEffect(() => {
@@ -1077,7 +1082,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     }
 
     const activeOutfit = outfits[selectedIdx] || outfits[0] || [];
-    const text = buildExplanation({ answers: effectiveAnswers, outfit: activeOutfit, weatherCategory, precipCategory: precipCondition, timeCategory, outfitIndex: selectedIdx ?? 0 });
+    const text = buildExplanation({ answers: effectiveAnswers, outfit: activeOutfit, weatherCategory, precipCategory: precipCondition, timeCategory });
     const cleaned = (text || "").toString().trim();
     return cleaned || "Pick a style and an occasion in onboarding to get a personalized explanation.";
   }, [effectiveAnswers, outfits, selectedIdx, aiSource, pairedExplanations, reused, weatherCategory, precipCondition, timeCategory]);
@@ -1128,7 +1133,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       const comfortSummary = buildComfortSummary(outfit, effectiveAnswers, weatherCategory);
       const explanation = aiSource === "ai" && !reused && pairedExplanations[idx]
         ? pairedExplanations[idx]
-        : buildExplanation({ answers: effectiveAnswers, outfit, weatherCategory, precipCategory: precipCondition, timeCategory, outfitIndex: idx });
+        : buildExplanation({ answers: effectiveAnswers, outfit, weatherCategory, precipCategory: precipCondition, timeCategory });
       const explanationPreview = summarizeExplanation(explanation) || buildColorReason(outfit);
 
       const traits = [];
@@ -1399,7 +1404,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     navigate("/wardrobe");
   };
 
-  const openPlanModal = () => {
+  const openPlanModal = async () => {
     if (isGuestMode) {
       setSaveMsg("Sign in to save outfit plans.");
       window.setTimeout(() => setSaveMsg(""), 2500);
@@ -1425,15 +1430,15 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       image_url: x?.image_url || "",
     }));
 
-    plannedOutfitsApi.planOutfit({
+    const result = await plannedOutfitsApi.planOutfit({
       item_ids: itemIds,
       item_details: itemDetails,
       planned_date: date,
       occasion: "",
       source: "planner",
-    }, user).catch(() => {});
+    }, user).catch(() => null);
 
-    setSaveMsg("Opening Google Calendar...");
+    setSaveMsg(result?.localOnly ? "Opening Google Calendar. Plan saved locally only." : "Opening Google Calendar...");
     window.setTimeout(() => setSaveMsg(""), 2500);
   };
 
@@ -1496,8 +1501,8 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     if (savedSigs.has(sig)) {
       setSavingSig(sig);
       try {
-        await savedOutfitsApi.unsaveOutfit(sig, user);
-        await outfitHistoryApi.removeBySignature(sig, user);
+        const savedResult = await savedOutfitsApi.unsaveOutfit(sig, user);
+        const historyResult = await outfitHistoryApi.removeBySignature(sig, user);
         setSavedSigs((prev) => {
           const next = new Set(prev);
           next.delete(sig);
@@ -1505,7 +1510,11 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         });
         setSavedOutfitEntries((prev) => prev.filter((entry) => (entry?.outfit_signature || "").toString().trim() !== sig));
         syncHistoryState(historyEntries.filter((entry) => idsSignature(Array.isArray(entry?.item_ids) ? entry.item_ids : []) !== sig));
-        setSaveMsg("Removed from saved outfits.");
+        setSaveMsg(
+          savedResult?.localOnly || historyResult?.localOnly
+            ? "Removed locally. Backend sync failed."
+            : "Removed from saved outfits."
+        );
         window.setTimeout(() => setSaveMsg(""), 2500);
       } catch (e) {
         setSaveMsg(e?.message || "Could not unsave outfit.");
@@ -1572,8 +1581,13 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         }
       }
 
-      if (msg) setSaveMsg(msg);
-      else setSaveMsg(created ? "Saved! Refreshing recommendations..." : "This outfit is already in your saved outfits.");
+      if (res?.localOnly && created) {
+        setSaveMsg("Saved locally only. Backend sync failed.");
+      } else if (msg) {
+        setSaveMsg(msg);
+      } else {
+        setSaveMsg(created ? "Saved! Refreshing recommendations..." : "This outfit is already in your saved outfits.");
+      }
 
       window.setTimeout(() => {
         setSaveMsg("");
@@ -1968,14 +1982,14 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
               <div className="dashViewToggle">
                 <button
                   type="button"
-                  className={"dashViewToggleBtn" + (viewMode === "grid" ? " active" : "")}
+                  className={`dashViewToggleBtn${viewMode === "grid" ? " active" : ""}`}
                   onClick={() => setViewMode("grid")}
                 >
                   Grid
                 </button>
                 <button
                   type="button"
-                  className={"dashViewToggleBtn" + (viewMode === "mannequin" ? " active" : "")}
+                  className={`dashViewToggleBtn${viewMode === "mannequin" ? " active" : ""}`}
                   onClick={() => {
                     setViewMode("mannequin");
                     if (selectedIdx == null) setSelectedIdx(0);
@@ -2007,63 +2021,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                 </button>
               </div>
             </div>
-          ) : viewMode === "mannequin" ? (
-            outfits.map((outfit, idx) => {
-              const sig = outfitSignature(outfit);
-              const isSaved = savedSigs.has(sig);
-              const disabled = !sig || savingSig === sig;
-              const label = isGuestMode ? "Sign in to save" : isSaved ? "Unsave" : savingSig === sig ? "Saving..." : "Save";
-              return (
-                <div
-                  key={`mq_${idx}`}
-                  className={"dashOutfitOption" + (idx === selectedIdx ? " dashOutfitSelected" : "")}
-                  style={{ animationDelay: `${idx * 120}ms`, marginTop: idx === 0 ? 0 : 18, cursor: "pointer" }}
-                  onClick={() => selectRecommendationOption(idx)}
-                >
-                  <div className="optionLabel">
-                    <span className="optionLabelNum">{String(idx + 1).padStart(2, "0")}</span>
-                    <span className="optionLabelSlash">{"//"}</span>
-                    <span className="optionLabelText">OPTION</span>
-                  </div>
-                  {idx === selectedIdx ? (
-                    <ErrorBoundary fallback={<div style={{ padding: 24, textAlign: "center" }}>3D view unavailable</div>}>
-                      <MannequinViewer outfit={outfit} bodyType={bodyTypeId} />
-                    </ErrorBoundary>
-                  ) : (
-                    <div className="dashOutfitGridFigma">
-                      {outfit.map((item, itemIdx) => (
-                        <div
-                          key={item.id}
-                          className="dashSquareTile dashTileReveal"
-                          style={{ animationDelay: `${itemIdx * 90 + idx * 140}ms` }}
-                        >
-                          {item.image_url ? (
-                            <img className="dashSquareImg" src={item.image_url} alt={item.name} />
-                          ) : (
-                            <div className="dashSquareImg" aria-hidden="true" />
-                          )}
-                          <div className="dashSquareNameRow">
-                            <span className="dashColorDot" style={{ background: colorToCss(item.color) }} title={item.color} />
-                            <span className="dashSquareName">{item.name}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="mannequinSaveBtnRow">
-                    <button
-                      type="button"
-                      className={"styledSaveBtn" + (isSaved ? " saved" : "")}
-                      onClick={(e) => { e.stopPropagation(); handleSaveOutfit(outfit); }}
-                      disabled={disabled}
-                    >
-                      <span className="styledSaveBtnIcon">{isSaved ? "\u2713" : "\u2661"}</span>
-                      <span className="styledSaveBtnText">{label}</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })
           ) : outfits.map((outfit, idx) => {
             const sig = outfitSignature(outfit);
             const isSaved = savedSigs.has(sig);
@@ -2133,50 +2090,98 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                   </div>
                 ) : null}
 
-                <div className="dashOutfitGridFigma">
-                  {outfit.map((item, itemIdx) => (
-                    <div
-                      key={item.id}
-                      className={"dashSquareTile dashTileReveal" + (normalizeCategory(item?.category) === "Accessories" ? " accessory" : "")}
-                      style={{ animationDelay: `${itemIdx * 90 + idx * 140}ms` }}
-                      onPointerMove={onTiltMove}
-                      onPointerLeave={onTiltLeave}
-                    >
-                      <div className="dashSquareRole">{outfitRoleLabel(item)}</div>
-                      {idx === selectedIdx ? (
-                        <ErrorBoundary fallback={item.image_url ? <img className="dashSquareImg" src={item.image_url} alt={item.name} /> : <div className="dashSquareImg" aria-hidden="true" />}><ClothCard key={clothCardKey(outfit, item, aiRefreshToken, recSeed)} imageUrl={item.image_url} className="dashSquareImg" /></ErrorBoundary>
-                      ) : item.image_url ? (
-                        <img className="dashSquareImg" src={item.image_url} alt={item.name} />
-                      ) : (
-                        <div className="dashSquareImg" aria-hidden="true" />
-                      )}
-                      <div className="dashSquareNameRow">
-                        <span
-                          className="dashColorDot"
-                          style={{ background: colorToCss(item.color) }}
-                          title={item.color}
-                        />
-                        <span className="dashSquareName">{item.name}</span>
+                {viewMode === "mannequin" && idx === selectedIdx ? (
+                  <>
+                    <ErrorBoundary fallback={<div className="dashEmptySub" style={{ padding: "24px 0" }}>3D view unavailable.</div>}>
+                      <MannequinViewer outfit={outfit} bodyType={bodyTypeId} />
+                    </ErrorBoundary>
+                    <div className="mannequinSaveBtnRow">
+                      <button
+                        type="button"
+                        className={"styledSaveBtn" + (isSaved ? " saved" : "")}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleSaveOutfit(outfit);
+                        }}
+                        disabled={disabled}
+                      >
+                        <span className="styledSaveBtnIcon">{isSaved ? "\u2713" : "\u2661"}</span>
+                        <span className="styledSaveBtnText">{label}</span>
+                      </button>
+                      <div className="dashFeedbackBtns">
+                        <button
+                          type="button"
+                          className="dashFeedbackBtn dashFeedbackLike"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleFeedback(outfit, "like");
+                          }}
+                          title="More like this"
+                        >
+                          &#x25B2;
+                        </button>
+                        <button
+                          type="button"
+                          className="dashFeedbackBtn dashFeedbackDislike"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleFeedback(outfit, "dislike");
+                          }}
+                          title="Less like this"
+                        >
+                          &#x25BC;
+                        </button>
                       </div>
                     </div>
-                  ))}
+                  </>
+                ) : (
+                  <div className="dashOutfitGridFigma">
+                    {outfit.map((item, itemIdx) => (
+                      <div
+                        key={item.id}
+                        className={"dashSquareTile dashTileReveal" + (normalizeCategory(item?.category) === "Accessories" ? " accessory" : "")}
+                        style={{ animationDelay: `${itemIdx * 90 + idx * 140}ms` }}
+                        onPointerMove={onTiltMove}
+                        onPointerLeave={onTiltLeave}
+                      >
+                        <div className="dashSquareRole">{outfitRoleLabel(item)}</div>
+                        {idx === selectedIdx ? (
+                          <ErrorBoundary fallback={item.image_url ? <img className="dashSquareImg" src={item.image_url} alt={item.name} /> : <div className="dashSquareImg" aria-hidden="true" />}>
+                            <ClothCard key={clothCardKey(outfit, item, aiRefreshToken, recSeed)} imageUrl={item.image_url} className="dashSquareImg" />
+                          </ErrorBoundary>
+                        ) : item.image_url ? (
+                          <img className="dashSquareImg" src={item.image_url} alt={item.name} />
+                        ) : (
+                          <div className="dashSquareImg" aria-hidden="true" />
+                        )}
+                        <div className="dashSquareNameRow">
+                          <span
+                            className="dashColorDot"
+                            style={{ background: colorToCss(item.color) }}
+                            title={item.color}
+                          />
+                          <span className="dashSquareName">{item.name}</span>
+                        </div>
+                      </div>
+                    ))}
 
-                  <div className="dashSaveBtnCell">
-                    <button
-                      type="button"
-                      className={"styledSaveBtn" + (isSaved ? " saved" : "")}
-                      onClick={() => handleSaveOutfit(outfit)}
-                      disabled={disabled}
-                    >
-                      <span className="styledSaveBtnIcon">{isSaved ? "\u2713" : "\u2661"}</span>
-                      <span className="styledSaveBtnText">{label}</span>
-                    </button>
-                    <div className="dashFeedbackBtns">
-                      <button type="button" className="dashFeedbackBtn dashFeedbackLike" onClick={() => handleFeedback(outfit, "like")} title="More like this">&#x25B2;</button>
-                      <button type="button" className="dashFeedbackBtn dashFeedbackDislike" onClick={() => handleFeedback(outfit, "dislike")} title="Less like this">&#x25BC;</button>
+                    <div className="dashSaveBtnCell">
+                      <button
+                        type="button"
+                        className={"styledSaveBtn" + (isSaved ? " saved" : "")}
+                        onClick={() => handleSaveOutfit(outfit)}
+                        disabled={disabled}
+                      >
+                        <span className="styledSaveBtnIcon">{isSaved ? "\u2713" : "\u2661"}</span>
+                        <span className="styledSaveBtnText">{label}</span>
+                      </button>
+                      <div className="dashFeedbackBtns">
+                        <button type="button" className="dashFeedbackBtn dashFeedbackLike" onClick={() => handleFeedback(outfit, "like")} title="More like this">&#x25B2;</button>
+                        <button type="button" className="dashFeedbackBtn dashFeedbackDislike" onClick={() => handleFeedback(outfit, "dislike")} title="Less like this">&#x25BC;</button>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 <div className="dashOptionReason">
                   <div className="dashOptionReasonHead">
@@ -2433,19 +2438,22 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             <div className="dashWhyContent">
               <div className="dashWhyLead">
                 <span key={`${selectedIdx}-${aiRefreshToken}-${recSeed}`} className="dashAiReveal">
-                  {adaptAiText(explanationSummaryText || explanationText, effectivePrefs)
+                  {adaptAiText(explanationSummaryText || explanationText, effectiveAccessibility)
                     .split(/\n{2,}/)
                     .filter(Boolean)
-                    .map((paragraph, pi, arr) => (
-                      <span key={pi} className="dashAiParagraph">
-                        {paragraph.split(" ").map((word, i) => (
-                          <React.Fragment key={i}>
-                            <span className="dashAiWord" style={{ animationDelay: `${(pi * 40 + i) * 28}ms` }}>
+                    .map((paragraph, paragraphIndex, paragraphs) => (
+                      <span key={paragraphIndex} className="dashAiParagraph">
+                        {paragraph.split(" ").map((word, wordIndex) => (
+                          <React.Fragment key={wordIndex}>
+                            <span
+                              className="dashAiWord"
+                              style={{ animationDelay: `${(paragraphIndex * 40 + wordIndex) * 28}ms` }}
+                            >
                               {word}
                             </span>{" "}
                           </React.Fragment>
                         ))}
-                        {pi < arr.length - 1 ? "\n" : null}
+                        {paragraphIndex < paragraphs.length - 1 ? "\n" : null}
                       </span>
                     ))}
                 </span>
@@ -2457,7 +2465,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                     <div key={detail.title} className="dashWhyCard">
                       <div className="dashWhyCardTitle">{detail.title}</div>
                       <div className="dashWhyCardText" style={{ whiteSpace: "pre-line" }}>
-                        {adaptAiText(detail.body, effectivePrefs)}
+                        {adaptAiText(detail.body, effectiveAccessibility)}
                       </div>
                     </div>
                   ))}

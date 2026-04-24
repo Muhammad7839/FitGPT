@@ -23,11 +23,11 @@ class TopLevelTabHistoryTest {
     @Test
     fun resolveBackTarget_defaultsToHomeWhenOnlyNonHomeTopLevelVisited() {
         val history = TopLevelTabHistory(homeRoute = Routes.DASHBOARD)
-        history.recordVisit(Routes.RECOMMENDATION)
+        history.recordVisit(Routes.HISTORY)
 
-        assertEquals(Routes.DASHBOARD, history.resolveBackTarget(Routes.RECOMMENDATION))
+        assertEquals(Routes.DASHBOARD, history.resolveBackTarget(Routes.HISTORY))
         history.recordVisit(Routes.DASHBOARD)
-        assertEquals(Routes.RECOMMENDATION, history.resolveBackTarget(Routes.DASHBOARD))
+        assertEquals(Routes.HISTORY, history.resolveBackTarget(Routes.DASHBOARD))
     }
 
     @Test
@@ -36,10 +36,10 @@ class TopLevelTabHistoryTest {
         history.recordVisit(Routes.DASHBOARD)
         history.recordVisit(Routes.WARDROBE)
         history.recordVisit(Routes.DASHBOARD)
-        history.recordVisit(Routes.RECOMMENDATION)
+        history.recordVisit(Routes.PLANS)
 
         assertEquals(
-            listOf(Routes.WARDROBE, Routes.DASHBOARD, Routes.RECOMMENDATION),
+            listOf(Routes.WARDROBE, Routes.DASHBOARD, Routes.PLANS),
             history.snapshot()
         )
     }

@@ -3,13 +3,17 @@
  */
 package com.fitgpt.app.ui.common
 
+import android.util.Log
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -18,9 +22,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Icon
@@ -37,11 +43,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.fitgpt.app.R
 import com.fitgpt.app.navigation.isTopLevelRoute
@@ -50,6 +64,8 @@ import com.fitgpt.app.navigation.navigateToTopLevel
 import com.fitgpt.app.navigation.routeBase
 import com.fitgpt.app.navigation.TopLevelReselectBus
 import com.fitgpt.app.navigation.Routes
+
+private const val SCAFFOLD_NAV_LOG_TAG = "FitGPTNav"
 
 /**
  * Shared shell used by top-level screens to mirror the web app IA.
@@ -71,12 +87,13 @@ fun FitGptScaffold(
     content: @Composable (PaddingValues) -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val density = LocalDensity.current
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val activeRoute = navBackStackEntry?.destination?.route ?: currentRoute
     val activeRouteBase = routeBase(activeRoute)
     val shouldShowBottomBar = showBottomBar && isTopLevelRoute(activeRouteBase)
     val shouldShowBackButton = showBackButton ?: !isTopLevelRoute(activeRouteBase)
-    val shouldShowGlobalChatFab = showGlobalChatFab && isTopLevelRoute(activeRouteBase)
+    val shouldShowGlobalChatFab = showGlobalChatFab && activeRouteBase == Routes.DASHBOARD
     val shouldShowBrandedBackground = isTopLevelRoute(activeRouteBase)
     val hasCustomFab = floatingActionButton != null
 
@@ -115,20 +132,40 @@ fun FitGptScaffold(
                             modifier = Modifier
                                 .shadow(8.dp, RoundedCornerShape(12.dp))
                                 .clip(RoundedCornerShape(12.dp))
-                                .padding(2.dp)
+                                .background(colorScheme.surface.copy(alpha = 0.42f), RoundedCornerShape(12.dp))
+                                .border(
+                                    width = 1.dp,
+                                    color = colorScheme.primary.copy(alpha = 0.22f),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .drawBehind {
+                                    val strokeWidth = 1.5.dp.toPx()
+                                    drawRoundRect(
+                                        color = colorScheme.primary.copy(alpha = 0.55f),
+                                        cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
+                                        style = Stroke(
+                                            width = strokeWidth,
+                                            cap = StrokeCap.Round,
+                                            pathEffect = PathEffect.dashPathEffect(
+                                                floatArrayOf(8.dp.toPx(), 6.dp.toPx())
+                                            )
+                                        )
+                                    )
+                                }
+                                .padding(4.dp)
                         )
                         {
                             Image(
-                                painter = painterResource(id = R.drawable.official_logo),
+                                painter = painterResource(id = R.drawable.fitgpt_header_logo),
                                 contentDescription = "FitGPT",
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(30.dp)
                             )
                         }
                         Text(title)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = colorScheme.surface.copy(alpha = 0.94f),
+                    containerColor = colorScheme.surface.copy(alpha = 0.64f),
                     titleContentColor = colorScheme.onSurface
                 ),
                 actions = {
@@ -152,7 +189,7 @@ fun FitGptScaffold(
         bottomBar = {
             if (shouldShowBottomBar) {
                 NavigationBar(
-                    containerColor = colorScheme.surface.copy(alpha = 0.95f),
+                    containerColor = colorScheme.surface.copy(alpha = 0.66f),
                     tonalElevation = 8.dp
                 ) {
                     topLevelItems.forEach { item ->
@@ -160,6 +197,10 @@ fun FitGptScaffold(
                         NavigationBarItem(
                             selected = isSelected,
                             onClick = {
+                                Log.i(
+                                    SCAFFOLD_NAV_LOG_TAG,
+                                    "top-level click target=${item.route} current=$activeRouteBase reselect=$isSelected"
+                                )
                                 if (isSelected) {
                                     TopLevelReselectBus.dispatch(item.route)
                                 } else {
@@ -183,6 +224,7 @@ fun FitGptScaffold(
         floatingActionButton = {
             if (hasCustomFab || shouldShowGlobalChatFab) {
                 Column(
+                    modifier = Modifier.navigationBarsPadding(),
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -193,10 +235,10 @@ fun FitGptScaffold(
                             icon = {
                                 Icon(
                                     imageVector = Icons.Default.Star,
-                                    contentDescription = "AI Chat"
+                                    contentDescription = "AURA"
                                 )
                             },
-                            text = { Text("AI Chat") }
+                            text = { Text("AURA") }
                         )
                     }
                 }
@@ -225,6 +267,7 @@ private data class TopLevelNavItem(
 private val topLevelItems = listOf(
     TopLevelNavItem(Routes.DASHBOARD, "Home", Icons.Default.Home),
     TopLevelNavItem(Routes.WARDROBE, "Wardrobe", Icons.AutoMirrored.Filled.List),
-    TopLevelNavItem(Routes.RECOMMENDATION, "Recommend", Icons.Default.Star),
+    TopLevelNavItem(Routes.HISTORY, "Insights", Icons.Default.Info),
+    TopLevelNavItem(Routes.PLANS, "Plans", Icons.Default.DateRange),
     TopLevelNavItem(Routes.PROFILE, "Profile", Icons.Default.Person)
 )

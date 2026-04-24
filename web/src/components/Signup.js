@@ -45,34 +45,22 @@ export default function Signup() {
     setIsLoading(true);
 
     try {
-      try {
-        await registerWithEmail(email.trim(), password);
-      } catch (regErr) {
-        const msg = (regErr?.message || "").toLowerCase();
-        if (!msg.includes("already") && !msg.includes("registered") && !msg.includes("exists")) {
-          throw regErr;
-        }
-        // Account already exists — fall through to login below
-      }
-
-      try {
-        await loginWithEmail(email.trim(), password);
-      } catch (loginErr) {
-        // Registration worked but auto-login failed — send to login page so user can sign in manually
-        navigate("/login", { replace: true });
-        return;
-      }
+      await registerWithEmail(email.trim(), password);
+      await loginWithEmail(email.trim(), password);
 
       try {
         const me = await getMe();
         if (me) {
           migrateGuestData(me);
           clearGuestData();
+          const onboarded = Boolean(me?.onboarding_complete ?? me?.onboardingComplete);
+          if (typeof setUser === "function") setUser(me);
+          navigate(onboarded ? "/dashboard" : "/onboarding", { replace: true });
+          return;
         }
-        if (typeof setUser === "function") setUser(me);
       } catch {}
 
-      navigate("/dashboard", { replace: true });
+      navigate("/onboarding", { replace: true });
     } catch (err) {
       setError(err?.message || "Registration failed. Please try again.");
     } finally {

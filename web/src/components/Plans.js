@@ -90,29 +90,16 @@ export default function Plans() {
 
   const handleRemove = async (plannedId) => {
     try {
-      await plannedOutfitsApi.removePlanned(plannedId, user);
+      const result = await plannedOutfitsApi.removePlanned(plannedId, user);
       refresh();
+      if (result?.localOnly) {
+        setMsg("Plan removed locally only. Backend sync failed.");
+        window.setTimeout(() => setMsg(""), 2500);
+      }
     } catch {
       setMsg("Could not remove plan.");
       window.setTimeout(() => setMsg(""), 2500);
     }
-  };
-
-  const handleCreatePlan = async ({ plannedDate, itemIds, occasion, itemDetails }) => {
-    const result = await plannedOutfitsApi.planOutfit(
-      {
-        item_ids: itemIds,
-        item_details: itemDetails,
-        planned_date: plannedDate,
-        occasion,
-        notes: occasion ? `Planned for ${occasion}.` : "Planned from calendar.",
-        source: "planner-calendar",
-      },
-      user
-    );
-
-    await refresh();
-    return result;
   };
 
   const handleWearAgain = (entry) => {
@@ -129,25 +116,8 @@ export default function Plans() {
   };
 
   const handleOpenGoogleCalendar = (plan) => {
-    const itemDetails = Array.isArray(plan?.item_details) && plan.item_details.length
-      ? plan.item_details
-      : (Array.isArray(plan?.item_ids) ? plan.item_ids : [])
-          .map((itemId) => wardrobeById.get((itemId ?? "").toString().trim()))
-          .filter(Boolean)
-          .map((item) => ({
-            id: (item?.id ?? "").toString(),
-            name: item?.name || "",
-            category: item?.category || "",
-            color: item?.color || "",
-            image_url: item?.image_url || "",
-          }));
-    const names = itemDetails.map((d) => d?.name).filter(Boolean);
-    const url = buildGoogleCalendarUrl({
-      date: plan?.planned_date,
-      occasion: plan?.occasion,
-      itemNames: names,
-      itemDetails,
-    });
+    const names = (Array.isArray(plan?.item_details) ? plan.item_details : []).map((d) => d?.name).filter(Boolean);
+    const url = buildGoogleCalendarUrl({ date: plan?.planned_date, occasion: plan?.occasion, itemNames: names });
     window.open(url, "_blank", "noopener");
   };
 
@@ -241,11 +211,9 @@ export default function Plans() {
       <UpcomingWeatherPlanner wardrobe={wardrobe} user={user} isGuestMode={!user} answers={answers} />
       <TripPackingPlanner wardrobe={wardrobe} user={user} answers={answers} />
       <PlanningCalendar
-        plans={planned}
+        plans={upcoming}
         history={history}
-        wardrobe={wardrobe}
         wardrobeById={wardrobeById}
-        onCreatePlan={handleCreatePlan}
         onWearThis={handleWearThis}
         onRemovePlan={handleRemove}
         onAddToGoogleCalendar={handleOpenGoogleCalendar}

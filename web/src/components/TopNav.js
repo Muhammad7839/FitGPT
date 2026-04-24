@@ -1,29 +1,20 @@
 // web/src/components/TopNav.js
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import ThemePicker from "./ThemePicker";
 import { useAuth } from "../auth/AuthProvider";
 import { readDemoAuth, loadProfilePic } from "../utils/userStorage";
 import { EVT_PROFILE_PIC_CHANGED } from "../utils/constants";
-
-const NAV_ITEMS = [
-  { to: "/dashboard", label: "Home" },
-  { to: "/wardrobe", label: "Wardrobe" },
-  { to: "/builder", label: "Builder" },
-  { to: "/history", label: "Insights" },
-  { to: "/saved-outfits", label: "Outfits" },
-  { to: "/plans", label: "Plans" },
-  { to: "/profile", label: "Profile" },
-];
+import { getVisibleNavItems } from "../utils/firstLaunchFlow";
 
 const HIDDEN_ROUTES = ["/", "/login", "/signup", "/onboarding"];
 
 export default function TopNav() {
   const { pathname } = useLocation();
-  const { user } = useAuth();
-  const demoUser = readDemoAuth();
+  const { user, isChecking } = useAuth();
+  const demoUser = useMemo(() => readDemoAuth(), []);
   const effectiveUser = user || demoUser;
-  const visibleNavItems = user ? NAV_ITEMS : NAV_ITEMS.filter((item) => item.to === "/dashboard" || item.to === "/wardrobe");
+  const visibleNavItems = getVisibleNavItems(user);
   const [profilePic, setProfilePic] = useState(() => loadProfilePic(effectiveUser));
   const safeProfilePic = (profilePic || "").toString();
   const isGif = safeProfilePic.startsWith("data:image/gif");
@@ -52,7 +43,7 @@ export default function TopNav() {
 
   const [profileHover, setProfileHover] = useState(false);
 
-  if (HIDDEN_ROUTES.includes(pathname)) return null;
+  if (isChecking || HIDDEN_ROUTES.includes(pathname)) return null;
 
   return (
     <header className="topNav">

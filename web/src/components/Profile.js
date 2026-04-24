@@ -1,9 +1,10 @@
 // web/src/components/Profile.js
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import ReactDOM from "react-dom";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { logout } from "../api/authApi";
+import { uploadProfileAvatar } from "../api/profileApi";
 import { readDemoAuth, writeDemoAuth, loadProfilePic, saveProfilePic, loadAnswers, saveAnswers, mirrorUserDataToGuest } from "../utils/userStorage";
 import { fileToDataUrl, getProfilePicUploadIssue } from "../utils/helpers";
 import { STYLE_OPTIONS, COMFORT_OPTIONS, DRESS_FOR_OPTIONS, BODY_TYPE_OPTIONS, GENDER_OPTIONS } from "../utils/formOptions";
@@ -15,12 +16,11 @@ import {
 } from "../utils/rotationAlertPreferences";
 import {
   TEXT_SIZES,
+  applyAccessibilityToDocument,
   readAccessibilityPrefs,
   writeAccessibilityPrefs,
-  applyAccessibilityToDocument,
 } from "../utils/accessibilityPrefs";
 import GuestModeNotice from "./GuestModeNotice";
-import BodyTypeFigure from "./BodyTypeFigure";
 
 const TEXT_SIZE_LABELS = {
   default: "Default",
@@ -35,19 +35,21 @@ export default function Profile({ onResetOnboarding = () => {} }) {
   const { hash } = useLocation();
   const { user, setUser } = useAuth();
 
-  const demoUser = readDemoAuth();
+  const demoUser = useMemo(() => readDemoAuth(), []);
   const effectiveUser = user || demoUser;
+  const remoteAvatarUrl = user?.avatar_url || user?.avatarUrl || effectiveUser?.avatar_url || effectiveUser?.avatarUrl || "";
 
   const email = effectiveUser?.email || effectiveUser?.user?.email || effectiveUser?.demoEmail || "";
 
   // ── Profile picture ──
-  const [profilePic, setProfilePic] = useState(() => loadProfilePic(effectiveUser));
+  const [profilePic, setProfilePic] = useState(() => remoteAvatarUrl || loadProfilePic(effectiveUser));
   const fileInputRef = useRef(null);
   const [picMsg, setPicMsg] = useState("");
+  const [pendingPicFile, setPendingPicFile] = useState(null);
 
   useEffect(() => {
-    setProfilePic(loadProfilePic(effectiveUser));
-  }, [effectiveUser]);
+    setProfilePic(remoteAvatarUrl || loadProfilePic(effectiveUser));
+  }, [effectiveUser, remoteAvatarUrl]);
 
   const openPicMenu = useCallback(() => {
     setPicMsg("");
@@ -57,6 +59,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
   const closePicMenu = useCallback(() => {
     setShowPicMenu(false);
     setPendingPic(null);
+    setPendingPicFile(null);
     setPicMsg("");
   }, []);
 
@@ -78,6 +81,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
     try {
       const dataUrl = await fileToDataUrl(file, 300);
       setPendingPic(dataUrl);
+      setPendingPicFile(file);
       setPicMsg("");
       setShowPicMenu(true);
     } catch {
@@ -107,13 +111,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
   const [alertsSaved, setAlertsSaved] = useState(false);
   const smartAlertsRef = useRef(null);
   const alertsSavedTimerRef = useRef(null);
-  const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(effectiveUser));
-
-  const updateTextSize = useCallback((next) => {
-    const safe = writeAccessibilityPrefs({ ...accessibilityPrefs, textSize: next }, effectiveUser);
-    setAccessibilityPrefs(safe);
-    applyAccessibilityToDocument(safe);
-  }, [accessibilityPrefs, effectiveUser]);
+  const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(null));
 
   // ── Account settings state ──
   const [showEmailEdit, setShowEmailEdit] = useState(false);
@@ -133,7 +131,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
 
   useEffect(() => {
     setRotationPrefs(readRotationAlertPreferences(effectiveUser));
-    setAccessibilityPrefs(readAccessibilityPrefs(effectiveUser));
+    setAccessibilityPrefs(readAccessibilityPrefs(null));
   }, [effectiveUser]);
 
   useEffect(() => {
@@ -198,6 +196,12 @@ export default function Profile({ onResetOnboarding = () => {} }) {
     flashAlertsSaved();
   }, [effectiveUser, flashAlertsSaved]);
 
+  const updateTextSize = useCallback((nextSize) => {
+    const safe = writeAccessibilityPrefs({ ...accessibilityPrefs, textSize: nextSize }, null);
+    setAccessibilityPrefs(safe);
+    applyAccessibilityToDocument(safe);
+  }, [accessibilityPrefs]);
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -218,6 +222,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
           <div className="profileHeaderRow">
             <div>
               <h1 className="heroTitle profileTitle">Profile</h1>
+              <p className="heroSub profileSub">Sign in to save and manage your profile.</p>
             </div>
           </div>
           <GuestModeNotice compact />
@@ -264,8 +269,10 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 onClick={openPicMenu}
                 title="Upload profile picture"
               >
-                <span className="profileAvatarPlaceholderBadge">Profile</span>
-                <span className="profileAvatarPlaceholderText">Add Photo</span>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
               </div>
             )}
           </div>
@@ -297,8 +304,8 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 >
                   Change Password
                 </button>
-                <button className="btn primary profileLogoutBtn" type="button" onClick={handleLogout}>
-                  Log out
+                <button className="btn primary" type="button" onClick={handleLogout}>
+                  Logout
                 </button>
               </div>
             </div>
@@ -369,16 +376,11 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                     <button
                       key={opt.id}
                       type="button"
-                      className={prefs.bodyType === opt.id ? "optionCard selected profileBodyTypeCard" : "optionCard profileBodyTypeCard"}
+                      className={prefs.bodyType === opt.id ? "optionCard selected" : "optionCard"}
                       onClick={() => setBodyType(opt.id)}
                     >
-                      <div className="profileBodyTypeRow">
-                        <BodyTypeFigure bodyTypeId={opt.id} compact />
-                        <div className="profileBodyTypeCopy">
-                          <div className="optionTitle">{opt.label}</div>
-                          <div className="optionNote">{opt.note}</div>
-                        </div>
-                      </div>
+                      <div className="optionTitle">{opt.label}</div>
+                      <div className="optionNote">{opt.note}</div>
                     </button>
                   ))}
                 </div>
@@ -474,7 +476,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
               </div>
 
               <div className="profileSettingsIntro">
-                Adjust how FitGPT displays AI-generated recommendations, explanations, and chat replies.
+                Adjust how FitGPT renders AI-generated recommendations, explanation cards, and AURA replies.
               </div>
 
               <div className="profileAccessibilitySection">
@@ -486,7 +488,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                       type="button"
                       role="radio"
                       aria-checked={accessibilityPrefs.textSize === size}
-                      className={"profileAccessibilityOption" + (accessibilityPrefs.textSize === size ? " active" : "")}
+                      className={`profileAccessibilityOption${accessibilityPrefs.textSize === size ? " active" : ""}`}
                       onClick={() => updateTextSize(size)}
                     >
                       {TEXT_SIZE_LABELS[size]}
@@ -494,7 +496,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                   ))}
                 </div>
                 <div className="profileAccessibilityHint">
-                  Large and Extra Large also split long AI replies into shorter paragraphs so dense blocks remain readable.
+                  Large and Extra Large also split long AI replies into shorter paragraphs so dense text stays readable.
                 </div>
               </div>
             </div>
@@ -505,6 +507,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
             <div className="profileSignInCard">
               <div className="profileSignInIcon">&#x1F464;</div>
               <div className="profileSignInTitle">You're browsing as a guest</div>
+              <div className="profileSignInSub">Sign in to save outfits, sync your wardrobe, and access your full profile.</div>
               <button className="btn primary" type="button" onClick={() => navigate("/login")}>
                 Sign in
               </button>
@@ -576,16 +579,11 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                     <button
                       key={opt.id}
                       type="button"
-                      className={prefs.bodyType === opt.id ? "optionCard selected profileBodyTypeCard" : "optionCard profileBodyTypeCard"}
+                      className={prefs.bodyType === opt.id ? "optionCard selected" : "optionCard"}
                       onClick={() => setBodyType(opt.id)}
                     >
-                      <div className="profileBodyTypeRow">
-                        <BodyTypeFigure bodyTypeId={opt.id} compact />
-                        <div className="profileBodyTypeCopy">
-                          <div className="optionTitle">{opt.label}</div>
-                          <div className="optionNote">{opt.note}</div>
-                        </div>
-                      </div>
+                      <div className="optionTitle">{opt.label}</div>
+                      <div className="optionNote">{opt.note}</div>
                     </button>
                   ))}
                 </div>
@@ -724,15 +722,22 @@ export default function Profile({ onResetOnboarding = () => {} }) {
         <div className="modalOverlay" role="dialog" aria-modal="true" onClick={closePicMenu}>
           <div className="modalCard profilePicMenu" onClick={(e) => e.stopPropagation()}>
             <div className="modalTitle">Profile Picture</div>
-            <div className="modalSub">Upload a photo or animated GIF as your avatar. Photos can be up to 10MB, and GIFs up to 3MB.</div>
+            <div className="modalSub">Upload a PNG, JPG, or WebP photo as your avatar. Images can be up to 10MB.</div>
+            {user ? (
+              <div className="noteBox" style={{ marginTop: 10 }}>
+                Changes are saved to your FitGPT account and will appear across supported devices.
+              </div>
+            ) : null}
 
             <div className="profilePicMenuPreview">
               {(pendingPic !== null ? pendingPic : profilePic) ? (
                 <img src={pendingPic !== null ? pendingPic : profilePic} alt="Preview" className="profileAvatar" style={{ cursor: "default" }} />
               ) : (
                 <div className="profileAvatar profileAvatarPlaceholder" style={{ cursor: "default" }}>
-                  <span className="profileAvatarPlaceholderBadge">Profile</span>
-                  <span className="profileAvatarPlaceholderText">Preview</span>
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
                 </div>
               )}
             </div>
@@ -750,9 +755,18 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 <button
                   className="btnSecondary"
                   type="button"
-                  onClick={() => { setPendingPic(""); setPicMsg(""); }}
+                  onClick={() => {
+                    if (user) {
+                      setPendingPic(null);
+                      setPendingPicFile(null);
+                    } else {
+                      setPendingPic("");
+                      setPendingPicFile(null);
+                    }
+                    setPicMsg("");
+                  }}
                 >
-                  Reset
+                  {user ? "Revert" : "Reset"}
                 </button>
               )}
               <button
@@ -766,15 +780,38 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 className="btnPrimary"
                 type="button"
                 disabled={pendingPic === null}
-                onClick={() => {
+                onClick={async () => {
                   try {
-                    saveProfilePic(pendingPic || "", effectiveUser);
-                    setProfilePic(pendingPic || "");
+                    if (user) {
+                      if (!pendingPicFile) {
+                        setPicMsg("Choose a new image before saving.");
+                        return;
+                      }
+                      setPicMsg("Uploading avatar...");
+                      const response = await uploadProfileAvatar(pendingPicFile);
+                      const avatarUrl = response?.avatar_url || response?.avatarUrl || pendingPic || "";
+                      if (!avatarUrl) {
+                        throw new Error("Avatar upload did not return a URL.");
+                      }
+                      saveProfilePic(avatarUrl, effectiveUser);
+                      setProfilePic(avatarUrl);
+                      if (typeof setUser === "function") {
+                        setUser((current) => (current ? { ...current, avatar_url: avatarUrl, avatarUrl } : current));
+                      }
+                    } else {
+                      saveProfilePic(pendingPic || "", effectiveUser);
+                      setProfilePic(pendingPic || "");
+                    }
                     setPendingPic(null);
+                    setPendingPicFile(null);
                     setPicMsg("");
                     setShowPicMenu(false);
                   } catch {
-                    setPicMsg("That profile picture is too large to save. Please choose a smaller image or GIF.");
+                    setPicMsg(
+                      user
+                        ? "Could not upload that avatar. Please try another supported image."
+                        : "That profile picture is too large to save. Please choose a smaller supported image."
+                    );
                   }
                 }}
               >

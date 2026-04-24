@@ -5,7 +5,9 @@ import { useAuth } from "../auth/AuthProvider";
 import { migrateGuestData, clearGuestData } from "../utils/userStorage";
 import { isNetworkError } from "../utils/helpers";
 
-const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "";
+const GOOGLE_CLIENT_ID =
+  (process.env.REACT_APP_GOOGLE_CLIENT_ID || "").trim() ||
+  (process.env.REACT_APP_GOOGLE_WEB_CLIENT_ID || "").trim();
 
 export default function GoogleSignInButton() {
   const navigate = useNavigate();
@@ -52,6 +54,9 @@ export default function GoogleSignInButton() {
           clearGuestData();
         }
         if (typeof setUser === "function") setUser(me);
+        const onboardingComplete = Boolean(me?.onboarding_complete ?? me?.onboardingComplete);
+        navigate(onboardingComplete ? "/dashboard" : "/onboarding", { replace: true });
+        return;
       } catch {}
 
       navigate("/dashboard", { replace: true });
@@ -66,25 +71,13 @@ export default function GoogleSignInButton() {
     }
   }
 
-  if (!GOOGLE_CLIENT_ID) {
-    return (
-      <div className="authGoogleSection">
-        <div className="authGoogleTitle">Sign in with Google</div>
-        <div className="authGoogleUnavailable">
-          Google sign-in is not configured for this environment yet.
-        </div>
-      </div>
-    );
-  }
+  if (!GOOGLE_CLIENT_ID) return null;
 
   return (
-    <div className="authGoogleSection">
-      <div className="authGoogleTitle">Sign in with Google</div>
+    <>
       {loading && <div className="authHint">Signing in with Google...</div>}
-      <div className="authGoogleButtonWrap">
-        <div ref={btnRef} style={{ width: "100%" }} />
-      </div>
+      <div ref={btnRef} style={{ width: "100%" }} />
       {error && <div className="authError">{error}</div>}
-    </div>
+    </>
   );
 }

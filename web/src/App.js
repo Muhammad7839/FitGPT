@@ -9,7 +9,7 @@ import { applyTheme } from "./theme/themeEngine";
 import TopNav from "./components/TopNav";
 import Chatbot from "./components/Chatbot";
 import { LEGACY_THEME_KEY, THEME_KEY, CUSTOM_THEMES_KEY, STALE_CLEANUP_KEY, TOKEN_KEY, WARDROBE_KEY, EVT_ACCESSIBILITY_CHANGED } from "./utils/constants";
-import { readAccessibilityPrefs, applyAccessibilityToDocument } from "./utils/accessibilityPrefs";
+import { applyAccessibilityToDocument, readAccessibilityPrefs } from "./utils/accessibilityPrefs";
 if (!localStorage.getItem(STALE_CLEANUP_KEY)) {
   localStorage.removeItem(WARDROBE_KEY);
   localStorage.setItem(STALE_CLEANUP_KEY, "1");

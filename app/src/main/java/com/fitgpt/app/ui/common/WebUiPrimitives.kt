@@ -1,6 +1,7 @@
 package com.fitgpt.app.ui.common
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 
@@ -35,6 +37,8 @@ fun WebCard(
     content: @Composable () -> Unit
 ) {
     val shape = RoundedCornerShape(22.dp)
+    val isDarkTheme = isSystemInDarkTheme()
+    val cardAlpha = if (isDarkTheme) 0.72f else 0.6f
     val cardContent: @Composable () -> Unit = {
         Column {
             if (accentTop) {
@@ -61,9 +65,11 @@ fun WebCard(
         Card(
             modifier = cardModifier,
             shape = shape,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.26f)),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = cardAlpha)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
         ) {
             cardContent()
         }
@@ -72,9 +78,11 @@ fun WebCard(
             modifier = cardModifier,
             onClick = onClick,
             shape = shape,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.26f)),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = cardAlpha)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
         ) {
             cardContent()
         }

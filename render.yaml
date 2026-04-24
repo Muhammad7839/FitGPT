@@ -1,9 +1,3 @@
-databases:
-  - name: fitgpt-db
-    plan: free
-    databaseName: fitgpt
-    user: fitgpt
-
 services:
   - type: web
     name: fitgpt-backend
@@ -16,7 +10,3 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.13
-      - key: DATABASE_URL
-        fromDatabase:
-          name: fitgpt-db
-          property: connectionString

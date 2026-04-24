@@ -1,4 +1,4 @@
-import { safeParse, makeId, formatToday, normalizeFitTag, normalizeItems, idsSignature, formatCardDate, formatPlanDate, buildWardrobeMap, labelFromSource, setReuseOutfit, monthKey, getProfilePicUploadIssue, PROFILE_GIF_MAX_BYTES, PROFILE_PIC_MAX_BYTES } from "./helpers";
+import { safeParse, makeId, formatToday, normalizeFitTag, normalizeItems, idsSignature, formatCardDate, formatPlanDate, buildWardrobeMap, labelFromSource, setReuseOutfit, monthKey, getProfilePicUploadIssue, PROFILE_PIC_MAX_BYTES } from "./helpers";
 import { REUSE_OUTFIT_KEY } from "./constants";
 
 describe("safeParse", () => {
@@ -75,10 +75,9 @@ describe("getProfilePicUploadIssue", () => {
     expect(getProfilePicUploadIssue(file)).toBe("This profile photo is too large. Please upload one under 10MB.");
   });
 
-  test("rejects oversized GIFs with the stricter limit", () => {
+  test("rejects GIF avatars because the backend only accepts static images", () => {
     const file = new File(["avatar"], "avatar.gif", { type: "image/gif" });
-    Object.defineProperty(file, "size", { value: PROFILE_GIF_MAX_BYTES + 1, configurable: true });
-    expect(getProfilePicUploadIssue(file)).toBe("This GIF is too large. Please upload one under 3MB.");
+    expect(getProfilePicUploadIssue(file)).toBe("Please choose a PNG, JPG, or WebP image.");
   });
 
   test("rejects non-image files", () => {

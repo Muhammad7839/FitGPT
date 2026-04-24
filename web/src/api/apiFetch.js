@@ -1,6 +1,31 @@
 import { TOKEN_KEY, AUTH_MODE_KEY } from "../utils/constants";
 
-const BASE_URL = (process.env.REACT_APP_API_BASE_URL || "https://fitgpt-backend-tdiq.onrender.com").trim();
+const REQUEST_TIMEOUT_MS = 15000;
+
+function isPrivateNetworkHost(hostname) {
+  return /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+    hostname.endsWith(".local");
+}
+
+function resolveBaseUrl() {
+  const configured = (process.env.REACT_APP_API_BASE_URL || "").toString().trim();
+  if (configured) return configured;
+
+  if (typeof window !== "undefined") {
+    const configuredLan = (process.env.REACT_APP_API_LAN_BASE_URL || "").toString().trim();
+    const { hostname, protocol } = window.location;
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return "http://127.0.0.1:8000";
+    }
+    if (isPrivateNetworkHost(hostname)) {
+      return configuredLan || `${protocol === "https:" ? "https" : "http"}://${hostname}:8000`;
+    }
+  }
+
+  return "";
+}
 
 const AUTH_STRATEGY = (process.env.REACT_APP_AUTH_STRATEGY || "token").toLowerCase();
 const USE_COOKIES = AUTH_STRATEGY === "cookies";
@@ -11,8 +36,8 @@ export function setUnauthorizedHandler(fn) {
 }
 
 export function hasApi() {
-  const base = (BASE_URL || "").toString().trim();
-  return base.length > 0;
+  const base = resolveBaseUrl();
+  return base.length > 0 || typeof window !== "undefined";
 }
 
 function getToken() {
@@ -45,8 +70,8 @@ function setAuthMode(mode) {
 }
 
 function buildUrl(path) {
-  const trimmed = BASE_URL.trim();
-  const base = trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+  const baseUrl = resolveBaseUrl();
+  const base = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
   if (!path) return base;
   if (path.startsWith("http")) return path;
   const p = path.startsWith("/") ? path : `/${path}`;
@@ -69,15 +94,20 @@ async function readErrorMessage(res) {
   return `Request failed (${res.status})`;
 }
 
-const DEFAULT_TIMEOUT_MS = 15000;
-
 export async function apiFetch(path, options = {}) {
+  const { timeoutMs, ...fetchOptions } = options;
   const url = buildUrl(path);
-
   const token = getToken();
-  const headers = new Headers(options.headers || {});
+  const headers = new Headers(fetchOptions.headers || {});
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const externalSignal = fetchOptions.signal;
+  let timeoutId = null;
+  let didTimeout = false;
+  let removeExternalAbortListener = null;
+  const requestTimeoutMs =
+    Number.isFinite(timeoutMs) && Number(timeoutMs) > 0 ? Number(timeoutMs) : REQUEST_TIMEOUT_MS;
 
-  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  const isFormData = typeof FormData !== "undefined" && fetchOptions.body instanceof FormData;
 
   if (!isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -87,14 +117,21 @@ export async function apiFetch(path, options = {}) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...fetchOptions } = options;
-  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-  const timeoutId = controller && Number.isFinite(timeoutMs) && timeoutMs > 0
-    ? setTimeout(() => controller.abort(new Error("timeout")), timeoutMs)
-    : null;
-  if (callerSignal && controller) {
-    if (callerSignal.aborted) controller.abort(callerSignal.reason);
-    else callerSignal.addEventListener("abort", () => controller.abort(callerSignal.reason), { once: true });
+  if (controller) {
+    if (externalSignal?.aborted) {
+      controller.abort(externalSignal.reason);
+    } else if (externalSignal?.addEventListener) {
+      const abortFromExternalSignal = () => controller.abort(externalSignal.reason);
+      externalSignal.addEventListener("abort", abortFromExternalSignal, { once: true });
+      removeExternalAbortListener = () => {
+        externalSignal.removeEventListener("abort", abortFromExternalSignal);
+      };
+    }
+
+    timeoutId = setTimeout(() => {
+      didTimeout = true;
+      controller.abort();
+    }, requestTimeoutMs);
   }
 
   let res;
@@ -103,23 +140,31 @@ export async function apiFetch(path, options = {}) {
       ...fetchOptions,
       headers,
       credentials: "include",
-      signal: controller ? controller.signal : callerSignal,
+      signal: controller?.signal || externalSignal,
     });
-  } catch (err) {
-    if (err?.name === "AbortError") {
-      const abortErr = new Error("Request timed out. Check your connection and try again.");
-      abortErr.status = 0;
-      abortErr.isTimeout = true;
-      throw abortErr;
-    }
-    const netErr = new Error("Network error: could not reach the server.");
-    netErr.status = 0;
-    netErr.isNetwork = true;
-    netErr.cause = err;
-    throw netErr;
-  } finally {
+  } catch (error) {
     if (timeoutId) clearTimeout(timeoutId);
+    removeExternalAbortListener?.();
+
+    if (didTimeout) {
+      const timeoutError = new Error("Request timed out. Please try again.");
+      timeoutError.code = "request_timeout";
+      throw timeoutError;
+    }
+
+    if (error?.name === "AbortError") {
+      const abortError = new Error("Request was cancelled.");
+      abortError.code = "request_aborted";
+      throw abortError;
+    }
+
+    const networkError = new Error("Network request failed. Check your connection and backend.");
+    networkError.code = "network_error";
+    throw networkError;
   }
+
+  if (timeoutId) clearTimeout(timeoutId);
+  removeExternalAbortListener?.();
 
   if (!res.ok) {
     if (res.status === 401) {

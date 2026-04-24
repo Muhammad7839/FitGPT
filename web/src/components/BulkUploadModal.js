@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import {
   CATEGORIES as ITEM_CATEGORIES,
   FIT_TAG_OPTIONS,
@@ -15,24 +15,11 @@ import {
 } from "../utils/wardrobeOptions";
 import SuggestedTagsPanel from "./SuggestedTagsPanel";
 
-const BULK_UPLOAD_TITLE_ID = "bulk-upload-title";
-
 function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, isSaving, error }) {
-  const lastFocusedRef = useRef(null);
-  useEffect(() => {
-    lastFocusedRef.current = document.activeElement;
-    return () => {
-      const target = lastFocusedRef.current;
-      if (target && typeof target.focus === "function") {
-        target.focus();
-      }
-    };
-  }, []);
-
   return (
-    <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby={BULK_UPLOAD_TITLE_ID}>
-      <div className="modalCard bulkUploadModalCard" style={{ maxHeight: "85vh", overflow: "auto", width: "min(780px, 96vw)" }}>
-        <div id={BULK_UPLOAD_TITLE_ID} className="modalTitle">Add {items.length} item{items.length > 1 ? "s" : ""}</div>
+    <div className="modalOverlay" role="dialog" aria-modal="true">
+      <div className="modalCard" style={{ maxHeight: "85vh", overflow: "auto", width: "min(780px, 96vw)" }}>
+        <div className="modalTitle">Add {items.length} item{items.length > 1 ? "s" : ""}</div>
 
         <div style={{ display: "grid", gap: 14, marginTop: 12 }}>
           {items.map((entry) => {
@@ -48,13 +35,26 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
                   alignItems: "start",
                 }}
               >
-                <img
-                  src={entry.preview}
-                  alt={entry.name}
-                  className="bulkUploadItemPreview"
-                />
+                {entry.preview ? (
+                  <img
+                    src={entry.preview}
+                    alt={entry.name}
+                    style={{ width: 80, height: 80, borderRadius: 12, objectFit: "cover" }}
+                  />
+                ) : (
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      width: 80,
+                      height: 80,
+                      borderRadius: 12,
+                      border: "1px dashed rgba(0, 0, 0, 0.16)",
+                      background: "linear-gradient(135deg, rgba(180, 180, 180, 0.22), rgba(140, 140, 140, 0.1))",
+                    }}
+                  />
+                )}
 
-                <div className="bulkUploadFieldStack">
+                <div style={{ display: "grid", gap: 8 }}>
                   <SuggestedTagsPanel
                     status={entry.taggingState}
                     message={entry.taggingMessage}
@@ -69,8 +69,8 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
                     onChange={(e) => onUpdateItem(entry._key, "name", e.target.value)}
                   />
 
-                  <div className="bulkUploadTwoColumn">
-                    <div className="bulkUploadRelative">
+                  <div style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr" }}>
+                    <div style={{ position: "relative" }}>
                       <select
                         className="wardrobeInput"
                         value={entry.category}
@@ -98,7 +98,7 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
 
                   <ColorPickerField value={entry.color} onChange={(v) => onUpdateItem(entry._key, "color", v)} />
 
-                  <div className="bulkUploadTwoColumn">
+                  <div style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr" }}>
                     <select
                       className="wardrobeInput"
                       value={entry.fitTag}
@@ -120,14 +120,14 @@ function BulkUploadModal({ items, onUpdateItem, onRemoveItem, onCancel, onSave, 
                     </select>
                   </div>
 
-                  <div className="bulkUploadSetRow">
+                  <div style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr auto", alignItems: "center" }}>
                     <input
                       className="wardrobeInput"
                       placeholder="Matching set ID"
                       value={entry.setId || ""}
                       onChange={(e) => onUpdateItem(entry._key, "setId", e.target.value)}
                     />
-                    <label className="bulkUploadCheckboxLabel">
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
                       <input
                         type="checkbox"
                         checked={!!entry.isOnePiece}

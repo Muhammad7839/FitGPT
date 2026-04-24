@@ -1,6 +1,11 @@
+import importlib
 from pathlib import Path
 
+import bcrypt
+
+from app.auth import hash_password, verify_password
 from app.google_oauth import GoogleTokenValidationError
+from sqlalchemy.exc import IntegrityError
 
 from conftest import register_and_login
 
@@ -15,6 +20,18 @@ def _cleanup_uploaded_file(image_url: str):
 def test_register_and_login_success(client):
     token = register_and_login(client, "user1@example.com", "password123")
     assert token
+
+
+def test_direct_bcrypt_password_helpers_round_trip_and_keep_existing_hash_compatibility():
+    password = "password123"
+
+    hashed = hash_password(password)
+    assert hashed.startswith("$2")
+    assert verify_password(password, hashed) is True
+    assert verify_password("wrong-pass", hashed) is False
+
+    existing_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    assert verify_password(password, existing_hash) is True
 
 
 def test_auth_alias_register_login_and_me_success(client):
@@ -37,6 +54,38 @@ def test_auth_alias_register_login_and_me_success(client):
     assert me.json()["email"] == "alias-auth@example.com"
 
 
+def test_register_returns_400_when_uniqueness_conflict_happens_at_commit(client, monkeypatch):
+    monkeypatch.setattr("app.routes.crud.get_user_by_email", lambda *_args, **_kwargs: None)
+
+    def raise_integrity_error(*_args, **_kwargs):
+        raise IntegrityError("INSERT INTO users ...", {"email": "race@example.com"}, Exception("UNIQUE constraint failed"))
+
+    monkeypatch.setattr("app.routes.crud.create_user", raise_integrity_error)
+
+    response = client.post(
+        "/register",
+        json={"email": "race@example.com", "password": "password123"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Email already registered"
+
+
+def test_register_rejects_duplicate_email_case_insensitively(client):
+    first = client.post(
+        "/register",
+        json={"email": "MixedCase@Example.com", "password": "password123"},
+    )
+    assert first.status_code == 200
+    assert first.json()["email"] == "mixedcase@example.com"
+
+    second = client.post(
+        "/register",
+        json={"email": "mixedcase@example.com", "password": "password123"},
+    )
+    assert second.status_code == 400
+    assert second.json()["detail"] == "Email already registered"
+
+
 def test_login_fails_with_wrong_password(client):
     register_and_login(client, "user2@example.com", "password123")
     bad_login = client.post(
@@ -45,6 +94,73 @@ def test_login_fails_with_wrong_password(client):
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     assert bad_login.status_code == 401
+
+
+def test_login_is_case_insensitive_and_preserves_wardrobe_after_relogin(client):
+    register = client.post(
+        "/register",
+        json={"email": "WardrobeUser@Example.com", "password": "password123"},
+    )
+    assert register.status_code == 200
+
+    first_login = client.post(
+        "/login",
+        data={"username": "wardrobeuser@example.com", "password": "password123"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert first_login.status_code == 200
+    auth = {"Authorization": f"Bearer {first_login.json()['access_token']}"}
+
+    create = client.post(
+        "/wardrobe/items",
+        headers=auth,
+        json={
+            "name": "Persistent Tee",
+            "category": "Top",
+            "clothing_type": "t-shirt",
+            "color": "Black",
+            "season": "All",
+            "comfort_level": 3,
+        },
+    )
+    assert create.status_code == 200
+
+    relogin = client.post(
+        "/login",
+        data={"username": "WARDROBEUSER@example.com", "password": "password123"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert relogin.status_code == 200
+    relogin_auth = {"Authorization": f"Bearer {relogin.json()['access_token']}"}
+
+    wardrobe = client.get("/wardrobe/items", headers=relogin_auth)
+    assert wardrobe.status_code == 200
+    names = [item["name"] for item in wardrobe.json()]
+    assert "Persistent Tee" in names
+
+
+def test_default_database_url_points_to_backend_db_when_env_is_unset(monkeypatch):
+    import app.config as config
+
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    reloaded = importlib.reload(config)
+    expected = f"sqlite:///{(Path(config.__file__).resolve().parents[1] / 'fitgpt.db').resolve()}"
+    assert reloaded.DATABASE_URL == expected
+
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///./fitgpt_test.db")
+    importlib.reload(config)
+
+
+def test_reset_token_exposure_defaults_to_enabled_in_development(monkeypatch):
+    import app.config as config
+
+    monkeypatch.delenv("EXPOSE_RESET_TOKEN_IN_RESPONSE", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    reloaded = importlib.reload(config)
+    assert reloaded.EXPOSE_RESET_TOKEN_IN_RESPONSE is True
+
+    monkeypatch.setenv("EXPOSE_RESET_TOKEN_IN_RESPONSE", "false")
+    importlib.reload(config)
 
 
 def test_get_me_and_update_profile(client):
@@ -63,12 +179,22 @@ def test_get_me_and_update_profile(client):
             "body_type": "athletic",
             "lifestyle": "active",
             "comfort_preference": "high",
+            "style_preferences": ["Professional", "Minimalist"],
+            "comfort_preferences": ["Balanced", "Stretchy"],
+            "dress_for": ["Work", "Travel"],
+            "gender": "woman",
+            "height_cm": 170,
             "onboarding_complete": True,
         },
     )
     assert update.status_code == 200
     body = update.json()
     assert body["body_type"] == "athletic"
+    assert body["style_preferences"] == ["Professional", "Minimalist"]
+    assert body["comfort_preferences"] == ["Balanced", "Stretchy"]
+    assert body["dress_for"] == ["Work", "Travel"]
+    assert body["gender"] == "woman"
+    assert body["height_cm"] == 170
     assert body["onboarding_complete"] is True
     assert body["avatar_url"] is None
 
@@ -84,6 +210,32 @@ def test_onboarding_complete_allows_skipped_preferences(client):
     assert body["body_type"] == "unspecified"
     assert body["lifestyle"] == "casual"
     assert body["comfort_preference"] == "medium"
+    assert body["style_preferences"] == []
+    assert body["dress_for"] == []
+    assert body["gender"] is None
+    assert body["height_cm"] is None
+
+
+def test_weather_current_returns_unavailable_payload_when_provider_is_down(client, monkeypatch):
+    token = register_and_login(client, "weather-current-unavailable@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    def fail_lookup(*_args, **_kwargs):
+        from app.weather import WeatherLookupError
+
+        raise WeatherLookupError("Weather service is not configured", status_code=503)
+
+    monkeypatch.setattr("app.routes.fetch_current_weather", fail_lookup)
+
+    response = client.get("/weather/current", headers=auth, params={"city": "Boston"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["city"] == "Boston"
+    assert body["available"] is False
+    assert body["temperature_f"] is None
+    assert body["weather_category"] is None
+    assert body["detail"] == "Weather service is not configured"
 
 
 def test_profile_summary_returns_preferences_and_counts(client):
@@ -174,6 +326,11 @@ def test_profile_summary_returns_preferences_and_counts(client):
     assert body["body_type"] == "unspecified"
     assert body["lifestyle"] == "casual"
     assert body["comfort_preference"] == "medium"
+    assert body["style_preferences"] == []
+    assert body["comfort_preferences"] == ["medium"]
+    assert body["dress_for"] == []
+    assert body["gender"] is None
+    assert body["height_cm"] is None
     assert body["wardrobe_count"] == 2
     assert body["active_wardrobe_count"] == 2
     assert body["favorite_count"] == 1
@@ -232,22 +389,46 @@ def test_google_login_callback_alias_uses_same_flow(client, monkeypatch):
     assert me.json()["email"] == "google-callback@example.com"
 
 
-def test_google_login_invalid_or_expired_token_handling(client, monkeypatch):
+def test_google_login_invalid_or_expired_token_handling(client, monkeypatch, caplog):
+    caplog.set_level("INFO")
+
     def invalid_verify(_: str):
-        raise GoogleTokenValidationError("Invalid Google token")
+        raise GoogleTokenValidationError(
+            "Invalid Google token audience",
+            category="invalid_audience",
+        )
 
     monkeypatch.setattr("app.routes.verify_google_id_token", invalid_verify)
     invalid_response = client.post("/login/google", json={"id_token": "bad-token-value-2222222222"})
     assert invalid_response.status_code == 400
-    assert invalid_response.json()["detail"] == "Invalid Google token"
+    # Detail is sanitized to a generic message so internal validator
+    # categories never reach the client. Full detail stays in server logs.
+    assert invalid_response.json()["detail"] == "Invalid Google credentials."
+    assert "category=invalid_audience" in caplog.text
+    assert "detail=Invalid Google token audience" in caplog.text
 
     def expired_verify(_: str):
-        raise GoogleTokenValidationError("Google token has expired", is_expired=True)
+        raise GoogleTokenValidationError(
+            "Google token has expired",
+            is_expired=True,
+            category="expired_token",
+        )
 
     monkeypatch.setattr("app.routes.verify_google_id_token", expired_verify)
     expired_response = client.post("/login/google", json={"id_token": "expired-token-value-33333333"})
     assert expired_response.status_code == 401
-    assert expired_response.json()["detail"] == "Google token has expired"
+    assert expired_response.json()["detail"] == "Google session expired. Please sign in again."
+    assert "category=expired_token" in caplog.text
+
+
+def test_google_login_missing_token_returns_400_with_explicit_category(client, caplog):
+    caplog.set_level("INFO")
+
+    response = client.post("/login/google", json={"id_token": "   "})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Google ID token is required"
+    assert "category=missing_token" in caplog.text
 
 
 def test_forgot_and_reset_password_flow(client, monkeypatch):
@@ -339,6 +520,9 @@ def test_reset_password_rejects_invalid_token(client):
 
 
 def test_forgot_password_hides_reset_token_when_exposure_disabled(client):
+    import app.routes
+
+    app.routes.EXPOSE_RESET_TOKEN_IN_RESPONSE = False
     register_and_login(client, "reset-hidden@example.com", "password123")
 
     forgot = client.post("/forgot-password", json={"email": "reset-hidden@example.com"})
