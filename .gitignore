@@ -58,3 +58,4 @@ fitgpt_test.db
 # Generated reports
 *.docx
 FitGPT_Branch_Analysis.docx
+.vercel
