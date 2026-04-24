@@ -17340,14 +17340,6 @@ html[data-hc="true"] .dashAiParagraph {
   text-align: center;
 }
 
-.downloadEyebrow {
-  margin: 0 0 10px;
-  color: var(--accent-highlight);
-  font-size: 13px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
 .downloadHero h1 {
   margin: 0;
   font-size: clamp(34px, 7vw, 58px);
@@ -17364,9 +17356,9 @@ html[data-hc="true"] .dashAiParagraph {
 
 .downloadGrid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
-  max-width: 1040px;
+  max-width: 820px;
   margin: 0 auto;
 }
 
@@ -17392,11 +17384,6 @@ html[data-hc="true"] .dashAiParagraph {
   margin: 0;
   color: var(--muted);
   line-height: 1.55;
-}
-
-.downloadNote {
-  margin-top: 12px !important;
-  font-size: 13px;
 }
 
 .downloadButton {
@@ -17425,22 +17412,51 @@ html[data-hc="true"] .dashAiParagraph {
   outline-offset: 3px;
 }
 
-.downloadBestDemo {
+.downloadQr {
   display: flex;
-  max-width: 1040px;
+  max-width: 820px;
   margin: 16px auto 0;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 16px 18px;
+  gap: 20px;
+  padding: 22px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--accent-soft-2);
   color: var(--text);
 }
 
-.downloadBestDemo span {
+.downloadQr h2 {
+  margin: 0 0 10px;
+  font-size: 24px;
+}
+
+.downloadQr p {
+  margin: 0;
   color: var(--muted);
+  line-height: 1.55;
+}
+
+.downloadQr a {
+  color: var(--accent);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.downloadQr img {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px;
+}
+
+.downloadSupportNote {
+  max-width: 820px;
+  margin: 14px auto 0;
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
 }
 
 @media (max-width: 860px) {
@@ -17452,7 +17468,7 @@ html[data-hc="true"] .dashAiParagraph {
     min-height: 0;
   }
 
-  .downloadBestDemo {
+  .downloadQr {
     align-items: flex-start;
     flex-direction: column;
   }
