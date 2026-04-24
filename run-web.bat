@@ -74,24 +74,46 @@ if not exist "%~dp0web\node_modules\react-scripts" (
 )
 echo       Node dependencies OK.
 
-:: Kill any existing processes on ports 8000 and 3000
+set "BACKEND_DIR=%~dp0backend"
+set "WEB_DIR=%~dp0web"
+set "BACKEND_URL=http://localhost:8000"
+set "LOCAL_DATABASE_URL=sqlite:///%BACKEND_DIR%\fitgpt.db"
+
+:: Kill any existing processes on ports 8000 and 3000. Use PowerShell's
+:: Get-NetTCPConnection so we also catch "Bound" state zombies that
+:: netstat | findstr "LISTENING" misses — those are the processes that
+:: silently squat on the port and make re-launch fail.
 echo [3/4] Clearing ports...
-for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr ":8000.*LISTENING"') do (
-    taskkill /F /PID %%a >nul 2>&1
-)
-for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr ":3000.*LISTENING"') do (
-    taskkill /F /PID %%a >nul 2>&1
-)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "foreach ($port in 8000, 3000) { Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }" >nul 2>&1
+:: Give the OS a moment to actually release the sockets before we rebind.
+timeout /t 1 /nobreak >nul
 
 :: Start servers
 echo [4/4] Starting servers...
 echo.
 
-start "FitGPT Backend" cmd /k "cd /d "%~dp0backend" && "%PYTHON_CMD%" -m uvicorn app.main:app --reload --port 8000"
+start "FitGPT Backend" cmd /k "cd /d ""%BACKEND_DIR%"" && set ""DATABASE_URL=%LOCAL_DATABASE_URL%"" && ""%PYTHON_CMD%"" -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
-timeout /t 4 /nobreak >nul
+echo       Waiting for backend health check...
+set "BACKEND_READY="
+for /l %%i in (1,1,30) do (
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-WebRequest -UseBasicParsing '%BACKEND_URL%/health' -TimeoutSec 2; if ($r.StatusCode -eq 200) { exit 0 } } catch { exit 1 }" >nul 2>&1
+    if !errorlevel! equ 0 (
+        set "BACKEND_READY=1"
+        goto :backend_ready
+    )
+    timeout /t 1 /nobreak >nul
+)
 
-start "FitGPT Frontend" cmd /k "cd /d "%~dp0web" && set REACT_APP_API_BASE_URL=http://localhost:8000 && npm start"
+:backend_ready
+if not defined BACKEND_READY (
+    echo [ERROR] Backend did not become ready at %BACKEND_URL%.
+    echo         Check the "FitGPT Backend" window for the startup error.
+    goto :fail
+)
+echo       Backend is ready.
+
+start "FitGPT Frontend" cmd /k "cd /d ""%WEB_DIR%"" && set ""REACT_APP_API_BASE_URL=%BACKEND_URL%"" && npm start"
 
 echo.
 echo ========================================
