@@ -764,7 +764,7 @@ export default function Wardrobe() {
     });
   };
 
-  const openPicker = () => fileInputRef.current?.click();
+  const openPicker = useCallback(() => fileInputRef.current?.click(), []);
 
   React.useEffect(() => {
     const flag = sessionStorage.getItem(OPEN_ADD_ITEM_FLAG);
@@ -772,7 +772,7 @@ export default function Wardrobe() {
       sessionStorage.removeItem(OPEN_ADD_ITEM_FLAG);
       window.setTimeout(() => openPicker(), 50);
     }
-  }, [user]);
+  }, [user, openPicker]);
 
   useEffect(() => { preloadModel(); }, []);
 
@@ -804,7 +804,7 @@ export default function Wardrobe() {
     setFormCategory(value);
   };
 
-  const openAddModalForFile = (file) => {
+  const openAddModalForFile = useCallback((file) => {
     if (!file) return;
 
     if (!fileIsOk(file)) {
@@ -890,7 +890,7 @@ export default function Wardrobe() {
       setToast("Upload failed. Try again.");
       window.setTimeout(() => setToast(""), 2500);
     }
-  };
+  }, []);
 
   const handleScanResult = useCallback(async ({ code, name, imageUrl }) => {
     setScannerOpen(false);
@@ -915,7 +915,7 @@ export default function Wardrobe() {
     setToast(hint);
     window.setTimeout(() => setToast(""), 3200);
     openPicker();
-  }, []);
+  }, [openAddModalForFile, openPicker]);
 
   const handleReceiptResult = useCallback(({ items }) => {
     setReceiptScannerOpen(false);
@@ -967,7 +967,7 @@ export default function Wardrobe() {
     window.setTimeout(() => setToast(""), 3500);
   }, []);
 
-  const onPickFile = async (fileList) => {
+  const onPickFile = useCallback(async (fileList) => {
     const allFiles = Array.from(fileList || []);
     const files = allFiles.filter(fileIsOk);
     const invalidFiles = allFiles.filter((file) => !fileIsOk(file));
@@ -992,7 +992,7 @@ export default function Wardrobe() {
       setUploadError("");
     }
 
-      if (files.length === 1) {
+    if (files.length === 1) {
       openAddModalForFile(files[0]);
     } else {
       const entries = await Promise.all(
@@ -1058,7 +1058,7 @@ export default function Wardrobe() {
     }
 
     if (fileInputRef.current) fileInputRef.current.value = "";
-  };
+  }, [openAddModalForFile]);
 
   const onDrop = (e) => {
     e.preventDefault();

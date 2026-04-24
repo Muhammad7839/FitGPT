@@ -247,6 +247,39 @@ def test_recommendations_ai_alias_returns_web_compatible_shape(client, monkeypat
     assert set(body["outfits"][0]["item_ids"]) == {str(top["id"]), str(bottom["id"]), str(shoes["id"])}
 
 
+def test_recommendations_ai_alias_uses_client_payload_when_db_is_empty(client, monkeypatch):
+    token = register_and_login(client, "ai-reco-client-payload@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    class FakeProvider:
+        is_available = False
+
+    monkeypatch.setattr("app.routes.ai_service.provider_client", FakeProvider())
+    response = client.post(
+        "/recommendations/ai",
+        headers=auth,
+        json={
+            "items": [
+                {"id": "local-top", "name": "Local Tee", "category": "Tops", "color": "Black", "clothing_type": "t-shirt"},
+                {"id": "local-bottom", "name": "Local Jeans", "category": "Bottoms", "color": "Blue", "clothing_type": "jeans"},
+                {"id": "local-shoes", "name": "Local Sneakers", "category": "Shoes", "color": "White", "clothing_type": "sneakers"},
+            ],
+            "context": {
+                "weather_category": "mild",
+                "occasion": "daily",
+                "style_preferences": ["casual"],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "fallback"
+    assert body["fallback_used"] is True
+    assert body["outfits"]
+    assert set(body["outfits"][0]["item_ids"]) == {"local-top", "local-bottom", "local-shoes"}
+
+
 def test_dashboard_context_returns_idle_without_weather_inputs(client):
     token = register_and_login(client, "dashboard-context-idle@example.com", "password123")
     auth = {"Authorization": f"Bearer {token}"}

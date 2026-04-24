@@ -150,6 +150,42 @@ def test_wardrobe_create_accepts_multipart_form_compatibility_payload(client):
     cleanup_uploaded_file(body["image_url"])
 
 
+def test_wardrobe_update_accepts_is_active_archive_compatibility(client):
+    token = register_and_login(client, "wardrobe-archive-compat@example.com", "password123")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    created = client.post(
+        "/wardrobe/items",
+        headers=auth,
+        json={
+            "name": "Archive Compat Tee",
+            "category": "Top",
+            "color": "Black",
+            "season": "All",
+            "comfort_level": 3,
+        },
+    )
+    assert created.status_code == 200
+    item_id = created.json()["id"]
+
+    archived = client.put(
+        f"/wardrobe/items/{item_id}",
+        headers=auth,
+        json={"is_active": False},
+    )
+    assert archived.status_code == 200
+    assert archived.json()["is_archived"] is True
+
+    active_items = client.get("/wardrobe/items", headers=auth)
+    assert active_items.status_code == 200
+    assert all(item["id"] != item_id for item in active_items.json())
+
+    all_items = client.get("/wardrobe/items?include_archived=true", headers=auth)
+    assert all_items.status_code == 200
+    restored = [item for item in all_items.json() if item["id"] == item_id]
+    assert restored and restored[0]["is_archived"] is True
+
+
 def test_wardrobe_image_upload_rejects_unsupported_content_type(client):
     token = register_and_login(client, "wardrobe-upload-invalid@example.com", "password123")
     auth = {"Authorization": f"Bearer {token}"}

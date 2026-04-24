@@ -398,6 +398,9 @@ def update_clothing_item(
 ):
     payload = updated_data.model_dump(exclude_unset=True)
     for field_name, field_value in payload.items():
+        if field_name == "is_active":
+            db_item.is_archived = not bool(field_value)
+            continue
         if field_name in {"colors", "season_tags", "style_tags", "occasion_tags"}:
             continue
         setattr(db_item, field_name, field_value)

@@ -348,6 +348,25 @@ def test_forgot_password_hides_reset_token_when_exposure_disabled(client):
     assert body["detail"] == "If the account exists, reset instructions were issued"
 
 
+def test_forgot_password_sends_reset_email_without_exposing_token(client, monkeypatch):
+    sent = {}
+
+    def fake_send_password_reset_email(email, token):
+        sent["email"] = email
+        sent["token"] = token
+
+    monkeypatch.setattr("app.routes.EXPOSE_RESET_TOKEN_IN_RESPONSE", False)
+    monkeypatch.setattr("app.routes.send_password_reset_email", fake_send_password_reset_email)
+    register_and_login(client, "reset-email@example.com", "password123")
+
+    forgot = client.post("/forgot-password", json={"email": "reset-email@example.com"})
+    assert forgot.status_code == 200
+    body = forgot.json()
+    assert body["reset_token"] is None
+    assert sent["email"] == "reset-email@example.com"
+    assert sent["token"]
+
+
 def test_profile_alias_get_and_put(client):
     token = register_and_login(client, "profile-alias@example.com", "password123")
     auth = {"Authorization": f"Bearer {token}"}

@@ -248,6 +248,7 @@ class ClothingItemUpdate(BaseModel):
     is_available: Optional[bool] = None
     is_favorite: Optional[bool] = None
     is_archived: Optional[bool] = None
+    is_active: Optional[bool] = None
     last_worn_timestamp: Optional[int] = Field(default=None, ge=0)
 
     @field_validator("category", "color", "season")
@@ -492,9 +493,23 @@ class CompatWardrobeItemInput(BaseModel):
     id: str
     name: Optional[str] = ""
     category: Optional[str] = ""
+    clothing_type: Optional[str] = ""
+    layer_type: Optional[str] = ""
+    is_one_piece: bool = False
+    set_id: Optional[str] = ""
     color: Optional[str] = ""
+    colors: list[str] = Field(default_factory=list)
     fit_type: Optional[str] = ""
+    fit_tag: Optional[str] = ""
     style_tag: Optional[str] = ""
+    style_tags: list[str] = Field(default_factory=list)
+    occasion_tags: list[str] = Field(default_factory=list)
+    season_tags: list[str] = Field(default_factory=list)
+    brand: Optional[str] = ""
+    comfort_level: int = Field(default=3, ge=1, le=5)
+    is_available: bool = True
+    is_archived: bool = False
+    is_active: Optional[bool] = None
 
 
 class CompatAiContext(BaseModel):

@@ -81,13 +81,14 @@ def _default_sqlite_url(file_name: str) -> str:
     return f"sqlite:///{(BACKEND_ROOT / file_name).resolve()}"
 
 
-DATABASE_URL = get_env("DATABASE_URL", _default_sqlite_url("fitgpt.db"))
+FORCE_LOCAL_DATABASE = get_bool_env("FITGPT_LOCAL_BACKEND", False)
+DATABASE_URL = _default_sqlite_url("fitgpt.db") if FORCE_LOCAL_DATABASE else get_env("DATABASE_URL", _default_sqlite_url("fitgpt.db"))
 SECRET_KEY = get_env("SECRET_KEY", "dev-only-change-me")
 JWT_ALGORITHM = "HS256"  # hardcoded to prevent "none"-algorithm downgrade via env
 ACCESS_TOKEN_EXPIRE_MINUTES = get_int_env("ACCESS_TOKEN_EXPIRE_MINUTES", 60)
 GOOGLE_CLIENT_ID = get_env("GOOGLE_CLIENT_ID", "")
 RESET_TOKEN_EXPIRE_MINUTES = get_int_env("RESET_TOKEN_EXPIRE_MINUTES", 30)
-EXPOSE_RESET_TOKEN_IN_RESPONSE = get_bool_env("EXPOSE_RESET_TOKEN_IN_RESPONSE", True)
+EXPOSE_RESET_TOKEN_IN_RESPONSE = get_bool_env("EXPOSE_RESET_TOKEN_IN_RESPONSE", False)
 OPENWEATHER_API_KEY = get_env("OPENWEATHER_API_KEY", "")
 OPENWEATHER_TIMEOUT_SECONDS = get_float_env("OPENWEATHER_TIMEOUT_SECONDS", 5)
 MAX_UPLOAD_IMAGE_BYTES = get_int_env("MAX_UPLOAD_IMAGE_BYTES", 5 * 1024 * 1024)
