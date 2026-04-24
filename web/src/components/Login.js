@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { loginWithEmail, getMe } from "../api/authApi";
 import { useAuth } from "../auth/AuthProvider";
 import { migrateGuestData, clearGuestData } from "../utils/userStorage";
@@ -8,6 +8,7 @@ import GoogleSignInButton from "./GoogleSignInButton";
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const auth = useAuth();
   const setUser = auth?.setUser;
 
@@ -17,6 +18,12 @@ export default function Login() {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const params = new URLSearchParams(location.search);
+  const protectedMessage =
+    location.state?.message ||
+    (params.get("reason") === "guest_protected"
+      ? "Sign in to unlock the full FitGPT experience."
+      : "");
 
   const emailOk = useMemo(() => {
     const e = email.trim();
@@ -87,6 +94,8 @@ export default function Login() {
         </div>
 
         <GoogleSignInButton />
+
+        {protectedMessage ? <div className="authHint">{protectedMessage}</div> : null}
 
         <div className="authDivider"><span>or</span></div>
 

@@ -3635,6 +3635,27 @@ img.dashSquareImg {
 .topNavRight {
   flex-shrink: 0;
   margin-left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topNavAuthBtn {
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-outline);
+  background: var(--accent-soft);
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.topNavAuthBtn:hover {
+  background: var(--accent-soft-2);
+  color: var(--text);
 }
 
 /* When ThemePicker is inside the TopNav, remove fixed positioning */

@@ -476,8 +476,7 @@ function TypewriterMessage({ text, onDone }) {
   );
 }
 
-export default function Chatbot() {
-  const { user } = useAuth();
+function AuthenticatedChatbot({ user }) {
   const { theme } = useTheme() || {};
   const demoUser = useMemo(() => readDemoAuth(), []);
   const effectiveUser = user || demoUser;
@@ -1101,4 +1100,10 @@ export default function Chatbot() {
       )}
     </>
   );
+}
+
+export default function Chatbot() {
+  const { user } = useAuth();
+  if (!user) return null;
+  return <AuthenticatedChatbot user={user} />;
 }
