@@ -6,6 +6,8 @@ https://www.fitgpt.tech/download
 Android APK QR target URL:
 https://github.com/Muhammad7839/FitGPT/releases/download/symposium-demo-v1/FitGPT-Symposium-Demo.apk
 
+The public access page shows separate QR codes for the web page and Android APK.
+
 Android:
 1. Scan the QR code.
 2. Tap Download Android APK.
