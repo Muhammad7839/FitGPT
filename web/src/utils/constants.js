@@ -33,6 +33,10 @@ export const PROFILE_KEY = "fitgpt_profile_v1";
 export const PROFILE_PIC_KEY = "fitgpt_profile_pic_v1";
 export const ONBOARDING_ANSWERS_KEY = "fitgpt_onboarding_answers_v1";
 export const ONBOARDED_KEY = "fitgpt_onboarded_v1";
+export const SPLASH_SEEN_KEY = "fitgpt_splash_seen";
+export const ONBOARDING_COMPLETE_KEY = "fitgpt_onboarding_complete";
+export const TUTORIAL_COMPLETE_KEY = "fitgpt_tutorial_complete";
+export const GUEST_MODE_KEY = "fitgpt_guest_mode";
 
 // Theme
 export const LEGACY_THEME_KEY = "fitgpt_theme_v1";

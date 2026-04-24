@@ -1,6 +1,6 @@
 
 
-import { GUEST_WARDROBE_KEY, WARDROBE_KEY, SAVED_OUTFITS_KEY, OUTFIT_HISTORY_KEY, PLANNED_OUTFITS_KEY, TRIP_PACKING_KEY, PROFILE_KEY, ONBOARDING_ANSWERS_KEY, ONBOARDED_KEY, EVT_WARDROBE_CHANGED, REC_SEED_KEY, TIME_OVERRIDE_KEY, WEATHER_OVERRIDE_KEY, SEASONAL_PREFERENCES_KEY, DEMO_AUTH_KEY, PROFILE_PIC_KEY, EVT_PROFILE_PIC_CHANGED, TUTORIAL_DONE_KEY } from "./constants";
+import { GUEST_WARDROBE_KEY, WARDROBE_KEY, SAVED_OUTFITS_KEY, OUTFIT_HISTORY_KEY, PLANNED_OUTFITS_KEY, TRIP_PACKING_KEY, PROFILE_KEY, ONBOARDING_ANSWERS_KEY, ONBOARDED_KEY, SPLASH_SEEN_KEY, ONBOARDING_COMPLETE_KEY, TUTORIAL_COMPLETE_KEY, GUEST_MODE_KEY, EVT_WARDROBE_CHANGED, REC_SEED_KEY, TIME_OVERRIDE_KEY, WEATHER_OVERRIDE_KEY, SEASONAL_PREFERENCES_KEY, DEMO_AUTH_KEY, PROFILE_PIC_KEY, EVT_PROFILE_PIC_CHANGED, TUTORIAL_DONE_KEY } from "./constants";
 import { safeParse } from "./helpers";
 import { normalizeItemMetadata, mergeWardrobeMetadata } from "./wardrobeOptions";
 
@@ -111,6 +111,7 @@ export function clearGuestData() {
     const store = storage === "session" ? sessionStorage : localStorage;
     store.removeItem(baseKey);
   }
+  localStorage.removeItem(GUEST_MODE_KEY);
 }
 
 export function mirrorUserDataToGuest(user) {
@@ -287,16 +288,21 @@ export function saveAnswers(answers, user) {
   try {
     localStorage.setItem(userKey(ONBOARDING_ANSWERS_KEY, user), JSON.stringify(answers));
     localStorage.setItem(userKey(ONBOARDED_KEY, user), "1");
+    localStorage.setItem(userKey(ONBOARDING_COMPLETE_KEY, user), "1");
   } catch {}
 }
 
 export function isOnboarded(user) {
-  return localStorage.getItem(userKey(ONBOARDED_KEY, user)) === "1";
+  return (
+    localStorage.getItem(userKey(ONBOARDED_KEY, user)) === "1" ||
+    localStorage.getItem(userKey(ONBOARDING_COMPLETE_KEY, user)) === "1"
+  );
 }
 
 export function clearOnboarding(user) {
   localStorage.removeItem(userKey(ONBOARDING_ANSWERS_KEY, user));
   localStorage.removeItem(userKey(ONBOARDED_KEY, user));
+  localStorage.removeItem(userKey(ONBOARDING_COMPLETE_KEY, user));
 }
 
 
@@ -316,13 +322,45 @@ export function saveProfilePic(pic, user) {
 
 
 export function isTutorialDone() {
-  return localStorage.getItem(TUTORIAL_DONE_KEY) === "1";
+  return (
+    localStorage.getItem(TUTORIAL_DONE_KEY) === "1" ||
+    localStorage.getItem(TUTORIAL_COMPLETE_KEY) === "1"
+  );
 }
 
 export function markTutorialDone() {
   try {
     localStorage.setItem(TUTORIAL_DONE_KEY, "1");
+    localStorage.setItem(TUTORIAL_COMPLETE_KEY, "1");
   } catch {}
+}
+
+export function clearTutorialDone() {
+  localStorage.removeItem(TUTORIAL_DONE_KEY);
+  localStorage.removeItem(TUTORIAL_COMPLETE_KEY);
+}
+
+export function isSplashSeen() {
+  return localStorage.getItem(SPLASH_SEEN_KEY) === "1";
+}
+
+export function markSplashSeen() {
+  try {
+    localStorage.setItem(SPLASH_SEEN_KEY, "1");
+  } catch {}
+}
+
+export function clearSplashSeen() {
+  localStorage.removeItem(SPLASH_SEEN_KEY);
+}
+
+export function isGuestMode(user) {
+  return !user && localStorage.getItem(GUEST_MODE_KEY) === "1";
+}
+
+export function setGuestMode(enabled) {
+  if (enabled) localStorage.setItem(GUEST_MODE_KEY, "1");
+  else localStorage.removeItem(GUEST_MODE_KEY);
 }
 
 const REJECTED_OUTFITS_KEY = "fitgpt_rejected_outfits_v1";
