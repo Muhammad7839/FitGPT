@@ -1040,7 +1040,38 @@ export default function Wardrobe() {
 
       let imageUrl = "";
       try { imageUrl = await fileToDataUrl(pendingFile); } catch {}
-      const created = await wardrobeApi.createItem(buildWardrobeApiPayload({
+
+      const tempId = makeId();
+      const optimisticItem = normalizeItemMetadata({
+        id: tempId,
+        name,
+        category: formCategory,
+        color,
+        fit_tag,
+        clothing_type: formClothingType,
+        layer_type: formLayerType,
+        is_one_piece: formIsOnePiece,
+        set_id: formSetId.trim(),
+        style_tags: formStyleTags,
+        occasion_tags: formOccasionTags,
+        season_tags: formSeasonTags,
+        image_url: imageUrl,
+        is_active: true,
+        is_favorite: false,
+      });
+
+      const nextItems = [optimisticItem, ...items];
+      setItemsAndSave(nextItems);
+      applyDuplicateScanResult(nextItems, [optimisticItem]);
+
+      setIsSaving(false);
+      setAddOpen(false);
+      resetAddForm();
+
+      setToast("Item added.");
+      toastTimeouts.set(() => setToast(""), 2000);
+
+      wardrobeApi.createItem(buildWardrobeApiPayload({
         name,
         category: formCategory,
         color,
@@ -1053,38 +1084,16 @@ export default function Wardrobe() {
         occasionTags: formOccasionTags,
         seasonTags: formSeasonTags,
         imageUrl,
-      }));
-
-      if (backendOffline) setBackendOffline(false);
-
-      const localShadow = normalizeItemMetadata({
-        id: created?.id || makeId(),
-        name,
-        category: formCategory,
-        color,
-        fit_tag: created?.fit_tag ?? fit_tag,
-        clothing_type: formClothingType,
-        layer_type: formLayerType,
-        is_one_piece: formIsOnePiece,
-        set_id: formSetId.trim(),
-        style_tags: formStyleTags,
-        occasion_tags: formOccasionTags,
-        season_tags: formSeasonTags,
-        image_url: created?.image_url || "",
-        is_active: created?.is_active ?? true,
-        is_favorite: created?.is_favorite ?? false,
-      });
-
-      const nextItems = [localShadow, ...items];
-      setItemsAndSave(nextItems);
-      applyDuplicateScanResult(nextItems, [localShadow]);
-
-      setIsSaving(false);
-      setAddOpen(false);
-      resetAddForm();
-
-      setToast("Item added.");
-      toastTimeouts.set(() => setToast(""), 2000);
+      })).then((created) => {
+        if (created?.id && String(created.id) !== String(tempId)) {
+          setItemsAndSave((prev) => prev.map((it) =>
+            String(it.id) === String(tempId)
+              ? normalizeItemMetadata({ ...it, id: created.id })
+              : it
+          ));
+        }
+        if (backendOffline) setBackendOffline(false);
+      }).catch(() => {});
     } catch (e) {
       if (isNetworkError(e)) {
         setBackendOffline(true);

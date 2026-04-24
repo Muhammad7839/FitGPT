@@ -34,11 +34,12 @@ export const SEASON_TAG_OPTIONS = [
 ];
 
 export const CLOTHING_TYPE_OPTIONS = {
-  Tops: ["t-shirt", "long sleeve shirt", "sweater", "hoodie", "dress shirt", "tank top", "polo", "blouse"],
-  Bottoms: ["jeans", "dress pants", "shorts", "skirt", "leggings", "joggers", "sweatpants"],
-  Outerwear: ["jacket", "coat", "blazer", "cardigan", "windbreaker", "parka"],
-  Shoes: ["sneakers", "boots", "sandals", "dress shoes", "heels", "flats"],
-  Accessories: ["hat", "scarf", "watch", "belt", "jewelry", "sunglasses", "bag"],
+  Tops: ["t-shirt", "long sleeve shirt", "sweater", "hoodie", "dress shirt", "tank top", "polo", "blouse", "crop top", "turtleneck", "henley"],
+  Bottoms: ["jeans", "pants", "cargo pants", "trousers", "chinos", "dress pants", "shorts", "skirt", "leggings", "joggers", "sweatpants", "wide-leg pants"],
+  Outerwear: ["jacket", "coat", "blazer", "cardigan", "windbreaker", "parka", "puffer jacket", "trench coat", "hoodie"],
+  Shoes: ["sneakers", "boots", "sandals", "dress shoes", "heels", "flats", "loafers", "slip-ons", "Chelsea boots"],
+  Accessories: ["hat", "cap", "scarf", "watch", "belt", "jewelry", "sunglasses", "bag", "backpack", "gloves"],
+  "One-Piece": ["dress", "jumpsuit", "overalls", "romper", "bodysuit", "maxi dress", "midi dress", "mini dress", "wrap dress"],
 };
 
 export function normalizeTagList(value) {

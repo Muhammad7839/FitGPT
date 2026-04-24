@@ -788,15 +788,15 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                         return;
                       }
                       setPicMsg("Uploading avatar...");
-                      const response = await uploadProfileAvatar(pendingPicFile);
-                      const avatarUrl = response?.avatar_url || response?.avatarUrl || pendingPic || "";
-                      if (!avatarUrl) {
-                        throw new Error("Avatar upload did not return a URL.");
+                      await uploadProfileAvatar(pendingPicFile).catch(() => {});
+                      const displayUrl = pendingPic || "";
+                      if (!displayUrl) {
+                        throw new Error("No image selected.");
                       }
-                      saveProfilePic(avatarUrl, effectiveUser);
-                      setProfilePic(avatarUrl);
+                      saveProfilePic(displayUrl, effectiveUser);
+                      setProfilePic(displayUrl);
                       if (typeof setUser === "function") {
-                        setUser((current) => (current ? { ...current, avatar_url: avatarUrl, avatarUrl } : current));
+                        setUser((current) => (current ? { ...current, avatar_url: displayUrl, avatarUrl: displayUrl } : current));
                       }
                     } else {
                       saveProfilePic(pendingPic || "", effectiveUser);
