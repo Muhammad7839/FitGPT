@@ -18,10 +18,17 @@ import {
   readWeatherOverride,
   userKey,
 } from "../utils/userStorage";
-import { adaptAiText, effectiveAccessibilityPrefs, readAccessibilityPrefs } from "../utils/accessibilityPrefs";
+import { readAccessibilityPrefs, adaptAiText, effectiveAccessibilityPrefs } from "../utils/accessibilityPrefs";
+import {
+  cancelSpeech,
+  getSpeechRecognitionClass,
+  isVoiceChatSupported,
+  preloadVoices,
+  speakText,
+} from "../utils/speech";
 
 const GREETING =
-  "Hi! I'm AURA. Ask me about outfits, styling, color pairing, or how to get the most out of FitGPT.";
+  "Hi! I'm AURA. Ask me about outfits, styling, color pairing, or what to wear for any occasion.";
 const EMPTY_PROMPT = "Ask me anything about outfits or styling!";
 const CLARIFY_PROMPT =
   "Can you tell me more about the occasion or style you are going for?";
@@ -86,15 +93,22 @@ function normalizeTimestamp(value, fallback = Date.now()) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function makeMessageId() {
+  return `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function normalizeMessages(messages) {
   const safe = (Array.isArray(messages) ? messages : [])
     .map((message) => ({
+      id: (message?.id || makeMessageId()).toString(),
       role: message?.role === "assistant" ? "assistant" : "user",
       content: (message?.content || "").toString(),
     }))
     .filter((message) => message.content.trim());
 
-  return safe.length > 0 ? safe : [{ role: "assistant", content: GREETING }];
+  return safe.length > 0
+    ? safe
+    : [{ id: makeMessageId(), role: "assistant", content: GREETING }];
 }
 
 function normalizeChat(chat) {
@@ -115,6 +129,7 @@ function serializeChat(chat) {
     id: normalized.id,
     title: normalized.title,
     messages: normalized.messages.map((message) => ({
+      id: message.id,
       role: message.role === "assistant" ? "assistant" : "user",
       content: (message.content || "").toString(),
     })),
@@ -184,7 +199,7 @@ function makeChat() {
   return {
     id: now.toString(36) + Math.random().toString(36).slice(2, 6),
     title: "New Chat",
-    messages: [{ role: "assistant", content: GREETING }],
+    messages: [{ id: makeMessageId(), role: "assistant", content: GREETING }],
     createdAt: now,
     updatedAt: now,
   };
@@ -478,7 +493,7 @@ function TypewriterMessage({ text, onDone }) {
 
 function AuthenticatedChatbot({ user }) {
   const { theme } = useTheme() || {};
-  const demoUser = useMemo(() => readDemoAuth(), []);
+  const demoUser = readDemoAuth();
   const effectiveUser = user || demoUser;
   const remoteChatUser = user || null;
   const storageKey = getChatStorageKey(effectiveUser);
@@ -492,7 +507,18 @@ function AuthenticatedChatbot({ user }) {
   const [loading, setLoading] = useState(false);
   const [typingIdx, setTypingIdx] = useState(-1);
   const [composerStatus, setComposerStatus] = useState("");
-  const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(null));
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(effectiveUser));
+  const voiceSupported = useMemo(() => isVoiceChatSupported(), []);
+
+  useEffect(() => {
+    setAccessibilityPrefs(readAccessibilityPrefs(effectiveUser));
+    const onChange = () => setAccessibilityPrefs(readAccessibilityPrefs(effectiveUser));
+    window.addEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
+    return () => window.removeEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
+  }, [effectiveUser]);
   const submitLockRef = useRef(false);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
@@ -501,6 +527,11 @@ function AuthenticatedChatbot({ user }) {
   const remoteHydratedRef = useRef(false);
   const lastSyncedPayloadRef = useRef("");
   const lastFocusedElementRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const voiceModeRef = useRef(false);
+  const spokenMessageIdRef = useRef(null);
+  const ttsHandleRef = useRef(null);
+  const messagesRef = useRef([]);
 
   if (!initialChatStateRef.current) {
     initialChatStateRef.current = getInitialChatState(effectiveUser);
@@ -508,17 +539,6 @@ function AuthenticatedChatbot({ user }) {
 
   const [chats, setChats] = useState(initialChatStateRef.current.chats);
   const [activeChatId, setActiveChatId] = useState(initialChatStateRef.current.activeChatId);
-  const effectiveAccessibility = useMemo(
-    () => effectiveAccessibilityPrefs(accessibilityPrefs, theme),
-    [accessibilityPrefs, theme]
-  );
-
-  useEffect(() => {
-    setAccessibilityPrefs(readAccessibilityPrefs(null));
-    const onChange = () => setAccessibilityPrefs(readAccessibilityPrefs(null));
-    window.addEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
-    return () => window.removeEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
-  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -595,7 +615,10 @@ function AuthenticatedChatbot({ user }) {
 
   const activeChat = chats.find((chat) => chat.id === activeChatId) || chats[0] || makeChat();
   const messages = useMemo(
-    () => activeChat?.messages || [{ role: "assistant", content: GREETING }],
+    () =>
+      activeChat?.messages || [
+        { id: "greeting_default", role: "assistant", content: GREETING },
+      ],
     [activeChat]
   );
   const sortedChats = useMemo(
@@ -667,17 +690,20 @@ function AuthenticatedChatbot({ user }) {
   const appendAssistantMessage = useCallback(
     (content, assistantIndex) => {
       updateActiveChat((chat) => ({
-        messages: [...chat.messages, { role: "assistant", content }],
+        messages: [
+          ...chat.messages,
+          { id: makeMessageId(), role: "assistant", content },
+        ],
       }));
-      setTypingIdx(assistantIndex);
+      setTypingIdx(voiceModeRef.current ? -1 : assistantIndex);
     },
     [updateActiveChat]
   );
 
-  const send = useCallback(async () => {
+  const submitText = useCallback(async (rawText) => {
     if (loading || typingIdx >= 0 || submitLockRef.current) return;
 
-    const text = input.trim();
+    const text = (rawText || "").trim();
     if (!text) {
       setComposerStatus("");
       appendAssistantMessage(EMPTY_PROMPT, messages.length);
@@ -687,8 +713,8 @@ function AuthenticatedChatbot({ user }) {
     if (isUnclearPrompt(text)) {
       const unclearMessages = [
         ...messages,
-        { role: "user", content: text },
-        { role: "assistant", content: CLARIFY_PROMPT },
+        { id: makeMessageId(), role: "user", content: text },
+        { id: makeMessageId(), role: "assistant", content: CLARIFY_PROMPT },
       ];
       updateActiveChat(() => ({
         messages: unclearMessages,
@@ -701,7 +727,7 @@ function AuthenticatedChatbot({ user }) {
     }
 
     const context = buildChatContext(effectiveUser);
-    const userMessage = { role: "user", content: text };
+    const userMessage = { id: makeMessageId(), role: "user", content: text };
     const nextMessages = [...messages, userMessage];
 
     updateActiveChat(() => ({
@@ -731,12 +757,169 @@ function AuthenticatedChatbot({ user }) {
   }, [
     appendAssistantMessage,
     effectiveUser,
-    input,
     loading,
     messages,
     typingIdx,
     updateActiveChat,
   ]);
+
+  const send = useCallback(() => submitText(input), [submitText, input]);
+
+  const submitTextRef = useRef(submitText);
+  useEffect(() => {
+    submitTextRef.current = submitText;
+  }, [submitText]);
+
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+  }, [voiceMode]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    preloadVoices();
+    return () => {
+      try { recognitionRef.current?.abort(); } catch {}
+      recognitionRef.current = null;
+      ttsHandleRef.current?.cancel?.();
+      cancelSpeech();
+    };
+  }, []);
+
+  const startListening = useCallback(() => {
+    const RecognitionClass = getSpeechRecognitionClass();
+    if (!RecognitionClass) return;
+    if (recognitionRef.current) return;
+
+    const recognition = new RecognitionClass();
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.maxAlternatives = 1;
+
+    let finalTranscript = "";
+
+    recognition.onresult = (event) => {
+      let running = "";
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const part = event.results[i][0].transcript;
+        running += part;
+        if (event.results[i].isFinal) finalTranscript += part;
+      }
+      setInput((finalTranscript + running.slice(finalTranscript.length)).trim());
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error === "no-speech" || event.error === "aborted") return;
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        setComposerStatus("Microphone access was blocked. Allow it in your browser settings.");
+        setVoiceMode(false);
+      } else {
+        setComposerStatus("Voice input failed. Try again.");
+      }
+    };
+
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      setListening(false);
+      const clean = finalTranscript.trim();
+      if (clean) {
+        setInput("");
+        submitTextRef.current?.(clean);
+      } else if (voiceModeRef.current) {
+        setTimeout(() => {
+          if (voiceModeRef.current && !recognitionRef.current) startListening();
+        }, 400);
+      }
+    };
+
+    try {
+      recognition.start();
+      recognitionRef.current = recognition;
+      setListening(true);
+      setComposerStatus("");
+    } catch {
+      recognitionRef.current = null;
+      setListening(false);
+    }
+  }, []);
+
+  const stopListening = useCallback(() => {
+    try { recognitionRef.current?.abort(); } catch {}
+    recognitionRef.current = null;
+    setListening(false);
+  }, []);
+
+  const toggleVoiceMode = useCallback(() => {
+    if (!voiceSupported) {
+      setComposerStatus("Voice chat isn't supported in this browser. Try Chrome, Edge, or Safari.");
+      return;
+    }
+    setVoiceMode((prev) => {
+      const next = !prev;
+      if (next) {
+        const lastAssistantId = [...messagesRef.current].reverse().find((m) => m.role === "assistant")?.id;
+        spokenMessageIdRef.current = lastAssistantId || null;
+        setComposerStatus("");
+        startListening();
+      } else {
+        stopListening();
+        ttsHandleRef.current?.cancel?.();
+        ttsHandleRef.current = null;
+        cancelSpeech();
+        setSpeaking(false);
+      }
+      return next;
+    });
+  }, [startListening, stopListening, voiceSupported]);
+
+  useEffect(() => {
+    if (!voiceMode) return;
+    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+    if (!lastAssistant) return;
+    if (spokenMessageIdRef.current === lastAssistant.id) return;
+    spokenMessageIdRef.current = lastAssistant.id;
+
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch {}
+      recognitionRef.current = null;
+      setListening(false);
+    }
+
+    ttsHandleRef.current = speakText(lastAssistant.content, {
+      onStart: () => setSpeaking(true),
+      onEnd: () => {
+        setSpeaking(false);
+        if (voiceModeRef.current && !recognitionRef.current) startListening();
+      },
+      onError: () => {
+        setSpeaking(false);
+        if (voiceModeRef.current && !recognitionRef.current) startListening();
+      },
+    });
+  }, [messages, voiceMode, startListening]);
+
+  useEffect(() => {
+    ttsHandleRef.current?.cancel?.();
+    ttsHandleRef.current = null;
+    cancelSpeech();
+    setSpeaking(false);
+    const lastAssistantId = [...messagesRef.current].reverse().find((m) => m.role === "assistant")?.id;
+    spokenMessageIdRef.current = lastAssistantId || null;
+  }, [activeChatId]);
+
+  useEffect(() => {
+    if (!open && voiceMode) {
+      setVoiceMode(false);
+      stopListening();
+      ttsHandleRef.current?.cancel?.();
+      ttsHandleRef.current = null;
+      cancelSpeech();
+      setSpeaking(false);
+    }
+  }, [open, voiceMode, stopListening]);
 
   const handleKey = useCallback(
     (event) => {
@@ -1003,13 +1186,13 @@ function AuthenticatedChatbot({ user }) {
                 aria-relevant="additions text"
               >
                 {messages.map((message, index) => {
-                  const display =
-                    message.role === "assistant"
-                      ? adaptAiText(message.content, effectiveAccessibility)
-                      : message.content;
-
+                  const effectivePrefs = effectiveAccessibilityPrefs(accessibilityPrefs, theme);
+                  const display = message.role === "assistant"
+                    ? adaptAiText(message.content, effectivePrefs)
+                    : message.content;
+                  const messageKey = message.id || `${activeChat.id}_${index}`;
                   return (
-                    <div key={index} className={`chatbot-row chatbot-row-${message.role}`}>
+                    <div key={messageKey} className={`chatbot-row chatbot-row-${message.role}`}>
                       <div className="chatbot-avatar">
                         {message.role === "assistant" ? (
                           <img src="/fitgpt-logo.png" alt="FitGPT" className="chatbot-avatar-logo" />
@@ -1057,12 +1240,50 @@ function AuthenticatedChatbot({ user }) {
                     onChange={(event) => {
                       setInput(event.target.value);
                       if (composerStatus) setComposerStatus("");
+                      if (listening) stopListening();
                     }}
                     onKeyDown={handleKey}
                     disabled={loading || typingIdx >= 0}
                     inputRef={inputRef}
                     helperTextId={helperTextId}
                   />
+                  <button
+                    type="button"
+                    className={`chatbot-mic${voiceMode ? " chatbot-mic--on" : ""}${listening ? " chatbot-mic--listening" : ""}${speaking ? " chatbot-mic--speaking" : ""}`}
+                    onClick={toggleVoiceMode}
+                    disabled={!voiceSupported}
+                    aria-pressed={voiceMode}
+                    aria-label={voiceMode ? "Turn off voice chat" : "Turn on voice chat"}
+                    title={
+                      voiceSupported
+                        ? voiceMode
+                          ? "Stop voice chat"
+                          : "Start voice chat"
+                        : "Voice chat not supported in this browser"
+                    }
+                  >
+                    {voiceMode ? (
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                        <rect x="4" y="4" width="8" height="8" rx="1.5" />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <rect x="6" y="2" width="4" height="8" rx="2" />
+                        <path d="M3.5 7.5a4.5 4.5 0 0 0 9 0" />
+                        <line x1="8" y1="12" x2="8" y2="14.5" />
+                      </svg>
+                    )}
+                  </button>
                   <button
                     type="button"
                     className={`chatbot-send${input.trim() ? " chatbot-send--ready" : ""}`}
@@ -1090,7 +1311,14 @@ function AuthenticatedChatbot({ user }) {
                   role={composerStatus ? "alert" : "status"}
                   aria-live={composerStatus ? "assertive" : "polite"}
                 >
-                  {composerStatus || "Press Enter to send. Shift+Enter adds a new line."}
+                  {composerStatus
+                    || (voiceMode && speaking
+                      ? "AURA is speaking..."
+                      : voiceMode && listening
+                        ? "Listening... speak now."
+                        : voiceMode
+                          ? "Voice chat on — tap the stop icon to exit."
+                          : "Press Enter to send. Shift+Enter adds a new line.")}
                 </div>
               </div>
             </>
