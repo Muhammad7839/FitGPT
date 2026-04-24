@@ -1,15 +1,19 @@
 import React from "react";
 
 const APK_DOWNLOAD_URL = "https://github.com/Muhammad7839/FitGPT/releases/download/symposium-demo-v1/FitGPT-Symposium-Demo.apk";
-const WEB_DEMO_URL = "https://fit-gpt-i3co.vercel.app";
+const WEB_APP_URL = "https://www.fitgpt.tech/";
+const DOWNLOAD_PAGE_URL = "https://www.fitgpt.tech/download";
+const QR_CODE_URL = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(DOWNLOAD_PAGE_URL)}`;
+const APK_QR_CODE_URL = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(APK_DOWNLOAD_URL)}`;
 
-function DownloadCard({ title, text, note, buttonLabel, href, primary = false }) {
+function DownloadCard({ title, text, buttonLabel, href, primary = false }) {
+  const titleId = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-download-title`;
+
   return (
-    <section className="downloadCard" aria-labelledby={`${title.toLowerCase()}-download-title`}>
+    <section className="downloadCard" aria-labelledby={titleId}>
       <div>
-        <h2 id={`${title.toLowerCase()}-download-title`}>{title}</h2>
+        <h2 id={titleId}>{title}</h2>
         <p>{text}</p>
-        {note ? <p className="downloadNote">{note}</p> : null}
       </div>
       <a
         className={`downloadButton${primary ? " primary" : ""}`}
@@ -27,38 +31,61 @@ export default function DownloadPage() {
   return (
     <main className="downloadPage">
       <section className="downloadHero">
-        <p className="downloadEyebrow">Senior Symposium</p>
-        <h1>Download FitGPT</h1>
-        <p>Choose your device to try FitGPT at Senior Symposium.</p>
+        <h1>Welcome to FITGPT</h1>
+        <p>Try the live web app or download the Android app.</p>
       </section>
 
       <div className="downloadGrid">
         <DownloadCard
-          title="Android"
-          text="Download the APK, open it, and follow Android's install prompt."
-          note="If Android asks for permission, allow installs from this browser or file manager, then return and install FitGPT."
-          buttonLabel="Download Android App"
-          href={APK_DOWNLOAD_URL}
+          title="Web App"
+          text="Open the current FitGPT web experience in your browser."
+          buttonLabel="Open FITGPT Web"
+          href={WEB_APP_URL}
           primary
         />
         <DownloadCard
-          title="iPhone"
-          text="The Android app cannot be installed on iPhone. Use the live web version instead."
-          buttonLabel="Open Web Demo"
-          href={WEB_DEMO_URL}
-        />
-        <DownloadCard
-          title="Having trouble?"
-          text="If installation does not work, use the web demo. It connects to the same live backend."
-          buttonLabel="Open Web Demo"
-          href={WEB_DEMO_URL}
+          title="Android App"
+          text="Download the Android APK and install it on an Android device."
+          buttonLabel="Download Android APK"
+          href={APK_DOWNLOAD_URL}
         />
       </div>
 
-      <aside className="downloadBestDemo">
-        <strong>For best demo experience</strong>
-        <span>Create an account or sign in, then try wardrobe, outfits, and recommendations.</span>
-      </aside>
+      <section className="downloadQr" aria-labelledby="download-qr-title">
+        <h2 id="download-qr-title">Scan to Open FITGPT</h2>
+        <div className="downloadQrGrid">
+          <article className="downloadQrItem">
+            <img
+              src={QR_CODE_URL}
+              width="180"
+              height="180"
+              alt="QR code to open the FITGPT download page"
+            />
+            <h3>Web Page</h3>
+            <p>
+              Open this page:
+              {" "}
+              <a href={DOWNLOAD_PAGE_URL}>{DOWNLOAD_PAGE_URL}</a>
+            </p>
+          </article>
+          <article className="downloadQrItem">
+            <img
+              src={APK_QR_CODE_URL}
+              width="180"
+              height="180"
+              alt="QR code to download the FITGPT Android APK"
+            />
+            <h3>Android APK</h3>
+            <p>
+              Download the APK:
+              {" "}
+              <a href={APK_DOWNLOAD_URL}>FitGPT Android APK</a>
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <p className="downloadSupportNote">If the Android install does not work, use the web app.</p>
     </main>
   );
 }
