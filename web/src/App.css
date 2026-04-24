@@ -17327,3 +17327,192 @@ html[data-hc="true"] .dashAiParagraph {
   display: block;
   margin-bottom: 0.6em;
 }
+
+/* ── Mannequin preview modal ──────────────────────────────────────── */
+.mannequinPreviewModalCard {
+  max-width: 980px;
+  width: 96vw;
+  max-height: 92vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.mannequinPreviewHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 28px 16px;
+  flex-shrink: 0;
+}
+.mannequinPreviewEyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.5;
+  margin-bottom: 4px;
+}
+.mannequinPreviewTitle { margin: 0 0 4px; }
+.mannequinPreviewSub { font-size: 13px; opacity: 0.55; }
+.mannequinPreviewClose { flex-shrink: 0; }
+.mannequinPreviewBody {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+.mannequinPreviewCanvasCard {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 480px;
+  position: relative;
+  background: #0f0f16;
+}
+.mannequinPreviewCanvasWrap {
+  flex: 1;
+  min-height: 380px;
+  transition: opacity 200ms;
+}
+.mannequinPreviewCanvasWrap.isLoading { opacity: 0.4; }
+.mannequinPreviewLoading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 13px;
+  color: rgba(255,255,255,0.55);
+  pointer-events: none;
+  z-index: 2;
+}
+.mannequinPreviewControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px;
+  background: rgba(0,0,0,0.35);
+  flex-shrink: 0;
+}
+.mannequinPreviewControlBtn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.8);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms;
+}
+.mannequinPreviewControlBtn:hover { background: rgba(255,255,255,0.12); }
+.mannequinPreviewControlBtn.isAccent {
+  border-color: rgba(139,30,30,0.5);
+  background: rgba(139,30,30,0.18);
+  color: #e88;
+}
+.mannequinPreviewControlBtn.isAccent:hover { background: rgba(139,30,30,0.28); }
+.mannequinPreviewInfoCard {
+  width: 240px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: 20px 18px;
+  border-left: 1px solid rgba(0,0,0,0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.mannequinPreviewSection { display: flex; flex-direction: column; gap: 8px; }
+.mannequinPreviewSectionTitle {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.42;
+}
+.mannequinPreviewStatusRow { display: flex; flex-wrap: wrap; gap: 6px; }
+.mannequinPreviewStatusPill {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(139,30,30,0.1);
+  color: rgba(139,30,30,0.9);
+}
+.mannequinPreviewStatusPill.muted {
+  background: rgba(0,0,0,0.06);
+  color: rgba(0,0,0,0.45);
+}
+.mannequinPreviewNotice {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(0,0,0,0.55);
+  background: rgba(0,0,0,0.04);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.mannequinPreviewNoticeSubtle { background: transparent; padding: 0; }
+.mannequinPreviewRoleList { display: flex; flex-direction: column; gap: 5px; }
+.mannequinPreviewRoleRow { display: flex; justify-content: space-between; font-size: 12px; gap: 8px; }
+.mannequinPreviewRoleLabel { font-weight: 700; opacity: 0.55; flex-shrink: 0; }
+.mannequinPreviewRoleValue { text-align: right; opacity: 0.8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mannequinPreviewItemList { display: flex; flex-direction: column; gap: 5px; }
+.mannequinPreviewItemRow { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.mannequinPreviewItemDot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(139,30,30,0.7);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+}
+.mannequinPreviewItemDot.isMuted { background: rgba(0,0,0,0.2); }
+.mannequinPreviewItemText { opacity: 0.75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mannequinPreviewFallback { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.mannequinPreviewFallbackTitle { font-size: 14px; font-weight: 800; }
+.mannequinPreviewFallbackText { font-size: 12px; opacity: 0.6; }
+.mannequinPreviewThumbGrid { display: flex; flex-wrap: wrap; gap: 10px; }
+.mannequinPreviewThumbTile { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.mannequinPreviewThumbImg { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; }
+.mannequinPreviewThumbPh { width: 72px; height: 72px; border-radius: 10px; background: rgba(0,0,0,0.08); }
+.mannequinPreviewThumbName { font-size: 10px; opacity: 0.6; max-width: 72px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mannequinPreviewUnsupported { font-size: 11px; opacity: 0.5; }
+
+/* ── Callout annotation cards ─────────────────────────────────────── */
+.mannequinCalloutCard {
+  background: rgba(14, 14, 22, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 7px;
+  width: 86px;
+  user-select: none;
+  -webkit-user-select: none;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  transition: border-color 120ms;
+}
+.mannequinCalloutCard:hover { border-color: rgba(255, 255, 255, 0.28); }
+.mannequinCalloutImg {
+  width: 100%;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+}
+.mannequinCalloutPlaceholder {
+  width: 100%;
+  height: 68px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.06);
+}
+.mannequinCalloutLabel {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  text-align: center;
+  margin-top: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-theme="dark"] .mannequinPreviewInfoCard { border-left-color: rgba(255,255,255,0.06); }
+[data-theme="dark"] .mannequinPreviewNotice { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.5); }
+[data-theme="dark"] .mannequinPreviewStatusPill.muted { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.4); }
