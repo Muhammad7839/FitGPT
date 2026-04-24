@@ -87,7 +87,12 @@ echo       Node dependencies OK.
 
 set "BACKEND_DIR=%~dp0backend"
 set "WEB_DIR=%~dp0web"
-set "BACKEND_URL=http://localhost:8000"
+:: Use 127.0.0.1, not localhost. Windows resolves `localhost` via the hosts
+:: file which lists ::1 (IPv6) before 127.0.0.1 — and uvicorn --host 0.0.0.0
+:: binds IPv4 only. PowerShell's Invoke-WebRequest tries ::1 first, times
+:: out in ~2s without falling back to IPv4, and our health loop never
+:: saw the backend even when it was up.
+set "BACKEND_URL=http://127.0.0.1:8000"
 
 :: Kill any existing processes on ports 8000 and 3000. Use PowerShell's
 :: Get-NetTCPConnection so we also catch bound sockets that netstat can miss.
@@ -95,7 +100,7 @@ set "BACKEND_URL=http://localhost:8000"
 echo [3/4] Clearing ports...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "foreach ($port in 8000, 3000) { Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }" >nul 2>&1
 :: Give the OS a moment to actually release the sockets before we rebind.
-timeout /t 1 /nobreak >nul
+ping -n 2 127.0.0.1 >nul
 
 :: Start servers
 echo [4/4] Starting servers...
@@ -121,7 +126,7 @@ for /l %%i in (1,1,30) do (
         set "BACKEND_READY=1"
         goto :backend_ready
     )
-    timeout /t 1 /nobreak >nul
+    ping -n 2 127.0.0.1 >nul
 )
 
 :backend_ready
