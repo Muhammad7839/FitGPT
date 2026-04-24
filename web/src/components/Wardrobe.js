@@ -718,7 +718,7 @@ export default function Wardrobe() {
     });
   };
 
-  const openPicker = () => fileInputRef.current?.click();
+  const openPicker = useCallback(() => fileInputRef.current?.click(), []);
 
   React.useEffect(() => {
     const flag = sessionStorage.getItem(OPEN_ADD_ITEM_FLAG);
@@ -726,7 +726,7 @@ export default function Wardrobe() {
       sessionStorage.removeItem(OPEN_ADD_ITEM_FLAG);
       window.setTimeout(() => openPicker(), 50);
     }
-  }, [user]);
+  }, [user, openPicker]);
 
   useEffect(() => { preloadModel(); }, []);
 
@@ -758,7 +758,7 @@ export default function Wardrobe() {
     setFormCategory(value);
   };
 
-  const openAddModalForFile = (file) => {
+  const openAddModalForFile = useCallback((file) => {
     if (!file) return;
 
     if (!fileIsOk(file)) {
@@ -837,7 +837,7 @@ export default function Wardrobe() {
       setToast("Upload failed. Try again.");
       toastTimeouts.set(() => setToast(""), 2500);
     }
-  };
+  }, []);
 
   const onPickFile = async (fileList) => {
     const allFiles = Array.from(fileList || []);
@@ -864,7 +864,7 @@ export default function Wardrobe() {
       setUploadError("");
     }
 
-      if (files.length === 1) {
+    if (files.length === 1) {
       openAddModalForFile(files[0]);
     } else {
       const entries = await Promise.all(

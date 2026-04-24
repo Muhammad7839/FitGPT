@@ -61,6 +61,14 @@ export function clothingTypeOptionsForCategory(category) {
 
 export function normalizeItemMetadata(item) {
   const next = item && typeof item === "object" ? { ...item } : {};
+  const archived =
+    next.is_archived === true ||
+    next.is_archived === "true" ||
+    next.is_active === false ||
+    next.is_active === "false";
+
+  next.is_archived = archived;
+  next.is_active = !archived;
   next.layer_type = (next.layer_type || "").toString().trim().toLowerCase();
   next.clothing_type = (next.clothing_type || "").toString().trim().toLowerCase();
   next.set_id = (next.set_id || "").toString().trim();

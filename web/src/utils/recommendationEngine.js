@@ -779,6 +779,21 @@ function precipScoreBias(item, precipCat) {
   return score;
 }
 
+function isForbiddenForWeather(item, context) {
+  const wCat = (context?.weatherCat || "mild").toString().trim().toLowerCase();
+  const pCat = (context?.precipCat || "clear").toString().trim().toLowerCase();
+  const type = normalizeClothingType(item?.clothing_type || item?.type || item?.name || "");
+  const role = itemRole(item);
+
+  if ((pCat === "snow" || wCat === "cold") && ["shorts", "tank top", "crop top", "sandals"].includes(type)) {
+    return true;
+  }
+  if ((pCat === "rain" || pCat === "snow" || pCat === "storm") && role === "shoes" && classifyWeatherProtection(item).openToe) {
+    return true;
+  }
+  return false;
+}
+
 function comfortPreferences(answers) {
   const raw = Array.isArray(answers?.comfort) ? answers.comfort : [];
   return new Set(raw.map((v) => (v || "").toString().trim().toLowerCase()).filter(Boolean));
@@ -790,17 +805,40 @@ function comfortFitScore(fitTag, comfortSet) {
 
   let score = 0;
   if (comfortSet.has("relaxed")) {
-    if (fit === "relaxed" || fit === "oversized") score += 6;
-    else if (fit === "tight" || fit === "fitted") score -= 3;
+    if (fit === "relaxed" || fit === "oversized") score += 10;
+    else if (fit === "tight" || fit === "fitted") score -= 6;
   }
   if (comfortSet.has("fitted")) {
-    if (fit === "fitted" || fit === "tight") score += 6;
-    else if (fit === "oversized") score -= 3;
+    if (fit === "fitted" || fit === "tight") score += 10;
+    else if (fit === "oversized" || fit === "relaxed") score -= 6;
   }
   if (comfortSet.has("stretchy")) {
     if (fit === "relaxed" || fit === "regular") score += 3;
   }
   return score;
+}
+
+function comfortFitPreferenceCounts(outfit, comfortSet) {
+  const counts = { preferred: 0, opposed: 0, margin: 0 };
+  if (!(comfortSet instanceof Set) || !comfortSet.size) return counts;
+
+  for (const item of Array.isArray(outfit) ? outfit : []) {
+    const fit = normalizeDashboardFit(item?.fit_tag);
+    if (fit === "unspecified" || fit === "regular") continue;
+
+    if (comfortSet.has("relaxed")) {
+      if (fit === "relaxed" || fit === "oversized") counts.preferred += 1;
+      else if (fit === "tight" || fit === "fitted") counts.opposed += 1;
+    }
+
+    if (comfortSet.has("fitted")) {
+      if (fit === "fitted" || fit === "tight") counts.preferred += 1;
+      else if (fit === "oversized" || fit === "relaxed") counts.opposed += 1;
+    }
+  }
+
+  counts.margin = counts.preferred - counts.opposed;
+  return counts;
 }
 
 function metadataScore(item, context) {
@@ -915,6 +953,12 @@ function itemsConflict(a, b) {
   if (!a || !b) return false;
   const roleA = itemRole(a);
   const roleB = itemRole(b);
+  const layerA = a.layer_type || normalizeLayerType(undefined, a.clothing_type || a.name, a.category);
+  const layerB = b.layer_type || normalizeLayerType(undefined, b.clothing_type || b.name, b.category);
+  if (roleA === "top" && roleB === "top") {
+    const layers = new Set([layerA, layerB]);
+    if (layers.has("base") && layers.has("mid")) return false;
+  }
   if (roleA === roleB && roleA !== "accessory") return true;
 
   /* One-piece covers top + bottom — conflicts with standalone tops and bottoms */
@@ -924,7 +968,7 @@ function itemsConflict(a, b) {
   const typeA = normalizeClothingType(a.clothing_type || a.name);
   const typeB = normalizeClothingType(b.clothing_type || b.name);
 
-  if (a.layer_type && b.layer_type && a.layer_type === b.layer_type && a.layer_type !== "base") return true;
+  if (layerA && layerB && layerA === layerB && layerA !== "base") return true;
   if (["coat", "parka", "overcoat", "down jacket", "puffer jacket"].includes(typeA) && ["coat", "parka", "overcoat", "down jacket", "puffer jacket"].includes(typeB)) return true;
   if (["hoodie", "sweater", "cardigan", "fleece", "pullover", "sweatshirt"].includes(typeA) && ["hoodie", "sweater", "cardigan", "fleece", "pullover", "sweatshirt"].includes(typeB)) return true;
 
@@ -1023,8 +1067,14 @@ export function defaultOutfitSet(seedNumber) {
 
 
 
-function sortCandidates(candidates, context, outfitSoFar, rng) {
-  return withUniqueById(candidates)
+function sortCandidates(candidates, context, outfitSoFar, rng, variant = 0) {
+  // Higher variants get more randomness so each outfit slot explores different items
+  const noiseScale = variant * 4.5;
+  const uniqueCandidates = withUniqueById(candidates);
+  const weatherFiltered = uniqueCandidates.filter((item) => !isForbiddenForWeather(item, context));
+  const pool = weatherFiltered.length ? weatherFiltered : uniqueCandidates;
+
+  return pool
     .map((item) => ({
       item,
       score: metadataScore(item, { ...context, outfitSoFar }),
@@ -1068,7 +1118,8 @@ function buildOutfitCandidate(buckets, rng, context, variant) {
     if (outfit.some((existing) => itemsConflict(existing, item))) return false;
 
     const role = itemRole(item);
-    if (role !== "accessory" && role !== "outerwear" && role !== "other") {
+    const isAdditionalTopLayer = role === "top" && item.layer_type === "mid" && (roleCounts.get("top") || 0) >= 1;
+    if (role !== "accessory" && role !== "outerwear" && role !== "other" && !isAdditionalTopLayer) {
       if ((roleCounts.get(role) || 0) >= 1) return false;
     }
     if (item.layer_type && selectedLayerTypes.has(item.layer_type) && item.layer_type !== "base") return false;
@@ -1337,13 +1388,10 @@ function scoreOutfitCandidate(outfit, context) {
   /* ── Comfort preference outfit-level bonus ─────────────────────── */
   const comfortSet = comfortPreferences(context.answers);
   if (comfortSet.has("layered") && layers.size >= 2) score += 8;
-  if (comfortSet.has("relaxed")) {
-    const relaxedCount = outfit.filter((item) => { const f = normalizeDashboardFit(item?.fit_tag); return f === "relaxed" || f === "oversized"; }).length;
-    if (relaxedCount >= 2) score += 6;
-  }
-  if (comfortSet.has("fitted")) {
-    const fittedCount = outfit.filter((item) => { const f = normalizeDashboardFit(item?.fit_tag); return f === "fitted" || f === "tight"; }).length;
-    if (fittedCount >= 2) score += 6;
+  if (comfortSet.has("relaxed") || comfortSet.has("fitted")) {
+    const fitCounts = comfortFitPreferenceCounts(outfit, comfortSet);
+    score += fitCounts.margin * 14;
+    if (fitCounts.preferred >= 2) score += 12;
   }
 
   for (const item of outfit) {
@@ -1515,12 +1563,100 @@ export function generateThreeOutfits(
 
   candidates.sort((a, b) => b.score - a.score);
 
-  const results = candidates.slice(0, requestedLimit).map((entry) => entry.outfit);
+  const selectionComfort = comfortPreferences(answers);
+  const hasFitPreference = selectionComfort.has("relaxed") || selectionComfort.has("fitted");
+  const comfortMargin = (entry) => comfortFitPreferenceCounts(entry?.outfit, selectionComfort).margin;
+  if (hasFitPreference) {
+    candidates.sort((a, b) => {
+      const marginDiff = comfortMargin(b) - comfortMargin(a);
+      if (marginDiff !== 0) return marginDiff;
+      return b.score - a.score;
+    });
+  }
+
+  const diversityThreshold = requestedLimit <= 2 ? 0.32 : hasFitPreference ? 0.5 : 0.24;
+  const fallbackSimilarityCap = hasFitPreference ? 0.72 : 0.58;
+  const selectedEntries = [];
+  const deferredEntries = [];
+
+  for (const candidate of candidates) {
+    const maxSimilarity = selectedEntries.reduce((highest, entry) => {
+      const similarity = recommendationSimilarity(entry.outfit, candidate.outfit);
+      return similarity > highest ? similarity : highest;
+    }, 0);
+
+    if (maxSimilarity <= diversityThreshold) {
+      selectedEntries.push(candidate);
+      if (selectedEntries.length >= requestedLimit) break;
+      continue;
+    }
+
+    deferredEntries.push({ ...candidate, maxSimilarity });
+  }
+
+  deferredEntries.sort((a, b) => {
+    if (hasFitPreference) {
+      const marginDiff = comfortMargin(b) - comfortMargin(a);
+      if (marginDiff !== 0) return marginDiff;
+    }
+    if (a.maxSimilarity !== b.maxSimilarity) return a.maxSimilarity - b.maxSimilarity;
+    return b.score - a.score;
+  });
+
+  for (const candidate of deferredEntries) {
+    if (selectedEntries.length >= requestedLimit) break;
+    const maxSimilarity = selectedEntries.reduce((highest, entry) => {
+      const similarity = recommendationSimilarity(entry.outfit, candidate.outfit);
+      return similarity > highest ? similarity : highest;
+    }, 0);
+    if (selectedEntries.length && maxSimilarity > fallbackSimilarityCap) continue;
+    selectedEntries.push(candidate);
+  }
+
+  const results = selectedEntries.slice(0, requestedLimit).map((entry) => entry.outfit);
   if (!results.length) return [];
   if (requestedLimit <= 3) {
     while (results.length < requestedLimit) results.push(results[results.length - 1]);
   }
   return results.slice(0, requestedLimit);
+}
+
+function recommendationSimilarity(outfitA, outfitB) {
+  const itemSimilarity = outfitSimilarity(outfitA, outfitB);
+
+  const tokenSet = (outfit, selector) => {
+    const values = new Set();
+    for (const item of Array.isArray(outfit) ? outfit : []) {
+      const normalized = (selector(item) || "").toString().trim().toLowerCase();
+      if (normalized) values.add(normalized);
+    }
+    return values;
+  };
+
+  const overlapRatio = (setA, setB) => {
+    if (!setA.size || !setB.size) return 0;
+    let shared = 0;
+    for (const value of setA) {
+      if (setB.has(value)) shared += 1;
+    }
+    return shared / Math.max(setA.size, setB.size);
+  };
+
+  const typeSimilarity = overlapRatio(
+    tokenSet(outfitA, (item) => item?.clothing_type || item?.type || item?.name),
+    tokenSet(outfitB, (item) => item?.clothing_type || item?.type || item?.name)
+  );
+  const colorSimilarity = overlapRatio(
+    tokenSet(outfitA, (item) => normalizeColorName(item?.color || "")),
+    tokenSet(outfitB, (item) => normalizeColorName(item?.color || ""))
+  );
+
+  const roleSimilarity = overlapRatio(
+    tokenSet(outfitA, (item) => itemRole(item)),
+    tokenSet(outfitB, (item) => itemRole(item))
+  );
+
+  return itemSimilarity * 0.68 + typeSimilarity * 0.17 + colorSimilarity * 0.08 + roleSimilarity * 0.07;
 }
 
 export function scoreOutfitForDisplay(
@@ -1553,7 +1689,8 @@ export function scoreOutfitForDisplay(
     seasonalMode,
   });
 
-  return Math.max(0, Math.min(100, Math.round(score)));
+  const displayScore = Math.max(0, Math.min(100, Math.round(score)));
+  return displayScore === 100 && !comfortPreferences(answers).size ? 99 : displayScore;
 }
 
 export function computeOutfitConfidence(outfit, { weatherCategory, precipCategory, timeCategory, answers, bodyTypeId, feedbackProfile, recentSigs } = {}) {
