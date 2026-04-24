@@ -47,19 +47,30 @@ if not exist "%~dp0web\package.json" (
     goto :fail
 )
 
-:: Install Python dependencies from requirements.txt
+:: Install local Python dependencies. The local launcher uses SQLite, so it
+:: intentionally skips psycopg2-binary from requirements.txt. That package can
+:: require PostgreSQL build tools on Python 3.13 and is only needed for remote
+:: Postgres deployments.
 echo [1/4] Checking Python dependencies...
-if exist "%~dp0backend\requirements.txt" (
-    %PYTHON_CMD% -m pip install -r "%~dp0backend\requirements.txt" --quiet >nul 2>&1
+if exist "%~dp0backend\requirements-local.txt" (
+    %PYTHON_CMD% -m pip show fastapi uvicorn sqlalchemy pyjwt bcrypt pydantic pydantic-core email-validator python-multipart python-dotenv google-auth requests httpx >nul 2>&1
     if !errorlevel! neq 0 (
         echo       Installing Python dependencies...
-        %PYTHON_CMD% -m pip install -r "%~dp0backend\requirements.txt"
+        %PYTHON_CMD% -m pip install -r "%~dp0backend\requirements-local.txt"
+        if !errorlevel! neq 0 (
+            echo [ERROR] Python dependency installation failed.
+            goto :fail
+        )
     )
 ) else (
-    %PYTHON_CMD% -m pip show fastapi uvicorn sqlalchemy passlib python-jose pydantic python-dotenv requests groq >nul 2>&1
+    %PYTHON_CMD% -m pip show fastapi uvicorn sqlalchemy pyjwt bcrypt pydantic pydantic-core email-validator python-multipart python-dotenv google-auth requests httpx >nul 2>&1
     if !errorlevel! neq 0 (
         echo       Installing Python dependencies...
-        %PYTHON_CMD% -m pip install fastapi uvicorn sqlalchemy passlib python-jose pydantic[email] python-dotenv python-multipart requests groq
+        %PYTHON_CMD% -m pip install fastapi "uvicorn[standard]" sqlalchemy pyjwt "bcrypt>=4.0,<5" "pydantic[email]" python-dotenv python-multipart requests httpx google-auth
+        if !errorlevel! neq 0 (
+            echo [ERROR] Python dependency installation failed.
+            goto :fail
+        )
     )
 )
 echo       Python dependencies OK.
@@ -77,12 +88,10 @@ echo       Node dependencies OK.
 set "BACKEND_DIR=%~dp0backend"
 set "WEB_DIR=%~dp0web"
 set "BACKEND_URL=http://localhost:8000"
-set "LOCAL_DATABASE_URL=sqlite:///%BACKEND_DIR%\fitgpt.db"
 
 :: Kill any existing processes on ports 8000 and 3000. Use PowerShell's
-:: Get-NetTCPConnection so we also catch "Bound" state zombies that
+:: Get-NetTCPConnection so we also catch bound sockets that netstat can miss.
 :: netstat | findstr "LISTENING" misses — those are the processes that
-:: silently squat on the port and make re-launch fail.
 echo [3/4] Clearing ports...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "foreach ($port in 8000, 3000) { Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }" >nul 2>&1
 :: Give the OS a moment to actually release the sockets before we rebind.
@@ -92,7 +101,17 @@ timeout /t 1 /nobreak >nul
 echo [4/4] Starting servers...
 echo.
 
-start "FitGPT Backend" cmd /k "cd /d ""%BACKEND_DIR%"" && set ""DATABASE_URL=%LOCAL_DATABASE_URL%"" && ""%PYTHON_CMD%"" -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+:: Export FITGPT_LOCAL_BACKEND in the OUTER shell. The spawned cmd inherits
+:: the parent's environment, so Python sees it and config.py forces SQLite.
+:: The old ""set ""VAR=val"""" inside cmd /k silently failed to set the
+:: variable (cmd quote-parsing edge case), so the backend fell through to
+:: .env's Railway DATABASE_URL and died on the Postgres connection.
+set "FITGPT_LOCAL_BACKEND=1"
+
+start "FitGPT Backend" /d "%BACKEND_DIR%" cmd /k "%PYTHON_CMD%" -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+:: Clear the flag so it doesn't leak to the frontend's inherited env.
+set "FITGPT_LOCAL_BACKEND="
 
 echo       Waiting for backend health check...
 set "BACKEND_READY="
@@ -113,7 +132,12 @@ if not defined BACKEND_READY (
 )
 echo       Backend is ready.
 
-start "FitGPT Frontend" cmd /k "cd /d ""%WEB_DIR%"" && set ""REACT_APP_API_BASE_URL=%BACKEND_URL%"" && npm start"
+:: Same outer-env pattern as the backend — REACT_APP_API_BASE_URL is
+:: exported here so CRA sees it when it spawns; the old inner-set form
+:: was subject to the same cmd quote-parsing bug.
+set "REACT_APP_API_BASE_URL=%BACKEND_URL%"
+start "FitGPT Frontend" /d "%WEB_DIR%" cmd /k npm start
+set "REACT_APP_API_BASE_URL="
 
 echo.
 echo ========================================
