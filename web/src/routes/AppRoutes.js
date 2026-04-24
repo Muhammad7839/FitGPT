@@ -34,6 +34,7 @@ import HistoryAnalytics from "../components/HistoryAnalytics";
 import Plans from "../components/Plans";
 import SavedOutfits from "../components/SavedOutfits";
 import OutfitBuilder from "../components/OutfitBuilder";
+import DownloadPage from "../components/DownloadPage";
 
 function OnboardingWrapper({
   onComplete,
@@ -205,6 +206,7 @@ export default function AppRoutes() {
           />
 
           <Route path="/auth" element={<Navigate to="/login" replace />} />
+          <Route path="/download" element={<DownloadPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
