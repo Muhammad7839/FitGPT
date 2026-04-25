@@ -1859,6 +1859,67 @@ export function outfitSimilarity(outfitA, outfitB) {
   return shared / Math.max(a.size, b.size);
 }
 
+export function recommendationSimilarity(outfitA, outfitB) {
+  const collectValues = (outfit, selector) => {
+    const values = new Set();
+    for (const item of Array.isArray(outfit) ? outfit : []) {
+      const raw = selector(item);
+      const parts = Array.isArray(raw) ? raw : [raw];
+      for (const part of parts) {
+        const value = (part || "").toString().trim().toLowerCase();
+        if (value) values.add(value);
+      }
+    }
+    return values;
+  };
+
+  const overlapRatio = (setA, setB) => {
+    if (!setA.size || !setB.size) return 0;
+    let shared = 0;
+    for (const value of setA) {
+      if (setB.has(value)) shared += 1;
+    }
+    return shared / Math.max(setA.size, setB.size);
+  };
+
+  const itemSimilarity = outfitSimilarity(outfitA, outfitB);
+  const categorySimilarity = overlapRatio(
+    collectValues(outfitA, (item) => normalizeCategory(item?.category)),
+    collectValues(outfitB, (item) => normalizeCategory(item?.category))
+  );
+  const colorSimilarity = overlapRatio(
+    collectValues(outfitA, (item) => normalizeColorName(item?.color)),
+    collectValues(outfitB, (item) => normalizeColorName(item?.color))
+  );
+  const styleSimilarity = overlapRatio(
+    collectValues(outfitA, (item) => normalizeTagArray(item?.style_tags)),
+    collectValues(outfitB, (item) => normalizeTagArray(item?.style_tags))
+  );
+  const occasionSimilarity = overlapRatio(
+    collectValues(outfitA, (item) => normalizeTagArray(item?.occasion_tags)),
+    collectValues(outfitB, (item) => normalizeTagArray(item?.occasion_tags))
+  );
+  const seasonSimilarity = overlapRatio(
+    collectValues(outfitA, (item) => normalizeTagArray(item?.season_tags)),
+    collectValues(outfitB, (item) => normalizeTagArray(item?.season_tags))
+  );
+  const nameSimilarity = overlapRatio(
+    collectValues(outfitA, (item) => item?.name),
+    collectValues(outfitB, (item) => item?.name)
+  );
+
+  const score =
+    itemSimilarity * 0.35 +
+    categorySimilarity * 0.2 +
+    colorSimilarity * 0.15 +
+    styleSimilarity * 0.12 +
+    occasionSimilarity * 0.08 +
+    seasonSimilarity * 0.05 +
+    nameSimilarity * 0.05;
+
+  return Math.max(0, Math.min(1, Math.round(score * 100) / 100));
+}
+
 /* ── History pattern analysis ─────────────────────────────────────── */
 
 function dateKey(iso) {
