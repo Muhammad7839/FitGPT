@@ -213,7 +213,7 @@ function compareItems(left, right) {
     imageScore >= 0.75,
   ].filter(Boolean).length;
 
-  if (signalMatches < 2) return null;
+  if (signalMatches < 3) return null;
 
   const score = (
     0.26 +
@@ -228,7 +228,7 @@ function compareItems(left, right) {
     (layerScore * 0.01)
   );
 
-  if (score < 0.72) return null;
+  if (score < 0.82) return null;
 
   const duplicateType = score >= 0.89 && imageScore >= 0.88 && (clothingTypeScore >= 1 || nameScore >= 0.94) && colorScore >= 0.6
     ? "exact"

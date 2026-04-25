@@ -26,6 +26,7 @@ from app.auth import (
 )
 from app.config import EXPOSE_RESET_TOKEN_IN_RESPONSE, MAX_UPLOAD_IMAGE_BYTES
 from app.database.database import get_db
+from app.email import send_password_reset_email
 from app.google_oauth import GoogleTokenValidationError, verify_google_id_token
 from app.receipt_ocr import extract_clothing_items as extract_receipt_clothing
 from app.recommendation_explanations import RecommendationContext, build_recommendation_explanation
@@ -455,6 +456,59 @@ def _extract_compat_upload_file(form: FormData) -> Optional[UploadFile]:
     return None
 
 
+def _normalize_compat_list(values: list[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in values or []:
+        cleaned = str(raw).strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(cleaned)
+    return normalized
+
+
+def _compat_items_to_clothing_items(items: list[schemas.CompatWardrobeItemInput]) -> list[models.ClothingItem]:
+    converted: list[models.ClothingItem] = []
+    for item in items or []:
+        item_id = str(item.id or "").strip()
+        if not item_id:
+            continue
+
+        colors = _normalize_compat_list(item.colors)
+        style_tags = _normalize_compat_list([item.style_tag] if item.style_tag else []) + _normalize_compat_list(item.style_tags)
+        season_tags = _normalize_compat_list(item.season_tags)
+        occasion_tags = _normalize_compat_list(item.occasion_tags)
+        archived = bool(item.is_archived) or item.is_active is False
+
+        converted_item = models.ClothingItem(
+            id=item_id,
+            name=(item.name or "").strip() or "Wardrobe item",
+            category=(item.category or "").strip() or "Top",
+            clothing_type=(item.clothing_type or "").strip() or None,
+            layer_type=(item.layer_type or "").strip() or None,
+            is_one_piece=bool(item.is_one_piece),
+            set_identifier=(item.set_id or "").strip() or None,
+            fit_tag=(item.fit_tag or item.fit_type or "").strip() or None,
+            color=(item.color or (colors[0] if colors else "")).strip() or "Unknown",
+            season=season_tags[0] if season_tags else "All",
+            comfort_level=item.comfort_level,
+            brand=(item.brand or "").strip() or None,
+            is_available=bool(item.is_available) and not archived,
+            is_archived=archived,
+            owner_id=0,
+        )
+        converted_item.colors = colors
+        converted_item.style_tags = _normalize_compat_list(style_tags)
+        converted_item.season_tags = season_tags
+        converted_item.occasion_tags = occasion_tags
+        converted.append(converted_item)
+    return converted
+
+
 def fetch_current_temperature_f(city: str) -> int:
     """Compatibility helper used by recommendation flow and tests."""
     return fetch_current_weather(city=city).temperature_f
@@ -532,7 +586,7 @@ def _build_weather_unavailable_response(
 def _login_with_credentials(db: Session, *, email: str, password: str) -> schemas.Token:
     user = crud.get_user_by_email(db, email)
 
-    if not user or not verify_password(password, user.hashed_password):
+    if not user or not user.hashed_password or not verify_password(password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -682,6 +736,7 @@ def forgot_password(
         return {"detail": detail, "reset_token": None}
 
     token = crud.create_password_reset_token(db, user)
+    send_password_reset_email(user.email, token)
     logger.info("Generated password reset token for user_id=%s exposed=%s", user.id, EXPOSE_RESET_TOKEN_IN_RESPONSE)
     return {
         "detail": detail,
@@ -1822,6 +1877,7 @@ def get_ai_recommendations_compat(
     request_id = uuid4().hex[:12]
     context = payload.context or schemas.CompatAiContext()
     style_preference = context.style_preferences[0] if context.style_preferences else None
+    client_items = _compat_items_to_clothing_items(payload.items)
 
     result = ai_service.run_recommendation(
         db=db,
@@ -1836,6 +1892,7 @@ def get_ai_recommendations_compat(
             preferred_seasons=[],
             request_id=request_id,
         ),
+        wardrobe_items_override=client_items or None,
     )
     logger.info(
         "request_id=%s endpoint=/recommendations/ai user_id=%s source=%s fallback=%s warning=%s suggestion_id=%s",

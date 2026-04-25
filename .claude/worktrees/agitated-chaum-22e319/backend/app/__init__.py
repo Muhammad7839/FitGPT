@@ -1,1 +1,0 @@
-"""FitGPT backend application package."""

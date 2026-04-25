@@ -11,28 +11,17 @@ import {
 import { colorToCss } from "../utils/recommendationEngine";
 import SuggestedTagsPanel from "./SuggestedTagsPanel";
 
-const CATEGORIES = ["Tops", "Bottoms", "Outerwear", "Shoes", "Accessories"];
+const CATEGORIES = ["Tops", "Bottoms", "Outerwear", "Shoes", "Accessories", "One-Piece"];
 const COLOR_PICKER_OPTIONS = [
-  "Black",
-  "White",
-  "Gray",
-  "Beige",
-  "Brown",
-  "Navy",
-  "Blue",
-  "Green",
-  "Olive",
-  "Yellow",
-  "Orange",
-  "Red",
-  "Pink",
-  "Purple",
-  "Gold",
-  "Silver",
-  "Burgundy",
-  "Teal",
-  "Cream",
-  "Charcoal",
+  "Black", "White", "Gray", "Light Gray", "Charcoal", "Silver",
+  "Beige", "Cream", "Ivory", "Tan", "Khaki",
+  "Brown", "Light Brown", "Dark Brown", "Chocolate", "Caramel",
+  "Navy", "Blue", "Light Blue", "Sky Blue", "Teal",
+  "Green", "Olive", "Forest Green", "Mint", "Lime",
+  "Red", "Burgundy", "Maroon", "Wine",
+  "Pink", "Hot Pink", "Rose", "Coral",
+  "Purple", "Lavender",
+  "Yellow", "Gold", "Orange",
 ];
 
 function parseColors(value) {
@@ -111,6 +100,7 @@ function CompactMultiSelectField({
 
 function ColorPickerField({ value, onChange }) {
   const [draft, setDraft] = useState("");
+  const [search, setSearch] = useState("");
   const colors = parseColors(value);
 
   const addColor = useCallback((raw) => {
@@ -168,8 +158,17 @@ function ColorPickerField({ value, onChange }) {
       </summary>
 
       <div className="pickerFieldMenu">
+        <input
+          className="wardrobeInput colorPickerSearch"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search colors..."
+          aria-label="Search colors"
+        />
         <div className="colorPickerGrid" aria-label="Color picker">
-          {COLOR_PICKER_OPTIONS.map((option) => {
+          {COLOR_PICKER_OPTIONS.filter((option) =>
+            !search || option.toLowerCase().includes(search.toLowerCase())
+          ).map((option) => {
             const active = colors.some((entry) => entry.toLowerCase() === option.toLowerCase());
             return (
               <button
@@ -283,6 +282,12 @@ function ItemFormFields({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const clothingTypeOptions = clothingTypeOptionsForCategory(category);
 
+  const handleCategoryChange = useCallback((val) => {
+    onCategoryChange(val);
+    if (val === "One-Piece") onIsOnePieceChange(true);
+    else if (category === "One-Piece") onIsOnePieceChange(false);
+  }, [onCategoryChange, onIsOnePieceChange, category]);
+
   useEffect(() => {
     if (tagSuggestionStatus !== "idle" || tagSuggestions) {
       setShowAdvanced(true);
@@ -305,7 +310,7 @@ function ItemFormFields({
       <label className="wardrobeLabel">
         Category
         <div style={{ position: "relative" }}>
-          <select className="wardrobeInput" value={category} onChange={(e) => onCategoryChange(e.target.value)}>
+          <select className="wardrobeInput wardrobeSelect" value={category} onChange={(e) => handleCategoryChange(e.target.value)}>
             {CATEGORIES.map((option) => (
               <option key={option} value={option}>{option}</option>
             ))}
@@ -317,7 +322,7 @@ function ItemFormFields({
 
       <label className="wardrobeLabel">
         Clothing type
-        <select className="wardrobeInput" value={clothingType} onChange={(e) => onClothingTypeChange(e.target.value)}>
+        <select className="wardrobeInput wardrobeSelect" value={clothingType} onChange={(e) => onClothingTypeChange(e.target.value)}>
           <option value="">Generic {category.slice(0, -1)}</option>
           {clothingTypeOptions.map((option) => (
             <option key={option} value={option}>{optionLabel(option)}</option>

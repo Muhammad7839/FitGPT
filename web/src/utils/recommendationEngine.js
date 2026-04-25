@@ -58,11 +58,23 @@ export function normalizeColorName(raw) {
 }
 
 const CSS_COLOR_MAP = {
-  black: "#1a1a1a", white: "#f5f5f5", gray: "#9ca3af", grey: "#9ca3af",
+  black: "#1a1a1a", white: "#f5f5f5",
+  gray: "#9ca3af", grey: "#9ca3af",
+  "light gray": "#d1d5db", "light grey": "#d1d5db",
+  charcoal: "#374151",
+  silver: "#b8bec7",
   red: "#dc2626", blue: "#3b82f6", green: "#22c55e", yellow: "#eab308",
-  orange: "#f97316", purple: "#a855f7", pink: "#ec4899", brown: "#92400e",
-  beige: "#d4c5a9", navy: "#1e3a5f", teal: "#14b8a6", coral: "#f87171",
+  orange: "#f97316", purple: "#a855f7", pink: "#ec4899",
+  brown: "#7c5c3e", "dark brown": "#4a3728", "light brown": "#a67c5b",
+  chocolate: "#5c3317", chestnut: "#8b4513", caramel: "#c68642",
+  beige: "#d4c5a9", cream: "#fdf5e6", ivory: "#fffff0",
+  tan: "#d4a574", khaki: "#c5b358",
+  navy: "#1e3a5f", teal: "#14b8a6", coral: "#f87171",
   gold: "#d97706", olive: "#65a30d", lavender: "#a78bfa", mint: "#34d399",
+  burgundy: "#722f37", maroon: "#800020", wine: "#722f37",
+  "forest green": "#228b22", lime: "#84cc16",
+  "light blue": "#93c5fd", "sky blue": "#38bdf8",
+  "hot pink": "#f9168c", rose: "#fb7185",
 };
 
 export function splitColors(raw) {
@@ -73,10 +85,15 @@ export function splitColors(raw) {
 export function colorToCss(colorName) {
   const parts = splitColors(colorName);
   if (parts.length <= 1) {
+    const raw = (colorName || "").toLowerCase().trim();
     const c = normalizeColorName(colorName).toLowerCase();
-    return CSS_COLOR_MAP[c] || "#9ca3af";
+    return CSS_COLOR_MAP[raw] || CSS_COLOR_MAP[c] || "#9ca3af";
   }
-  const hexes = parts.map((p) => CSS_COLOR_MAP[normalizeColorName(p).toLowerCase()] || "#9ca3af");
+  const hexes = parts.map((p) => {
+    const raw = (p || "").toLowerCase().trim();
+    const c = normalizeColorName(p).toLowerCase();
+    return CSS_COLOR_MAP[raw] || CSS_COLOR_MAP[c] || "#9ca3af";
+  });
   const stops = hexes.map((h, i) => `${h} ${Math.round((i / (hexes.length - 1)) * 100)}%`).join(", ");
   return `linear-gradient(135deg, ${stops})`;
 }
@@ -1956,6 +1973,67 @@ export function outfitSimilarity(outfitA, outfitB) {
   if (!a.size || !b.size) return 0;
   const shared = [...a].filter((id) => b.has(id)).length;
   return shared / Math.max(a.size, b.size);
+}
+
+export function recommendationSimilarity(outfitA, outfitB) {
+  const collectValues = (outfit, selector) => {
+    const values = new Set();
+    for (const item of Array.isArray(outfit) ? outfit : []) {
+      const raw = selector(item);
+      const parts = Array.isArray(raw) ? raw : [raw];
+      for (const part of parts) {
+        const value = (part || "").toString().trim().toLowerCase();
+        if (value) values.add(value);
+      }
+    }
+    return values;
+  };
+
+  const overlapRatio = (setA, setB) => {
+    if (!setA.size || !setB.size) return 0;
+    let shared = 0;
+    for (const value of setA) {
+      if (setB.has(value)) shared += 1;
+    }
+    return shared / Math.max(setA.size, setB.size);
+  };
+
+  const itemSimilarity = outfitSimilarity(outfitA, outfitB);
+  const categorySimilarity = overlapRatio(
+    collectValues(outfitA, (item) => normalizeCategory(item?.category)),
+    collectValues(outfitB, (item) => normalizeCategory(item?.category))
+  );
+  const colorSimilarity = overlapRatio(
+    collectValues(outfitA, (item) => normalizeColorName(item?.color)),
+    collectValues(outfitB, (item) => normalizeColorName(item?.color))
+  );
+  const styleSimilarity = overlapRatio(
+    collectValues(outfitA, (item) => normalizeTagArray(item?.style_tags)),
+    collectValues(outfitB, (item) => normalizeTagArray(item?.style_tags))
+  );
+  const occasionSimilarity = overlapRatio(
+    collectValues(outfitA, (item) => normalizeTagArray(item?.occasion_tags)),
+    collectValues(outfitB, (item) => normalizeTagArray(item?.occasion_tags))
+  );
+  const seasonSimilarity = overlapRatio(
+    collectValues(outfitA, (item) => normalizeTagArray(item?.season_tags)),
+    collectValues(outfitB, (item) => normalizeTagArray(item?.season_tags))
+  );
+  const nameSimilarity = overlapRatio(
+    collectValues(outfitA, (item) => item?.name),
+    collectValues(outfitB, (item) => item?.name)
+  );
+
+  const score =
+    itemSimilarity * 0.35 +
+    categorySimilarity * 0.2 +
+    colorSimilarity * 0.15 +
+    styleSimilarity * 0.12 +
+    occasionSimilarity * 0.08 +
+    seasonSimilarity * 0.05 +
+    nameSimilarity * 0.05;
+
+  return Math.max(0, Math.min(1, Math.round(score * 100) / 100));
 }
 
 /* ── History pattern analysis ─────────────────────────────────────── */

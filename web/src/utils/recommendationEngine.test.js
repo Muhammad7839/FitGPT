@@ -48,6 +48,7 @@ import {
   explorationFactor,
   validatePersonalizationProgress,
   computeOutfitConfidence,
+  recommendationSimilarity,
 } from "./recommendationEngine";
 
 describe("titleCase", () => {
@@ -2164,6 +2165,20 @@ describe("outfitSimilarity", () => {
   });
 });
 
+describe("recommendationSimilarity", () => {
+  test("stays bounded and tolerates missing fields", () => {
+    const empty = recommendationSimilarity([], []);
+    const loose = recommendationSimilarity(
+      [{ id: "1", category: "tops", color: "blue", style_tags: ["casual"], occasion_tags: ["work"], season_tags: ["spring"], name: "Blue Tee" }],
+      [{ id: "2", category: "tops", color: "blue", style_tags: ["casual"], occasion_tags: ["work"], season_tags: ["spring"], name: "Blue Tee" }]
+    );
+
+    expect(empty).toBe(0);
+    expect(loose).toBeGreaterThan(0);
+    expect(loose).toBeLessThanOrEqual(1);
+  });
+});
+
 describe("rejection penalty in outfit generation", () => {
   const wardrobe = [
     { id: "t1", name: "White Tee", category: "tops", clothing_type: "t-shirt", color: "white", is_active: true },
@@ -2228,6 +2243,14 @@ describe("rejection penalty in outfit generation", () => {
   test("no rejections passed works normally", () => {
     const outfits = generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null);
     expect(outfits.length).toBe(3);
+  });
+
+  test("generateThreeOutfits does not crash when diversity filtering runs", () => {
+    expect(() =>
+      generateThreeOutfits(wardrobe, 42, "rectangle", new Set(), new Map(), "mild", "morning", null, {
+        limit: 3,
+      })
+    ).not.toThrow();
   });
 
   test("empty rejection array works normally", () => {

@@ -8,14 +8,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class BackendEndpointRegistryTest {
-    private val renderBaseUrl = "https://fitgpt-backend-tiiq.onrender.com/"
+    private val renderBaseUrl = "https://fitgpt-backend-tdiq.onrender.com/"
 
     @Test
     fun candidateListReturnsOnlyConfiguredHost() {
         BackendEndpointRegistry.initialize(renderBaseUrl)
 
         val candidates = BackendEndpointRegistry.candidateBaseUrls(
-            currentUrl = "https://fitgpt-backend-tiiq.onrender.com/login".toHttpUrl(),
+            currentUrl = "https://fitgpt-backend-tdiq.onrender.com/login".toHttpUrl(),
             allowFallback = true
         )
 
@@ -36,7 +36,7 @@ class BackendEndpointRegistryTest {
 
     @Test
     fun rewriteKeepsPathAndQueryWithPinnedHost() {
-        val original = "https://fitgpt-backend-tiiq.onrender.com/wardrobe/items?limit=10".toHttpUrl()
+        val original = "https://fitgpt-backend-tdiq.onrender.com/wardrobe/items?limit=10".toHttpUrl()
 
         val rewritten = BackendEndpointRegistry.rewrite(
             url = original,
@@ -44,7 +44,7 @@ class BackendEndpointRegistryTest {
         )
 
         assertEquals(
-            "https://fitgpt-backend-tiiq.onrender.com/wardrobe/items?limit=10",
+            "https://fitgpt-backend-tdiq.onrender.com/wardrobe/items?limit=10",
             rewritten.toString()
         )
     }

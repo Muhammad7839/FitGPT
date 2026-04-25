@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-
-    <style name="Theme.FitGPT" parent="android:Theme.Material.Light.NoActionBar" />
-
-    <style name="Theme.FitGPT.Launcher" parent="@style/Theme.FitGPT">
-        <item name="android:windowBackground">@drawable/fitgpt_launch_background</item>
-    </style>
-</resources>

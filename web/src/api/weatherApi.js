@@ -28,6 +28,26 @@ async function getCoordsFromBrowser() {
   });
 }
 
+async function getCoordsFromIp() {
+  try {
+    const res = await fetch("https://ipapi.co/json/", { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const lat = Number(data?.latitude);
+    const lon = Number(data?.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lon)) return { lat, lon };
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+async function getCoords() {
+  const browser = await getCoordsFromBrowser();
+  if (browser) return browser;
+  return getCoordsFromIp();
+}
+
 async function fetchBackendCurrentWeather({ lat, lon }) {
   const params = new URLSearchParams({
     lat: String(lat),
@@ -146,7 +166,7 @@ export async function getWeatherContext() {
     };
   }
 
-  const coords = await getCoordsFromBrowser();
+  const coords = await getCoords();
   if (!coords) {
     return {
       status: "fallback",
@@ -181,7 +201,7 @@ export async function getWeatherContext() {
 }
 
 export async function getWeatherForecast(days = 6) {
-  const coords = await getCoordsFromBrowser();
+  const coords = await getCoords();
   if (!coords) {
     return {
       status: "fallback",
