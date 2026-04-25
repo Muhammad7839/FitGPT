@@ -46,22 +46,38 @@ def _ensure_runtime_schema() -> None:
         return
 
     user_columns = {column["name"] for column in inspector.get_columns("users")}
-    pending_user_alters: list[str] = []
+    user_alters: list[str] = []
     if "avatar_url" not in user_columns:
-        pending_user_alters.append("ALTER TABLE users ADD COLUMN avatar_url VARCHAR")
+        user_alters.append("ALTER TABLE users ADD COLUMN avatar_url VARCHAR")
+    if "full_name" not in user_columns:
+        user_alters.append("ALTER TABLE users ADD COLUMN full_name VARCHAR")
+    if "body_type" not in user_columns:
+        user_alters.append("ALTER TABLE users ADD COLUMN body_type VARCHAR DEFAULT 'unspecified'")
+    if "lifestyle" not in user_columns:
+        user_alters.append("ALTER TABLE users ADD COLUMN lifestyle VARCHAR DEFAULT 'casual'")
+    if "comfort_preference" not in user_columns:
+        user_alters.append("ALTER TABLE users ADD COLUMN comfort_preference VARCHAR DEFAULT 'medium'")
     if "style_preferences_json" not in user_columns:
-        pending_user_alters.append("ALTER TABLE users ADD COLUMN style_preferences_json VARCHAR DEFAULT '[]'")
+        user_alters.append("ALTER TABLE users ADD COLUMN style_preferences_json VARCHAR DEFAULT '[]'")
     if "comfort_preferences_json" not in user_columns:
-        pending_user_alters.append("ALTER TABLE users ADD COLUMN comfort_preferences_json VARCHAR DEFAULT '[]'")
+        user_alters.append("ALTER TABLE users ADD COLUMN comfort_preferences_json VARCHAR DEFAULT '[]'")
     if "dress_for_json" not in user_columns:
-        pending_user_alters.append("ALTER TABLE users ADD COLUMN dress_for_json VARCHAR DEFAULT '[]'")
+        user_alters.append("ALTER TABLE users ADD COLUMN dress_for_json VARCHAR DEFAULT '[]'")
     if "gender" not in user_columns:
-        pending_user_alters.append("ALTER TABLE users ADD COLUMN gender VARCHAR DEFAULT ''")
+        user_alters.append("ALTER TABLE users ADD COLUMN gender VARCHAR DEFAULT ''")
     if "height_cm" not in user_columns:
-        pending_user_alters.append("ALTER TABLE users ADD COLUMN height_cm INTEGER")
-    if pending_user_alters:
+        user_alters.append("ALTER TABLE users ADD COLUMN height_cm INTEGER")
+    if "is_active" not in user_columns:
+        user_alters.append("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1")
+    if "onboarding_complete" not in user_columns:
+        user_alters.append("ALTER TABLE users ADD COLUMN onboarding_complete BOOLEAN DEFAULT 0")
+    if "reset_token_hash" not in user_columns:
+        user_alters.append("ALTER TABLE users ADD COLUMN reset_token_hash VARCHAR")
+    if "reset_token_expires_at" not in user_columns:
+        user_alters.append("ALTER TABLE users ADD COLUMN reset_token_expires_at INTEGER")
+    if user_alters:
         with engine.begin() as connection:
-            for sql in pending_user_alters:
+            for sql in user_alters:
                 connection.execute(text(sql))
 
     if "clothing_items" in table_names:

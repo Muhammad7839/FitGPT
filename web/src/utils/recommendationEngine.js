@@ -1023,14 +1023,15 @@ export function defaultOutfitSet(seedNumber) {
 
 
 
-function sortCandidates(candidates, context, outfitSoFar, rng) {
+function sortCandidates(candidates, context, outfitSoFar, rng, variant = 0) {
+  // Higher variants get more randomness so each outfit slot explores different items
+  const noiseScale = variant * 4.5;
   return withUniqueById(candidates)
     .map((item) => ({
       item,
-      score: metadataScore(item, { ...context, outfitSoFar }),
-      tie: rng(),
+      score: metadataScore(item, { ...context, outfitSoFar }) + (rng() - 0.5) * noiseScale,
     }))
-    .sort((a, b) => (b.score - a.score) || (a.tie - b.tie))
+    .sort((a, b) => b.score - a.score)
     .map((entry) => entry.item);
 }
 
@@ -1084,12 +1085,12 @@ function buildOutfitCandidate(buckets, rng, context, variant) {
     return true;
   };
 
-  const onePieceCandidates = sortCandidates(buckets.OnePieces, context, outfit, rng);
-  const topCandidates = sortCandidates(buckets.Tops, context, outfit, rng);
-  const bottomCandidates = sortCandidates(buckets.Bottoms, context, outfit, rng);
-  const shoeCandidates = sortCandidates(buckets.Shoes, context, outfit, rng);
-  const outerCandidates = sortCandidates(buckets.Outerwear, context, outfit, rng);
-  const accessoryCandidates = sortCandidates([...buckets.Accessories, ...buckets.Other], context, outfit, rng);
+  const onePieceCandidates = sortCandidates(buckets.OnePieces, context, outfit, rng, variant);
+  const topCandidates = sortCandidates(buckets.Tops, context, outfit, rng, variant);
+  const bottomCandidates = sortCandidates(buckets.Bottoms, context, outfit, rng, variant);
+  const shoeCandidates = sortCandidates(buckets.Shoes, context, outfit, rng, variant);
+  const outerCandidates = sortCandidates(buckets.Outerwear, context, outfit, rng, variant);
+  const accessoryCandidates = sortCandidates([...buckets.Accessories, ...buckets.Other], context, outfit, rng, variant);
 
   const allPools = [topCandidates, bottomCandidates, outerCandidates, shoeCandidates, accessoryCandidates, onePieceCandidates];
   const preferOnePiece = variant % 3 === 1 || (onePieceCandidates.length > 0 && topCandidates.length < 2);
@@ -1195,7 +1196,7 @@ function buildOutfitCandidate(buckets, rng, context, variant) {
 
   /* ── Shoes: prefer closed-toe in precipitation ─────────────────── */
   const shoeContext = outfit.filter((item) => ["one-piece", "top", "bottom", "outerwear"].includes(itemRole(item)));
-  let rankedShoes = sortCandidates(shoeCandidates, context, shoeContext.length ? shoeContext : outfit, rng);
+  let rankedShoes = sortCandidates(shoeCandidates, context, shoeContext.length ? shoeContext : outfit, rng, variant);
   if (precipNeedsOuter) {
     const closedToe = rankedShoes.filter((item) => !classifyWeatherProtection(item).openToe);
     if (closedToe.length) rankedShoes = closedToe;
@@ -1515,7 +1516,31 @@ export function generateThreeOutfits(
 
   candidates.sort((a, b) => b.score - a.score);
 
-  const results = candidates.slice(0, requestedLimit).map((entry) => entry.outfit);
+  const diversityThreshold = requestedLimit <= 2 ? 0.40 : 0.28;
+  const selectedEntries = [];
+  const deferredEntries = [];
+
+  for (const candidate of candidates) {
+    const maxSimilarity = selectedEntries.reduce((highest, entry) => {
+      const similarity = recommendationSimilarity(entry.outfit, candidate.outfit);
+      return similarity > highest ? similarity : highest;
+    }, 0);
+
+    if (maxSimilarity <= diversityThreshold) {
+      selectedEntries.push(candidate);
+      if (selectedEntries.length >= requestedLimit) break;
+      continue;
+    }
+
+    deferredEntries.push(candidate);
+  }
+
+  for (const candidate of deferredEntries) {
+    if (selectedEntries.length >= requestedLimit) break;
+    selectedEntries.push(candidate);
+  }
+
+  const results = selectedEntries.slice(0, requestedLimit).map((entry) => entry.outfit);
   if (!results.length) return [];
   if (requestedLimit <= 3) {
     while (results.length < requestedLimit) results.push(results[results.length - 1]);
@@ -2246,14 +2271,42 @@ function outfitMetadataSentence(outfit, weatherCategory, seed) {
     return [`${seasons[0]}-friendly pieces help the outfit feel on season.`, `These are ${seasons[0].toLowerCase()}-ready picks that suit the time of year.`][seed % 2];
   }
 
-  if (accessories.length > 0 && accessories.length <= 2) {
-    return "The accessories stay light, so they finish the outfit without cluttering it.";
+  // Name specific items for a more outfit-specific sentence
+  const outerItem = items.find((x) => normalizeCategory(x?.category) === "Outerwear");
+  const topItem = items.find((x) => normalizeCategory(x?.category) === "Tops");
+  const bottomItem = items.find((x) => normalizeCategory(x?.category) === "Bottoms");
+
+  if (outerItem?.name && topItem?.name && bottomItem?.name) {
+    return [
+      `The ${outerItem.name} over the ${topItem.name} grounds the whole look.`,
+      `${topItem.name} and ${bottomItem.name} under the ${outerItem.name} — everything earns its place.`,
+      `The ${outerItem.name} ties the ${topItem.name} and ${bottomItem.name} together.`,
+    ][seed % 3];
   }
 
-  return "The pieces work together without competing for the same role in the outfit.";
+  if (topItem?.name && bottomItem?.name) {
+    return [
+      `The ${topItem.name} and ${bottomItem.name} give the look a clean foundation.`,
+      `Pairing the ${topItem.name} with the ${bottomItem.name} keeps the proportions right.`,
+      `The ${topItem.name} over the ${bottomItem.name} — a reliable combination.`,
+    ][seed % 3];
+  }
+
+  if (accessories.length > 0 && accessories.length <= 2) {
+    return [
+      "The accessories stay light, so they finish the outfit without cluttering it.",
+      `The ${accessories[0]?.name || "accessory"} pulls the look together without overdoing it.`,
+    ][seed % 2];
+  }
+
+  return [
+    "The pieces work together without competing for the same role in the outfit.",
+    "Each piece has a clear purpose — nothing overlaps or gets in the way.",
+    "The combination stays balanced from top to bottom.",
+  ][seed % 3];
 }
 
-export function buildExplanation({ answers, outfit, weatherCategory, precipCategory, timeCategory }) {
+export function buildExplanation({ answers, outfit, weatherCategory, precipCategory, timeCategory, outfitIndex = 0 }) {
   const dressFor = Array.isArray(answers?.dressFor) ? answers.dressFor : [];
   const style = Array.isArray(answers?.style) ? answers.style : [];
   const bodyTypeId = answers?.bodyType || DEFAULT_BODY_TYPE;
@@ -2265,7 +2318,8 @@ export function buildExplanation({ answers, outfit, weatherCategory, precipCateg
   const styleHint = style.length ? style[0].toLowerCase() : "";
   const colors = uniqueNonEmpty((outfit || []).flatMap((x) => splitColors(x?.color || "").length ? splitColors(x.color) : [x?.color]));
 
-  const seed = explanationHash(outfit.map((x) => `${x?.name}${x?.color}`).join(""));
+  // Shift seed by outfit position so the three cards pick different templates even for similar outfits
+  const seed = explanationHash(outfit.map((x) => `${x?.name}${x?.color}`).join("")) + outfitIndex * 13;
 
   const isNotableWeather = weatherCategory && weatherCategory !== "mild";
   const hasPrecip = precipCategory && precipCategory !== "clear";
@@ -2274,8 +2328,40 @@ export function buildExplanation({ answers, outfit, weatherCategory, precipCateg
 
   const styleMatchesOccasion = styleHint && occasion && styleHint.toLowerCase() === occasion.toLowerCase();
 
+  // For positions 1 and 2, find a named hero item to make the opener more specific
+  const heroItem = outfitIndex > 0
+    ? (outfit.find((x) => normalizeCategory(x?.category) === "Outerwear")
+        || outfit.find((x) => normalizeCategory(x?.category) === "Tops")
+        || outfit[0])
+    : null;
+  const heroName = heroItem?.name || "";
+
   let opener;
-  if (occasion && styleHint && !styleMatchesOccasion) {
+  if (heroName && occasion && styleHint && !styleMatchesOccasion) {
+    opener = [
+      `A ${styleHint} look for ${occasion}${timeHint}.`,
+      `The ${heroName} carries this ${styleHint} take on ${occasion}${timeHint}.`,
+      `Built around the ${heroName} — a ${styleHint} read on ${occasion}${timeHint}.`,
+    ][seed % 3];
+  } else if (heroName && occasion) {
+    opener = [
+      `The ${heroName} sets the tone for ${occasion}${timeHint}.`,
+      `A solid ${occasion} pick anchored by the ${heroName}${timeHint}.`,
+      `Built around the ${heroName} for ${occasion}${timeHint}.`,
+    ][seed % 3];
+  } else if (heroName && styleHint) {
+    opener = [
+      `The ${heroName} anchors this ${styleHint} combination${timeHint}.`,
+      `A ${styleHint} look led by the ${heroName}${timeHint}.`,
+      `${styleHint.charAt(0).toUpperCase() + styleHint.slice(1)} energy, with the ${heroName} doing the heavy lifting.`,
+    ][seed % 3];
+  } else if (heroName) {
+    opener = [
+      `The ${heroName} carries the look.`,
+      `Centered on the ${heroName} — a solid combination.`,
+      `A well-rounded outfit built around the ${heroName}.`,
+    ][seed % 3];
+  } else if (occasion && styleHint && !styleMatchesOccasion) {
     opener = [
       `A ${styleHint} look for ${occasion}${timeHint}.`,
       `This outfit leans ${styleHint} while still fitting ${occasion}${timeHint}.`,

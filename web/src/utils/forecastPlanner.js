@@ -259,6 +259,8 @@ export function buildForecastSuggestions({
 }) {
   const days = Array.isArray(forecastDays) ? forecastDays : [];
   const usedSignatures = new Set();
+  // Accumulate item usage across days so each day's outfit uses different pieces
+  const crossDayItemCounts = new Map(recentItemCounts instanceof Map ? recentItemCounts : []);
 
   return days.map((day, index) => {
     const weatherCategory = forecastWeatherCategory(day);
@@ -267,7 +269,7 @@ export function buildForecastSuggestions({
       daySeed(seedNumber, day?.date, index),
       bodyTypeId || DEFAULT_BODY_TYPE,
       new Set(),
-      recentItemCounts instanceof Map ? recentItemCounts : new Map(),
+      crossDayItemCounts,
       weatherCategory,
       timeCategory || DEFAULT_TIME_CATEGORY,
       answers,
@@ -295,6 +297,12 @@ export function buildForecastSuggestions({
 
     const selected = ranked[0] || { outfit: [], signature: "", score: 0 };
     if (selected.signature) usedSignatures.add(selected.signature);
+
+    // Penalise items used today so tomorrow's outfit picks different pieces
+    for (const item of Array.isArray(selected.outfit) ? selected.outfit : []) {
+      const id = (item?.id ?? "").toString().trim();
+      if (id) crossDayItemCounts.set(id, (crossDayItemCounts.get(id) || 0) + 2);
+    }
 
     return {
       ...day,
