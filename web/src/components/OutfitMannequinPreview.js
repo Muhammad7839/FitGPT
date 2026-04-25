@@ -385,7 +385,6 @@ const CALLOUT_CFG = {
 
 function CalloutCard({ item, role, onDragChange }) {
   const cfg = CALLOUT_CFG[role];
-  if (!cfg || !item) return null;
 
   const [isDragging, setIsDragging] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -411,6 +410,8 @@ function CalloutCard({ item, role, onDragChange }) {
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
   }, [offset.x, offset.y, onDragChange]);
+
+  if (!cfg || !item) return null;
 
   return (
     <>
