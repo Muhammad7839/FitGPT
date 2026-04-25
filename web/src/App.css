@@ -17972,11 +17972,14 @@ html[data-hc="true"] .dashAiParagraph {
 }
 
 .editorialHeadlineTemp {
+  /* Fraunces — display serif with a chunkier degree glyph + softer
+     contrast than Playfair, makes the temperature read like a magazine
+     pull figure. opsz 96+ requests the display optical size automatically. */
+  font-family: "Fraunces", "Playfair Display", "Didot", "Georgia", serif;
+  font-optical-sizing: auto;
+  font-variation-settings: "opsz" 96;
   color: #c43c3c;
   font-weight: 700;
-  /* The fallback Times/Georgia degree glyph renders as a hairline that
-     can disappear into anti-aliasing — set the font-feature-settings to
-     pull a solid degree from the font's stylistic set when available. */
   font-variant-numeric: lining-nums;
 }
 
