@@ -3,6 +3,8 @@ import json
 import logging
 from typing import Optional
 
+from app.config import GROQ_API_KEY, GROQ_MODEL
+
 logger = logging.getLogger(__name__)
 
 _client = None
@@ -13,9 +15,9 @@ def _get_client():
     if _client is not None:
         return _client
 
-    api_key = os.environ.get("GROQ_API_KEY", "").strip()
-    if not api_key or api_key == "your_groq_api_key_here":
-        logger.warning("GROQ_API_KEY not set or is placeholder — AI recommendations disabled")
+    api_key = GROQ_API_KEY.strip()
+    if not api_key:
+        logger.warning("GROQ_API_KEY not set — AI recommendations disabled")
         return None
 
     try:
@@ -125,7 +127,7 @@ def get_ai_recommendations(items: list, context: dict) -> Optional[list]:
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=GROQ_MODEL,
             messages=[
                 {"role": "system", "content": build_system_prompt()},
                 {"role": "user", "content": build_user_prompt(items, context)},
