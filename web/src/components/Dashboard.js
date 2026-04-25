@@ -2424,37 +2424,39 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                     </div>
                   </>
                 ) : (
-                  <div className="dashOutfitGridFigma">
-                    {outfit.map((item, itemIdx) => (
-                      <div
-                        key={item.id}
-                        className={"dashSquareTile dashTileReveal" + (normalizeCategory(item?.category) === "Accessories" ? " accessory" : "")}
-                        style={{ animationDelay: `${itemIdx * 90 + idx * 140}ms` }}
-                        onPointerMove={onTiltMove}
-                        onPointerLeave={onTiltLeave}
-                      >
-                        <div className="dashSquareRole">{outfitRoleLabel(item)}</div>
-                        {idx === selectedIdx ? (
-                          <ErrorBoundary fallback={item.image_url ? <img className="dashSquareImg" src={item.image_url} alt={item.name} /> : <div className="dashSquareImg" aria-hidden="true" />}>
-                            <ClothCard key={clothCardKey(outfit, item, aiRefreshToken, recSeed)} imageUrl={item.image_url} className="dashSquareImg" />
-                          </ErrorBoundary>
-                        ) : item.image_url ? (
-                          <img className="dashSquareImg" src={item.image_url} alt={item.name} />
-                        ) : (
-                          <div className="dashSquareImg" aria-hidden="true" />
-                        )}
-                        <div className="dashSquareNameRow">
-                          <span
-                            className="dashColorDot"
-                            style={{ background: colorToCss(item.color) }}
-                            title={item.color}
-                          />
-                          <span className="dashSquareName">{item.name}</span>
+                  <>
+                    <div className="dashOutfitGridFigma">
+                      {outfit.map((item, itemIdx) => (
+                        <div
+                          key={item.id}
+                          className={"dashSquareTile dashTileReveal" + (normalizeCategory(item?.category) === "Accessories" ? " accessory" : "")}
+                          style={{ animationDelay: `${itemIdx * 90 + idx * 140}ms` }}
+                          onPointerMove={onTiltMove}
+                          onPointerLeave={onTiltLeave}
+                        >
+                          <div className="dashSquareRole">{outfitRoleLabel(item)}</div>
+                          {idx === selectedIdx ? (
+                            <ErrorBoundary fallback={item.image_url ? <img className="dashSquareImg" src={item.image_url} alt={item.name} /> : <div className="dashSquareImg" aria-hidden="true" />}>
+                              <ClothCard key={clothCardKey(outfit, item, aiRefreshToken, recSeed)} imageUrl={item.image_url} className="dashSquareImg" />
+                            </ErrorBoundary>
+                          ) : item.image_url ? (
+                            <img className="dashSquareImg" src={item.image_url} alt={item.name} />
+                          ) : (
+                            <div className="dashSquareImg" aria-hidden="true" />
+                          )}
+                          <div className="dashSquareNameRow">
+                            <span
+                              className="dashColorDot"
+                              style={{ background: colorToCss(item.color) }}
+                              title={item.color}
+                            />
+                            <span className="dashSquareName">{item.name}</span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
 
-                    <div className="dashSaveBtnCell">
+                    <div className="dashOutfitActionsRow">
                       <button
                         type="button"
                         className={"styledSaveBtn" + (isSaved ? " saved" : "")}
@@ -2495,7 +2497,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                         </button>
                       </div>
                     </div>
-                  </div>
+                  </>
                 )}
 
                 <div className="dashOptionReason">
