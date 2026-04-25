@@ -8,6 +8,7 @@ import { uploadProfileAvatar } from "../api/profileApi";
 import { readDemoAuth, writeDemoAuth, loadProfilePic, saveProfilePic, loadAnswers, saveAnswers, mirrorUserDataToGuest } from "../utils/userStorage";
 import { fileToDataUrl, getProfilePicUploadIssue } from "../utils/helpers";
 import { STYLE_OPTIONS, COMFORT_OPTIONS, DRESS_FOR_OPTIONS, BODY_TYPE_OPTIONS, GENDER_OPTIONS } from "../utils/formOptions";
+import BodyTypeFigure from "./BodyTypeFigure";
 import {
   readRotationAlertPreferences,
   ROTATION_REMINDER_OPTIONS,
@@ -376,11 +377,16 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                     <button
                       key={opt.id}
                       type="button"
-                      className={prefs.bodyType === opt.id ? "optionCard selected" : "optionCard"}
+                      className={prefs.bodyType === opt.id ? "optionCard selected profileBodyTypeCard" : "optionCard profileBodyTypeCard"}
                       onClick={() => setBodyType(opt.id)}
                     >
-                      <div className="optionTitle">{opt.label}</div>
-                      <div className="optionNote">{opt.note}</div>
+                      <div className="profileBodyTypeRow">
+                        <BodyTypeFigure bodyTypeId={opt.id} compact />
+                        <div className="profileBodyTypeCopy">
+                          <div className="optionTitle">{opt.label}</div>
+                          <div className="optionNote">{opt.note}</div>
+                        </div>
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -579,11 +585,16 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                     <button
                       key={opt.id}
                       type="button"
-                      className={prefs.bodyType === opt.id ? "optionCard selected" : "optionCard"}
+                      className={prefs.bodyType === opt.id ? "optionCard selected profileBodyTypeCard" : "optionCard profileBodyTypeCard"}
                       onClick={() => setBodyType(opt.id)}
                     >
-                      <div className="optionTitle">{opt.label}</div>
-                      <div className="optionNote">{opt.note}</div>
+                      <div className="profileBodyTypeRow">
+                        <BodyTypeFigure bodyTypeId={opt.id} compact />
+                        <div className="profileBodyTypeCopy">
+                          <div className="optionTitle">{opt.label}</div>
+                          <div className="optionNote">{opt.note}</div>
+                        </div>
+                      </div>
                     </button>
                   ))}
                 </div>
