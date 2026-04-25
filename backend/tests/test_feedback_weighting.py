@@ -28,7 +28,7 @@ def _create_item(client, auth: dict, payload: dict) -> int:
 
 
 def test_weighting_prefers_favorite_signal(client):
-    token = register_and_login(client, "weight-favorite@example.com", "password123")
+    token = register_and_login(client, "weight-favorite@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     favored_top = _create_item(client, auth, _item_payload("Top Fav", "Top", favorite=True))
@@ -46,7 +46,7 @@ def test_weighting_prefers_favorite_signal(client):
 
 
 def test_weighting_handles_conflicting_signals(client):
-    token = register_and_login(client, "weight-conflict@example.com", "password123")
+    token = register_and_login(client, "weight-conflict@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     favored_top = _create_item(client, auth, _item_payload("Top Fav", "Top", favorite=True))
@@ -75,7 +75,7 @@ def test_weighting_handles_conflicting_signals(client):
 
 
 def test_weighting_with_sparse_feedback_still_returns_ranked_options(client):
-    token = register_and_login(client, "weight-sparse@example.com", "password123")
+    token = register_and_login(client, "weight-sparse@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create_item(client, auth, _item_payload("Top", "Top"))

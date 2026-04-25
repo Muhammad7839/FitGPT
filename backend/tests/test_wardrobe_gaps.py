@@ -22,7 +22,7 @@ def _item_payload(category: str, name: str) -> dict:
 
 
 def test_wardrobe_gaps_handles_empty_wardrobe(client):
-    token = register_and_login(client, "gaps-empty@example.com", "password123")
+    token = register_and_login(client, "gaps-empty@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     response = client.get("/wardrobe/gaps", headers=auth)
@@ -39,7 +39,7 @@ def test_wardrobe_gaps_handles_empty_wardrobe(client):
 
 
 def test_wardrobe_gaps_detects_missing_categories_accuracy(client):
-    token = register_and_login(client, "gaps-accuracy@example.com", "password123")
+    token = register_and_login(client, "gaps-accuracy@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     create_top = client.post("/wardrobe/items", json=_item_payload("Top", "Black Tee"), headers=auth)
@@ -60,9 +60,9 @@ def test_wardrobe_gaps_detects_missing_categories_accuracy(client):
 
 
 def test_wardrobe_gaps_are_user_scoped(client):
-    token_a = register_and_login(client, "gaps-user-a@example.com", "password123")
+    token_a = register_and_login(client, "gaps-user-a@example.com", "Testpass9x")
     auth_a = {"Authorization": f"Bearer {token_a}"}
-    token_b = register_and_login(client, "gaps-user-b@example.com", "password123")
+    token_b = register_and_login(client, "gaps-user-b@example.com", "Testpass9x")
     auth_b = {"Authorization": f"Bearer {token_b}"}
 
     categories = ["Top", "Top", "Bottom", "Bottom", "Shoes", "Outerwear"]

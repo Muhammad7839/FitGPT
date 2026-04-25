@@ -15,9 +15,39 @@ DEFAULT_LIFESTYLE = "casual"
 DEFAULT_COMFORT_PREFERENCE = "medium"
 
 
+_WEAK_PASSWORDS = frozenset({
+    "12345678", "123456789", "1234567890",
+    "password", "password1", "password123", "password!",
+    "qwerty123", "qwerty1234", "qwertyui",
+    "11111111", "00000000", "12121212",
+    "abc12345", "abc123456",
+    "fitgpt", "fitgpt1", "fitgpt123",
+    "letmein1", "admin1234", "admin123!", "adminpass",
+    "iloveyou", "welcome1", "welcome123",
+    "monkey12", "dragon12", "baseball1",
+    "sunshine", "football", "superman1",
+    "mustang1", "michael1", "jessica1",
+})
+
+
+def _validate_password_strength(value: str) -> str:
+    cleaned = value.strip()
+    if cleaned != value:
+        raise ValueError("Password cannot have leading or trailing spaces.")
+    if len(cleaned) < 8:
+        raise ValueError("Password must be at least 8 characters.")
+    has_letter = any(c.isalpha() for c in cleaned)
+    has_digit = any(c.isdigit() for c in cleaned)
+    if not has_letter or not has_digit:
+        raise ValueError("Password must include at least one letter and one number.")
+    if cleaned.lower() in _WEAK_PASSWORDS:
+        raise ValueError("Password is too common. Please choose a stronger password.")
+    return value
+
+
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=6, max_length=128)
+    password: str = Field(min_length=8, max_length=128)
 
     @field_validator("email", mode="before")
     @classmethod
@@ -29,10 +59,7 @@ class UserCreate(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, value: str) -> str:
-        cleaned = value.strip()
-        if cleaned != value:
-            raise ValueError("password cannot have leading or trailing spaces")
-        return value
+        return _validate_password_strength(value)
 
 
 class UserLogin(BaseModel):
@@ -183,15 +210,12 @@ class ForgotPasswordResponse(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str = Field(min_length=20, max_length=255)
-    new_password: str = Field(min_length=6, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
 
     @field_validator("new_password")
     @classmethod
     def validate_new_password(cls, value: str) -> str:
-        cleaned = value.strip()
-        if cleaned != value:
-            raise ValueError("new_password cannot have leading or trailing spaces")
-        return value
+        return _validate_password_strength(value)
 
 
 class ResetPasswordResponse(BaseModel):
@@ -565,7 +589,7 @@ class FeedbackPromptEventResponse(BaseModel):
 
 class ChatMessage(BaseModel):
     role: str = Field(min_length=1, max_length=16)
-    content: str = Field(min_length=1, max_length=1200)
+    content: str = Field(min_length=1, max_length=4000)
 
     @field_validator("role")
     @classmethod

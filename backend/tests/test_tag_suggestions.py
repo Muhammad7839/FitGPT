@@ -22,7 +22,7 @@ def _base_item_payload():
 
 
 def test_tag_suggestions_generate_and_persist_on_item_create(client):
-    token = register_and_login(client, "tags-create@example.com", "password123")
+    token = register_and_login(client, "tags-create@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     created = client.post("/wardrobe/items", headers=auth, json=_base_item_payload())
@@ -41,7 +41,7 @@ def test_tag_suggestions_generate_and_persist_on_item_create(client):
 
 
 def test_apply_tag_suggestions_fills_missing_fields_without_overwriting(client):
-    token = register_and_login(client, "tags-apply@example.com", "password123")
+    token = register_and_login(client, "tags-apply@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     payload = _base_item_payload() | {
@@ -63,7 +63,7 @@ def test_apply_tag_suggestions_fills_missing_fields_without_overwriting(client):
 
 
 def test_preview_tag_suggestions_handles_minimal_input(client):
-    token = register_and_login(client, "tags-preview@example.com", "password123")
+    token = register_and_login(client, "tags-preview@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     response = client.post(

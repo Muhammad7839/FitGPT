@@ -29,7 +29,7 @@ def _create_item(client, auth: dict, payload: dict) -> int:
 
 
 def test_default_current_season_filter_applies_to_recommendations(client, monkeypatch):
-    token = register_and_login(client, "season-default@example.com", "password123")
+    token = register_and_login(client, "season-default@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     monkeypatch.setattr("app.crud.get_current_season_tag", lambda **_: "winter")
@@ -47,7 +47,7 @@ def test_default_current_season_filter_applies_to_recommendations(client, monkey
 
 
 def test_multi_season_items_are_handled(client, monkeypatch):
-    token = register_and_login(client, "season-multi@example.com", "password123")
+    token = register_and_login(client, "season-multi@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     monkeypatch.setattr("app.crud.get_current_season_tag", lambda **_: "summer")
@@ -65,7 +65,7 @@ def test_multi_season_items_are_handled(client, monkeypatch):
 
 
 def test_missing_season_tags_fallback_still_returns_recommendations(client, monkeypatch):
-    token = register_and_login(client, "season-fallback@example.com", "password123")
+    token = register_and_login(client, "season-fallback@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     monkeypatch.setattr("app.crud.get_current_season_tag", lambda **_: "winter")

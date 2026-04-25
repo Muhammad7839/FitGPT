@@ -43,6 +43,11 @@ def reset_db():
     Base.metadata.create_all(bind=engine)
     app.dependency_overrides[get_db] = override_get_db
     routes_module._reset_forgot_password_throttle_state()
+    # Clear login and register rate limit buckets so tests are isolated.
+    with routes_module._login_lock:
+        routes_module._login_ip_hits.clear()
+    with routes_module._register_lock:
+        routes_module._register_ip_hits.clear()
     yield
     app.dependency_overrides.clear()
 

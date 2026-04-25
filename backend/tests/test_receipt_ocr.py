@@ -44,7 +44,7 @@ def test_receipt_ocr_requires_auth(client):
 
 
 def test_receipt_ocr_rejects_non_image(client):
-    token = register_and_login(client, "receipt-mime@example.com", "password123")
+    token = register_and_login(client, "receipt-mime@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     response = client.post(
         "/receipts/ocr",
@@ -55,7 +55,7 @@ def test_receipt_ocr_rejects_non_image(client):
 
 
 def test_receipt_ocr_returns_empty_when_provider_not_configured(client, monkeypatch):
-    token = register_and_login(client, "receipt-unconfigured@example.com", "password123")
+    token = register_and_login(client, "receipt-unconfigured@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     monkeypatch.setattr(receipt_ocr, "_get_vision_client", lambda: None)
@@ -68,7 +68,7 @@ def test_receipt_ocr_returns_empty_when_provider_not_configured(client, monkeypa
 
 
 def test_receipt_ocr_happy_path_extracts_items(client, monkeypatch):
-    token = register_and_login(client, "receipt-happy@example.com", "password123")
+    token = register_and_login(client, "receipt-happy@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     payload = {
@@ -91,7 +91,7 @@ def test_receipt_ocr_happy_path_extracts_items(client, monkeypatch):
 
 
 def test_receipt_ocr_filters_non_clothing_and_normalizes_categories(client, monkeypatch):
-    token = register_and_login(client, "receipt-filter@example.com", "password123")
+    token = register_and_login(client, "receipt-filter@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     payload = {
@@ -114,7 +114,7 @@ def test_receipt_ocr_filters_non_clothing_and_normalizes_categories(client, monk
 
 
 def test_receipt_ocr_malformed_response_returns_warning(client, monkeypatch):
-    token = register_and_login(client, "receipt-malformed@example.com", "password123")
+    token = register_and_login(client, "receipt-malformed@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     monkeypatch.setattr(receipt_ocr, "_get_vision_client", lambda: _FakeClient(content="not-json-at-all"))
@@ -127,7 +127,7 @@ def test_receipt_ocr_malformed_response_returns_warning(client, monkeypatch):
 
 
 def test_receipt_ocr_provider_error_returns_warning(client, monkeypatch):
-    token = register_and_login(client, "receipt-provider-err@example.com", "password123")
+    token = register_and_login(client, "receipt-provider-err@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     monkeypatch.setattr(
@@ -145,7 +145,7 @@ def test_receipt_ocr_provider_error_returns_warning(client, monkeypatch):
 
 def test_receipt_ocr_rejects_oversized_image(client, monkeypatch):
     monkeypatch.setattr("app.routes.MAX_UPLOAD_IMAGE_BYTES", 32)
-    token = register_and_login(client, "receipt-toobig@example.com", "password123")
+    token = register_and_login(client, "receipt-toobig@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     big_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 256
     response = client.post(

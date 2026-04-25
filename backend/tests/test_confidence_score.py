@@ -34,7 +34,7 @@ def _seed_wardrobe(client, auth: dict) -> None:
 
 
 def test_recommendation_endpoint_includes_confidence_alias(client):
-    token = register_and_login(client, "confidence-reco@example.com", "password123")
+    token = register_and_login(client, "confidence-reco@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     _seed_wardrobe(client, auth)
 
@@ -48,7 +48,7 @@ def test_recommendation_endpoint_includes_confidence_alias(client):
 
 
 def test_ai_recommendation_endpoint_includes_confidence_alias(client):
-    token = register_and_login(client, "confidence-ai@example.com", "password123")
+    token = register_and_login(client, "confidence-ai@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     _seed_wardrobe(client, auth)
 

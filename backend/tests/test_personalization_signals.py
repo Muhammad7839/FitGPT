@@ -33,7 +33,7 @@ def _signature_from_outfit(outfit: dict) -> str:
 
 
 def test_recommendation_interaction_endpoint_records_signals(client):
-    token = register_and_login(client, "interaction-record@example.com", "password123")
+    token = register_and_login(client, "interaction-record@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
@@ -57,7 +57,7 @@ def test_recommendation_interaction_endpoint_records_signals(client):
 
 
 def test_recommendation_ranking_changes_after_negative_interaction(client):
-    token = register_and_login(client, "interaction-ranking@example.com", "password123")
+    token = register_and_login(client, "interaction-ranking@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
@@ -91,7 +91,7 @@ def test_recommendation_ranking_changes_after_negative_interaction(client):
 
 
 def test_personalization_handles_conflicting_signals_without_crashing(client):
-    token = register_and_login(client, "interaction-conflict@example.com", "password123")
+    token = register_and_login(client, "interaction-conflict@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")

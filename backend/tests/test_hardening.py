@@ -36,7 +36,7 @@ def test_health_returns_503_when_database_probe_fails(client, monkeypatch):
 
 
 def test_wardrobe_create_returns_serializable_422_for_blank_required_text(client):
-    token = register_and_login(client, "wardrobe-hardening@example.com", "password123")
+    token = register_and_login(client, "wardrobe-hardening@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     payload = {
         "name": "Broken item",
@@ -56,7 +56,7 @@ def test_wardrobe_create_returns_serializable_422_for_blank_required_text(client
 
 
 def test_wardrobe_create_returns_422_for_oversized_style_tag_list(client):
-    token = register_and_login(client, "wardrobe-tags@example.com", "password123")
+    token = register_and_login(client, "wardrobe-tags@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     payload = {
         "name": "Tag-heavy item",
@@ -75,7 +75,7 @@ def test_wardrobe_create_returns_422_for_oversized_style_tag_list(client):
 
 
 def test_wardrobe_create_returns_serializable_422_for_oversized_tag_element(client):
-    token = register_and_login(client, "wardrobe-long-tag@example.com", "password123")
+    token = register_and_login(client, "wardrobe-long-tag@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     payload = {
         "name": "Long-tag item",
@@ -97,7 +97,7 @@ def test_wardrobe_create_returns_serializable_422_for_oversized_tag_element(clie
 
 def test_forgot_password_is_rate_limited_per_email(client, monkeypatch):
     monkeypatch.setattr(routes_module, "EXPOSE_RESET_TOKEN_IN_RESPONSE", False)
-    register_and_login(client, "rate-limit@example.com", "password123")
+    register_and_login(client, "rate-limit@example.com", "Testpass9x")
 
     for _ in range(routes_module.FORGOT_PASSWORD_EMAIL_LIMIT):
         response = client.post("/forgot-password", json={"email": "rate-limit@example.com"})
@@ -187,7 +187,7 @@ def test_verify_google_id_token_rejects_unverified_email(monkeypatch):
 
 
 def test_weather_forecast_returns_provider_status_and_message(client, monkeypatch):
-    token = register_and_login(client, "forecast-hardening@example.com", "password123")
+    token = register_and_login(client, "forecast-hardening@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     def raise_lookup_error(**_kwargs):

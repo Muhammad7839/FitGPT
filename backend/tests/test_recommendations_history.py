@@ -22,7 +22,7 @@ def item(category: str, color: str):
 
 
 def test_recommendations_and_history_flow(client):
-    token = register_and_login(client, "reco@example.com", "password123")
+    token = register_and_login(client, "reco@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
@@ -76,7 +76,7 @@ def test_recommendations_and_history_flow(client):
 
 
 def test_saved_outfits_returns_updated_data_and_persists(client):
-    token = register_and_login(client, "saved@example.com", "password123")
+    token = register_and_login(client, "saved@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
@@ -123,7 +123,7 @@ def test_saved_outfits_returns_updated_data_and_persists(client):
 
 
 def test_saved_outfits_legacy_alias_supports_create_list_and_delete_by_signature(client):
-    token = register_and_login(client, "saved-legacy@example.com", "password123")
+    token = register_and_login(client, "saved-legacy@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
@@ -172,7 +172,7 @@ def test_saved_outfits_legacy_alias_supports_create_list_and_delete_by_signature
 
 
 def test_outfit_history_legacy_alias_supports_create_list_and_signature_delete(client):
-    token = register_and_login(client, "history-legacy@example.com", "password123")
+    token = register_and_login(client, "history-legacy@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
@@ -207,7 +207,7 @@ def test_outfit_history_legacy_alias_supports_create_list_and_signature_delete(c
 
 
 def test_recommendations_use_weather_city_when_temp_missing(client, monkeypatch):
-    token = register_and_login(client, "weather@example.com", "password123")
+    token = register_and_login(client, "weather@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
@@ -229,7 +229,7 @@ def test_recommendations_use_weather_city_when_temp_missing(client, monkeypatch)
 
 
 def test_weather_current_endpoint_returns_snapshot(client, monkeypatch):
-    token = register_and_login(client, "weather-now@example.com", "password123")
+    token = register_and_login(client, "weather-now@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     monkeypatch.setattr(
@@ -255,7 +255,7 @@ def test_weather_current_endpoint_returns_snapshot(client, monkeypatch):
 
 
 def test_weather_current_endpoint_maps_provider_errors(client, monkeypatch):
-    token = register_and_login(client, "weather-error-map@example.com", "password123")
+    token = register_and_login(client, "weather-error-map@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     def quota_error(**_kwargs):
@@ -272,7 +272,7 @@ def test_weather_current_endpoint_maps_provider_errors(client, monkeypatch):
 
 
 def test_planned_outfits_crud_flow(client):
-    token = register_and_login(client, "planned@example.com", "password123")
+    token = register_and_login(client, "planned@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
@@ -305,7 +305,7 @@ def test_planned_outfits_crud_flow(client):
 
 
 def test_outfit_history_rejects_invalid_item_ids(client):
-    token = register_and_login(client, "history-invalid-ids@example.com", "password123")
+    token = register_and_login(client, "history-invalid-ids@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
@@ -326,7 +326,7 @@ def test_outfit_history_rejects_invalid_item_ids(client):
 
 
 def test_outfit_history_supports_date_range_update_and_delete(client):
-    token = register_and_login(client, "history-range@example.com", "password123")
+    token = register_and_login(client, "history-range@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
@@ -391,7 +391,7 @@ def test_outfit_history_supports_date_range_update_and_delete(client):
 
 
 def test_outfit_history_range_rejects_invalid_dates(client):
-    token = register_and_login(client, "history-range-invalid@example.com", "password123")
+    token = register_and_login(client, "history-range-invalid@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     response = client.get(
@@ -404,7 +404,7 @@ def test_outfit_history_range_rejects_invalid_dates(client):
 
 
 def test_planned_outfit_requires_valid_date_format(client):
-    token = register_and_login(client, "planned-date-format@example.com", "password123")
+    token = register_and_login(client, "planned-date-format@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
@@ -422,7 +422,7 @@ def test_planned_outfit_requires_valid_date_format(client):
 
 
 def test_planner_assign_replaces_existing_entries(client):
-    token = register_and_login(client, "planner-replace@example.com", "password123")
+    token = register_and_login(client, "planner-replace@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
@@ -459,7 +459,7 @@ def test_planner_assign_replaces_existing_entries(client):
 
 
 def test_planner_assign_allows_multiple_entries_when_replace_disabled(client):
-    token = register_and_login(client, "planner-append@example.com", "password123")
+    token = register_and_login(client, "planner-append@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
@@ -493,7 +493,7 @@ def test_planner_assign_allows_multiple_entries_when_replace_disabled(client):
 
 
 def test_recommendations_accept_weather_category_when_lookup_fails(client, monkeypatch):
-    token = register_and_login(client, "weather-fallback@example.com", "password123")
+    token = register_and_login(client, "weather-fallback@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
@@ -518,7 +518,7 @@ def test_recommendations_accept_weather_category_when_lookup_fails(client, monke
 
 
 def test_recommendations_fall_back_when_weather_lookup_fails_without_weather_category(client, monkeypatch):
-    token = register_and_login(client, "weather-auto-fallback@example.com", "password123")
+    token = register_and_login(client, "weather-auto-fallback@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
@@ -544,7 +544,7 @@ def test_recommendations_fall_back_when_weather_lookup_fails_without_weather_cat
 
 
 def test_recommendation_options_fall_back_when_weather_lookup_fails_without_weather_category(client, monkeypatch):
-    token = register_and_login(client, "weather-options-fallback@example.com", "password123")
+    token = register_and_login(client, "weather-options-fallback@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     client.post("/wardrobe/items", json=item("Top", "Black"), headers=auth).json()
@@ -570,7 +570,7 @@ def test_recommendation_options_fall_back_when_weather_lookup_fails_without_weat
 
 
 def test_cold_recommendations_prioritize_outerwear_and_avoid_light_items(client):
-    token = register_and_login(client, "temp-logic@example.com", "password123")
+    token = register_and_login(client, "temp-logic@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     client.post(

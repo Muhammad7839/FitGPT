@@ -6,8 +6,11 @@ from conftest import register_and_login
 def cleanup_uploaded_file(image_url: str):
     filename = image_url.replace("/uploads/", "", 1).strip("/")
     upload_path = Path(__file__).resolve().parents[1] / "uploads" / filename
-    if upload_path.exists():
-        upload_path.unlink()
+    try:
+        if upload_path.exists():
+            upload_path.unlink()
+    except OSError:
+        pass  # Best-effort cleanup; ignore permission errors in sandboxed environments.
 
 
 def sample_item_payload():
@@ -29,7 +32,7 @@ def sample_item_payload():
 
 
 def test_wardrobe_crud_flow(client):
-    token = register_and_login(client, "wardrobe@example.com", "password123")
+    token = register_and_login(client, "wardrobe@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     create = client.post("/wardrobe/items", json=sample_item_payload(), headers=auth)
@@ -56,7 +59,7 @@ def test_wardrobe_crud_flow(client):
 
 
 def test_wardrobe_partial_update_supports_edit_workflow(client):
-    token = register_and_login(client, "wardrobe-edit@example.com", "password123")
+    token = register_and_login(client, "wardrobe-edit@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     create = client.post("/wardrobe/items", json=sample_item_payload(), headers=auth)
@@ -74,7 +77,7 @@ def test_wardrobe_partial_update_supports_edit_workflow(client):
 
 
 def test_wardrobe_include_archived_and_favorite_persistence(client):
-    token = register_and_login(client, "wardrobe-flags@example.com", "password123")
+    token = register_and_login(client, "wardrobe-flags@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     create = client.post("/wardrobe/items", json=sample_item_payload(), headers=auth)
@@ -109,7 +112,7 @@ def test_wardrobe_include_archived_and_favorite_persistence(client):
 
 
 def test_wardrobe_image_upload_returns_static_url(client):
-    token = register_and_login(client, "wardrobe-upload@example.com", "password123")
+    token = register_and_login(client, "wardrobe-upload@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     files = {"image": ("item.jpg", b"fake-jpeg-binary", "image/jpeg")}
 
@@ -121,7 +124,7 @@ def test_wardrobe_image_upload_returns_static_url(client):
 
 
 def test_wardrobe_create_accepts_multipart_form_compatibility_payload(client):
-    token = register_and_login(client, "wardrobe-multipart@example.com", "password123")
+    token = register_and_login(client, "wardrobe-multipart@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     response = client.post(
@@ -151,7 +154,7 @@ def test_wardrobe_create_accepts_multipart_form_compatibility_payload(client):
 
 
 def test_wardrobe_update_accepts_is_active_archive_compatibility(client):
-    token = register_and_login(client, "wardrobe-archive-compat@example.com", "password123")
+    token = register_and_login(client, "wardrobe-archive-compat@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     created = client.post(
@@ -187,7 +190,7 @@ def test_wardrobe_update_accepts_is_active_archive_compatibility(client):
 
 
 def test_wardrobe_image_upload_rejects_unsupported_content_type(client):
-    token = register_and_login(client, "wardrobe-upload-invalid@example.com", "password123")
+    token = register_and_login(client, "wardrobe-upload-invalid@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     files = {"image": ("item.gif", b"fake-gif-binary", "image/gif")}
 
@@ -197,7 +200,7 @@ def test_wardrobe_image_upload_rejects_unsupported_content_type(client):
 
 
 def test_wardrobe_image_upload_rejects_oversized_files(client):
-    token = register_and_login(client, "wardrobe-upload-oversize@example.com", "password123")
+    token = register_and_login(client, "wardrobe-upload-oversize@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     files = {"image": ("item.jpg", b"x" * (5 * 1024 * 1024 + 1), "image/jpeg")}
 
@@ -207,7 +210,7 @@ def test_wardrobe_image_upload_rejects_oversized_files(client):
 
 
 def test_wardrobe_create_rejects_out_of_range_comfort(client):
-    token = register_and_login(client, "wardrobe-bad-comfort@example.com", "password123")
+    token = register_and_login(client, "wardrobe-bad-comfort@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     payload = sample_item_payload()
     payload["comfort_level"] = 6
@@ -217,7 +220,7 @@ def test_wardrobe_create_rejects_out_of_range_comfort(client):
 
 
 def test_favorites_mark_unmark_and_retrieve(client):
-    token = register_and_login(client, "favorites@example.com", "password123")
+    token = register_and_login(client, "favorites@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     create = client.post("/wardrobe/items", json=sample_item_payload(), headers=auth)
@@ -251,7 +254,7 @@ def test_favorites_mark_unmark_and_retrieve(client):
 
 
 def test_wardrobe_search_and_filter_queries(client):
-    token = register_and_login(client, "search-filter@example.com", "password123")
+    token = register_and_login(client, "search-filter@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     payload_a = sample_item_payload() | {
@@ -309,7 +312,7 @@ def test_wardrobe_search_and_filter_queries(client):
 
 
 def test_wardrobe_fit_tag_is_stored_and_filterable(client):
-    token = register_and_login(client, "fit-tag@example.com", "password123")
+    token = register_and_login(client, "fit-tag@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     fitted = sample_item_payload() | {"name": "Slim Jeans", "category": "Bottom", "fit_tag": "slim"}
@@ -326,7 +329,7 @@ def test_wardrobe_fit_tag_is_stored_and_filterable(client):
 
 
 def test_bulk_create_items_returns_per_item_result(client):
-    token = register_and_login(client, "bulk-create@example.com", "password123")
+    token = register_and_login(client, "bulk-create@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     response = client.post(
@@ -350,7 +353,7 @@ def test_bulk_create_items_returns_per_item_result(client):
 
 
 def test_multi_file_upload_returns_success_and_failure_per_file(client):
-    token = register_and_login(client, "multi-upload@example.com", "password123")
+    token = register_and_login(client, "multi-upload@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     files = [
@@ -370,7 +373,7 @@ def test_multi_file_upload_returns_success_and_failure_per_file(client):
 
 
 def test_duplicate_detection_returns_expected_candidates(client):
-    token = register_and_login(client, "duplicates@example.com", "password123")
+    token = register_and_login(client, "duplicates@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     first_payload = sample_item_payload() | {
@@ -419,7 +422,7 @@ def test_duplicate_detection_returns_expected_candidates(client):
 
 
 def test_duplicate_detection_returns_empty_when_items_are_distinct(client):
-    token = register_and_login(client, "duplicates-empty@example.com", "password123")
+    token = register_and_login(client, "duplicates-empty@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = sample_item_payload() | {

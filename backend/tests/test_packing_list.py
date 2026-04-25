@@ -35,7 +35,7 @@ def _seed_basic_wardrobe(client, auth: dict) -> None:
 
 
 def test_packing_list_generation_returns_quantities(client, monkeypatch):
-    token = register_and_login(client, "packing-basic@example.com", "password123")
+    token = register_and_login(client, "packing-basic@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     _seed_basic_wardrobe(client, auth)
 
@@ -68,7 +68,7 @@ def test_packing_list_generation_returns_quantities(client, monkeypatch):
 
 
 def test_packing_list_applies_weather_based_outerwear_adjustment(client, monkeypatch):
-    token = register_and_login(client, "packing-weather@example.com", "password123")
+    token = register_and_login(client, "packing-weather@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     _seed_basic_wardrobe(client, auth)
 
@@ -98,7 +98,7 @@ def test_packing_list_applies_weather_based_outerwear_adjustment(client, monkeyp
 
 
 def test_packing_list_handles_forecast_failure_and_sparse_data(client, monkeypatch):
-    token = register_and_login(client, "packing-edge@example.com", "password123")
+    token = register_and_login(client, "packing-edge@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     response_item = client.post("/wardrobe/items", json=_item_payload("Top A", "Top"), headers=auth)
@@ -125,7 +125,7 @@ def test_packing_list_handles_forecast_failure_and_sparse_data(client, monkeypat
 
 
 def test_packing_list_skips_unavailable_items(client, monkeypatch):
-    token = register_and_login(client, "packing-availability@example.com", "password123")
+    token = register_and_login(client, "packing-availability@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     for name, category, is_available in [

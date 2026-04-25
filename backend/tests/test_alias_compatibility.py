@@ -22,19 +22,19 @@ def _item_payload(name: str, category: str, color: str):
 def test_auth_aliases_match_canonical_routes(client):
     register_primary = client.post(
         "/register",
-        json={"email": "alias-primary@example.com", "password": "password123"},
+        json={"email": "alias-primary@example.com", "password": "Testpass9x"},
     )
     assert register_primary.status_code == 200
 
     register_alias = client.post(
         "/auth/register",
-        json={"email": "alias-secondary@example.com", "password": "password123"},
+        json={"email": "alias-secondary@example.com", "password": "Testpass9x"},
     )
     assert register_alias.status_code == 200
 
     login_primary = client.post(
         "/login",
-        data={"username": "alias-primary@example.com", "password": "password123"},
+        data={"username": "alias-primary@example.com", "password": "Testpass9x"},
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     assert login_primary.status_code == 200
@@ -42,7 +42,7 @@ def test_auth_aliases_match_canonical_routes(client):
 
     login_alias = client.post(
         "/auth/login",
-        json={"email": "alias-secondary@example.com", "password": "password123"},
+        json={"email": "alias-secondary@example.com", "password": "Testpass9x"},
     )
     assert login_alias.status_code == 200
     assert login_alias.json()["token_type"] == "bearer"
@@ -64,7 +64,7 @@ def test_auth_aliases_match_canonical_routes(client):
 
 
 def test_profile_aliases_match_canonical_routes(client):
-    token = register_and_login(client, "profile-alias@example.com", "password123")
+    token = register_and_login(client, "profile-alias@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     update = client.put(
@@ -94,7 +94,7 @@ def test_profile_aliases_match_canonical_routes(client):
 
 
 def test_ai_recommendation_alias_wraps_same_primary_outfit(client, monkeypatch):
-    token = register_and_login(client, "ai-alias@example.com", "password123")
+    token = register_and_login(client, "ai-alias@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = client.post("/wardrobe/items", headers=auth, json=_item_payload("Alias Top", "Top", "Black")).json()
@@ -124,7 +124,7 @@ def test_ai_recommendation_alias_wraps_same_primary_outfit(client, monkeypatch):
 
 
 def test_saved_outfit_aliases_interoperate_with_canonical_routes(client):
-    token = register_and_login(client, "saved-alias-cross@example.com", "password123")
+    token = register_and_login(client, "saved-alias-cross@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = client.post("/wardrobe/items", headers=auth, json=_item_payload("Saved Top", "Top", "Black")).json()
@@ -153,7 +153,7 @@ def test_saved_outfit_aliases_interoperate_with_canonical_routes(client):
 
 
 def test_outfit_history_aliases_interoperate_with_canonical_routes(client):
-    token = register_and_login(client, "history-alias-cross@example.com", "password123")
+    token = register_and_login(client, "history-alias-cross@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = client.post("/wardrobe/items", headers=auth, json=_item_payload("History Top", "Top", "Black")).json()
@@ -180,7 +180,7 @@ def test_outfit_history_aliases_interoperate_with_canonical_routes(client):
 
 
 def test_chat_conversation_compatibility_endpoints_return_local_only_status(client):
-    token = register_and_login(client, "chat-conversations@example.com", "password123")
+    token = register_and_login(client, "chat-conversations@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     listed = client.get("/chat/conversations", headers=auth)

@@ -29,7 +29,7 @@ def _create_item(client, auth, *, category: str, color: str, clothing_type: str)
 
 
 def test_forecast_recommendations_use_forecast_weather_context(client, monkeypatch):
-    token = register_and_login(client, "forecast-reco@example.com", "password123")
+    token = register_and_login(client, "forecast-reco@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create_item(client, auth, category="Top", color="Black", clothing_type="tee")
@@ -65,7 +65,7 @@ def test_forecast_recommendations_use_forecast_weather_context(client, monkeypat
 
 
 def test_forecast_recommendations_fallback_when_forecast_unavailable(client, monkeypatch):
-    token = register_and_login(client, "forecast-reco-fallback@example.com", "password123")
+    token = register_and_login(client, "forecast-reco-fallback@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create_item(client, auth, category="Top", color="Black", clothing_type="tee")

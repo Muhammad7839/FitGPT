@@ -78,7 +78,7 @@ def test_ai_chat_rejects_blank_content(client):
 
 
 def test_ai_chat_success(client, monkeypatch):
-    token = register_and_login(client, "ai-chat-success@example.com", "password123")
+    token = register_and_login(client, "ai-chat-success@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     class FakeProvider:
@@ -103,7 +103,7 @@ def test_ai_chat_success(client, monkeypatch):
 
 
 def test_ai_chat_system_prompt_uses_continuity_and_wardrobe_context(client, monkeypatch):
-    token = register_and_login(client, "ai-chat-context@example.com", "password123")
+    token = register_and_login(client, "ai-chat-context@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
     _create_item(client, auth, category="Outerwear", color="Olive", name="Olive Jacket", clothing_type="jacket")
@@ -147,7 +147,7 @@ def test_ai_chat_system_prompt_uses_continuity_and_wardrobe_context(client, monk
 
 
 def test_ai_chat_fallback_when_provider_unavailable(client, monkeypatch):
-    token = register_and_login(client, "ai-chat-fallback@example.com", "password123")
+    token = register_and_login(client, "ai-chat-fallback@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     class FakeProvider:
@@ -200,7 +200,7 @@ def test_ai_chat_fallback_redirects_non_style_requests(client, monkeypatch):
 
 
 def test_ai_chat_fallback_builds_on_previous_turn_with_wardrobe_context(client, monkeypatch):
-    token = register_and_login(client, "ai-chat-follow-up@example.com", "password123")
+    token = register_and_login(client, "ai-chat-follow-up@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
     _create_item(client, auth, category="Bottom", color="Blue", name="Blue Jeans", clothing_type="jeans")
@@ -230,7 +230,7 @@ def test_ai_chat_fallback_builds_on_previous_turn_with_wardrobe_context(client, 
 
 
 def test_ai_chat_fallback_varies_tone_for_repeated_same_input(client, monkeypatch):
-    token = register_and_login(client, "ai-chat-variation@example.com", "password123")
+    token = register_and_login(client, "ai-chat-variation@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     _create_item(client, auth, category="Top", color="White", name="White Tee", clothing_type="tee")
     _create_item(client, auth, category="Bottom", color="Olive", name="Olive Chino", clothing_type="chino")
@@ -274,7 +274,7 @@ def test_ai_chat_fallback_varies_tone_for_repeated_same_input(client, monkeypatc
 
 
 def test_chat_alias_uses_same_response_contract(client, monkeypatch):
-    token = register_and_login(client, "ai-chat-alias@example.com", "password123")
+    token = register_and_login(client, "ai-chat-alias@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     class FakeProvider:
@@ -299,7 +299,7 @@ def test_chat_alias_uses_same_response_contract(client, monkeypatch):
 
 
 def test_ai_recommendations_ai_success(client, monkeypatch):
-    token = register_and_login(client, "ai-reco-success@example.com", "password123")
+    token = register_and_login(client, "ai-reco-success@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
@@ -338,7 +338,7 @@ def test_ai_recommendations_ai_success(client, monkeypatch):
 
 
 def test_ai_recommendations_malformed_provider_payload_fallback(client, monkeypatch):
-    token = register_and_login(client, "ai-reco-malformed@example.com", "password123")
+    token = register_and_login(client, "ai-reco-malformed@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
@@ -363,7 +363,7 @@ def test_ai_recommendations_malformed_provider_payload_fallback(client, monkeypa
 
 
 def test_ai_recommendations_provider_error_fallback(client, monkeypatch):
-    token = register_and_login(client, "ai-reco-provider-error@example.com", "password123")
+    token = register_and_login(client, "ai-reco-provider-error@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
@@ -386,7 +386,7 @@ def test_ai_recommendations_provider_error_fallback(client, monkeypatch):
 
 
 def test_ai_recommendations_fall_back_when_weather_lookup_fails_without_weather_category(client, monkeypatch):
-    token = register_and_login(client, "ai-reco-weather-fallback@example.com", "password123")
+    token = register_and_login(client, "ai-reco-weather-fallback@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
@@ -416,7 +416,7 @@ def test_ai_recommendations_fall_back_when_weather_lookup_fails_without_weather_
 
 
 def test_ai_recommendations_return_structured_weather_fallback_when_service_not_configured(client, monkeypatch):
-    token = register_and_login(client, "ai-reco-weather-config@example.com", "password123")
+    token = register_and_login(client, "ai-reco-weather-config@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
@@ -446,7 +446,7 @@ def test_ai_recommendations_return_structured_weather_fallback_when_service_not_
 
 
 def test_ai_recommendations_explanation_uses_weather_time_and_occasion(client, monkeypatch):
-    token = register_and_login(client, "ai-reco-context@example.com", "password123")
+    token = register_and_login(client, "ai-reco-context@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create_item(client, auth, category="Top", color="White", name="White Linen Shirt", clothing_type="shirt")
@@ -499,7 +499,7 @@ def test_ai_recommendations_explanation_uses_weather_time_and_occasion(client, m
 
 
 def test_ai_recommendations_weak_wardrobe_still_returns_outfit_with_limitation(client, monkeypatch):
-    token = register_and_login(client, "ai-reco-weak-wardrobe@example.com", "password123")
+    token = register_and_login(client, "ai-reco-weak-wardrobe@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create_item(client, auth, category="Top", color="Black", name="Only Tee", clothing_type="tee")
@@ -530,7 +530,7 @@ def test_recommendations_ai_alias_requires_auth(client):
 
 
 def test_recommendations_ai_alias_returns_web_compatible_shape(client, monkeypatch):
-    token = register_and_login(client, "ai-reco-alias@example.com", "password123")
+    token = register_and_login(client, "ai-reco-alias@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
@@ -567,7 +567,7 @@ def test_recommendations_ai_alias_returns_web_compatible_shape(client, monkeypat
 
 
 def test_recommendations_ai_alias_uses_client_payload_when_db_is_empty(client, monkeypatch):
-    token = register_and_login(client, "ai-reco-client-payload@example.com", "password123")
+    token = register_and_login(client, "ai-reco-client-payload@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     class FakeProvider:
@@ -600,7 +600,7 @@ def test_recommendations_ai_alias_uses_client_payload_when_db_is_empty(client, m
 
 
 def test_dashboard_context_returns_idle_without_weather_inputs(client):
-    token = register_and_login(client, "dashboard-context-idle@example.com", "password123")
+    token = register_and_login(client, "dashboard-context-idle@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     response = client.get("/dashboard/context", headers=auth)
@@ -611,7 +611,7 @@ def test_dashboard_context_returns_idle_without_weather_inputs(client):
 
 
 def test_dashboard_context_returns_weather_when_lookup_succeeds(client, monkeypatch):
-    token = register_and_login(client, "dashboard-context-weather@example.com", "password123")
+    token = register_and_login(client, "dashboard-context-weather@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     monkeypatch.setattr(
@@ -633,7 +633,7 @@ def test_dashboard_context_returns_weather_when_lookup_succeeds(client, monkeypa
 
 
 def test_dashboard_context_returns_unavailable_on_weather_error(client, monkeypatch):
-    token = register_and_login(client, "dashboard-context-error@example.com", "password123")
+    token = register_and_login(client, "dashboard-context-error@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     def raise_weather_error(**_):
@@ -649,7 +649,7 @@ def test_dashboard_context_returns_unavailable_on_weather_error(client, monkeypa
 
 
 def test_ai_recommendations_repeat_prevention_avoids_same_fingerprint(client, monkeypatch):
-    token = register_and_login(client, "ai-reco-repeat@example.com", "password123")
+    token = register_and_login(client, "ai-reco-repeat@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")
@@ -686,7 +686,7 @@ def test_ai_recommendations_repeat_prevention_avoids_same_fingerprint(client, mo
 
 
 def test_recommendation_feedback_endpoint_upserts_signal(client):
-    token = register_and_login(client, "feedback-upsert@example.com", "password123")
+    token = register_and_login(client, "feedback-upsert@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     first = client.post(
@@ -709,7 +709,7 @@ def test_recommendation_feedback_endpoint_upserts_signal(client):
 
 
 def test_recommendation_feedback_influences_option_ranking(client, monkeypatch):
-    token = register_and_login(client, "feedback-ranking@example.com", "password123")
+    token = register_and_login(client, "feedback-ranking@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create_item(client, auth, category="Top", color="Black", name="Black Tee", clothing_type="tee")

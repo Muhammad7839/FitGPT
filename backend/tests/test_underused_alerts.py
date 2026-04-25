@@ -28,7 +28,7 @@ def _create_item(client, auth: dict, payload: dict) -> int:
 
 
 def test_underused_alerts_detect_items_by_usage_and_last_worn(client):
-    token = register_and_login(client, "underused-accuracy@example.com", "password123")
+    token = register_and_login(client, "underused-accuracy@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top_id = _create_item(client, auth, _item_payload("Top", "Top"))
@@ -68,9 +68,9 @@ def test_underused_alerts_detect_items_by_usage_and_last_worn(client):
 
 
 def test_underused_alerts_are_user_specific(client):
-    token_a = register_and_login(client, "underused-user-a@example.com", "password123")
+    token_a = register_and_login(client, "underused-user-a@example.com", "Testpass9x")
     auth_a = {"Authorization": f"Bearer {token_a}"}
-    token_b = register_and_login(client, "underused-user-b@example.com", "password123")
+    token_b = register_and_login(client, "underused-user-b@example.com", "Testpass9x")
     auth_b = {"Authorization": f"Bearer {token_b}"}
 
     _create_item(client, auth_a, _item_payload("A Top", "Top"))
@@ -88,7 +88,7 @@ def test_underused_alerts_are_user_specific(client):
 
 
 def test_underused_alerts_flag_insufficient_data(client):
-    token = register_and_login(client, "underused-insufficient@example.com", "password123")
+    token = register_and_login(client, "underused-insufficient@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create_item(client, auth, _item_payload("Top", "Top"))

@@ -7,7 +7,7 @@ from conftest import register_and_login
 
 
 def test_weather_current_returns_controlled_error_when_provider_json_is_invalid(client, monkeypatch):
-    token = register_and_login(client, "weather-json-invalid@example.com", "password123")
+    token = register_and_login(client, "weather-json-invalid@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     class FakeResponse:

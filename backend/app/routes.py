@@ -52,11 +52,51 @@ _forgot_password_email_hits: dict[str, list[float]] = {}
 _forgot_password_ip_hits: dict[str, list[float]] = {}
 _forgot_password_lock = threading.Lock()
 
+# Login rate limiting: max 15 attempts per IP per 15 minutes
+LOGIN_WINDOW_SECONDS = 15 * 60
+LOGIN_IP_LIMIT = 15
+_login_ip_hits: dict[str, list[float]] = {}
+_login_lock = threading.Lock()
+
+# Register rate limiting: max 10 new accounts per IP per hour
+REGISTER_WINDOW_SECONDS = 60 * 60
+REGISTER_IP_LIMIT = 10
+_register_ip_hits: dict[str, list[float]] = {}
+_register_lock = threading.Lock()
+
 
 def _reset_forgot_password_throttle_state() -> None:
     with _forgot_password_lock:
         _forgot_password_email_hits.clear()
         _forgot_password_ip_hits.clear()
+
+
+def _enforce_login_rate_limit(request: Request) -> None:
+    ip = _get_request_ip(request)
+    now = datetime.utcnow().timestamp()
+    with _login_lock:
+        hits = [t for t in _login_ip_hits.get(ip, []) if now - t < LOGIN_WINDOW_SECONDS]
+        hits.append(now)
+        _login_ip_hits[ip] = hits
+    if len(hits) > LOGIN_IP_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts. Please try again later.",
+        )
+
+
+def _enforce_register_rate_limit(request: Request) -> None:
+    ip = _get_request_ip(request)
+    now = datetime.utcnow().timestamp()
+    with _register_lock:
+        hits = [t for t in _register_ip_hits.get(ip, []) if now - t < REGISTER_WINDOW_SECONDS]
+        hits.append(now)
+        _register_ip_hits[ip] = hits
+    if len(hits) > REGISTER_IP_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many registration attempts. Please try again later.",
+        )
 
 
 def _get_request_ip(request: Request) -> str:
@@ -318,13 +358,16 @@ def _store_uploaded_image(
                 bytes_written += len(chunk)
                 if bytes_written > MAX_UPLOAD_IMAGE_BYTES:
                     raise HTTPException(
-                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                         detail="Image exceeds max upload size",
                     )
                 output.write(chunk)
     except Exception:
         logger.exception("Image upload write failed user_id=%s file=%s", user_id, filename)
-        destination.unlink(missing_ok=True)
+        try:
+            destination.unlink(missing_ok=True)
+        except OSError:
+            pass  # Best-effort cleanup; ignore if file cannot be removed (e.g. permissions)
         raise
     finally:
         image.file.close()
@@ -609,7 +652,8 @@ def _login_with_credentials(db: Session, *, email: str, password: str) -> schema
 # =============================
 
 @router.post("/register", response_model=schemas.UserResponse)
-def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+def register_user(user: schemas.UserCreate, request: Request, db: Session = Depends(get_db)):
+    _enforce_register_rate_limit(request)
     existing_user = crud.get_user_by_email(db, user.email)
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -621,9 +665,9 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/auth/register", response_model=schemas.UserResponse)
-def register_user_alias(user: schemas.UserCreate, db: Session = Depends(get_db)):
+def register_user_alias(user: schemas.UserCreate, request: Request, db: Session = Depends(get_db)):
     """Compatibility alias for web clients expecting /auth/register."""
-    return register_user(user=user, db=db)
+    return register_user(user=user, request=request, db=db)
 
 
 # =============================
@@ -632,9 +676,11 @@ def register_user_alias(user: schemas.UserCreate, db: Session = Depends(get_db))
 
 @router.post("/login", response_model=schemas.Token)
 def login_user(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
+    _enforce_login_rate_limit(request)
     return _login_with_credentials(
         db=db,
         email=form_data.username,
@@ -645,9 +691,11 @@ def login_user(
 @router.post("/auth/login", response_model=schemas.Token)
 def login_user_alias(
     payload: schemas.UserLogin,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Compatibility alias for web clients expecting JSON login at /auth/login."""
+    _enforce_login_rate_limit(request)
     return _login_with_credentials(
         db=db,
         email=payload.email,
@@ -979,7 +1027,7 @@ def receipt_ocr(
             buffer.extend(chunk)
             if len(buffer) > MAX_UPLOAD_IMAGE_BYTES:
                 raise HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                     detail="Image exceeds max upload size",
                 )
     finally:
@@ -1323,7 +1371,7 @@ def get_current_weather(
     city: Optional[str] = None,
     lat: Optional[float] = None,
     lon: Optional[float] = None,
-    current_user: models.User = Depends(get_current_user),
+    current_user: Optional[models.User] = Depends(get_optional_user),
 ):
     _ = current_user
     try:
@@ -1364,7 +1412,7 @@ def get_daily_weather_forecast(
     lat: Optional[float] = None,
     lon: Optional[float] = None,
     days: int = Query(default=6, ge=1, le=10),
-    current_user: models.User = Depends(get_current_user),
+    current_user: Optional[models.User] = Depends(get_optional_user),
 ):
     _ = current_user
     try:

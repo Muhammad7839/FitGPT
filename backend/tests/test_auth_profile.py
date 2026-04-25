@@ -13,17 +13,21 @@ from conftest import register_and_login
 def _cleanup_uploaded_file(image_url: str):
     filename = image_url.replace("/uploads/", "", 1).strip("/")
     upload_path = Path(__file__).resolve().parents[1] / "uploads" / filename
-    if upload_path.exists():
-        upload_path.unlink()
+    try:
+        if upload_path.exists():
+            upload_path.unlink()
+    except OSError:
+        # Best-effort cleanup; ignore permission errors in sandboxed environments.
+        pass
 
 
 def test_register_and_login_success(client):
-    token = register_and_login(client, "user1@example.com", "password123")
+    token = register_and_login(client, "user1@example.com", "Testpass9x")
     assert token
 
 
 def test_direct_bcrypt_password_helpers_round_trip_and_keep_existing_hash_compatibility():
-    password = "password123"
+    password = "Testpass9x"
 
     hashed = hash_password(password)
     assert hashed.startswith("$2")
@@ -37,13 +41,13 @@ def test_direct_bcrypt_password_helpers_round_trip_and_keep_existing_hash_compat
 def test_auth_alias_register_login_and_me_success(client):
     register = client.post(
         "/auth/register",
-        json={"email": "alias-auth@example.com", "password": "password123"},
+        json={"email": "alias-auth@example.com", "password": "Testpass9x"},
     )
     assert register.status_code == 200
 
     login = client.post(
         "/auth/login",
-        json={"email": "alias-auth@example.com", "password": "password123"},
+        json={"email": "alias-auth@example.com", "password": "Testpass9x"},
     )
     assert login.status_code == 200
     token = login.json()["access_token"]
@@ -64,7 +68,7 @@ def test_register_returns_400_when_uniqueness_conflict_happens_at_commit(client,
 
     response = client.post(
         "/register",
-        json={"email": "race@example.com", "password": "password123"},
+        json={"email": "race@example.com", "password": "Testpass9x"},
     )
     assert response.status_code == 400
     assert response.json()["detail"] == "Email already registered"
@@ -73,21 +77,21 @@ def test_register_returns_400_when_uniqueness_conflict_happens_at_commit(client,
 def test_register_rejects_duplicate_email_case_insensitively(client):
     first = client.post(
         "/register",
-        json={"email": "MixedCase@Example.com", "password": "password123"},
+        json={"email": "MixedCase@Example.com", "password": "Testpass9x"},
     )
     assert first.status_code == 200
     assert first.json()["email"] == "mixedcase@example.com"
 
     second = client.post(
         "/register",
-        json={"email": "mixedcase@example.com", "password": "password123"},
+        json={"email": "mixedcase@example.com", "password": "Testpass9x"},
     )
     assert second.status_code == 400
     assert second.json()["detail"] == "Email already registered"
 
 
 def test_login_fails_with_wrong_password(client):
-    register_and_login(client, "user2@example.com", "password123")
+    register_and_login(client, "user2@example.com", "Testpass9x")
     bad_login = client.post(
         "/login",
         data={"username": "user2@example.com", "password": "wrong-pass"},
@@ -99,13 +103,13 @@ def test_login_fails_with_wrong_password(client):
 def test_login_is_case_insensitive_and_preserves_wardrobe_after_relogin(client):
     register = client.post(
         "/register",
-        json={"email": "WardrobeUser@Example.com", "password": "password123"},
+        json={"email": "WardrobeUser@Example.com", "password": "Testpass9x"},
     )
     assert register.status_code == 200
 
     first_login = client.post(
         "/login",
-        data={"username": "wardrobeuser@example.com", "password": "password123"},
+        data={"username": "wardrobeuser@example.com", "password": "Testpass9x"},
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     assert first_login.status_code == 200
@@ -127,7 +131,7 @@ def test_login_is_case_insensitive_and_preserves_wardrobe_after_relogin(client):
 
     relogin = client.post(
         "/login",
-        data={"username": "WARDROBEUSER@example.com", "password": "password123"},
+        data={"username": "WARDROBEUSER@example.com", "password": "Testpass9x"},
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     assert relogin.status_code == 200
@@ -164,7 +168,7 @@ def test_reset_token_exposure_defaults_to_enabled_in_development(monkeypatch):
 
 
 def test_get_me_and_update_profile(client):
-    token = register_and_login(client, "user3@example.com", "password123")
+    token = register_and_login(client, "user3@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     me = client.get("/me", headers=auth)
@@ -200,7 +204,7 @@ def test_get_me_and_update_profile(client):
 
 
 def test_onboarding_complete_allows_skipped_preferences(client):
-    token = register_and_login(client, "onboarding-skip@example.com", "password123")
+    token = register_and_login(client, "onboarding-skip@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     response = client.post("/onboarding/complete", headers=auth, json={})
@@ -217,7 +221,7 @@ def test_onboarding_complete_allows_skipped_preferences(client):
 
 
 def test_weather_current_returns_unavailable_payload_when_provider_is_down(client, monkeypatch):
-    token = register_and_login(client, "weather-current-unavailable@example.com", "password123")
+    token = register_and_login(client, "weather-current-unavailable@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     def fail_lookup(*_args, **_kwargs):
@@ -239,7 +243,7 @@ def test_weather_current_returns_unavailable_payload_when_provider_is_down(clien
 
 
 def test_profile_summary_returns_preferences_and_counts(client):
-    token = register_and_login(client, "summary@example.com", "password123")
+    token = register_and_login(client, "summary@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = client.post(
@@ -356,7 +360,7 @@ def test_google_login_creates_new_user(client, monkeypatch):
 
 
 def test_google_login_returns_existing_user(client, monkeypatch):
-    register_and_login(client, "google-existing@example.com", "password123")
+    register_and_login(client, "google-existing@example.com", "Testpass9x")
 
     class Identity:
         email = "google-existing@example.com"
@@ -433,7 +437,7 @@ def test_google_login_missing_token_returns_400_with_explicit_category(client, c
 
 def test_forgot_and_reset_password_flow(client, monkeypatch):
     monkeypatch.setattr("app.routes.EXPOSE_RESET_TOKEN_IN_RESPONSE", True)
-    register_and_login(client, "resetme@example.com", "password123")
+    register_and_login(client, "resetme@example.com", "Testpass9x")
 
     forgot = client.post("/forgot-password", json={"email": "resetme@example.com"})
     assert forgot.status_code == 200
@@ -449,7 +453,7 @@ def test_forgot_and_reset_password_flow(client, monkeypatch):
 
     old_login = client.post(
         "/login",
-        data={"username": "resetme@example.com", "password": "password123"},
+        data={"username": "resetme@example.com", "password": "Testpass9x"},
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     assert old_login.status_code == 401
@@ -464,7 +468,7 @@ def test_forgot_and_reset_password_flow(client, monkeypatch):
 
 def test_auth_forgot_and_reset_aliases_match_canonical_behavior(client, monkeypatch):
     monkeypatch.setattr("app.routes.EXPOSE_RESET_TOKEN_IN_RESPONSE", True)
-    register_and_login(client, "reset-alias@example.com", "password123")
+    register_and_login(client, "reset-alias@example.com", "Testpass9x")
 
     forgot = client.post("/auth/forgot-password", json={"email": "reset-alias@example.com"})
     assert forgot.status_code == 200
@@ -480,7 +484,7 @@ def test_auth_forgot_and_reset_aliases_match_canonical_behavior(client, monkeypa
 
     old_login = client.post(
         "/login",
-        data={"username": "reset-alias@example.com", "password": "password123"},
+        data={"username": "reset-alias@example.com", "password": "Testpass9x"},
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     assert old_login.status_code == 401
@@ -494,7 +498,7 @@ def test_auth_forgot_and_reset_aliases_match_canonical_behavior(client, monkeypa
 
 
 def test_logout_compat_endpoint_is_stateless(client):
-    token = register_and_login(client, "logout-alias@example.com", "password123")
+    token = register_and_login(client, "logout-alias@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     without_auth = client.post("/logout")
@@ -523,7 +527,7 @@ def test_forgot_password_hides_reset_token_when_exposure_disabled(client):
     import app.routes
 
     app.routes.EXPOSE_RESET_TOKEN_IN_RESPONSE = False
-    register_and_login(client, "reset-hidden@example.com", "password123")
+    register_and_login(client, "reset-hidden@example.com", "Testpass9x")
 
     forgot = client.post("/forgot-password", json={"email": "reset-hidden@example.com"})
     assert forgot.status_code == 200
@@ -541,7 +545,7 @@ def test_forgot_password_sends_reset_email_without_exposing_token(client, monkey
 
     monkeypatch.setattr("app.routes.EXPOSE_RESET_TOKEN_IN_RESPONSE", False)
     monkeypatch.setattr("app.routes.send_password_reset_email", fake_send_password_reset_email)
-    register_and_login(client, "reset-email@example.com", "password123")
+    register_and_login(client, "reset-email@example.com", "Testpass9x")
 
     forgot = client.post("/forgot-password", json={"email": "reset-email@example.com"})
     assert forgot.status_code == 200
@@ -552,7 +556,7 @@ def test_forgot_password_sends_reset_email_without_exposing_token(client, monkey
 
 
 def test_profile_alias_get_and_put(client):
-    token = register_and_login(client, "profile-alias@example.com", "password123")
+    token = register_and_login(client, "profile-alias@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     update = client.put(
@@ -573,7 +577,7 @@ def test_profile_alias_get_and_put(client):
 
 
 def test_avatar_upload_updates_me_and_summary_and_persists_after_relogin(client):
-    token = register_and_login(client, "avatar@example.com", "password123")
+    token = register_and_login(client, "avatar@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     upload = client.post(
@@ -595,7 +599,7 @@ def test_avatar_upload_updates_me_and_summary_and_persists_after_relogin(client)
 
     relogin = client.post(
         "/login",
-        data={"username": "avatar@example.com", "password": "password123"},
+        data={"username": "avatar@example.com", "password": "Testpass9x"},
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     assert relogin.status_code == 200
@@ -611,7 +615,7 @@ def test_avatar_upload_updates_me_and_summary_and_persists_after_relogin(client)
 
 
 def test_avatar_upload_rejects_invalid_content_type(client):
-    token = register_and_login(client, "avatar-invalid@example.com", "password123")
+    token = register_and_login(client, "avatar-invalid@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     response = client.post(
@@ -624,7 +628,7 @@ def test_avatar_upload_rejects_invalid_content_type(client):
 
 
 def test_avatar_upload_rejects_oversized_file(client):
-    token = register_and_login(client, "avatar-oversize@example.com", "password123")
+    token = register_and_login(client, "avatar-oversize@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     response = client.post(

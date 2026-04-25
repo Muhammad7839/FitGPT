@@ -33,7 +33,7 @@ def _seed_minimum_wardrobe(client, auth: dict) -> None:
 
 
 def test_prompt_timing_metadata_respects_cooldown(client):
-    token = register_and_login(client, "prompt-timing@example.com", "password123")
+    token = register_and_login(client, "prompt-timing@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     _seed_minimum_wardrobe(client, auth)
 
@@ -50,7 +50,7 @@ def test_prompt_timing_metadata_respects_cooldown(client):
 
 
 def test_prompt_interactions_are_recorded(client):
-    token = register_and_login(client, "prompt-interaction@example.com", "password123")
+    token = register_and_login(client, "prompt-interaction@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     _seed_minimum_wardrobe(client, auth)
 
@@ -72,7 +72,7 @@ def test_prompt_interactions_are_recorded(client):
 
 
 def test_prompt_metadata_handles_high_frequency_requests(client):
-    token = register_and_login(client, "prompt-frequency@example.com", "password123")
+    token = register_and_login(client, "prompt-frequency@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     _seed_minimum_wardrobe(client, auth)
 

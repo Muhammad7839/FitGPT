@@ -53,7 +53,7 @@ def _create(client, auth, payload):
 
 
 def test_metadata_fields_persist_and_are_filterable(client):
-    token = register_and_login(client, "card-metadata@example.com", "password123")
+    token = register_and_login(client, "card-metadata@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     created = _create(
@@ -95,7 +95,7 @@ def test_metadata_fields_persist_and_are_filterable(client):
 
 
 def test_one_piece_and_set_metadata_editing(client):
-    token = register_and_login(client, "card-onepiece@example.com", "password123")
+    token = register_and_login(client, "card-onepiece@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
     created = _create(
         client,
@@ -126,7 +126,7 @@ def test_one_piece_and_set_metadata_editing(client):
 
 
 def test_recommendations_options_return_ranked_unique_outfits(client):
-    token = register_and_login(client, "card-options@example.com", "password123")
+    token = register_and_login(client, "card-options@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     # Tops / bottoms / shoes for combination diversity.
@@ -189,7 +189,7 @@ def test_recommendations_options_return_ranked_unique_outfits(client):
 
 
 def test_recommendation_options_prefer_diverse_core_items_when_variety_exists(client):
-    token = register_and_login(client, "card-diversity@example.com", "password123")
+    token = register_and_login(client, "card-diversity@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create(client, auth, _item_payload(name="Black Tee", category="Top", clothing_type="t-shirt", color="Black"))
@@ -222,7 +222,7 @@ def test_recommendation_options_prefer_diverse_core_items_when_variety_exists(cl
 
 
 def test_cold_recommendation_structure_requires_outerwear_and_caps_accessories(client):
-    token = register_and_login(client, "card-cold-structure@example.com", "password123")
+    token = register_and_login(client, "card-cold-structure@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create(
@@ -350,7 +350,7 @@ def test_cold_recommendation_structure_requires_outerwear_and_caps_accessories(c
 
 
 def test_ai_recommendations_include_ranked_outfit_options(client, monkeypatch):
-    token = register_and_login(client, "card-ai-options@example.com", "password123")
+    token = register_and_login(client, "card-ai-options@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     top = _create(client, auth, _item_payload(name="Top A", category="Top", clothing_type="t-shirt", color="Black"))
@@ -389,7 +389,7 @@ def test_ai_recommendations_include_ranked_outfit_options(client, monkeypatch):
 
 
 def test_recommendation_option_explanations_vary_for_different_outfits(client):
-    token = register_and_login(client, "card-explanations@example.com", "password123")
+    token = register_and_login(client, "card-explanations@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create(client, auth, _item_payload(name="Top Black", category="Top", clothing_type="t-shirt", color="Black"))
@@ -435,7 +435,7 @@ def test_recommendation_option_explanations_vary_for_different_outfits(client):
 
 
 def test_recommendation_options_surface_grounded_creative_combo(client):
-    token = register_and_login(client, "card-grounded-creativity@example.com", "password123")
+    token = register_and_login(client, "card-grounded-creativity@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create(client, auth, _item_payload(name="White Tee", category="Top", clothing_type="t-shirt", color="White"))
@@ -501,7 +501,7 @@ def test_recommendation_options_surface_grounded_creative_combo(client):
 
 
 def test_recommendation_options_repeat_requests_vary_creative_explanation_wording(client):
-    token = register_and_login(client, "card-creative-wording-repeat@example.com", "password123")
+    token = register_and_login(client, "card-creative-wording-repeat@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create(client, auth, _item_payload(name="White Tee", category="Top", clothing_type="t-shirt", color="White"))
@@ -570,7 +570,7 @@ def test_recommendation_options_repeat_requests_vary_creative_explanation_wordin
 
 
 def test_occasion_tags_influence_top_recommendation_choice(client):
-    token = register_and_login(client, "card-occasion-signal@example.com", "password123")
+    token = register_and_login(client, "card-occasion-signal@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     work_top = _create(

@@ -31,7 +31,7 @@ def _create_items(client, auth: dict, payloads: list[dict]) -> list[int]:
 
 
 def test_rejected_outfit_is_stored_and_duplicate_is_idempotent(client):
-    token = register_and_login(client, "reject-store@example.com", "password123")
+    token = register_and_login(client, "reject-store@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     item_ids = _create_items(
@@ -63,7 +63,7 @@ def test_rejected_outfit_is_stored_and_duplicate_is_idempotent(client):
 
 
 def test_recommendations_avoid_rejected_outfit_fingerprint(client):
-    token = register_and_login(client, "reject-filter@example.com", "password123")
+    token = register_and_login(client, "reject-filter@example.com", "Testpass9x")
     auth = {"Authorization": f"Bearer {token}"}
 
     _create_items(
@@ -100,9 +100,9 @@ def test_recommendations_avoid_rejected_outfit_fingerprint(client):
 
 
 def test_rejected_outfits_edge_cases_no_data_and_large_history(client):
-    token_a = register_and_login(client, "reject-edge-a@example.com", "password123")
+    token_a = register_and_login(client, "reject-edge-a@example.com", "Testpass9x")
     auth_a = {"Authorization": f"Bearer {token_a}"}
-    token_b = register_and_login(client, "reject-edge-b@example.com", "password123")
+    token_b = register_and_login(client, "reject-edge-b@example.com", "Testpass9x")
     auth_b = {"Authorization": f"Bearer {token_b}"}
 
     no_data = client.get("/recommendations", headers=auth_b)
