@@ -40,6 +40,27 @@
   --accent-highlight: #8b1e1e;
   --body-grad1: rgba(139, 30, 30, 0.10);
   --body-grad2: rgba(139, 30, 30, 0.07);
+
+  /* ── FitGPT UI Polish 2026 — light tokens ── */
+  --fit-ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --fit-ease-out: cubic-bezier(0.0, 0.0, 0.2, 1);
+  --fit-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --fit-blur: blur(18px);
+  --fit-blur-sm: blur(8px);
+  --fit-glass: rgba(255, 255, 255, 0.70);
+  --fit-glass-border: rgba(255, 255, 255, 0.40);
+  --fit-panel: rgba(255, 255, 255, 0.88);
+  --fit-panel-raised: rgba(255, 255, 255, 0.96);
+  --fit-shadow-xs: 0 1px 4px rgba(17, 24, 39, 0.05);
+  --fit-shadow-sm: 0 2px 10px rgba(17, 24, 39, 0.07);
+  --fit-shadow-md: 0 6px 24px rgba(17, 24, 39, 0.10);
+  --fit-shadow-lg: 0 18px 48px rgba(17, 24, 39, 0.13);
+  --fit-shadow-glow: 0 0 22px rgba(139, 30, 30, 0.13);
+  --fit-radius-card: 18px;
+  --fit-radius-btn: 10px;
+  --fit-radius-input: 10px;
+  --fit-transition: 160ms var(--fit-ease);
+  --fit-transition-slow: 320ms var(--fit-ease);
 }
 
 /* ── Dark theme ────────────────────────────────────────────── */
@@ -78,6 +99,17 @@
   --accent-highlight: #e87070;
   --body-grad1: rgba(196, 60, 60, 0.12);
   --body-grad2: rgba(196, 60, 60, 0.08);
+
+  /* ── FitGPT UI Polish 2026 — dark tokens ── */
+  --fit-glass: rgba(22, 22, 30, 0.78);
+  --fit-glass-border: rgba(255, 255, 255, 0.07);
+  --fit-panel: rgba(18, 18, 26, 0.90);
+  --fit-panel-raised: rgba(28, 28, 38, 0.96);
+  --fit-shadow-xs: 0 1px 4px rgba(0, 0, 0, 0.18);
+  --fit-shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.26);
+  --fit-shadow-md: 0 6px 24px rgba(0, 0, 0, 0.36);
+  --fit-shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.50);
+  --fit-shadow-glow: 0 0 26px rgba(196, 60, 60, 0.20);
 }
 
 /* ── High contrast mode ─────────────────────────────────────── */
@@ -20874,5 +20906,1193 @@ border: 1px solid var(--border);
   .chatbotWindow {
     right: 8px !important;
     width: calc(100vw - 16px) !important;
+  }
+}
+
+/* ============================================================
+   UI POLISH 2026 — FitGPT Premium Aesthetic
+   All overrides scoped conservatively; no layout changes.
+   ============================================================ */
+
+/* ── Text selection ── */
+::selection {
+  background: var(--accent-soft, rgba(139, 30, 30, 0.22));
+  color: var(--text);
+}
+
+/* ── Thin themed scrollbars (webkit) ── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-outline);
+}
+
+/* ── Smooth scroll on root ── */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ── Dark body radial ambient glow ── */
+[data-theme="dark"] body {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(196, 60, 60, 0.08) 0%, transparent 70%),
+    var(--pageBg1, #0e0e12);
+}
+
+/* ── Nav: richer glass ── */
+.topNav {
+  background: var(--fit-glass) !important;
+  backdrop-filter: var(--fit-blur) saturate(180%);
+  -webkit-backdrop-filter: var(--fit-blur) saturate(180%);
+  border-bottom: 1px solid var(--fit-glass-border) !important;
+  box-shadow: var(--fit-shadow-sm);
+  transition: box-shadow var(--fit-transition), background var(--fit-transition-slow);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .topNav {
+    background: var(--fit-panel) !important;
+  }
+}
+
+/* Nav link transitions — smoother, slightly longer */
+.topNavLink {
+  transition: background var(--fit-transition), color var(--fit-transition), transform 120ms var(--fit-ease-spring) !important;
+  border: 1px solid transparent;
+}
+.topNavLink:hover {
+  transform: translateY(-1px);
+}
+.topNavLink:active {
+  transform: scale(0.96);
+}
+.topNavLinkActive {
+  box-shadow: var(--fit-shadow-xs);
+}
+
+/* Nav auth button ── more presence */
+.topNavAuthBtn {
+  transition: background var(--fit-transition), color var(--fit-transition), box-shadow var(--fit-transition), transform 120ms var(--fit-ease-spring) !important;
+}
+.topNavAuthBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--fit-shadow-sm);
+}
+.topNavAuthBtn:active {
+  transform: scale(0.96);
+}
+
+/* ── Cards: hover lift ── */
+.outfitCard,
+.wardrobeCard,
+.savedOutfitCard,
+.plannedCard,
+.historyCard,
+.analyticsCard,
+.profileCard {
+  transition:
+    transform var(--fit-transition),
+    box-shadow var(--fit-transition) !important;
+}
+.outfitCard:hover,
+.wardrobeCard:hover,
+.savedOutfitCard:hover,
+.plannedCard:hover,
+.historyCard:hover,
+.analyticsCard:hover,
+.profileCard:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--fit-shadow-md) !important;
+}
+
+/* ── Buttons: press scale + glow ── */
+.btn,
+.saveBtn,
+.authSubmit,
+.wardrobeBtn,
+.outfitSaveBtn {
+  transition:
+    background var(--fit-transition),
+    color var(--fit-transition),
+    box-shadow var(--fit-transition),
+    transform 100ms var(--fit-ease-spring),
+    opacity var(--fit-transition) !important;
+  will-change: transform;
+}
+.btn:hover,
+.saveBtn:hover,
+.wardrobeBtn:hover,
+.outfitSaveBtn:hover {
+  box-shadow: var(--fit-shadow-sm);
+}
+.btn:active,
+.saveBtn:active,
+.authSubmit:active,
+.wardrobeBtn:active,
+.outfitSaveBtn:active {
+  transform: scale(0.97) !important;
+  box-shadow: none !important;
+}
+
+/* Primary accent buttons specifically */
+.btn.primary,
+.saveBtn,
+.authSubmit {
+  position: relative;
+  overflow: hidden;
+}
+.btn.primary::after,
+.saveBtn::after,
+.authSubmit::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.08);
+  opacity: 0;
+  transition: opacity var(--fit-transition);
+  border-radius: inherit;
+  pointer-events: none;
+}
+.btn.primary:hover::after,
+.saveBtn:hover::after,
+.authSubmit:hover::after {
+  opacity: 1;
+}
+
+/* ── Inputs: glowing focus ring ── */
+.wardrobeInput,
+.authFormGroup input,
+.authFormGroup textarea,
+.chatbotInput,
+.planOutfitInput,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+textarea {
+  transition:
+    border-color var(--fit-transition),
+    box-shadow var(--fit-transition),
+    background var(--fit-transition) !important;
+  border-radius: var(--fit-radius-input) !important;
+}
+.wardrobeInput:focus,
+.authFormGroup input:focus,
+.authFormGroup textarea:focus,
+.planOutfitInput:focus,
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+textarea:focus {
+  outline: none !important;
+  border-color: var(--accent-outline) !important;
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--fit-shadow-xs) !important;
+}
+
+/* ── Modals: glass panel + blur-lift entry ── */
+.modalOverlay,
+.wardrobeModalOverlay {
+  backdrop-filter: var(--fit-blur-sm);
+  -webkit-backdrop-filter: var(--fit-blur-sm);
+  background: rgba(0, 0, 0, 0.45) !important;
+}
+
+.modalCard,
+.wardrobeModal,
+.planOutfitModal {
+  background: var(--fit-panel-raised) !important;
+  backdrop-filter: var(--fit-blur);
+  -webkit-backdrop-filter: var(--fit-blur);
+  border: 1px solid var(--fit-glass-border) !important;
+  box-shadow: var(--fit-shadow-lg) !important;
+  animation: fitModalIn 220ms var(--fit-ease-out) both;
+}
+
+@keyframes fitModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Auth card: glass feel ── */
+.authCard {
+  background: var(--fit-panel) !important;
+  backdrop-filter: var(--fit-blur-sm);
+  -webkit-backdrop-filter: var(--fit-blur-sm);
+  border: 1px solid var(--fit-glass-border);
+  border-radius: var(--fit-radius-card) !important;
+  box-shadow: var(--fit-shadow-lg) !important;
+  padding: 36px 32px !important;
+}
+
+@media (max-width: 480px) {
+  .authCard {
+    padding: 24px 18px !important;
+    border-radius: 16px !important;
+  }
+}
+
+/* Auth page body — center + add ambient glow */
+.authPage,
+.loginPage,
+.signupPage {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 24px 16px;
+}
+[data-theme="dark"] .authPage,
+[data-theme="dark"] .loginPage,
+[data-theme="dark"] .signupPage {
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 0%, rgba(196, 60, 60, 0.10) 0%, transparent 65%),
+    var(--pageBg1);
+}
+
+/* ── Dashboard: recommendation section polish ── */
+[data-theme="dark"] .dashWide {
+  background: var(--fit-glass) !important;
+  backdrop-filter: var(--fit-blur-sm);
+  -webkit-backdrop-filter: var(--fit-blur-sm);
+  border: 1px solid var(--fit-glass-border) !important;
+}
+
+/* Weather card: lifted glass ── */
+[data-theme="dark"] .weatherCard,
+[data-theme="dark"] .weatherRow {
+  background: var(--fit-glass) !important;
+  backdrop-filter: var(--fit-blur-sm);
+  -webkit-backdrop-filter: var(--fit-blur-sm);
+  border: 1px solid var(--fit-glass-border) !important;
+  box-shadow: var(--fit-shadow-sm) !important;
+}
+
+/* Outfit option cards ── cleaner tile hover */
+.outfitOptionCard,
+.outfitTile {
+  transition: transform var(--fit-transition), box-shadow var(--fit-transition) !important;
+}
+.outfitOptionCard:hover,
+.outfitTile:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--fit-shadow-sm) !important;
+}
+.outfitOptionCard:active,
+.outfitTile:active {
+  transform: scale(0.98) !important;
+}
+
+/* ── Wardrobe item cards ── */
+.clothingItem,
+.wardrobeItem {
+  transition:
+    transform var(--fit-transition),
+    box-shadow var(--fit-transition),
+    border-color var(--fit-transition) !important;
+  border-radius: var(--fit-radius-card) !important;
+}
+.clothingItem:hover,
+.wardrobeItem:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--fit-shadow-md) !important;
+  border-color: var(--accent-outline) !important;
+}
+
+/* ── AURA (Chatbot) panel glass ── */
+.chatbotWindow {
+  background: var(--fit-panel-raised) !important;
+  backdrop-filter: var(--fit-blur);
+  -webkit-backdrop-filter: var(--fit-blur);
+  border: 1px solid var(--fit-glass-border) !important;
+  box-shadow: var(--fit-shadow-lg) !important;
+  border-radius: 20px !important;
+}
+
+/* Chat bubbles ── */
+.chatbotMsg.user .chatbotBubble {
+  border-radius: 18px 18px 4px 18px !important;
+  box-shadow: var(--fit-shadow-xs);
+}
+.chatbotMsg.assistant .chatbotBubble {
+  border-radius: 18px 18px 18px 4px !important;
+  box-shadow: var(--fit-shadow-xs);
+  border: 1px solid var(--fit-glass-border) !important;
+}
+
+/* Chat input area ── */
+.chatbotComposer {
+  background: var(--fit-glass) !important;
+  border-top: 1px solid var(--fit-glass-border) !important;
+  backdrop-filter: var(--fit-blur-sm);
+  -webkit-backdrop-filter: var(--fit-blur-sm);
+}
+
+/* AURA toggle button ── glow on hover */
+.chatbotToggle {
+  transition: transform 200ms var(--fit-ease-spring), box-shadow var(--fit-transition) !important;
+}
+.chatbotToggle:hover {
+  transform: scale(1.08) translateY(-2px) !important;
+  box-shadow: var(--fit-shadow-glow), var(--fit-shadow-md) !important;
+}
+.chatbotToggle:active {
+  transform: scale(0.95) !important;
+}
+
+/* ── Plans/Calendar cards ── */
+.planningCalendarDay {
+  transition: background var(--fit-transition), transform 120ms var(--fit-ease-spring), box-shadow var(--fit-transition) !important;
+}
+.planningCalendarDay:hover {
+  transform: scale(1.03);
+  box-shadow: var(--fit-shadow-sm) !important;
+}
+
+/* Planning modal ── */
+.planOutfitModal {
+  animation: fitModalIn 220ms var(--fit-ease-out) both !important;
+}
+
+/* ── Saved outfits chips ── */
+.savedOutfitTag,
+.wardrobeTag,
+.filterChip {
+  transition: background var(--fit-transition), transform 100ms var(--fit-ease-spring), border-color var(--fit-transition) !important;
+}
+.savedOutfitTag:hover,
+.wardrobeTag:hover,
+.filterChip:hover {
+  transform: translateY(-1px);
+}
+.savedOutfitTag:active,
+.wardrobeTag:active,
+.filterChip:active {
+  transform: scale(0.95);
+}
+
+/* ── Onboarding option pills ── */
+.onboardingPill,
+.styleOption,
+.bodyTypeOption {
+  transition: background var(--fit-transition), border-color var(--fit-transition), transform 120ms var(--fit-ease-spring), box-shadow var(--fit-transition) !important;
+}
+.onboardingPill:hover,
+.styleOption:hover,
+.bodyTypeOption:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--fit-shadow-sm) !important;
+}
+.onboardingPill:active,
+.styleOption:active,
+.bodyTypeOption:active {
+  transform: scale(0.97);
+}
+
+/* ── Profile sections ── */
+[data-theme="dark"] .profileSection,
+[data-theme="dark"] .profileCard {
+  background: var(--fit-glass) !important;
+  border: 1px solid var(--fit-glass-border) !important;
+  backdrop-filter: var(--fit-blur-sm);
+  -webkit-backdrop-filter: var(--fit-blur-sm);
+}
+
+/* ── Download page QR cards ── */
+.downloadQrCard {
+  transition: transform var(--fit-transition), box-shadow var(--fit-transition) !important;
+}
+.downloadQrCard:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--fit-shadow-md) !important;
+}
+
+/* ── Page fade-up entry for main content containers ── */
+.dashPage > *,
+.wardrobePage > *,
+.historyPage > * {
+  animation: fitFadeUp 360ms var(--fit-ease-out) both;
+}
+
+.dashPage > *:nth-child(2) { animation-delay: 40ms; }
+.dashPage > *:nth-child(3) { animation-delay: 80ms; }
+.dashPage > *:nth-child(4) { animation-delay: 120ms; }
+
+@keyframes fitFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Typography micro-polish ── */
+.authTitle,
+.dashTitle,
+.wardrobeTitle,
+.sectionTitle {
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+h1, h2 {
+  letter-spacing: -0.02em;
+}
+
+/* ── Link hover — subtle underline slide-in ── */
+.linkLike {
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px;
+}
+.linkLike:hover {
+  text-decoration: underline;
+  opacity: 0.85 !important;
+}
+
+/* ── Toast notifications ── */
+.toast,
+.toastMsg {
+  border-radius: 12px !important;
+  backdrop-filter: var(--fit-blur-sm);
+  -webkit-backdrop-filter: var(--fit-blur-sm);
+  border: 1px solid var(--fit-glass-border) !important;
+  box-shadow: var(--fit-shadow-md) !important;
+}
+
+/* ── Focus-visible ring (keyboard navigation) ── */
+:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 4px var(--accent-soft) !important;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 3px !important;
+  border-radius: 6px;
+}
+
+/* ── Dark mode: surface cards get subtle glass ── */
+[data-theme="dark"] .outfitCard {
+  background: var(--fit-glass) !important;
+  border: 1px solid var(--fit-glass-border) !important;
+}
+
+[data-theme="dark"] .savedOutfitCard {
+  background: var(--fit-glass) !important;
+  border: 1px solid var(--fit-glass-border) !important;
+}
+
+[data-theme="dark"] .historyCard {
+  background: var(--fit-glass) !important;
+  border: 1px solid var(--fit-glass-border) !important;
+}
+
+/* ── Reduced motion: respect system preference ── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .chatbotToggle:hover {
+    transform: none !important;
+  }
+  .outfitCard:hover,
+  .wardrobeCard:hover,
+  .clothingItem:hover,
+  .wardrobeItem:hover,
+  .downloadQrCard:hover {
+    transform: none !important;
+  }
+}
+
+/* ── Mobile: disable blur on low-power devices ── */
+@media (max-width: 480px) {
+  .chatbotWindow,
+  .modalCard,
+  .wardrobeModal,
+  .planOutfitModal {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+/* ── Extra depth: dark sidebar/panel borders ── */
+[data-theme="dark"] .topNav {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055) !important;
+}
+
+/* ── Accent glow on active nav link in dark mode ── */
+[data-theme="dark"] .topNavLinkActive {
+  box-shadow: 0 0 16px var(--accent-glow) !important;
+}
+
+/* ── History holographic card — smoother transition ── */
+.historyHolographic {
+  transition: box-shadow 300ms var(--fit-ease), transform 300ms var(--fit-ease) !important;
+}
+
+/* ── Mannequin preview modal — glass ── */
+.mannequinModal,
+.outfit3dModal {
+  background: var(--fit-panel-raised) !important;
+  border: 1px solid var(--fit-glass-border) !important;
+  box-shadow: var(--fit-shadow-lg) !important;
+}
+
+/* ── Analytics charts — card glass in dark mode ── */
+[data-theme="dark"] .analyticsBlock {
+  background: var(--fit-glass) !important;
+  border: 1px solid var(--fit-glass-border) !important;
+}
+
+/* ── Skeleton loading shimmer ── */
+@keyframes fitShimmer {
+  0%   { background-position: -300px 0; }
+  100% { background-position: 300px 0; }
+}
+.loadingSkeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface, #f3f4f6) 25%,
+    var(--bgSoft, rgba(0,0,0,0.04)) 50%,
+    var(--surface, #f3f4f6) 75%
+  );
+  background-size: 600px 100%;
+  animation: fitShimmer 1.4s infinite linear;
+  border-radius: 8px;
+}
+
+/* ── "Floating" quick-action button in wardrobe ── */
+.wardrobeFab,
+.fabBtn {
+  transition: transform 180ms var(--fit-ease-spring), box-shadow var(--fit-transition) !important;
+  box-shadow: var(--fit-shadow-md) !important;
+}
+.wardrobeFab:hover,
+.fabBtn:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: var(--fit-shadow-glow), var(--fit-shadow-lg) !important;
+}
+.wardrobeFab:active,
+.fabBtn:active {
+  transform: scale(0.95) !important;
+}
+
+/* ── Badge/count chips ── */
+.badgeChip,
+.countChip {
+  transition: background var(--fit-transition), transform 100ms var(--fit-ease-spring) !important;
+}
+.badgeChip:hover,
+.countChip:hover {
+  transform: scale(1.05);
+}
+
+
+/* ============================================================
+   UI POLISH 2026 — Corrected / Supplementary Selectors
+   Patches above block with verified class names from components
+   ============================================================ */
+
+/* ── AURA / Chatbot — correct class names ── */
+.chatbot-panel {
+  background: var(--fit-panel-raised) !important;
+  backdrop-filter: var(--fit-blur);
+  -webkit-backdrop-filter: var(--fit-blur);
+  border: 1px solid var(--fit-glass-border) !important;
+  box-shadow: var(--fit-shadow-lg) !important;
+  border-radius: 20px !important;
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .chatbot-panel {
+    background: var(--fit-panel-raised) !important;
+    backdrop-filter: none !important;
+  }
+}
+
+.chatbot-row-user .chatbot-bubble {
+  border-radius: 18px 18px 4px 18px !important;
+  box-shadow: var(--fit-shadow-xs);
+}
+.chatbot-row-assistant .chatbot-bubble {
+  border-radius: 4px 18px 18px 18px !important;
+  box-shadow: var(--fit-shadow-xs);
+}
+
+.chatbot-composer {
+  backdrop-filter: var(--fit-blur-sm);
+  -webkit-backdrop-filter: var(--fit-blur-sm);
+}
+
+.chatbot-toggle {
+  transition: transform 200ms var(--fit-ease-spring), box-shadow var(--fit-transition) !important;
+}
+.chatbot-toggle:hover {
+  transform: scale(1.08) translateY(-2px) !important;
+  box-shadow: var(--fit-shadow-glow), var(--fit-shadow-md) !important;
+}
+.chatbot-toggle:active {
+  transform: scale(0.95) !important;
+}
+
+/* ── Auth pages — correct wrapper ── */
+/* Login/Signup use `.onboarding.onboardingPage` as outer wrapper */
+.onboardingPage .card.authCard {
+  background: var(--fit-panel) !important;
+  backdrop-filter: var(--fit-blur-sm);
+  -webkit-backdrop-filter: var(--fit-blur-sm);
+  border: 1px solid var(--fit-glass-border) !important;
+  border-radius: 22px !important;
+  box-shadow: var(--fit-shadow-lg) !important;
+  padding: 36px 32px !important;
+}
+
+@media (max-width: 480px) {
+  .onboardingPage .card.authCard {
+    padding: 24px 18px !important;
+    border-radius: 16px !important;
+  }
+}
+
+/* Auth page dark ambient glow */
+[data-theme="dark"] .onboardingPage:has(.authCard) {
+  background:
+    radial-gradient(ellipse 80% 55% at 50% 0%, rgba(196, 60, 60, 0.09) 0%, transparent 65%),
+    var(--pageBg1) !important;
+}
+
+/* ── Dashboard page entries ── */
+/* Dashboard uses .onboarding.onboardingPage.dashPage */
+.dashPage > * {
+  animation: fitFadeUpDash 380ms var(--fit-ease-out) both;
+}
+.dashPage > *:nth-child(2) { animation-delay: 50ms; }
+.dashPage > *:nth-child(3) { animation-delay: 100ms; }
+.dashPage > *:nth-child(4) { animation-delay: 150ms; }
+.dashPage > *:nth-child(5) { animation-delay: 200ms; }
+
+@keyframes fitFadeUpDash {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── History / Saved Outfit cards ── */
+.historyCard {
+  transition: transform var(--fit-transition), box-shadow var(--fit-transition) !important;
+}
+.historyCard:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--fit-shadow-md) !important;
+}
+
+[data-theme="dark"] .historyCard {
+  background: var(--fit-glass) !important;
+  border: 1px solid var(--fit-glass-border) !important;
+}
+
+/* ── Planned cards ── */
+.plannedCard {
+  transition: transform var(--fit-transition), box-shadow var(--fit-transition) !important;
+}
+.plannedCard:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--fit-shadow-md) !important;
+}
+
+[data-theme="dark"] .plannedCard {
+  background: var(--fit-glass) !important;
+  border: 1px solid var(--fit-glass-border) !important;
+}
+
+/* ── Profile card ── */
+.profileCard {
+  transition: box-shadow var(--fit-transition) !important;
+}
+[data-theme="dark"] .profileCard {
+  background: var(--fit-glass) !important;
+  border: 1px solid var(--fit-glass-border) !important;
+}
+
+/* ── Download page QR items ── */
+.downloadQrItem {
+  transition: transform var(--fit-transition), box-shadow var(--fit-transition) !important;
+}
+.downloadQrItem:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--fit-shadow-md) !important;
+}
+
+/* ── Onboarding pills ── */
+.pill,
+.optionCard {
+  transition:
+    background var(--fit-transition),
+    border-color var(--fit-transition),
+    transform 120ms var(--fit-ease-spring),
+    box-shadow var(--fit-transition) !important;
+}
+.pill:hover,
+.optionCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--fit-shadow-sm) !important;
+}
+.pill:active,
+.optionCard:active {
+  transform: scale(0.97) !important;
+}
+
+/* ── Analytics chart blocks ── */
+.analyticsChartBlock {
+  transition: transform var(--fit-transition), box-shadow var(--fit-transition) !important;
+}
+.analyticsChartBlock:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--fit-shadow-sm) !important;
+}
+[data-theme="dark"] .analyticsChartBlock {
+  background: var(--fit-glass) !important;
+  border: 1px solid var(--fit-glass-border) !important;
+}
+
+/* ── Wardrobe filter chips — correct class ── */
+.wardrobeFilterChip,
+.wardrobeChipBtn {
+  transition:
+    background var(--fit-transition),
+    border-color var(--fit-transition),
+    transform 100ms var(--fit-ease-spring),
+    box-shadow var(--fit-transition) !important;
+}
+.wardrobeFilterChip:hover,
+.wardrobeChipBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--fit-shadow-xs) !important;
+}
+.wardrobeFilterChip:active,
+.wardrobeChipBtn:active {
+  transform: scale(0.95) !important;
+}
+
+/* ── Wardrobe card — override dark in correct specificity ── */
+[data-theme="dark"] .wardrobeCard {
+  background: var(--fit-glass) !important;
+  border: 1px solid var(--fit-glass-border) !important;
+}
+
+/* ── Toast (wardrobe) ── */
+.wardrobeToast {
+  backdrop-filter: var(--fit-blur-sm);
+  -webkit-backdrop-filter: var(--fit-blur-sm);
+  border-radius: 12px !important;
+  box-shadow: var(--fit-shadow-md) !important;
+}
+
+/* ── Mobile: disable expensive blur ── */
+@media (max-width: 480px) {
+  .chatbot-panel {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .onboardingPage .card.authCard {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .dashPage > * {
+    animation: none !important;
+  }
+}
+
+/* ── Reduced motion: override all animations in corrected block ── */
+@media (prefers-reduced-motion: reduce) {
+  .chatbot-toggle:hover,
+  .chatbot-toggle:active {
+    transform: none !important;
+  }
+  .historyCard:hover,
+  .plannedCard:hover,
+  .downloadQrItem:hover,
+  .analyticsChartBlock:hover,
+  .pill:hover,
+  .optionCard:hover {
+    transform: none !important;
+  }
+  .dashPage > * {
+    animation: none !important;
+  }
+}
+
+
+/* ============================================================
+   UI POLISH 2026 — Component Deep Pass
+   Dashboard, Profile, Calendar, Mannequin, Mobile, A11y
+   ============================================================ */
+
+/* ── Dark mode: main `.card` sections get glass ── */
+[data-theme="dark"] .card {
+  background: var(--fit-glass) !important;
+  border-color: var(--fit-glass-border) !important;
+  box-shadow: var(--fit-shadow-md) !important;
+}
+[data-theme="dark"] .card:hover {
+  box-shadow: var(--fit-shadow-lg) !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+/* ── Dashboard section cards: deeper depth layering ── */
+[data-theme="dark"] .dashWeatherCard {
+  background:
+    linear-gradient(135deg, rgba(196, 60, 60, 0.07) 0%, transparent 60%),
+    var(--fit-glass) !important;
+  border-color: var(--fit-glass-border) !important;
+}
+
+[data-theme="dark"] .dashRecCard {
+  background: var(--fit-glass) !important;
+}
+
+/* Weather emoji gentle float */
+.dashWeatherEmoji {
+  animation: floatEmoji 3.5s ease-in-out infinite;
+  display: inline-block;
+}
+@keyframes floatEmoji {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashWeatherEmoji { animation: none; }
+}
+
+/* Dashboard hero badge glow on dark */
+[data-theme="dark"] .dashHeroBadge {
+  background: rgba(196, 60, 60, 0.14) !important;
+  box-shadow: 0 0 18px rgba(196, 60, 60, 0.14);
+}
+
+/* Rec action buttons: sharper dark presence */
+[data-theme="dark"] .dashRecActionBtn {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+  color: var(--text) !important;
+}
+[data-theme="dark"] .dashRecActionBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.13) !important;
+  border-color: var(--accent-outline) !important;
+}
+[data-theme="dark"] .dashRecActionPrimary {
+  background: linear-gradient(160deg, var(--accent), var(--accent-deep)) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+}
+
+/* ── Planning calendar card glass ── */
+[data-theme="dark"] .planningCalendarCard {
+  background: var(--fit-glass) !important;
+  border-color: var(--fit-glass-border) !important;
+}
+
+.planningCalendarDay {
+  border-radius: 12px !important;
+}
+
+/* Calendar "today" ring — more prominent */
+.planningCalendarDay.today {
+  box-shadow: 0 0 0 2px var(--accent), var(--fit-shadow-xs) !important;
+}
+
+/* Calendar chips pop */
+.planningCalendarChip {
+  transition: transform 100ms var(--fit-ease-spring), box-shadow var(--fit-transition) !important;
+}
+.planningCalendarChip:hover {
+  transform: scale(1.04);
+}
+
+/* ── Profile page sections ── */
+[data-theme="dark"] .card.profileCard {
+  background: var(--fit-glass) !important;
+  border-color: var(--fit-glass-border) !important;
+}
+[data-theme="dark"] .profileSection {
+  border-top-color: rgba(255, 255, 255, 0.07) !important;
+}
+
+/* Profile avatar ring hover */
+.profileAvatar {
+  transition: box-shadow 200ms var(--fit-ease), transform 200ms var(--fit-ease-spring) !important;
+}
+.profileAvatar:hover {
+  transform: scale(1.04);
+  box-shadow: 0 0 0 4px var(--accent-soft), var(--fit-shadow-md) !important;
+}
+
+/* ── Mannequin preview modal dark ── */
+[data-theme="dark"] .mannequinPreviewModalCard {
+  background:
+    radial-gradient(circle at top right, rgba(196, 60, 60, 0.12), transparent 30%),
+    var(--fit-panel-raised) !important;
+  border: 1px solid var(--fit-glass-border) !important;
+}
+
+/* ── Download page hero section ── */
+[data-theme="dark"] .downloadHero,
+[data-theme="dark"] .downloadQr {
+  background: var(--fit-glass) !important;
+}
+
+.downloadQrItem {
+  border-radius: 16px !important;
+}
+
+/* ── Wardrobe: better empty state icon ── */
+.wardrobeEmptyIcon {
+  transition: transform 300ms var(--fit-ease-spring) !important;
+}
+.wardrobeEmpty:hover .wardrobeEmptyIcon {
+  transform: scale(1.12) rotate(-5deg);
+}
+
+/* ── Wardrobe filter dropdown: glass panel ── */
+.wardrobeFilterDropdown {
+  border-radius: 16px !important;
+  border: 1px solid var(--fit-glass-border) !important;
+  box-shadow: var(--fit-shadow-lg) !important;
+  backdrop-filter: var(--fit-blur-sm);
+  -webkit-backdrop-filter: var(--fit-blur-sm);
+}
+[data-theme="dark"] .wardrobeFilterDropdown {
+  background: var(--fit-panel-raised) !important;
+}
+
+/* ── Auth card top accent stripe — gradient upgrade ── */
+.card.authCard::before {
+  background: linear-gradient(90deg,
+    var(--accent),
+    var(--accent-hover),
+    rgba(139, 30, 30, 0.4)) !important;
+  opacity: 1 !important;
+  height: 4px !important;
+}
+
+/* ── Btn: primary more presence in dark ── */
+[data-theme="dark"] .btn.primary,
+[data-theme="dark"] .btnPrimary {
+  box-shadow: 0 6px 20px rgba(196, 60, 60, 0.22) !important;
+}
+[data-theme="dark"] .btn.primary:hover,
+[data-theme="dark"] .btnPrimary:hover {
+  box-shadow: 0 8px 28px rgba(196, 60, 60, 0.32) !important;
+}
+
+/* ── Page content wrapper: subtle max-width centering ── */
+.onboardingPage.dashPage,
+.onboardingPage.profilePage {
+  max-width: 1160px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ── Typography: headings sharper ── */
+.dashRecEyebrow,
+.planningCalendarEyebrow,
+.profilePrefLabel {
+  letter-spacing: 0.12em;
+}
+
+/* ── History holo card: richer in dark ── */
+[data-theme="dark"] .historyCard {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, transparent 50%),
+    var(--fit-glass) !important;
+}
+
+/* ── Plan modal: more depth ── */
+[data-theme="dark"] .planOutfitModal {
+  background: var(--fit-panel-raised) !important;
+  border: 1px solid var(--fit-glass-border) !important;
+}
+
+/* ── Mobile deep pass (≤ 768px) ── */
+@media (max-width: 768px) {
+  /* Nav: tighter on mobile */
+  .topNavInner {
+    height: 48px;
+    padding: 0 12px;
+  }
+
+  /* Auth card: full width, minimal padding */
+  .card.authCard {
+    padding: 24px 18px !important;
+    border-radius: 16px !important;
+    margin: 0 8px;
+  }
+
+  /* Dashboard: full-bleed sections */
+  .card.dashWide {
+    border-radius: 16px !important;
+    padding: 18px 14px !important;
+  }
+
+  /* Wardrobe card on mobile */
+  .wardrobeCard {
+    border-radius: 14px !important;
+  }
+
+  /* Profile card */
+  .card.profileCard {
+    border-radius: 16px !important;
+    padding: 18px 14px !important;
+  }
+
+  /* Chatbot panel */
+  .chatbot-panel {
+    border-radius: 16px !important;
+  }
+
+  /* Planning calendar */
+  .card.planningCalendarCard {
+    border-radius: 16px !important;
+  }
+
+  /* Reduce fade-up animation distance on mobile */
+  @keyframes fitFadeUpDash {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+}
+
+/* ── Narrow mobile (≤ 480px) ── */
+@media (max-width: 480px) {
+  /* Reduce all hover lifts: too much on small screens */
+  .historyCard:hover,
+  .plannedCard:hover,
+  .wardrobeCard:hover,
+  .outfitCard:hover,
+  .analyticsChartBlock:hover {
+    transform: translateY(-1px) !important;
+  }
+
+  /* Nav active link: just color, no border */
+  .topNavLinkActive {
+    border: none;
+    font-weight: 900;
+  }
+
+  /* Larger touch targets for filter chips */
+  .wardrobeFilterChip,
+  .wardrobeChipBtn {
+    min-height: 36px;
+    padding: 6px 14px !important;
+  }
+
+  /* Calendar days: bigger tap area */
+  .planningCalendarDay {
+    min-height: 52px !important;
+  }
+
+  /* AURA toggle: bigger tap area */
+  .chatbot-toggle {
+    width: 52px !important;
+    height: 52px !important;
+  }
+}
+
+/* ── Very narrow (≤ 390px) ── */
+@media (max-width: 390px) {
+  .card.dashWide {
+    padding: 14px 12px !important;
+    border-radius: 12px !important;
+  }
+  .card.authCard {
+    padding: 20px 14px !important;
+    margin: 0 4px;
+  }
+  .dashHeroIntro {
+    font-size: 13px;
+  }
+}
+
+/* ── Accessibility: focus-visible standardized ── */
+/* Already defined above but reinforce for interactive elements */
+.btn:focus-visible,
+.btnPrimary:focus-visible,
+.btnSecondary:focus-visible,
+.wardrobeChipBtn:focus-visible,
+.wardrobeFilterChip:focus-visible,
+.topNavLink:focus-visible,
+.topNavAuthBtn:focus-visible,
+.chatbot-toggle:focus-visible,
+.pill:focus-visible,
+.optionCard:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 4px var(--accent-soft) !important;
+  border-radius: inherit;
+}
+
+/* ── High-contrast: no blur/glass effects ── */
+[data-contrast="high"] .chatbot-panel,
+[data-contrast="high"] .card,
+[data-contrast="high"] .modalCard,
+[data-contrast="high"] .wardrobeFilterDropdown {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: var(--surface) !important;
+  border: 2px solid var(--text) !important;
+}
+
+/* ── Reduced motion: comprehensive override ── */
+@media (prefers-reduced-motion: reduce) {
+  /* Kill all our new keyframes */
+  .dashWeatherEmoji { animation: none !important; }
+  .dashPage > *     { animation: none !important; }
+
+  /* Kill all transform-based hovers */
+  .topNavLink:hover,
+  .topNavAuthBtn:hover,
+  .btn:hover,
+  .btnPrimary:hover,
+  .wardrobeCard:hover,
+  .historyCard:hover,
+  .plannedCard:hover,
+  .downloadQrItem:hover,
+  .planningCalendarDay:hover,
+  .wardrobeFilterChip:hover,
+  .wardrobeChipBtn:hover,
+  .pill:hover,
+  .optionCard:hover,
+  .chatbot-toggle:hover,
+  .profileAvatar:hover,
+  .analyticsChartBlock:hover,
+  .planningCalendarChip:hover {
+    transform: none !important;
+  }
+
+  /* Keep color/shadow transitions — they're safe */
+  * {
+    transition-duration: 80ms !important;
   }
 }

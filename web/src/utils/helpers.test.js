@@ -75,9 +75,16 @@ describe("getProfilePicUploadIssue", () => {
     expect(getProfilePicUploadIssue(file)).toBe("This profile photo is too large. Please upload one under 10MB.");
   });
 
-  test("rejects GIF avatars because the backend only accepts static images", () => {
+  test("allows GIF avatars under 3MB (animated profile pic support)", () => {
     const file = new File(["avatar"], "avatar.gif", { type: "image/gif" });
-    expect(getProfilePicUploadIssue(file)).toBe("Please choose a PNG, JPG, or WebP image.");
+    expect(getProfilePicUploadIssue(file)).toBe("");
+  });
+
+  test("rejects oversized GIFs above the 3MB limit", () => {
+    const { PROFILE_GIF_MAX_BYTES } = require("./helpers");
+    const file = new File(["avatar"], "avatar.gif", { type: "image/gif" });
+    Object.defineProperty(file, "size", { value: PROFILE_GIF_MAX_BYTES + 1, configurable: true });
+    expect(getProfilePicUploadIssue(file)).toBe("This GIF is too large. Please upload one under 3MB.");
   });
 
   test("rejects non-image files", () => {
