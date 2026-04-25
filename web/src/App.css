@@ -4315,6 +4315,25 @@ img.dashSquareImg {
   color: var(--muted);
 }
 
+.profileBodyTypeCard {
+  padding: 12px 14px;
+}
+
+.profileBodyTypeRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.profileBodyTypeCopy {
+  display: grid;
+  gap: 4px;
+}
+
+.profileBodyTypeCard .optionNote {
+  margin-top: 0;
+}
+
 .profileEmpty {
   margin-top: 12px;
   border: 1px dashed rgba(0, 0, 0, 0.18);
