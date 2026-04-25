@@ -1,6 +1,7 @@
 /* web/src/App.css */
 
 :root {
+  --app-text-scale: 1;
   --bg: #ffffff;
   --text: #111111;
   --muted: rgba(17, 17, 17, 0.62);
@@ -77,6 +78,83 @@
   --accent-highlight: #e87070;
   --body-grad1: rgba(196, 60, 60, 0.12);
   --body-grad2: rgba(196, 60, 60, 0.08);
+}
+
+/* ── High contrast mode ─────────────────────────────────────── */
+[data-contrast="high"] {
+  --text: #050505;
+  --muted: rgba(5, 5, 5, 0.86);
+  --border: rgba(5, 5, 5, 0.34);
+  --accent: #7a0000;
+  --accent-hover: #5c0000;
+  --accent-deep: #330000;
+  --accent-soft: rgba(122, 0, 0, 0.18);
+  --accent-soft-2: rgba(122, 0, 0, 0.12);
+  --accent-outline: rgba(5, 5, 5, 0.54);
+  --accent-glow: rgba(122, 0, 0, 0.22);
+  --bgSoft: rgba(5, 5, 5, 0.08);
+  --surface: #ffffff;
+  --surface-input: #ffffff;
+  --surface-border: rgba(5, 5, 5, 0.22);
+  --surface-hover: rgba(5, 5, 5, 0.34);
+  --accent-highlight: #7a0000;
+  --body-grad1: rgba(5, 5, 5, 0.08);
+  --body-grad2: rgba(122, 0, 0, 0.10);
+}
+
+[data-theme="dark"][data-contrast="high"] {
+  --bg: #050505;
+  --text: #ffffff;
+  --muted: rgba(255, 255, 255, 0.86);
+  --border: rgba(255, 255, 255, 0.26);
+  --accent: #ff5c5c;
+  --accent-hover: #ff8080;
+  --accent-deep: #ffffff;
+  --accent-soft: rgba(255, 92, 92, 0.24);
+  --accent-soft-2: rgba(255, 255, 255, 0.14);
+  --accent-outline: rgba(255, 255, 255, 0.56);
+  --accent-glow: rgba(255, 92, 92, 0.26);
+  --bgSoft: rgba(255, 255, 255, 0.12);
+  --surface: #111111;
+  --surface-input: #0d0d0d;
+  --surface-border: rgba(255, 255, 255, 0.24);
+  --surface-hover: rgba(255, 255, 255, 0.36);
+  --accent-highlight: #ffffff;
+  --body-grad1: rgba(255, 255, 255, 0.08);
+  --body-grad2: rgba(255, 92, 92, 0.18);
+}
+
+[data-contrast="high"] .card,
+[data-contrast="high"] .optionCard,
+[data-contrast="high"] .modalCard,
+[data-contrast="high"] .savedOutfitCard,
+[data-contrast="high"] .historyCard,
+[data-contrast="high"] .wardrobeCard,
+[data-contrast="high"] .wardrobeRowItem,
+[data-contrast="high"] .profileSettingsCard {
+  border-width: 2px;
+  box-shadow: 0 0 0 1px var(--surface-border);
+}
+
+[data-contrast="high"] .btn,
+[data-contrast="high"] .pill,
+[data-contrast="high"] .dashChip,
+[data-contrast="high"] .wardrobeChipBtn,
+[data-contrast="high"] .wardrobeTab,
+[data-contrast="high"] .dashPreviewBtn,
+[data-contrast="high"] .historyBadge {
+  border-width: 2px;
+  font-weight: 800;
+}
+
+[data-contrast="high"] .btn:focus-visible,
+[data-contrast="high"] .pill:focus-visible,
+[data-contrast="high"] button:focus-visible,
+[data-contrast="high"] input:focus-visible,
+[data-contrast="high"] select:focus-visible,
+[data-contrast="high"] textarea:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
 
 [data-theme="dark"] body {
@@ -1882,6 +1960,67 @@ a {
 }
 .linkLike:hover {
   opacity: 0.75;
+}
+
+/* QR codes at bottom of auth pages */
+.authQrRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 28px;
+  padding: 20px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.authQrCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.authQrCode {
+  width: 100px;
+  height: 100px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: 4px;
+}
+
+.authQrLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.3px;
+}
+
+.authQrSub {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.2px;
+}
+
+.authQrDivider {
+  width: 1px;
+  height: 100px;
+  background: var(--border);
+  align-self: center;
+  flex-shrink: 0;
+}
+
+@media (max-width: 400px) {
+  .authQrRow {
+    gap: 16px;
+  }
+  .authQrCode {
+    width: 80px;
+    height: 80px;
+  }
+  .authQrDivider {
+    height: 80px;
+  }
 }
 
 .authHint {
@@ -17301,4 +17440,1067 @@ html[data-text-size="xlarge"] .dashAiParagraph,
 html[data-hc="true"] .dashAiParagraph {
   display: block;
   margin-bottom: 0.6em;
+}
+
+
+/* === Editorial theme — global overrides (top nav + sections) ============ */
+/* All scoped to [data-theme-id^="editorial"] so they're completely opt-in. */
+
+[data-theme-id^="editorial"] .topNav {
+  background: var(--bg);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: 1px solid var(--text);
+}
+
+[data-theme-id^="editorial"] .topNavInner {
+  height: 64px;
+  max-width: 1200px;
+}
+
+[data-theme-id^="editorial"] .topNavBrandName {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-weight: 600;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  font-style: italic;
+}
+
+[data-theme-id^="editorial"] .topNavLogo {
+  border-radius: 0;
+  filter: grayscale(0.4);
+}
+
+[data-theme-id^="editorial"] .topNavLink {
+  font-family: "Georgia", serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text);
+  border-radius: 0;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  position: relative;
+}
+
+[data-theme-id^="editorial"] .topNavLink:hover {
+  background: transparent;
+  color: var(--accent);
+}
+
+[data-theme-id^="editorial"] .topNavLinkActive,
+[data-theme-id^="editorial"] .topNavLinkActive:hover {
+  background: transparent;
+  color: var(--text);
+  border: none;
+}
+
+[data-theme-id^="editorial"] .topNavLinkActive::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 2px;
+  height: 1px;
+  background: var(--text);
+}
+
+[data-theme-id^="editorial"] .topNavProfileLink {
+  background: transparent;
+  border: 1px solid var(--text);
+  border-radius: 0;
+  box-shadow: none;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+/* Section eyebrows + titles ─────────────────────────────────── */
+
+[data-theme-id^="editorial"] .dashSectionEyebrow {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  color: var(--accent);
+  opacity: 0.8;
+}
+
+[data-theme-id^="editorial"] .dashSectionTitle {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-weight: 600;
+  font-size: 32px;
+  letter-spacing: -0.01em;
+}
+
+/* Rec card (Today's Recommendation) ─────────────────────────── */
+
+[data-theme-id^="editorial"] .dashRecCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  border-radius: 0;
+}
+
+[data-theme-id^="editorial"] .dashRecHeaderGradient {
+  display: none;
+}
+
+[data-theme-id^="editorial"] .dashRecHeader {
+  border-bottom: 1px solid var(--text);
+  padding-bottom: 16px;
+}
+
+[data-theme-id^="editorial"] .dashRecTitle {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-weight: 600;
+  font-size: 28px;
+  letter-spacing: -0.005em;
+  color: var(--text);
+}
+
+[data-theme-id^="editorial"] .dashChip {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--text);
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+}
+
+[data-theme-id^="editorial"] .dashRecPersonalizationBadge {
+  background: var(--accent);
+  color: var(--bg);
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+[data-theme-id^="editorial"] .dashRecPersonalizationText {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  color: var(--muted);
+}
+
+[data-theme-id^="editorial"] .dashRecActionBtn {
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+[data-theme-id^="editorial"] .dashViewToggle {
+  border-radius: 0;
+  border: 1px solid var(--text);
+}
+
+[data-theme-id^="editorial"] .dashViewToggleBtn {
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Weather card ─────────────────────────────────────────────── */
+
+[data-theme-id^="editorial"] .dashWeatherCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: var(--shadow);
+}
+
+[data-theme-id^="editorial"] .dashWeatherTemp {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-weight: 600;
+}
+
+[data-theme-id^="editorial"] .dashWeatherLabel,
+[data-theme-id^="editorial"] .dashWeatherStatus {
+  font-family: "Georgia", serif;
+  font-style: italic;
+}
+
+[data-theme-id^="editorial"] .dashMiniPill {
+  background: transparent;
+  border: 1px solid var(--text);
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+}
+
+[data-theme-id^="editorial"] .dashRefineToggle {
+  background: var(--text);
+  color: var(--bg);
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* Style tips marquee ───────────────────────────────────────── */
+
+[data-theme-id^="editorial"] .dashStyleMarquee {
+  background: transparent;
+  border-top: 1px solid var(--text);
+  border-bottom: 1px solid var(--text);
+  border-radius: 0;
+  padding: 14px 0;
+  margin-bottom: 24px;
+}
+
+[data-theme-id^="editorial"] .dashStyleMarqueeText {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 14px;
+  color: var(--text);
+}
+
+[data-theme-id^="editorial"] .dashStyleMarqueeDot {
+  background: var(--accent);
+}
+
+/* Page background — paper-feel gradient ─────────────────────── */
+
+[data-theme-id^="editorial"] body {
+  background: var(--bg);
+}
+
+/* === Editorial theme — magazine-style Dashboard hero & insight strip === */
+/* Scoped to the editorial theme via the dashPageEditorial modifier so other
+   themes are completely unaffected. */
+
+.dashPageEditorial {
+  font-feature-settings: "ss01", "kern", "liga";
+}
+
+.editorialHero {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 36px;
+  padding: 36px 32px 28px;
+  margin-bottom: 24px;
+  background: linear-gradient(180deg, var(--pageBg1) 0%, var(--bg) 100%);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.editorialHero::after {
+  content: "";
+  position: absolute;
+  left: 32px;
+  right: 32px;
+  bottom: 0;
+  height: 1px;
+  background: var(--text);
+  opacity: 0.18;
+}
+
+.editorialHeroLeft {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 280px;
+}
+
+.editorialMasthead {
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0.55;
+  border-bottom: 1px solid var(--text);
+  padding-bottom: 8px;
+  margin-bottom: 18px;
+  width: fit-content;
+}
+
+.editorialHeadline {
+  font-family: "Playfair Display", "Didot", "Georgia", "Times New Roman", serif;
+  font-weight: 600;
+  font-size: clamp(36px, 5vw, 60px);
+  line-height: 1.05;
+  letter-spacing: -0.012em;
+  margin: 0;
+  color: var(--text);
+}
+
+.editorialHeadlineTemp {
+  color: #c43c3c;
+  font-weight: 700;
+  /* The fallback Times/Georgia degree glyph renders as a hairline that
+     can disappear into anti-aliasing — set the font-feature-settings to
+     pull a solid degree from the font's stylistic set when available. */
+  font-variant-numeric: lining-nums;
+}
+
+.editorialDek {
+  font-family: "Georgia", "Times New Roman", serif;
+  font-style: italic;
+  font-size: 16px;
+  line-height: 1.5;
+  margin-top: 18px;
+  color: var(--muted);
+  max-width: 46ch;
+}
+
+.editorialActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 28px;
+  flex-wrap: wrap;
+}
+
+.editorialBtnPrimary,
+.editorialBtnGhost {
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 10px 18px;
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.editorialBtnPrimary {
+  background: var(--text);
+  color: var(--bg);
+  border: 1px solid var(--text);
+}
+
+.editorialBtnPrimary:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.editorialBtnGhost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--text);
+}
+
+.editorialBtnGhost:hover {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.editorialHeroRight {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.editorialHeroFigure {
+  width: 100%;
+  max-width: 380px;
+  aspect-ratio: 4 / 5;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.editorialHeroImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  filter: saturate(0.92) contrast(1.02);
+}
+
+.editorialHeroFigureEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+}
+
+.editorialHeroFigureLabel {
+  font-family: "Playfair Display", "Georgia", serif;
+  font-size: 22px;
+  font-style: italic;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.editorialHeroCaption {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  font-family: "Georgia", serif;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  /* Caption sits on a dark translucent overlay regardless of theme,
+     so the text must always be light — don't tie it to var(--bg). */
+  color: #f5efe6;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 6px 10px;
+  text-align: center;
+}
+
+.editorialHeroFigureEmpty .editorialHeroCaption {
+  position: static;
+  background: transparent;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: normal;
+  font-style: italic;
+  font-size: 13px;
+  padding: 0;
+  margin-top: 4px;
+}
+
+/* Insight strip ───────────────────────────────────────────── */
+
+.editorialInsightStrip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  margin-bottom: 28px;
+  border-top: 1px solid var(--text);
+  border-bottom: 1px solid var(--text);
+}
+
+.editorialInsightCard {
+  padding: 22px 24px;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editorialInsightCard:last-child {
+  border-right: none;
+}
+
+.editorialInsightLabel {
+  font-family: "Georgia", serif;
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0.55;
+}
+
+.editorialInsightHeadline {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-size: 22px;
+  line-height: 1.15;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.editorialInsightSub {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+@media (max-width: 760px) {
+  .editorialHero {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 24px 18px;
+  }
+
+  .editorialHeroLeft {
+    min-height: auto;
+  }
+
+  .editorialInsightStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .editorialInsightCard {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .editorialInsightCard:last-child {
+    border-bottom: none;
+  }
+}
+
+/* === Editorial theme Phase 3 — dominant-selected outfit strip ============ */
+/* Selected option dominates (flex:2, full chrome). Non-selected become
+   compact thumbnail cards (2x2 tile grid, no meta/traits/feedback).
+   Click a thumbnail to swap which is dominant — wired by existing JSX. */
+
+[data-theme-id^="editorial"] .dashOutfitsAnimWrap {
+  display: flex;
+  flex-direction: row;
+  gap: 18px;
+  align-items: stretch;
+  padding: 0;
+}
+
+[data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption {
+  margin-top: 0 !important;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 18px;
+  transition: flex-grow 220ms ease, box-shadow 220ms ease;
+}
+
+/* Empty / sparse / loading states are the only child when there are no
+   outfit options. Without flex:1 they collapse to content width and get
+   pinned to the left of the row container. */
+[data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashEmptyWardrobe,
+[data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashSparseWardrobe,
+[data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashAiLoading {
+  flex: 1 1 100%;
+  width: 100%;
+}
+
+[data-theme-id^="editorial"] .dashEmptyActions {
+  justify-content: center;
+}
+
+[data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption.dashOutfitSelected {
+  flex: 2.4 1 0;
+  order: -1;
+  background: var(--surface);
+  border: 1px solid var(--text);
+  box-shadow: var(--shadow);
+}
+
+[data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption:not(.dashOutfitSelected) {
+  cursor: pointer;
+  background: var(--bgSoft);
+  opacity: 0.92;
+}
+
+[data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption:not(.dashOutfitSelected):hover {
+  opacity: 1;
+  background: var(--surface);
+}
+
+/* Hide the rich chrome on non-selected — keep only label + tiles. */
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOptionMeta,
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOptionTraits,
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashComfortStrip,
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOutfitActionsRow,
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOutfitFeedbackPanel,
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashFeedbackBtns,
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .mannequinSaveBtnRow,
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .styledSaveBtn {
+  display: none;
+}
+
+/* Compact tile grid for non-selected: 2x2 with smaller tiles */
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOutfitGridFigma {
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 8px 0 0;
+}
+
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashSquareTile {
+  min-height: 100px;
+  padding: 10px 8px;
+  border-radius: 0;
+  box-shadow: none;
+  border: 1px solid var(--border);
+}
+
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashSquareImg {
+  max-width: 80px;
+  border-radius: 0;
+}
+
+[data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashSquareNameRow {
+  display: none;
+}
+
+/* Editorial tile styling for the SELECTED option (paper-feel, square) */
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashOutfitGridFigma {
+  padding: 16px 0 8px;
+  gap: 12px;
+}
+
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashSquareTile {
+  border-radius: 0;
+  border: 1px solid var(--border);
+  box-shadow: none;
+  background: var(--bg);
+}
+
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashSquareTile:hover {
+  box-shadow: 0 4px 14px rgba(38, 28, 20, 0.12);
+}
+
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashSquareImg {
+  border-radius: 0;
+  background: var(--bgSoft);
+}
+
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashSquareName {
+  font-family: "Georgia", serif;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+/* Editorial option label — serif italic plate numbers, flat on paper.
+   Strip the base gradient/clip-path/skew so text sits on the page bg,
+   not on a burgundy parallelogram. */
+[data-theme-id^="editorial"] .optionLabel {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0.7;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  background: transparent;
+  clip-path: none;
+  transform: none;
+}
+
+[data-theme-id^="editorial"] .optionLabel::after {
+  display: none;
+}
+
+[data-theme-id^="editorial"] .optionLabelNum {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-style: italic;
+  font-weight: 600;
+  font-size: 22px;
+  color: var(--accent);
+  opacity: 1;
+  letter-spacing: 0;
+  transform: none;
+  text-shadow: none;
+}
+
+[data-theme-id^="editorial"] .optionLabelSlash,
+[data-theme-id^="editorial"] .optionLabelText {
+  transform: none;
+}
+
+[data-theme-id^="editorial"] .optionLabelSlash {
+  opacity: 0.4;
+}
+
+/* Selected option meta + traits styling.
+   The score reads like a magazine pull-quote — large italic Playfair
+   numeral in accent ink with a hairline divider above the label. */
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionScore {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border-left: 1px solid var(--border);
+  min-width: 86px;
+}
+
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionScoreValue {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 38px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+  text-shadow: none;
+}
+
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionScoreLabel {
+  font-family: "Georgia", serif;
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0.62;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  width: 100%;
+  text-align: center;
+}
+
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionTrait {
+  background: transparent;
+  border: 1px solid var(--text);
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+}
+
+[data-theme-id^="editorial"] .dashOutfitOption.dashOutfitSelected .dashOptionRankBadge {
+  background: transparent;
+  border: 1px solid var(--text);
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Save button + feedback pills paper-feel */
+[data-theme-id^="editorial"] .styledSaveBtn {
+  background: var(--text);
+  color: var(--bg);
+  border-radius: 0;
+  clip-path: none;
+  transform: none;
+  font-family: "Georgia", serif;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+[data-theme-id^="editorial"] .styledSaveBtn.saved {
+  background: var(--accent);
+}
+
+/* Mobile: fall back to vertical stack so non-selected aren't crushed */
+@media (max-width: 760px) {
+  [data-theme-id^="editorial"] .dashOutfitsAnimWrap {
+    flex-direction: column;
+  }
+
+  [data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption,
+  [data-theme-id^="editorial"] .dashOutfitsAnimWrap > .dashOutfitOption.dashOutfitSelected {
+    flex: 1 1 auto;
+    order: 0;
+  }
+
+  [data-theme-id^="editorial"] .dashOutfitOption:not(.dashOutfitSelected) .dashOutfitGridFigma {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* === Editorial theme — outfit breakdown overlay (dashWhyFloat) ============ */
+/* Matches the magazine aesthetic: serif headlines, square paper cards,
+   hairline dividers, accent-ink toggle/close, no rounded pills. */
+
+[data-theme-id^="editorial"] .dashWhyFloat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: var(--shadow);
+}
+
+[data-theme-id^="editorial"] .dashWhyHeader {
+  border-bottom: 1px solid var(--text);
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+}
+
+[data-theme-id^="editorial"] .dashWhyEyebrow {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 400;
+}
+
+[data-theme-id^="editorial"] .dashInfoTitle {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-weight: 600;
+  font-style: normal;
+  font-size: 32px;
+  letter-spacing: -0.012em;
+  color: var(--text);
+}
+
+[data-theme-id^="editorial"] .dashWhyIntro {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+[data-theme-id^="editorial"] .dashWhyToggle {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--text);
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 8px 14px;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+[data-theme-id^="editorial"] .dashWhyToggle:hover {
+  background: var(--text);
+  color: var(--bg);
+}
+
+[data-theme-id^="editorial"] .dashWhyClose {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--text);
+  border-radius: 0;
+  width: 36px;
+  height: 36px;
+  font-family: "Georgia", serif;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+[data-theme-id^="editorial"] .dashWhyClose:hover {
+  background: var(--text);
+  color: var(--bg);
+}
+
+/* Lead callout — magazine intro paragraph */
+[data-theme-id^="editorial"] .dashWhyLead {
+  background: var(--bgSoft);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 0;
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text);
+  padding: 18px 22px;
+}
+
+/* Detail grid cards */
+[data-theme-id^="editorial"] .dashWhyCard {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 18px;
+}
+
+[data-theme-id^="editorial"] .dashWhyCardTitle {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+[data-theme-id^="editorial"] .dashWhyCardText {
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+/* Confidence breakdown — hairline bars in accent ink */
+[data-theme-id^="editorial"] .dashConfidenceLabel {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  font-weight: 400;
+  color: var(--text);
+  opacity: 0.75;
+}
+
+[data-theme-id^="editorial"] .dashConfidenceBar {
+  background: var(--bgSoft);
+  border-radius: 0;
+  height: 3px;
+}
+
+[data-theme-id^="editorial"] .dashConfidenceFill {
+  background: var(--accent);
+  border-radius: 0;
+}
+
+[data-theme-id^="editorial"] .dashConfidenceValue {
+  font-family: "Playfair Display", "Didot", "Georgia", serif;
+  font-style: italic;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--accent);
+  opacity: 1;
+  letter-spacing: 0;
+}
+
+[data-theme-id^="editorial"] .dashConfidenceNote {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* AI badge in the title row */
+[data-theme-id^="editorial"] .dashAiBadge {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 0;
+  font-family: "Georgia", serif;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  font-weight: 500;
+}
+
+/* === Editorial theme — refine chips & season note ====================== */
+/* The pill-shaped weather/time/season/occasion/style chips clash with the
+   square paper aesthetic. Drop the geometric placeholder icons too — they
+   feel out of place in a serif layout. */
+
+[data-theme-id^="editorial"] .dashContextChipIcon {
+  display: none;
+}
+
+[data-theme-id^="editorial"] .dashContextChip {
+  border-radius: 0;
+  border: 1px solid var(--text);
+  background: transparent;
+  color: var(--text);
+  font-family: "Georgia", serif;
+  font-style: normal;
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 8px 14px;
+}
+
+[data-theme-id^="editorial"] .dashContextChip:hover {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+[data-theme-id^="editorial"] .dashContextChip.active {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+
+/* Picker buttons that drop down beneath the chips (Cold/Cool/Mild/...) */
+[data-theme-id^="editorial"] .dashContextPickerBtn {
+  border-radius: 0;
+  border: 1px solid var(--border);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-family: "Georgia", serif;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 500;
+  padding: 7px 12px;
+}
+
+[data-theme-id^="editorial"] .dashContextPickerBtn:hover {
+  background: var(--bgSoft);
+  border-color: var(--text);
+}
+
+[data-theme-id^="editorial"] .dashContextPickerBtn.active {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+
+[data-theme-id^="editorial"] .dashContextPicker {
+  border-top: 1px solid var(--text);
+  padding-top: 14px;
+  margin-top: 14px;
+}
+
+/* Season note row */
+[data-theme-id^="editorial"] .dashSeasonNote {
+  font-family: "Georgia", serif;
+  font-style: italic;
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 14px;
+}
+
+[data-theme-id^="editorial"] .dashSeasonIndicator {
+  border-radius: 0;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-family: "Georgia", serif;
+  font-style: normal;
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+/* Mannequin preview controls in editorial mode — square paper buttons */
+[data-theme-id^="editorial"] .mannequinPreviewControlBtn {
+  border-radius: 0;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(8, 8, 10, 0.78);
+  color: #f5efe6;
+  font-family: "Georgia", serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+[data-theme-id^="editorial"] .mannequinPreviewControlBtn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #f5efe6;
+}
+
+[data-theme-id^="editorial"] .mannequinPreviewControlBtn.isAccent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #f5efe6;
+}
+
+[data-theme-id^="editorial"] .mannequinPreviewControlBtn.isAccent:hover {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
 }

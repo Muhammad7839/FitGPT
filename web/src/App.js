@@ -9,13 +9,20 @@ import { applyTheme } from "./theme/themeEngine";
 import TopNav from "./components/TopNav";
 import Chatbot from "./components/Chatbot";
 import { LEGACY_THEME_KEY, THEME_KEY, CUSTOM_THEMES_KEY, STALE_CLEANUP_KEY, TOKEN_KEY, WARDROBE_KEY, EVT_ACCESSIBILITY_CHANGED } from "./utils/constants";
-import { applyAccessibilityToDocument, readAccessibilityPrefs } from "./utils/accessibilityPrefs";
+import { readAccessibilityPrefs, applyAccessibilityToDocument } from "./utils/accessibilityPrefs";
+
+const TEXT_SCALE_KEY = "fitgpt_text_scale_v1";
+const HIGH_CONTRAST_KEY = "fitgpt_high_contrast_v1";
+const TEXT_SCALE_LEVELS = Object.freeze({
+  medium: 1,
+  large: 1.08,
+  xl: 1.16,
+});
 if (!localStorage.getItem(STALE_CLEANUP_KEY)) {
   localStorage.removeItem(WARDROBE_KEY);
   localStorage.setItem(STALE_CLEANUP_KEY, "1");
 }
 
-/** Load custom themes from localStorage */
 function loadCustomThemes() {
   try {
     const raw = localStorage.getItem(CUSTOM_THEMES_KEY);
@@ -24,48 +31,66 @@ function loadCustomThemes() {
   return [];
 }
 
-/** Check whether the user has a saved account (JWT token present) */
 function hasAccount() {
   return !!localStorage.getItem(TOKEN_KEY);
 }
 
-/** Read the active theme, migrating from v1 if needed.
- *  Guests always default to dark; persisted theme only loads for accounts. */
 function readTheme(customThemes) {
   if (!hasAccount()) return getPresetTheme("dark");
 
   try {
-    // Try v2 first
     const raw = localStorage.getItem(THEME_KEY);
     if (raw) {
       const { activeThemeId } = JSON.parse(raw);
-      // Check presets
       const preset = getPresetTheme(activeThemeId);
       if (preset && preset.id === activeThemeId) return preset;
-      // Check custom themes
       const custom = customThemes.find((t) => t.id === activeThemeId);
       if (custom) return custom;
     }
 
-    // Migrate from v1 ("light" / "dark")
     const legacy = localStorage.getItem(LEGACY_THEME_KEY);
     if (legacy === "dark") return getPresetTheme("dark");
   } catch {}
   return getPresetTheme("light");
 }
 
+function readTextScale() {
+  try {
+    const raw = localStorage.getItem(TEXT_SCALE_KEY);
+    if (raw && TEXT_SCALE_LEVELS[raw]) return raw;
+  } catch {}
+  return "medium";
+}
+
+function readHighContrast() {
+  try {
+    return localStorage.getItem(HIGH_CONTRAST_KEY) === "true";
+  } catch {}
+  return false;
+}
+
 const ThemeContext = createContext(null);
+const TextScaleContext = createContext(null);
+const ContrastContext = createContext(null);
 
 export function useTheme() {
   return useContext(ThemeContext);
 }
 
+export function useTextScale() {
+  return useContext(TextScaleContext);
+}
+
+export function useContrastMode() {
+  return useContext(ContrastContext);
+}
+
 export default function App() {
   const [customThemes, setCustomThemes] = useState(() => loadCustomThemes());
   const [activeTheme, setActiveTheme] = useState(() => readTheme(customThemes));
+  const [textScale, setTextScaleState] = useState(() => readTextScale());
+  const [highContrast, setHighContrastState] = useState(() => readHighContrast());
 
-  // Apply theme whenever it changes — useLayoutEffect to prevent light-mode flash
-  // Only persist to localStorage for signed-in users; guests get dark by default each session
   useLayoutEffect(() => {
     applyTheme(activeTheme);
     if (hasAccount()) {
@@ -79,6 +104,22 @@ export default function App() {
     window.addEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
     return () => window.removeEventListener(EVT_ACCESSIBILITY_CHANGED, onChange);
   }, []);
+
+  useLayoutEffect(() => {
+    const scale = TEXT_SCALE_LEVELS[textScale] || 1;
+    document.documentElement.style.setProperty("--app-text-scale", String(scale));
+    document.documentElement.setAttribute("data-text-scale", textScale);
+    localStorage.setItem(TEXT_SCALE_KEY, textScale);
+  }, [textScale]);
+
+  useLayoutEffect(() => {
+    if (highContrast) {
+      document.documentElement.setAttribute("data-contrast", "high");
+    } else {
+      document.documentElement.removeAttribute("data-contrast");
+    }
+    localStorage.setItem(HIGH_CONTRAST_KEY, String(highContrast));
+  }, [highContrast]);
 
   const setTheme = useCallback(
     (themeOrId) => {
@@ -109,14 +150,21 @@ export default function App() {
         localStorage.setItem(CUSTOM_THEMES_KEY, JSON.stringify(next));
         return next;
       });
-      // If the deleted theme was active, fall back to default
       const fallback = hasAccount() ? "light" : "dark";
       setActiveTheme((prev) => (prev.id === themeId ? getPresetTheme(fallback) : prev));
     },
     []
   );
 
-  const ctxValue = {
+  const setTextScale = useCallback((nextScale) => {
+    setTextScaleState(TEXT_SCALE_LEVELS[nextScale] ? nextScale : "medium");
+  }, []);
+
+  const setHighContrast = useCallback((nextValue) => {
+    setHighContrastState(Boolean(nextValue));
+  }, []);
+
+  const themeValue = {
     theme: activeTheme,
     themeBase: activeTheme.base,
     setTheme,
@@ -126,13 +174,28 @@ export default function App() {
     allThemes: [...PRESET_THEMES, ...customThemes],
   };
 
+  const textScaleValue = {
+    textScale,
+    setTextScale,
+    levels: TEXT_SCALE_LEVELS,
+  };
+
+  const contrastValue = {
+    highContrast,
+    setHighContrast,
+  };
+
   return (
-    <ThemeContext.Provider value={ctxValue}>
-      <AuthProvider>
-        <TopNav />
-        <AppRoutes />
-        <Chatbot />
-      </AuthProvider>
+    <ThemeContext.Provider value={themeValue}>
+      <TextScaleContext.Provider value={textScaleValue}>
+        <ContrastContext.Provider value={contrastValue}>
+          <AuthProvider>
+            <TopNav />
+            <AppRoutes />
+            <Chatbot />
+          </AuthProvider>
+        </ContrastContext.Provider>
+      </TextScaleContext.Provider>
     </ThemeContext.Provider>
   );
 }

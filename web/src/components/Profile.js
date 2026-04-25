@@ -1,10 +1,9 @@
 // web/src/components/Profile.js
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import ReactDOM from "react-dom";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { logout } from "../api/authApi";
-import { uploadProfileAvatar } from "../api/profileApi";
 import { readDemoAuth, writeDemoAuth, loadProfilePic, saveProfilePic, loadAnswers, saveAnswers, mirrorUserDataToGuest } from "../utils/userStorage";
 import { fileToDataUrl, getProfilePicUploadIssue } from "../utils/helpers";
 import { STYLE_OPTIONS, COMFORT_OPTIONS, DRESS_FOR_OPTIONS, BODY_TYPE_OPTIONS, GENDER_OPTIONS } from "../utils/formOptions";
@@ -16,11 +15,13 @@ import {
 } from "../utils/rotationAlertPreferences";
 import {
   TEXT_SIZES,
-  applyAccessibilityToDocument,
   readAccessibilityPrefs,
   writeAccessibilityPrefs,
+  applyAccessibilityToDocument,
 } from "../utils/accessibilityPrefs";
 import GuestModeNotice from "./GuestModeNotice";
+import BodyTypeFigure from "./BodyTypeFigure";
+import { useContrastMode, useTextScale } from "../App";
 
 const TEXT_SIZE_LABELS = {
   default: "Default",
@@ -34,22 +35,22 @@ export default function Profile({ onResetOnboarding = () => {} }) {
   const navigate = useNavigate();
   const { hash } = useLocation();
   const { user, setUser } = useAuth();
+  const { textScale, setTextScale } = useTextScale();
+  const { highContrast, setHighContrast } = useContrastMode();
 
-  const demoUser = useMemo(() => readDemoAuth(), []);
+  const demoUser = readDemoAuth();
   const effectiveUser = user || demoUser;
-  const remoteAvatarUrl = user?.avatar_url || user?.avatarUrl || effectiveUser?.avatar_url || effectiveUser?.avatarUrl || "";
 
   const email = effectiveUser?.email || effectiveUser?.user?.email || effectiveUser?.demoEmail || "";
 
   // ── Profile picture ──
-  const [profilePic, setProfilePic] = useState(() => remoteAvatarUrl || loadProfilePic(effectiveUser));
+  const [profilePic, setProfilePic] = useState(() => loadProfilePic(effectiveUser));
   const fileInputRef = useRef(null);
   const [picMsg, setPicMsg] = useState("");
-  const [pendingPicFile, setPendingPicFile] = useState(null);
 
   useEffect(() => {
-    setProfilePic(remoteAvatarUrl || loadProfilePic(effectiveUser));
-  }, [effectiveUser, remoteAvatarUrl]);
+    setProfilePic(loadProfilePic(effectiveUser));
+  }, [effectiveUser]);
 
   const openPicMenu = useCallback(() => {
     setPicMsg("");
@@ -59,7 +60,6 @@ export default function Profile({ onResetOnboarding = () => {} }) {
   const closePicMenu = useCallback(() => {
     setShowPicMenu(false);
     setPendingPic(null);
-    setPendingPicFile(null);
     setPicMsg("");
   }, []);
 
@@ -81,7 +81,6 @@ export default function Profile({ onResetOnboarding = () => {} }) {
     try {
       const dataUrl = await fileToDataUrl(file, 300);
       setPendingPic(dataUrl);
-      setPendingPicFile(file);
       setPicMsg("");
       setShowPicMenu(true);
     } catch {
@@ -111,7 +110,24 @@ export default function Profile({ onResetOnboarding = () => {} }) {
   const [alertsSaved, setAlertsSaved] = useState(false);
   const smartAlertsRef = useRef(null);
   const alertsSavedTimerRef = useRef(null);
-  const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(null));
+  const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(effectiveUser));
+
+  const updateTextSize = useCallback((next) => {
+    const safe = writeAccessibilityPrefs({ ...accessibilityPrefs, textSize: next }, effectiveUser);
+    setAccessibilityPrefs(safe);
+    applyAccessibilityToDocument(safe);
+  }, [accessibilityPrefs, effectiveUser]);
+  const textScaleOptions = [
+    { value: "medium", label: "Default", note: "Use the standard FitGPT text size." },
+    { value: "large", label: "Large", note: "Increase text size for better readability." },
+    { value: "xl", label: "XL", note: "Use the largest reading-friendly text size." },
+  ];
+  const [openSections, setOpenSections] = useState({
+    account: false,
+    accessibility: true,
+    style: false,
+    alerts: false,
+  });
 
   // ── Account settings state ──
   const [showEmailEdit, setShowEmailEdit] = useState(false);
@@ -131,17 +147,23 @@ export default function Profile({ onResetOnboarding = () => {} }) {
 
   useEffect(() => {
     setRotationPrefs(readRotationAlertPreferences(effectiveUser));
-    setAccessibilityPrefs(readAccessibilityPrefs(null));
+    setAccessibilityPrefs(readAccessibilityPrefs(effectiveUser));
   }, [effectiveUser]);
 
   useEffect(() => {
     if (hash !== "#smart-alerts") return;
+    setOpenSections((prev) => ({ ...prev, alerts: true }));
     const node = smartAlertsRef.current;
     if (!node) return;
 
     window.setTimeout(() => {
       node.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 60);
+  }, [hash]);
+
+  useEffect(() => {
+    if (hash !== "#accessibility") return;
+    setOpenSections((prev) => ({ ...prev, accessibility: true }));
   }, [hash]);
 
   useEffect(() => () => {
@@ -196,11 +218,24 @@ export default function Profile({ onResetOnboarding = () => {} }) {
     flashAlertsSaved();
   }, [effectiveUser, flashAlertsSaved]);
 
-  const updateTextSize = useCallback((nextSize) => {
-    const safe = writeAccessibilityPrefs({ ...accessibilityPrefs, textSize: nextSize }, null);
-    setAccessibilityPrefs(safe);
-    applyAccessibilityToDocument(safe);
-  }, [accessibilityPrefs]);
+  const toggleSection = useCallback((sectionKey) => {
+    setOpenSections((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
+  }, []);
+
+  const currentTextScaleLabel =
+    textScaleOptions.find((option) => option.value === textScale)?.label || "Default";
+  const reminderPaceLabel =
+    ROTATION_REMINDER_OPTIONS.find((option) => option.key === (rotationPrefs?.reminderPace || "balanced"))?.label || "Balanced";
+  const bodyTypeLabel =
+    BODY_TYPE_OPTIONS.find((option) => option.id === prefs.bodyType)?.label || null;
+  const styleSummary = [
+    prefs.style.length ? `${prefs.style.length} style` : null,
+    prefs.comfort.length ? `${prefs.comfort.length} comfort` : null,
+    prefs.dressFor.length ? `${prefs.dressFor.length} dress-for` : null,
+    bodyTypeLabel,
+  ]
+    .filter(Boolean)
+    .join(" | ");
 
   const handleLogout = async () => {
     try {
@@ -222,7 +257,6 @@ export default function Profile({ onResetOnboarding = () => {} }) {
           <div className="profileHeaderRow">
             <div>
               <h1 className="heroTitle profileTitle">Profile</h1>
-              <p className="heroSub profileSub">Sign in to save and manage your profile.</p>
             </div>
           </div>
           <GuestModeNotice compact />
@@ -269,10 +303,8 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 onClick={openPicMenu}
                 title="Upload profile picture"
               >
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
+                <span className="profileAvatarPlaceholderBadge">Profile</span>
+                <span className="profileAvatarPlaceholderText">Add Photo</span>
               </div>
             )}
           </div>
@@ -287,9 +319,26 @@ export default function Profile({ onResetOnboarding = () => {} }) {
 
             {/* ── Account Settings ── */}
             <div className="profileSection">
-              <div className="dashCardTitle" style={{ marginBottom: 12 }}>Account Settings</div>
+              <button
+                type="button"
+                className={`profileAccordionTrigger ${openSections.account ? "open" : ""}`}
+                onClick={() => toggleSection("account")}
+                aria-expanded={openSections.account}
+              >
+                <div className="profileAccordionCopy">
+                  <div className="dashCardTitle" style={{ marginBottom: 0 }}>Account Settings</div>
+                  <div className="profileAccordionSummary">
+                    {email ? email : "Manage sign-in details"}
+                  </div>
+                </div>
+                <span className="profileAccordionChevron" aria-hidden="true">
+                  {openSections.account ? "-" : "+"}
+                </span>
+              </button>
 
-              <div style={{ display: "flex", gap: 10 }}>
+              {openSections.account ? (
+                <div className="profileAccordionBody">
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <button
                   className="btn"
                   type="button"
@@ -304,24 +353,101 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 >
                   Change Password
                 </button>
-                <button className="btn primary" type="button" onClick={handleLogout}>
-                  Logout
-                </button>
-              </div>
+                    <button className="btn primary profileLogoutBtn" type="button" onClick={handleLogout}>
+                      Log out
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="profileSection profileSettingsSection" id="accessibility">
+              <button
+                type="button"
+                className={`profileAccordionTrigger ${openSections.accessibility ? "open" : ""}`}
+                onClick={() => toggleSection("accessibility")}
+                aria-expanded={openSections.accessibility}
+              >
+                <div className="profileAccordionCopy">
+                  <div className="dashCardTitle" style={{ marginBottom: 0 }}>
+                    Accessibility
+                  </div>
+                  <div className="profileAccordionSummary">
+                    {currentTextScaleLabel} text | Contrast {highContrast ? "On" : "Off"}
+                  </div>
+                </div>
+                <span className="profileAccordionChevron" aria-hidden="true">
+                  {openSections.accessibility ? "-" : "+"}
+                </span>
+              </button>
+              {openSections.accessibility ? (
+                <div className="profileAccordionBody">
+                  <div className="profileSettingsIntro">
+                    Large Text Mode updates typography across FitGPT right away so content stays easier to read.
+                  </div>
+                  <div className="profileTextScaleGrid">
+                    {textScaleOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`profileTextScaleBtn ${textScale === option.value ? "active" : ""}`}
+                        onClick={() => setTextScale(option.value)}
+                        aria-pressed={textScale === option.value}
+                      >
+                        <span className="profileTextScaleLabel">{option.label}</span>
+                        <span className="profileTextScaleNote">{option.note}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="profileContrastCard">
+                    <div>
+                      <div className="profileContrastTitle">High-Contrast Mode</div>
+                      <div className="profileContrastNote">
+                        Increase visual contrast for better readability across text, icons, and interactive elements.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className={`btn ${highContrast ? "primary" : ""}`}
+                      onClick={() => setHighContrast(!highContrast)}
+                      aria-pressed={highContrast}
+                    >
+                      {highContrast ? "On" : "Off"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {/* ── Style Preferences ── */}
             <div className="profileSection">
-              <div className="profileSectionTop">
-                <div className="dashCardTitle" style={{ marginBottom: 0 }}>
-                  Style Preferences
+              <button
+                type="button"
+                className={`profileAccordionTrigger ${openSections.style ? "open" : ""}`}
+                onClick={() => toggleSection("style")}
+                aria-expanded={openSections.style}
+              >
+                <div className="profileAccordionCopy">
+                  <div className="dashCardTitle" style={{ marginBottom: 0 }}>
+                    Style Preferences
+                  </div>
+                  <div className="profileAccordionSummary">
+                    {styleSummary || "Style, comfort, dressing for, and body type"}
+                  </div>
                 </div>
-                {prefsSaved && (
-                  <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 700 }}>Saved</span>
-                )}
-              </div>
+                <div className="profileAccordionMeta">
+                  {prefsSaved ? (
+                    <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 700 }}>Saved</span>
+                  ) : null}
+                  <span className="profileAccordionChevron" aria-hidden="true">
+                    {openSections.style ? "-" : "+"}
+                  </span>
+                </div>
+              </button>
 
-              <div style={{ marginTop: 12 }}>
+              {openSections.style ? (
+                <div className="profileAccordionBody">
+                  <div style={{ marginTop: 12 }}>
                 <div className="profilePrefLabel">Style</div>
                 <div className="pillGrid" style={{ marginTop: 8 }}>
                   {STYLE_OPTIONS.map((opt) => (
@@ -376,17 +502,22 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                     <button
                       key={opt.id}
                       type="button"
-                      className={prefs.bodyType === opt.id ? "optionCard selected" : "optionCard"}
+                      className={prefs.bodyType === opt.id ? "optionCard selected profileBodyTypeCard" : "optionCard profileBodyTypeCard"}
                       onClick={() => setBodyType(opt.id)}
                     >
-                      <div className="optionTitle">{opt.label}</div>
-                      <div className="optionNote">{opt.note}</div>
+                      <div className="profileBodyTypeRow">
+                        <BodyTypeFigure bodyTypeId={opt.id} compact />
+                        <div className="profileBodyTypeCopy">
+                          <div className="optionTitle">{opt.label}</div>
+                          <div className="optionNote">{opt.note}</div>
+                        </div>
+                      </div>
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div style={{ marginTop: 16, display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                  <div style={{ marginTop: 16, display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
                 <label className="wardrobeLabel">
                   Gender
                   <select className="wardrobeInput" value={prefs.gender || ""} onChange={(e) => setScalarPref("gender", e.target.value)}>
@@ -407,18 +538,37 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                   />
                 </label>
               </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="profileSection profileSettingsSection" id="smart-alerts" ref={smartAlertsRef}>
-              <div className="profileSectionTop">
-                <div className="dashCardTitle" style={{ marginBottom: 0 }}>
-                  Smart Alerts
+              <button
+                type="button"
+                className={`profileAccordionTrigger ${openSections.alerts ? "open" : ""}`}
+                onClick={() => toggleSection("alerts")}
+                aria-expanded={openSections.alerts}
+              >
+                <div className="profileAccordionCopy">
+                  <div className="dashCardTitle" style={{ marginBottom: 0 }}>
+                    Smart Alerts
+                  </div>
+                  <div className="profileAccordionSummary">
+                    {rotationPrefs?.enabled ? `${reminderPaceLabel} reminders` : "Alerts off"}
+                  </div>
                 </div>
-                {alertsSaved ? (
-                  <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 700 }}>Saved</span>
-                ) : null}
-              </div>
+                <div className="profileAccordionMeta">
+                  {alertsSaved ? (
+                    <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 700 }}>Saved</span>
+                  ) : null}
+                  <span className="profileAccordionChevron" aria-hidden="true">
+                    {openSections.alerts ? "-" : "+"}
+                  </span>
+                </div>
+              </button>
 
+              {openSections.alerts ? (
+                <div className="profileAccordionBody">
               <div className="profileSettingsIntro">
                 Control how FitGPT surfaces underused clothing so reminders stay helpful and not overwhelming.
               </div>
@@ -466,6 +616,8 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                   </div>
                 </div>
               </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="profileSection profileSettingsSection">
@@ -476,7 +628,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
               </div>
 
               <div className="profileSettingsIntro">
-                Adjust how FitGPT renders AI-generated recommendations, explanation cards, and AURA replies.
+                Adjust how FitGPT displays AI-generated recommendations, explanations, and chat replies.
               </div>
 
               <div className="profileAccessibilitySection">
@@ -488,7 +640,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                       type="button"
                       role="radio"
                       aria-checked={accessibilityPrefs.textSize === size}
-                      className={`profileAccessibilityOption${accessibilityPrefs.textSize === size ? " active" : ""}`}
+                      className={"profileAccessibilityOption" + (accessibilityPrefs.textSize === size ? " active" : "")}
                       onClick={() => updateTextSize(size)}
                     >
                       {TEXT_SIZE_LABELS[size]}
@@ -496,7 +648,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                   ))}
                 </div>
                 <div className="profileAccessibilityHint">
-                  Large and Extra Large also split long AI replies into shorter paragraphs so dense text stays readable.
+                  Large and Extra Large also split long AI replies into shorter paragraphs so dense blocks remain readable.
                 </div>
               </div>
             </div>
@@ -507,24 +659,98 @@ export default function Profile({ onResetOnboarding = () => {} }) {
             <div className="profileSignInCard">
               <div className="profileSignInIcon">&#x1F464;</div>
               <div className="profileSignInTitle">You're browsing as a guest</div>
-              <div className="profileSignInSub">Sign in to save outfits, sync your wardrobe, and access your full profile.</div>
               <button className="btn primary" type="button" onClick={() => navigate("/login")}>
                 Sign in
               </button>
             </div>
 
+            <div className="profileSection profileSettingsSection" id="accessibility">
+              <button
+                type="button"
+                className={`profileAccordionTrigger ${openSections.accessibility ? "open" : ""}`}
+                onClick={() => toggleSection("accessibility")}
+                aria-expanded={openSections.accessibility}
+              >
+                <div className="profileAccordionCopy">
+                  <div className="dashCardTitle" style={{ marginBottom: 0 }}>
+                    Accessibility
+                  </div>
+                  <div className="profileAccordionSummary">
+                    {currentTextScaleLabel} text | Contrast {highContrast ? "On" : "Off"}
+                  </div>
+                </div>
+                <span className="profileAccordionChevron" aria-hidden="true">
+                  {openSections.accessibility ? "-" : "+"}
+                </span>
+              </button>
+              {openSections.accessibility ? (
+                <div className="profileAccordionBody">
+                  <div className="profileSettingsIntro">
+                    Large Text Mode updates typography across FitGPT right away so content stays easier to read.
+                  </div>
+                  <div className="profileTextScaleGrid">
+                    {textScaleOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`profileTextScaleBtn ${textScale === option.value ? "active" : ""}`}
+                        onClick={() => setTextScale(option.value)}
+                        aria-pressed={textScale === option.value}
+                      >
+                        <span className="profileTextScaleLabel">{option.label}</span>
+                        <span className="profileTextScaleNote">{option.note}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="profileContrastCard">
+                    <div>
+                      <div className="profileContrastTitle">High-Contrast Mode</div>
+                      <div className="profileContrastNote">
+                        Increase visual contrast for better readability across text, icons, and interactive elements.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className={`btn ${highContrast ? "primary" : ""}`}
+                      onClick={() => setHighContrast(!highContrast)}
+                      aria-pressed={highContrast}
+                    >
+                      {highContrast ? "On" : "Off"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
             {/* ── Style Preferences (guest) ── */}
             <div className="profileSection">
-              <div className="profileSectionTop">
-                <div className="dashCardTitle" style={{ marginBottom: 0 }}>
-                  Style Preferences
+              <button
+                type="button"
+                className={`profileAccordionTrigger ${openSections.style ? "open" : ""}`}
+                onClick={() => toggleSection("style")}
+                aria-expanded={openSections.style}
+              >
+                <div className="profileAccordionCopy">
+                  <div className="dashCardTitle" style={{ marginBottom: 0 }}>
+                    Style Preferences
+                  </div>
+                  <div className="profileAccordionSummary">
+                    {styleSummary || "Style, comfort, dressing for, and body type"}
+                  </div>
                 </div>
-                {prefsSaved && (
-                  <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 700 }}>Saved</span>
-                )}
-              </div>
+                <div className="profileAccordionMeta">
+                  {prefsSaved ? (
+                    <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 700 }}>Saved</span>
+                  ) : null}
+                  <span className="profileAccordionChevron" aria-hidden="true">
+                    {openSections.style ? "-" : "+"}
+                  </span>
+                </div>
+              </button>
 
-              <div style={{ marginTop: 12 }}>
+              {openSections.style ? (
+                <div className="profileAccordionBody">
+                  <div style={{ marginTop: 12 }}>
                 <div className="profilePrefLabel">Style</div>
                 <div className="pillGrid" style={{ marginTop: 8 }}>
                   {STYLE_OPTIONS.map((opt) => (
@@ -579,15 +805,22 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                     <button
                       key={opt.id}
                       type="button"
-                      className={prefs.bodyType === opt.id ? "optionCard selected" : "optionCard"}
+                      className={prefs.bodyType === opt.id ? "optionCard selected profileBodyTypeCard" : "optionCard profileBodyTypeCard"}
                       onClick={() => setBodyType(opt.id)}
                     >
-                      <div className="optionTitle">{opt.label}</div>
-                      <div className="optionNote">{opt.note}</div>
+                      <div className="profileBodyTypeRow">
+                        <BodyTypeFigure bodyTypeId={opt.id} compact />
+                        <div className="profileBodyTypeCopy">
+                          <div className="optionTitle">{opt.label}</div>
+                          <div className="optionNote">{opt.note}</div>
+                        </div>
+                      </div>
                     </button>
                   ))}
                 </div>
               </div>
+                </div>
+              ) : null}
             </div>
 
           </>
@@ -722,22 +955,15 @@ export default function Profile({ onResetOnboarding = () => {} }) {
         <div className="modalOverlay" role="dialog" aria-modal="true" onClick={closePicMenu}>
           <div className="modalCard profilePicMenu" onClick={(e) => e.stopPropagation()}>
             <div className="modalTitle">Profile Picture</div>
-            <div className="modalSub">Upload a PNG, JPG, or WebP photo as your avatar. Images can be up to 10MB.</div>
-            {user ? (
-              <div className="noteBox" style={{ marginTop: 10 }}>
-                Changes are saved to your FitGPT account and will appear across supported devices.
-              </div>
-            ) : null}
+            <div className="modalSub">Upload a photo or animated GIF as your avatar. Photos can be up to 10MB, and GIFs up to 3MB.</div>
 
             <div className="profilePicMenuPreview">
               {(pendingPic !== null ? pendingPic : profilePic) ? (
                 <img src={pendingPic !== null ? pendingPic : profilePic} alt="Preview" className="profileAvatar" style={{ cursor: "default" }} />
               ) : (
                 <div className="profileAvatar profileAvatarPlaceholder" style={{ cursor: "default" }}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
+                  <span className="profileAvatarPlaceholderBadge">Profile</span>
+                  <span className="profileAvatarPlaceholderText">Preview</span>
                 </div>
               )}
             </div>
@@ -755,18 +981,9 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 <button
                   className="btnSecondary"
                   type="button"
-                  onClick={() => {
-                    if (user) {
-                      setPendingPic(null);
-                      setPendingPicFile(null);
-                    } else {
-                      setPendingPic("");
-                      setPendingPicFile(null);
-                    }
-                    setPicMsg("");
-                  }}
+                  onClick={() => { setPendingPic(""); setPicMsg(""); }}
                 >
-                  {user ? "Revert" : "Reset"}
+                  Reset
                 </button>
               )}
               <button
@@ -780,38 +997,15 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 className="btnPrimary"
                 type="button"
                 disabled={pendingPic === null}
-                onClick={async () => {
+                onClick={() => {
                   try {
-                    if (user) {
-                      if (!pendingPicFile) {
-                        setPicMsg("Choose a new image before saving.");
-                        return;
-                      }
-                      setPicMsg("Uploading avatar...");
-                      const response = await uploadProfileAvatar(pendingPicFile);
-                      const avatarUrl = response?.avatar_url || response?.avatarUrl || pendingPic || "";
-                      if (!avatarUrl) {
-                        throw new Error("Avatar upload did not return a URL.");
-                      }
-                      saveProfilePic(avatarUrl, effectiveUser);
-                      setProfilePic(avatarUrl);
-                      if (typeof setUser === "function") {
-                        setUser((current) => (current ? { ...current, avatar_url: avatarUrl, avatarUrl } : current));
-                      }
-                    } else {
-                      saveProfilePic(pendingPic || "", effectiveUser);
-                      setProfilePic(pendingPic || "");
-                    }
+                    saveProfilePic(pendingPic || "", effectiveUser);
+                    setProfilePic(pendingPic || "");
                     setPendingPic(null);
-                    setPendingPicFile(null);
                     setPicMsg("");
                     setShowPicMenu(false);
                   } catch {
-                    setPicMsg(
-                      user
-                        ? "Could not upload that avatar. Please try another supported image."
-                        : "That profile picture is too large to save. Please choose a smaller supported image."
-                    );
+                    setPicMsg("That profile picture is too large to save. Please choose a smaller image or GIF.");
                   }
                 }}
               >

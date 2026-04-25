@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { registerWithEmail, loginWithEmail, getMe } from "../api/authApi";
+import { saveProfileDraft } from "../api/profileApi";
 import { useAuth } from "../auth/AuthProvider";
 import { migrateGuestData, clearGuestData } from "../utils/userStorage";
-import GoogleSignInButton from "./GoogleSignInButton";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -45,20 +45,39 @@ export default function Signup() {
     setIsLoading(true);
 
     try {
-      await registerWithEmail(email.trim(), password);
-      await loginWithEmail(email.trim(), password);
+      try {
+        await registerWithEmail(email.trim(), password);
+      } catch (regErr) {
+        const msg = (regErr?.message || "").toLowerCase();
+        if (!msg.includes("already") && !msg.includes("registered") && !msg.includes("exists")) {
+          throw regErr;
+        }
+        // Account already exists — fall through to login
+      }
+
+      try {
+        await loginWithEmail(email.trim(), password);
+      } catch {
+        navigate("/login", { replace: true });
+        return;
+      }
+
+      const profileDraft = { fullName: fullName.trim(), dob: dob || "" };
 
       try {
         const me = await getMe();
         if (me) {
+          try { await saveProfileDraft(profileDraft, me); } catch {}
           migrateGuestData(me);
           clearGuestData();
-          const onboarded = Boolean(me?.onboarding_complete ?? me?.onboardingComplete);
           if (typeof setUser === "function") setUser(me);
+          const onboarded = Boolean(me?.onboarding_complete ?? me?.onboardingComplete);
           navigate(onboarded ? "/dashboard" : "/onboarding", { replace: true });
           return;
         }
-      } catch {}
+      } catch {
+        try { await saveProfileDraft(profileDraft, { email: email.trim() }); } catch {}
+      }
 
       navigate("/onboarding", { replace: true });
     } catch (err) {
@@ -89,10 +108,6 @@ export default function Signup() {
             Back
           </button>
         </div>
-
-        <GoogleSignInButton />
-
-        <div className="authDivider"><span>or</span></div>
 
         <form onSubmit={onSubmit} className="authForm">
           <label className="authFormGroup">
@@ -188,6 +203,32 @@ export default function Signup() {
             </NavLink>
           </div>
         </form>
+      </div>
+
+      <div className="authQrRow">
+        <div className="authQrCard">
+          <img
+            className="authQrCode"
+            src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https%3A%2F%2Fwww.fitgpt.tech"
+            alt="QR code for FitGPT web app"
+            loading="lazy"
+          />
+          <span className="authQrLabel">Open on phone</span>
+          <span className="authQrSub">fitgpt.tech</span>
+        </div>
+
+        <div className="authQrDivider" aria-hidden="true" />
+
+        <div className="authQrCard">
+          <img
+            className="authQrCode"
+            src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https%3A%2F%2Fwww.fitgpt.tech%2Fdownload"
+            alt="QR code to download FitGPT Android app"
+            loading="lazy"
+          />
+          <span className="authQrLabel">Android app</span>
+          <span className="authQrSub">Download APK</span>
+        </div>
       </div>
     </div>
   );

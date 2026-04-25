@@ -4,7 +4,6 @@ import { loginWithEmail, getMe } from "../api/authApi";
 import { useAuth } from "../auth/AuthProvider";
 import { migrateGuestData, clearGuestData } from "../utils/userStorage";
 import { isNetworkError } from "../utils/helpers";
-import GoogleSignInButton from "./GoogleSignInButton";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -93,11 +92,7 @@ export default function Login() {
           </button>
         </div>
 
-        <GoogleSignInButton />
-
         {protectedMessage ? <div className="authHint">{protectedMessage}</div> : null}
-
-        <div className="authDivider"><span>or</span></div>
 
         <form onSubmit={onSubmit} className="authForm">
           <label className="authFormGroup">
@@ -160,6 +155,32 @@ export default function Login() {
             </NavLink>
           </div>
         </form>
+      </div>
+
+      <div className="authQrRow">
+        <div className="authQrCard">
+          <img
+            className="authQrCode"
+            src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https%3A%2F%2Fwww.fitgpt.tech"
+            alt="QR code for FitGPT web app"
+            loading="lazy"
+          />
+          <span className="authQrLabel">Open on phone</span>
+          <span className="authQrSub">fitgpt.tech</span>
+        </div>
+
+        <div className="authQrDivider" aria-hidden="true" />
+
+        <div className="authQrCard">
+          <img
+            className="authQrCode"
+            src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https%3A%2F%2Fwww.fitgpt.tech%2Fdownload"
+            alt="QR code to download FitGPT Android app"
+            loading="lazy"
+          />
+          <span className="authQrLabel">Android app</span>
+          <span className="authQrSub">Download APK</span>
+        </div>
       </div>
     </div>
   );

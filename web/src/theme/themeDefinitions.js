@@ -70,6 +70,58 @@ export const PRESET_THEMES = [
     vars: buildVars("dark", "#c43c3c"),
   },
 
+  // Editorial — cream paper aesthetic, serif-friendly, ink burgundy accent.
+  // Used by the magazine-style Dashboard hero. Opt-in only.
+  {
+    id: "editorial",
+    name: "Editorial Paper",
+    base: "light",
+    category: "editorial",
+    icon: "\uD83D\uDCD6",
+    vars: buildVars("light", "#7a1f1f", {
+      "--bg": "#f5efe6",
+      "--pageBg1": "#f0e8db",
+      "--pageBg2": "#f7f1e8",
+      "--surface": "#fbf6ee",
+      "--surface-input": "#fbf6ee",
+      "--surface-border": "rgba(38, 28, 20, 0.14)",
+      "--text": "#2a221c",
+      "--muted": "rgba(42, 34, 28, 0.6)",
+      "--border": "rgba(38, 28, 20, 0.14)",
+      "--bgSoft": "rgba(38, 28, 20, 0.05)",
+      "--shadow": "0 14px 38px rgba(38, 28, 20, 0.12)",
+      "--shadow-hover": "0 18px 50px rgba(38, 28, 20, 0.18)",
+      "--wardrobe-blue": "#7a1f1f",
+      "--wardrobe-blue-soft": "rgba(122, 31, 31, 0.08)",
+    }),
+  },
+
+  // Editorial Night — same magazine layout in a dark warm-ink palette.
+  // Shares all [data-theme-id^="editorial"] CSS via the matching id prefix.
+  {
+    id: "editorial-dark",
+    name: "Editorial Night",
+    base: "dark",
+    category: "editorial",
+    icon: "\uD83C\uDF03",
+    vars: buildVars("dark", "#c43c3c", {
+      "--bg": "#1a1410",
+      "--pageBg1": "#15100c",
+      "--pageBg2": "#1a1410",
+      "--surface": "#231b14",
+      "--surface-input": "rgba(35, 27, 20, 0.92)",
+      "--surface-border": "rgba(232, 223, 208, 0.10)",
+      "--text": "#e8dfd0",
+      "--muted": "rgba(232, 223, 208, 0.60)",
+      "--border": "rgba(232, 223, 208, 0.10)",
+      "--bgSoft": "rgba(232, 223, 208, 0.06)",
+      "--shadow": "0 14px 38px rgba(0, 0, 0, 0.45)",
+      "--shadow-hover": "0 18px 50px rgba(0, 0, 0, 0.55)",
+      "--wardrobe-blue": "#c43c3c",
+      "--wardrobe-blue-soft": "rgba(196, 60, 60, 0.14)",
+    }),
+  },
+
   // Color presets
   {
     id: "ocean",
@@ -195,6 +247,12 @@ export const PRESET_THEMES = [
       "--wardrobe-blue-soft": "rgba(196, 181, 253, 0.12)",
     }),
   },
+
+  // Accessibility — high contrast (light + dark variants).
+  // Pure black/white colors, strong borders, minimized soft shadows so the
+  // UI remains legible for users who need maximum contrast. Marked with
+  // highContrast:true so accessibility helpers (e.g. adaptAiText) can
+  // trigger additional text-structure adjustments when active.
   {
     id: "contrast-light",
     name: "High Contrast Light",
@@ -254,6 +312,7 @@ export function getPresetTheme(id) {
   return PRESET_THEMES.find((t) => t.id === id) || PRESET_THEMES[0];
 }
 
+/** True if the given theme (preset or custom) is a high-contrast variant. */
 export function isHighContrast(theme) {
   return !!(theme && theme.highContrast);
 }

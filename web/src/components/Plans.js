@@ -10,6 +10,7 @@ import GuestModeNotice from "./GuestModeNotice";
 import PlanningCalendar from "./PlanningCalendar";
 import UpcomingWeatherPlanner from "./UpcomingWeatherPlanner";
 import TripPackingPlanner from "./TripPackingPlanner";
+import OutfitMannequinPreview from "./OutfitMannequinPreview";
 
 export default function Plans() {
   const navigate = useNavigate();
@@ -19,6 +20,7 @@ export default function Plans() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
+  const [mannequinPreview, setMannequinPreview] = useState(null);
 
   const wardrobe = useMemo(() => loadWardrobe(user), [user]);
   const answers = useMemo(() => loadAnswers(user), [user]);
@@ -90,16 +92,29 @@ export default function Plans() {
 
   const handleRemove = async (plannedId) => {
     try {
-      const result = await plannedOutfitsApi.removePlanned(plannedId, user);
+      await plannedOutfitsApi.removePlanned(plannedId, user);
       refresh();
-      if (result?.localOnly) {
-        setMsg("Plan removed locally only. Backend sync failed.");
-        window.setTimeout(() => setMsg(""), 2500);
-      }
     } catch {
       setMsg("Could not remove plan.");
       window.setTimeout(() => setMsg(""), 2500);
     }
+  };
+
+  const handleCreatePlan = async ({ plannedDate, itemIds, occasion, itemDetails }) => {
+    const result = await plannedOutfitsApi.planOutfit(
+      {
+        item_ids: itemIds,
+        item_details: itemDetails,
+        planned_date: plannedDate,
+        occasion,
+        notes: occasion ? `Planned for ${occasion}.` : "Planned from calendar.",
+        source: "planner-calendar",
+      },
+      user
+    );
+
+    await refresh();
+    return result;
   };
 
   const handleWearAgain = (entry) => {
@@ -116,14 +131,51 @@ export default function Plans() {
   };
 
   const handleOpenGoogleCalendar = (plan) => {
-    const names = (Array.isArray(plan?.item_details) ? plan.item_details : []).map((d) => d?.name).filter(Boolean);
-    const url = buildGoogleCalendarUrl({ date: plan?.planned_date, occasion: plan?.occasion, itemNames: names });
+    const itemDetails = Array.isArray(plan?.item_details) && plan.item_details.length
+      ? plan.item_details
+      : (Array.isArray(plan?.item_ids) ? plan.item_ids : [])
+          .map((itemId) => wardrobeById.get((itemId ?? "").toString().trim()))
+          .filter(Boolean)
+          .map((item) => ({
+            id: (item?.id ?? "").toString(),
+            name: item?.name || "",
+            category: item?.category || "",
+            color: item?.color || "",
+            image_url: item?.image_url || "",
+          }));
+    const names = itemDetails.map((d) => d?.name).filter(Boolean);
+    const url = buildGoogleCalendarUrl({
+      date: plan?.planned_date,
+      occasion: plan?.occasion,
+      itemNames: names,
+      itemDetails,
+    });
     window.open(url, "_blank", "noopener");
+  };
+
+  const resolvePlanOutfit = (plan) => {
+    const details = Array.isArray(plan?.item_details) ? plan.item_details.filter(Boolean) : [];
+    if (details.length) return details;
+
+    const itemIds = Array.isArray(plan?.item_ids) ? plan.item_ids : [];
+    return itemIds
+      .map((id) => {
+        const trimmed = (id ?? "").toString().trim();
+        return (
+          wardrobeById.get(trimmed) || {
+            id: trimmed,
+            name: trimmed || "Item",
+            image_url: "",
+            not_rendered_reason: "This planned piece is not available in the active wardrobe, so it can only appear in the preview summary.",
+          }
+        );
+      });
   };
 
   const renderCard = (p) => {
     const details = Array.isArray(p?.item_details) ? p.item_details : [];
     const previewIds = Array.isArray(p?.item_ids) ? p.item_ids : [];
+    const previewOutfit = resolvePlanOutfit(p);
 
     return (
       <div key={p?.planned_id} className="plannedCard">
@@ -165,6 +217,17 @@ export default function Plans() {
         <div className="historyActions" style={{ marginTop: 10 }}>
           <button className="btn primary" onClick={() => handleWearThis(p)}>
             Wear This
+          </button>
+          <button
+            className="btn"
+            onClick={() =>
+              setMannequinPreview({
+                outfit: previewOutfit,
+                title: `3D Outfit Preview: ${p?.occasion || formatPlanDate(p?.planned_date) || "Planned look"}`,
+              })
+            }
+          >
+            View on mannequin
           </button>
           <button className="btn" onClick={() => handleOpenGoogleCalendar(p)}>
             Add to Google Calendar
@@ -211,9 +274,11 @@ export default function Plans() {
       <UpcomingWeatherPlanner wardrobe={wardrobe} user={user} isGuestMode={!user} answers={answers} />
       <TripPackingPlanner wardrobe={wardrobe} user={user} answers={answers} />
       <PlanningCalendar
-        plans={upcoming}
+        plans={planned}
         history={history}
+        wardrobe={wardrobe}
         wardrobeById={wardrobeById}
+        onCreatePlan={handleCreatePlan}
         onWearThis={handleWearThis}
         onRemovePlan={handleRemove}
         onAddToGoogleCalendar={handleOpenGoogleCalendar}
@@ -256,6 +321,14 @@ export default function Plans() {
           </div>
         </section>
       )}
+
+      <OutfitMannequinPreview
+        isOpen={Boolean(mannequinPreview)}
+        onClose={() => setMannequinPreview(null)}
+        outfit={mannequinPreview?.outfit || []}
+        title={mannequinPreview?.title || "3D Outfit Preview"}
+        subtitle="Planned outfit preview"
+      />
 
     </div>
   );

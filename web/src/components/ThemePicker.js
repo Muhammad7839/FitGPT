@@ -7,6 +7,7 @@ import CustomThemeEditor from "./CustomThemeEditor";
 const CATEGORY_LABELS = {
   classic: "Classic",
   preset: "Color",
+  editorial: "Editorial",
   seasonal: "Seasonal & Mood",
   accessibility: "Accessibility",
   custom: "Custom",
@@ -82,7 +83,7 @@ export default function ThemePicker({ inline }) {
         {open && (
           <div className="themePickerDropdown">
             {/* Category sections */}
-            {["classic", "preset", "seasonal", "accessibility"].map((cat) => {
+            {["classic", "preset", "editorial", "seasonal", "accessibility"].map((cat) => {
               const items = groups[cat];
               if (!items?.length) return null;
               return (
@@ -108,9 +109,16 @@ export default function ThemePicker({ inline }) {
                           }}
                         >
                           <span
-                            className="themePickerAccentBar"
+                            className="themePickerSwatchSurface"
+                            style={{ background: t.vars["--surface"] || t.vars["--pageBg1"] || t.vars["--bg"] }}
+                          />
+                          <span
+                            className="themePickerSwatchAccent"
                             style={{ background: t.vars["--accent"] }}
                           />
+                          {t.id === theme.id ? (
+                            <span className="themePickerSwatchCheck" aria-hidden="true">{"\u2713"}</span>
+                          ) : null}
                         </span>
                         <span className="themePickerTileLabel">
                           <span className="themePickerTileIcon">{t.icon}</span>

@@ -454,6 +454,12 @@ function AutoResizeTextarea({ value, onChange, onKeyDown, disabled, inputRef, he
       disabled={disabled}
       aria-label="Ask AURA about outfits or styling"
       aria-describedby={helperTextId}
+      autoComplete="off"
+      autoCorrect="off"
+      spellCheck="false"
+      data-gramm="false"
+      data-gramm_editor="false"
+      data-enable-grammarly="false"
     />
   );
 }
@@ -491,7 +497,8 @@ function TypewriterMessage({ text, onDone }) {
   );
 }
 
-function AuthenticatedChatbot({ user }) {
+export default function Chatbot() {
+  const { user } = useAuth();
   const { theme } = useTheme() || {};
   const demoUser = readDemoAuth();
   const effectiveUser = user || demoUser;
@@ -1328,10 +1335,4 @@ function AuthenticatedChatbot({ user }) {
       )}
     </>
   );
-}
-
-export default function Chatbot() {
-  const { user } = useAuth();
-  if (!user) return null;
-  return <AuthenticatedChatbot user={user} />;
 }

@@ -218,7 +218,7 @@ class ClothingItemCreate(BaseModel):
     occasion_tags: list[str] = Field(default_factory=list, max_length=12)
     accessory_type: Optional[str] = Field(default=None, max_length=32)
     comfort_level: int = Field(ge=1, le=5)
-    image_url: Optional[str] = Field(default=None, max_length=1024)
+    image_url: Optional[str] = Field(default=None)
     brand: Optional[str] = Field(default=None, max_length=128)
     is_available: bool = True
     is_favorite: bool = False
@@ -233,13 +233,21 @@ class ClothingItemCreate(BaseModel):
             raise ValueError("value cannot be blank")
         return cleaned
 
-    @field_validator("name", "clothing_type", "fit_tag", "layer_type", "set_identifier", "accessory_type", "image_url", "brand")
+    @field_validator("name", "clothing_type", "fit_tag", "layer_type", "set_identifier", "accessory_type", "brand")
     @classmethod
     def validate_optional_text(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return value
         cleaned = value.strip()
         return cleaned or None
+
+    @field_validator("image_url")
+    @classmethod
+    def validate_image_url(cls, value: Optional[str]) -> Optional[str]:
+        # Allow full base64 data URLs (no length restriction)
+        if value is None:
+            return value
+        return value.strip() or None
 
     @field_validator("layer_type")
     @classmethod
@@ -319,7 +327,7 @@ class ClothingItemUpdate(BaseModel):
     occasion_tags: Optional[list[str]] = Field(default=None, max_length=12)
     accessory_type: Optional[str] = Field(default=None, max_length=32)
     comfort_level: Optional[int] = Field(default=None, ge=1, le=5)
-    image_url: Optional[str] = Field(default=None, max_length=1024)
+    image_url: Optional[str] = Field(default=None)
     brand: Optional[str] = Field(default=None, max_length=128)
     is_available: Optional[bool] = None
     is_favorite: Optional[bool] = None
@@ -336,13 +344,21 @@ class ClothingItemUpdate(BaseModel):
             raise ValueError("value cannot be blank")
         return cleaned
 
-    @field_validator("name", "clothing_type", "fit_tag", "layer_type", "set_identifier", "accessory_type", "image_url", "brand")
+    @field_validator("name", "clothing_type", "fit_tag", "layer_type", "set_identifier", "accessory_type", "brand")
     @classmethod
     def validate_optional_free_text(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return value
         cleaned = value.strip()
         return cleaned or None
+
+    @field_validator("image_url")
+    @classmethod
+    def validate_update_image_url(cls, value: Optional[str]) -> Optional[str]:
+        # Allow full base64 data URLs (no length restriction)
+        if value is None:
+            return value
+        return value.strip() or None
 
     @field_validator("layer_type")
     @classmethod
