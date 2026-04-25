@@ -19421,8 +19421,10 @@ html[data-hc="true"] .dashAiParagraph {
 .editorialHeadlineTemp {
   /* Fraunces — display serif with a chunkier degree glyph + softer
      contrast than Playfair, makes the temperature read like a magazine
-     pull figure. opsz 96+ requests the display optical size automatically. */
+     pull figure. opsz 96+ requests the display optical size automatically.
+     Italic so the digits lean and read as a pull figure, not as body text. */
   font-family: "Fraunces", "Playfair Display", "Didot", "Georgia", serif;
+  font-style: italic;
   font-optical-sizing: auto;
   font-variation-settings: "opsz" 96;
   color: #c43c3c;
