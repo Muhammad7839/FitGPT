@@ -63,18 +63,28 @@ export function saveWardrobe(items, user) {
   const sessionKey = userKey(GUEST_WARDROBE_KEY, user);
   const localKey = userKey(WARDROBE_KEY, user);
   const safe = (Array.isArray(items) ? items : []).map(normalizeItemMetadata);
-  const json = JSON.stringify(safe);
+
+  // Full data (with images) goes to sessionStorage — current session only, no quota pressure
   try {
-    sessionStorage.setItem(sessionKey, json);
-    if (getUserId(user)) {
-      localStorage.setItem(localKey, json);
-    } else {
-      localStorage.removeItem(WARDROBE_KEY);
-    }
-    window.dispatchEvent(new Event(EVT_WARDROBE_CHANGED));
+    sessionStorage.setItem(sessionKey, JSON.stringify(safe));
   } catch (e) {
-    console.warn("Storage quota exceeded, skipping save:", e);
+    console.warn("sessionStorage quota exceeded:", e);
   }
+
+  // Compact data (no base64 images) goes to localStorage — persists across sessions
+  // Images are large data URLs; stripping them keeps localStorage well under mobile quotas
+  if (getUserId(user)) {
+    const compact = safe.map(({ image_url, ...rest }) => rest);
+    try {
+      localStorage.setItem(localKey, JSON.stringify(compact));
+    } catch (e) {
+      console.warn("localStorage quota exceeded:", e);
+    }
+  } else {
+    localStorage.removeItem(WARDROBE_KEY);
+  }
+
+  window.dispatchEvent(new Event(EVT_WARDROBE_CHANGED));
 }
 
 
