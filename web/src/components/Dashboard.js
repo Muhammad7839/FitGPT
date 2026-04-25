@@ -78,6 +78,7 @@ import {
   readRecommendationPersonalization,
   trackRecommendationPersonalization,
 } from "../utils/recommendationPersonalization";
+import STYLE_TIPS from "../utils/styleTips";
 
 const DEFAULT_BODY_TYPE = "rectangle";
 const OCCASION_OPTIONS = ["", "casual", "work", "formal", "athletic", "social", "lounge"];
@@ -440,9 +441,100 @@ function rejectSyncErrorText() {
   return `${REJECT_SUCCESS_MESSAGE} We couldn't sync that rejection right now.`;
 }
 
+// ── Editorial mode helpers ─────────────────────────────────────────
+// Used only when the "editorial" theme is active. Keep these data-only
+// (no JSX) so they stay easy to test and don't pull React in.
+
+function editorialDayName(date) {
+  return date.toLocaleDateString(undefined, { weekday: "long" });
+}
+
+function buildEditorialHeadline({ count, tempF, day }) {
+  const ways = count >= 3 ? "Three" : count === 2 ? "Two" : count === 1 ? "One" : "No";
+  const wayLabel = count === 1 ? "way" : "ways";
+  if (count === 0) {
+    return { before: `No outfits for a ${day}.`, temp: "", after: "" };
+  }
+  if (Number.isFinite(tempF)) {
+    return {
+      before: `${ways} ${wayLabel} to dress for a `,
+      temp: `${Math.round(tempF)}\u00B0`,
+      after: ` ${day}.`,
+    };
+  }
+  return { before: `${ways} ${wayLabel} to dress for a ${day}.`, temp: "", after: "" };
+}
+
+function buildClosetGapInsight(wardrobe) {
+  const active = (wardrobe || []).filter((item) => !item?.is_archived);
+  const counts = { Tops: 0, Bottoms: 0, Shoes: 0, Outerwear: 0, Accessories: 0 };
+  for (const item of active) {
+    const cat = normalizeCategory(item?.category);
+    if (counts[cat] != null) counts[cat] += 1;
+  }
+  const order = ["Outerwear", "Tops", "Bottoms", "Shoes", "Accessories"];
+  const missing = order.find((c) => counts[c] === 0);
+  if (missing) return { headline: `Add ${missing.toLowerCase()}`, sub: "Empty category in your closet" };
+  const lowest = order.reduce((acc, c) => (counts[c] < counts[acc] ? c : acc), order[0]);
+  if (counts[lowest] <= 2) return { headline: `Light on ${lowest.toLowerCase()}`, sub: `Only ${counts[lowest]} in rotation` };
+  return { headline: "Balanced closet", sub: "Every category is covered" };
+}
+
+function buildRotationInsight(historyEntries) {
+  const list = Array.isArray(historyEntries) ? historyEntries : [];
+  const now = new Date();
+  const monthAgo = new Date(now);
+  monthAgo.setDate(monthAgo.getDate() - 30);
+  const recent = list.filter((entry) => {
+    const ts = entry?.worn_at || entry?.created_at;
+    if (!ts) return false;
+    const d = new Date(ts);
+    return !Number.isNaN(d.getTime()) && d >= monthAgo;
+  });
+  if (recent.length === 0) return { headline: "Quiet month", sub: "Log an outfit to start the count" };
+  return {
+    headline: `${recent.length} outfit${recent.length === 1 ? "" : "s"} worn`,
+    sub: "In the last 30 days",
+  };
+}
+
+function buildTomorrowInsight(plannedOutfits) {
+  const list = Array.isArray(plannedOutfits) ? plannedOutfits : [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const future = list
+    .filter((p) => {
+      const d = p?.planned_date ? new Date(p.planned_date) : null;
+      return d && !Number.isNaN(d.getTime()) && d >= today;
+    })
+    .sort((a, b) => new Date(a.planned_date) - new Date(b.planned_date));
+  const next = future[0];
+  if (!next) return { headline: "Nothing planned", sub: "Plan an outfit from the dashboard" };
+  const when = new Date(next.planned_date);
+  const isToday = when.getTime() === today.getTime();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const isTomorrow = when.getTime() === tomorrow.getTime();
+  const label = isToday ? "Today" : isTomorrow ? "Tomorrow" : when.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  return {
+    headline: label,
+    sub: next.occasion ? titleCase(next.occasion) : "Outfit planned",
+  };
+}
+
+function pickEditorialHeroImage(outfit) {
+  const list = Array.isArray(outfit) ? outfit : [];
+  const withImg = list.find((item) => item?.image_url);
+  return withImg?.image_url || null;
+}
+
 export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { theme } = useTheme() || {};
+  // Catches "editorial" and any sibling like "editorial-dark" so the hero,
+  // insight strip, and dominant-selected layout render across the family.
+  const isEditorial = typeof theme?.id === "string" && theme.id.startsWith("editorial");
   const isGuestMode = !user;
 
   const wardrobe = useWardrobe(user);
@@ -489,6 +581,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [showRefineControls, setShowRefineControls] = useState(false);
 
   const [rejectedOutfits] = useState(() => loadRejectedOutfits(user));
+  const [editorialPlanned, setEditorialPlanned] = useState([]);
   const [legacyPreferenceProfile, setLegacyPreferenceProfile] = useState(null);
 
   /* Build personalization profile from all signals once history + saved are loaded */
@@ -514,6 +607,19 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const nudgeTimerRef = useRef(null);
 
   useEffect(() => { recordVisit(user); }, [user]);
+
+  // Editorial mode: load planned outfits for the "Tomorrow" insight card.
+  // Only fires when the editorial theme is active so we don't pay for it
+  // on every dashboard mount.
+  useEffect(() => {
+    if (!isEditorial) return;
+    let alive = true;
+    plannedOutfitsApi.listPlanned(user).then((res) => {
+      if (!alive) return;
+      setEditorialPlanned(Array.isArray(res?.planned_outfits) ? res.planned_outfits : []);
+    }).catch(() => { if (alive) setEditorialPlanned([]); });
+    return () => { alive = false; };
+  }, [isEditorial, user]);
 
   const [aiOutfits, setAiOutfits] = useState(null);
   const [aiExplanations, setAiExplanations] = useState([]);
@@ -981,7 +1087,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [viewMode, setViewMode] = useState("grid");
-  const { theme } = useTheme() || {};
   const [accessibilityPrefs, setAccessibilityPrefs] = useState(() => readAccessibilityPrefs(null));
   const effectiveAccessibility = useMemo(
     () => effectiveAccessibilityPrefs(accessibilityPrefs, theme),
@@ -1612,6 +1717,10 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     if (type === "dislike") {
       saveRejectedOutfit(outfit, user);
     }
+    /* Also feed the new-format feedback store so the Like/Dislike button's
+     * active state reflects the click; submitFeedback is async but we don't
+     * need to await it here. */
+    submitFeedback({ outfit, signal: type }).catch(() => {});
     /* Rebuild personalization profile from all signals */
     Promise.all([
       outfitHistoryApi.listHistory(user).catch(() => ({ history: [] })),
@@ -1709,61 +1818,158 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     return "Filtered by current season. In season items stay first, while overlap pieces still help with transitional weather.";
   }, [seasonalMode, hasSeasonTags, currentSeasonLabel]);
 
+  const editorialHeadline = isEditorial
+    ? buildEditorialHeadline({
+        count: outfits.length,
+        tempF: weatherTempF,
+        day: editorialDayName(new Date()),
+      })
+    : { before: "", temp: "", after: "" };
+  const editorialHeroOutfit = isEditorial ? (outfits[selectedIdx ?? 0] || outfits[0] || []) : [];
+  const editorialHeroImage = isEditorial ? pickEditorialHeroImage(editorialHeroOutfit) : null;
+  const editorialClosetGap = isEditorial ? buildClosetGapInsight(wardrobe) : null;
+  const editorialRotation = isEditorial ? buildRotationInsight(historyEntries) : null;
+  const editorialTomorrow = isEditorial ? buildTomorrowInsight(editorialPlanned) : null;
+
   return (
-    <div className="onboarding onboardingPage dashPage">
-      <div className="dashHeroBar">
-        <div className="dashHeroLeft">
-          <div className="dashHeroDate">{formatToday()}</div>
-          <div className="dashHeroIntro">
-            A cleaner way to check today&apos;s outfit, refine it fast, and spot the next best move for your wardrobe.
-          </div>
-          <div className="dashQuickRow">
-            <button type="button" className="dashQuickBtn" onClick={goAddItem}>+ Add Item</button>
-            {!isGuestMode ? (
-              <>
-                <button type="button" className="dashQuickBtn" onClick={openPlanModal}>{"\u2606"} Plan Outfit</button>
-                <button type="button" className="dashQuickBtn" onClick={() => navigate("/history")}>{"\u29D6"} History</button>
-              </>
-            ) : null}
-          </div>
-        </div>
-        <div className="dashHeroRight">
-          {legacyPreferenceProfile && legacyPreferenceProfile.personalizationLevel > 0 ? (
-            <div className="dashPersonalization" title={`Personalization: ${legacyPreferenceProfile.personalizationLevel}%`}>
-              <div className="dashPersonalizationBar">
-                <div className="dashPersonalizationFill" style={{ width: `${legacyPreferenceProfile.personalizationLevel}%` }} />
-              </div>
-              <span className="dashPersonalizationLabel">
-                {legacyPreferenceProfile.personalizationLevel >= 70 ? "Tuned to you" : legacyPreferenceProfile.personalizationLevel >= 35 ? "Learning" : "Getting started"}
-              </span>
+    <div className={"onboarding onboardingPage dashPage" + (isEditorial ? " dashPageEditorial" : "")}>
+      {isEditorial ? (
+        <header className="editorialHero">
+          <div className="editorialHeroLeft">
+            <div className="editorialMasthead">FitGPT — {formatToday()}</div>
+            <h1 className="editorialHeadline">
+              {editorialHeadline.before}
+              {editorialHeadline.temp ? (
+                <span className="editorialHeadlineTemp">{editorialHeadline.temp}</span>
+              ) : null}
+              {editorialHeadline.after}
+            </h1>
+            <div className="editorialDek">
+              {weatherPresentation.subline || "Refine, save, or plan today's look."}
             </div>
-          ) : null}
-          <div className="dashHeroBadge">Personalized daily styling</div>
+            <div className="editorialActions">
+              <button type="button" className="editorialBtnPrimary" onClick={goAddItem}>Add item</button>
+              {!isGuestMode ? (
+                <>
+                  <button type="button" className="editorialBtnGhost" onClick={openPlanModal}>Plan outfit</button>
+                  <button type="button" className="editorialBtnGhost" onClick={() => navigate("/history")}>History</button>
+                </>
+              ) : null}
+            </div>
+          </div>
+          <div className="editorialHeroRight">
+            {editorialHeroImage ? (
+              <div className="editorialHeroFigure">
+                <img src={editorialHeroImage} alt="Today's selected outfit" className="editorialHeroImg" />
+                <div className="editorialHeroCaption">
+                  {`Plate ${String((selectedIdx ?? 0) + 1).padStart(2, "0")} \u2014 ${editorialHeroOutfit.length} pieces`}
+                </div>
+              </div>
+            ) : (
+              <div className="editorialHeroFigure editorialHeroFigureEmpty">
+                <div className="editorialHeroFigureLabel">No plate yet</div>
+                <div className="editorialHeroCaption">Add a few items to render today's outfit.</div>
+              </div>
+            )}
+          </div>
+        </header>
+      ) : (
+        <div className="dashHeroBar">
+          <div className="dashHeroLeft">
+            <div className="dashHeroDate">{formatToday()}</div>
+            <div className="dashHeroIntro">
+              A cleaner way to check today&apos;s outfit, refine it fast, and spot the next best move for your wardrobe.
+            </div>
+            <div className="dashQuickRow">
+              <button type="button" className="dashQuickBtn" onClick={goAddItem}>+ Add Item</button>
+              {!isGuestMode ? (
+                <>
+                  <button type="button" className="dashQuickBtn" onClick={openPlanModal}>{"\u2606"} Plan Outfit</button>
+                  <button type="button" className="dashQuickBtn" onClick={() => navigate("/history")}>{"\u29D6"} History</button>
+                </>
+              ) : null}
+            </div>
+          </div>
+          <div className="dashHeroRight">
+            <div
+              className="dashPersonalization"
+              title={`Personalization: ${legacyPreferenceProfile?.personalizationLevel ?? 0}%`}
+            >
+              <span className="dashPersonalizationSparkle" aria-hidden="true">{"\u2728"}</span>
+              <div className="dashPersonalizationBody">
+                <div className="dashPersonalizationHead">
+                  <span className="dashPersonalizationLabel">
+                    {(() => {
+                      const lvl = legacyPreferenceProfile?.personalizationLevel ?? 0;
+                      if (lvl >= 70) return "Tuned to you";
+                      if (lvl >= 35) return "Learning";
+                      return "Getting started";
+                    })()}
+                  </span>
+                  <span className="dashPersonalizationPct">
+                    {`${Math.round(legacyPreferenceProfile?.personalizationLevel ?? 0)}%`}
+                  </span>
+                </div>
+                <div className="dashPersonalizationBar" aria-hidden="true">
+                  <div
+                    className="dashPersonalizationFill"
+                    style={{ width: `${legacyPreferenceProfile?.personalizationLevel ?? 0}%` }}
+                  />
+                </div>
+                <div className="dashPersonalizationCaption">Personalized daily styling</div>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {isEditorial ? (
+        <section className="editorialInsightStrip" aria-label="Closet insights">
+          <article className="editorialInsightCard">
+            <div className="editorialInsightLabel">Rotation</div>
+            <div className="editorialInsightHeadline">{editorialRotation?.headline}</div>
+            <div className="editorialInsightSub">{editorialRotation?.sub}</div>
+          </article>
+          <article className="editorialInsightCard">
+            <div className="editorialInsightLabel">Closet gap</div>
+            <div className="editorialInsightHeadline">{editorialClosetGap?.headline}</div>
+            <div className="editorialInsightSub">{editorialClosetGap?.sub}</div>
+          </article>
+          <article className="editorialInsightCard">
+            <div className="editorialInsightLabel">Tomorrow</div>
+            <div className="editorialInsightHeadline">{editorialTomorrow?.headline}</div>
+            <div className="editorialInsightSub">{editorialTomorrow?.sub}</div>
+          </article>
+        </section>
+      ) : null}
 
       <section className="card dashWide dashWeatherCard dashSectionCard">
         <div className="dashWeatherHud">
           <div className="dashWeatherMain">
-            <span className="dashWeatherEmoji">
+            <span className={"dashWeatherEmoji" + (weatherLoading ? " dashWeatherEmojiLoading" : "")}>
               {weatherPresentation.glyph}
             </span>
             <div className="dashWeatherInfo">
-              <div className="dashWeatherTemp">
-                {weatherLoading ? `Detecting Weather${".".repeat(dotCount)}` : weatherPresentation.headline}
+              <div className={"dashWeatherTemp" + (weatherLoading ? " dashWeatherTempLoading" : "")}>
+                {weatherLoading ? "Detecting weather" : weatherPresentation.headline}
               </div>
               <div className="dashWeatherLabel">
-                {weatherLoading ? "" : weatherPresentation.subline}
+                {weatherLoading ? "Checking forecast for your area" : weatherPresentation.subline}
               </div>
             </div>
           </div>
 
           <div className="dashRefineSummary">
             <div className="dashRefinePills">
-              <span className="dashMiniPill">{weatherLoading ? `Detecting${".".repeat(dotCount)}` : weatherPresentation.status}</span>
+              {!weatherLoading ? (
+                <span className="dashMiniPill">{weatherPresentation.status}</span>
+              ) : null}
               <span className="dashMiniPill">{timeLine}</span>
-              <span className="dashMiniPill">{seasonalMode ? seasonalWardrobeLabel : "All Seasons"}</span>
-              {seasonalMode ? <span className="dashMiniPill">Filtered by current season</span> : null}
+              {seasonalMode ? (
+                <span className="dashMiniPill dashMiniPillAccent">{seasonalWardrobeLabel}</span>
+              ) : (
+                <span className="dashMiniPill">All seasons</span>
+              )}
               {selectedOccasion ? <span className="dashMiniPill">{titleCase(selectedOccasion)}</span> : null}
               {selectedStyle ? <span className="dashMiniPill">{titleCase(selectedStyle)}</span> : null}
             </div>
@@ -1939,6 +2145,17 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         ) : null}
       </div>
 
+      <div className="dashStyleMarquee" aria-label="Style tips">
+        <div className="dashStyleMarqueeTrack" aria-hidden="true">
+          {STYLE_TIPS.concat(STYLE_TIPS).map((tip, index) => (
+            <span className="dashStyleMarqueeItem" key={`mq-${index}`}>
+              <span className="dashStyleMarqueeDot" aria-hidden="true" />
+              <span className="dashStyleMarqueeText">{tip}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+
       <section className="card dashWide dashRecCard dashSectionCard">
         <div className="dashRecHeader">
           <ErrorBoundary fallback={null}><MeshGradient className="dashRecHeaderGradient" /></ErrorBoundary>
@@ -1961,41 +2178,80 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
           <div className="dashChip">{chipText}</div>
           {outfits.length > 0 && (
             <div className="dashRecActions">
-              <button type="button" className="btn primary dashRecActionBtn" onClick={handleRefreshRecommendation} disabled={!canRefresh}>
-                Refresh
+              <button
+                type="button"
+                className="dashRecActionBtn dashRecActionPrimary"
+                onClick={handleRefreshRecommendation}
+                disabled={!canRefresh}
+                aria-label="Refresh recommendations"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="23 4 23 10 17 10" />
+                  <polyline points="1 20 1 14 7 14" />
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                </svg>
+                <span>Refresh</span>
               </button>
-              <button type="button" className="btn dashRecActionBtn" onClick={() => {
-                const outfit = outfits[selectedIdx ?? 0] || outfits[0] || [];
-                if (!outfit.length) return;
-                const lines = outfit.map((item) => `${item.name}${item.color ? ` (${item.color})` : ""}`);
-                const text = `My FitGPT Outfit:\n${lines.join("\n")}`;
-                navigator.clipboard.writeText(text).then(() => {
-                  setSaveMsg("Outfit copied to clipboard!");
-                  window.setTimeout(() => setSaveMsg(""), 2500);
-                }).catch(() => {
-                  setSaveMsg("Could not copy to clipboard.");
-                  window.setTimeout(() => setSaveMsg(""), 2500);
-                });
-              }}>
-                Share
+              <button
+                type="button"
+                className="dashRecActionBtn dashRecActionSecondary"
+                onClick={() => {
+                  const outfit = outfits[selectedIdx ?? 0] || outfits[0] || [];
+                  if (!outfit.length) return;
+                  const lines = outfit.map((item) => `${item.name}${item.color ? ` (${item.color})` : ""}`);
+                  const text = `My FitGPT Outfit:\n${lines.join("\n")}`;
+                  navigator.clipboard.writeText(text).then(() => {
+                    setSaveMsg("Outfit copied to clipboard!");
+                    window.setTimeout(() => setSaveMsg(""), 2500);
+                  }).catch(() => {
+                    setSaveMsg("Could not copy to clipboard.");
+                    window.setTimeout(() => setSaveMsg(""), 2500);
+                  });
+                }}
+                aria-label="Share outfit"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="18" cy="5" r="3" />
+                  <circle cx="6" cy="12" r="3" />
+                  <circle cx="18" cy="19" r="3" />
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                </svg>
+                <span>Share</span>
               </button>
-              <div className="dashViewToggle">
+              <div className="dashViewToggle" role="radiogroup" aria-label="View mode">
                 <button
                   type="button"
-                  className={`dashViewToggleBtn${viewMode === "grid" ? " active" : ""}`}
+                  role="radio"
+                  aria-checked={viewMode === "grid"}
+                  className={"dashViewToggleBtn" + (viewMode === "grid" ? " active" : "")}
                   onClick={() => setViewMode("grid")}
+                  title="Grid view"
                 >
-                  Grid
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="14" y="14" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                  </svg>
+                  <span>Grid</span>
                 </button>
                 <button
                   type="button"
-                  className={`dashViewToggleBtn${viewMode === "mannequin" ? " active" : ""}`}
+                  role="radio"
+                  aria-checked={viewMode === "mannequin"}
+                  className={"dashViewToggleBtn" + (viewMode === "mannequin" ? " active" : "")}
                   onClick={() => {
                     setViewMode("mannequin");
                     if (selectedIdx == null) setSelectedIdx(0);
                   }}
+                  title="3D mannequin view"
                 >
-                  3D
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="5" r="2.5" />
+                    <path d="M7 10h10l-1 5h-3v7h-2v-7H8z" />
+                  </svg>
+                  <span>3D</span>
                 </button>
               </div>
             </div>
@@ -2007,17 +2263,44 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             <div className="dashAiLoading" style={{ padding: "32px 0", textAlign: "center" }}>
               {personalizationSummary.loadingLabel}
             </div>
-          ) : outfits.length === 0 ? (
+          ) : wardrobe.filter((it) => it?.is_active !== false).length === 0 ? (
             <div className="dashEmptyWardrobe">
               <div className="dashEmptyIcon">&#x1F455;</div>
               <div className="dashEmptyTitle">Your wardrobe is empty</div>
               <div className="dashEmptySub">Add a few items to get recommendations.</div>
               <div className="dashEmptyActions">
-                <button className="btn primary" type="button" onClick={() => navigate("/wardrobe")}>
-                  Add clothing items
+                <button className="btn primary dashEmptyBtn" type="button" onClick={() => navigate("/wardrobe")}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <span>Add clothing items</span>
                 </button>
-                <button className="btn" type="button" onClick={() => navigate("/wardrobe")}>
-                  Open wardrobe
+                <button className="btn dashEmptyBtn" type="button" onClick={() => navigate("/wardrobe")}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v7"/><path d="M12 10l-8 4.5v5h16v-5z"/><circle cx="12" cy="4" r="1.5"/></svg>
+                  <span>Open wardrobe</span>
+                </button>
+              </div>
+            </div>
+          ) : outfits.length === 0 || wardrobe.filter((it) => it?.is_active !== false).length < 3 ? (
+            <div className="dashEmptyWardrobe dashSparseWardrobe">
+              <div className="dashEmptyIcon">&#x1F9FA;</div>
+              <div className="dashEmptyTitle">Almost there</div>
+              <div className="dashEmptySub">
+                {(() => {
+                  const active = wardrobe.filter((it) => it?.is_active !== false).length;
+                  const remaining = Math.max(0, 3 - active);
+                  if (remaining > 0) {
+                    return `Add ${remaining} more item${remaining === 1 ? "" : "s"} from different categories (tops, bottoms, shoes) and we'll start suggesting full outfits.`;
+                  }
+                  return `You have ${active} item${active === 1 ? "" : "s"} but we couldn't assemble an outfit. Try adding items from different categories (tops, bottoms, shoes).`;
+                })()}
+              </div>
+              <div className="dashEmptyActions">
+                <button className="btn primary dashEmptyBtn" type="button" onClick={() => navigate("/wardrobe")}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <span>Add more items</span>
+                </button>
+                <button className="btn dashEmptyBtn" type="button" onClick={() => navigate("/wardrobe")}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v7"/><path d="M12 10l-8 4.5v5h16v-5z"/><circle cx="12" cy="4" r="1.5"/></svg>
+                  <span>Open wardrobe</span>
                 </button>
               </div>
             </div>
@@ -2040,8 +2323,8 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             const feedbackHint = feedbackSignal
               ? feedbackSummaryText(feedbackEntry)
               : showPromptHighlight
-                ? "Like or Not for me. One tap helps future picks improve over time."
-                : "Like or Not for me.";
+                ? "Hide removes this outfit from view. Add detail for a specific reason."
+                : "Hide this option, or add detail about what worked.";
             const feedbackToneClass = feedbackSignal === FEEDBACK_SIGNALS.LIKE
               ? " dashOutfitFeedbackLike"
               : feedbackSignal === FEEDBACK_SIGNALS.DISLIKE
@@ -2070,9 +2353,15 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                       <span className="dashOptionScoreLabel">match</span>
                     </div>
 
-                    <div className="dashOptionRankGroup">
-                      <span className="dashOptionRank">{summary.rankLabel}</span>
-                      <span className="dashOptionConfidence">{summary.confidenceLabel}</span>
+                    <div className={"dashOptionRankBadge conf-" + (summary.confidenceLabel || "").toLowerCase()}>
+                      <span className="dashOptionRankDot" aria-hidden="true" />
+                      <span className="dashOptionRankLabel">{summary.rankLabel}</span>
+                      {summary.confidenceLabel ? (
+                        <>
+                          <span className="dashOptionRankSep" aria-hidden="true">{"\u00B7"}</span>
+                          <span className="dashOptionRankConfidence">{summary.confidenceLabel}</span>
+                        </>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -2135,37 +2424,39 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                     </div>
                   </>
                 ) : (
-                  <div className="dashOutfitGridFigma">
-                    {outfit.map((item, itemIdx) => (
-                      <div
-                        key={item.id}
-                        className={"dashSquareTile dashTileReveal" + (normalizeCategory(item?.category) === "Accessories" ? " accessory" : "")}
-                        style={{ animationDelay: `${itemIdx * 90 + idx * 140}ms` }}
-                        onPointerMove={onTiltMove}
-                        onPointerLeave={onTiltLeave}
-                      >
-                        <div className="dashSquareRole">{outfitRoleLabel(item)}</div>
-                        {idx === selectedIdx ? (
-                          <ErrorBoundary fallback={item.image_url ? <img className="dashSquareImg" src={item.image_url} alt={item.name} /> : <div className="dashSquareImg" aria-hidden="true" />}>
-                            <ClothCard key={clothCardKey(outfit, item, aiRefreshToken, recSeed)} imageUrl={item.image_url} className="dashSquareImg" />
-                          </ErrorBoundary>
-                        ) : item.image_url ? (
-                          <img className="dashSquareImg" src={item.image_url} alt={item.name} />
-                        ) : (
-                          <div className="dashSquareImg" aria-hidden="true" />
-                        )}
-                        <div className="dashSquareNameRow">
-                          <span
-                            className="dashColorDot"
-                            style={{ background: colorToCss(item.color) }}
-                            title={item.color}
-                          />
-                          <span className="dashSquareName">{item.name}</span>
+                  <>
+                    <div className="dashOutfitGridFigma">
+                      {outfit.map((item, itemIdx) => (
+                        <div
+                          key={item.id}
+                          className={"dashSquareTile dashTileReveal" + (normalizeCategory(item?.category) === "Accessories" ? " accessory" : "")}
+                          style={{ animationDelay: `${itemIdx * 90 + idx * 140}ms` }}
+                          onPointerMove={onTiltMove}
+                          onPointerLeave={onTiltLeave}
+                        >
+                          <div className="dashSquareRole">{outfitRoleLabel(item)}</div>
+                          {idx === selectedIdx ? (
+                            <ErrorBoundary fallback={item.image_url ? <img className="dashSquareImg" src={item.image_url} alt={item.name} /> : <div className="dashSquareImg" aria-hidden="true" />}>
+                              <ClothCard key={clothCardKey(outfit, item, aiRefreshToken, recSeed)} imageUrl={item.image_url} className="dashSquareImg" />
+                            </ErrorBoundary>
+                          ) : item.image_url ? (
+                            <img className="dashSquareImg" src={item.image_url} alt={item.name} />
+                          ) : (
+                            <div className="dashSquareImg" aria-hidden="true" />
+                          )}
+                          <div className="dashSquareNameRow">
+                            <span
+                              className="dashColorDot"
+                              style={{ background: colorToCss(item.color) }}
+                              title={item.color}
+                            />
+                            <span className="dashSquareName">{item.name}</span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
 
-                    <div className="dashSaveBtnCell">
+                    <div className="dashOutfitActionsRow">
                       <button
                         type="button"
                         className={"styledSaveBtn" + (isSaved ? " saved" : "")}
@@ -2176,11 +2467,37 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                         <span className="styledSaveBtnText">{label}</span>
                       </button>
                       <div className="dashFeedbackBtns">
-                        <button type="button" className="dashFeedbackBtn dashFeedbackLike" onClick={() => handleFeedback(outfit, "like")} title="More like this">&#x25B2;</button>
-                        <button type="button" className="dashFeedbackBtn dashFeedbackDislike" onClick={() => handleFeedback(outfit, "dislike")} title="Less like this">&#x25BC;</button>
+                        <button
+                          type="button"
+                          className={"dashFeedbackBtn dashFeedbackLike" + (feedbackSignal === FEEDBACK_SIGNALS.LIKE ? " active" : "")}
+                          onClick={() => handleFeedback(outfit, "like")}
+                          title="More like this"
+                          aria-label="More like this"
+                          aria-pressed={feedbackSignal === FEEDBACK_SIGNALS.LIKE}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M7 10v12" />
+                            <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.97 2.35l-1.4 8A2 2 0 0 1 18.43 22H7V10l4.66-6.66A1 1 0 0 1 13 3a2.88 2.88 0 0 1 2 4.88Z" />
+                          </svg>
+                          <span>Like</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={"dashFeedbackBtn dashFeedbackDislike" + (feedbackSignal === FEEDBACK_SIGNALS.DISLIKE ? " active" : "")}
+                          onClick={() => handleFeedback(outfit, "dislike")}
+                          title="Less like this"
+                          aria-label="Less like this"
+                          aria-pressed={feedbackSignal === FEEDBACK_SIGNALS.DISLIKE}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M17 14V2" />
+                            <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.97-2.35l1.4-8A2 2 0 0 1 5.57 2H17v12l-4.66 6.66A1 1 0 0 1 11 21a2.88 2.88 0 0 1-2-4.88Z" />
+                          </svg>
+                          <span>Dislike</span>
+                        </button>
                       </div>
                     </div>
-                  </div>
+                  </>
                 )}
 
                 <div className="dashOptionReason">
@@ -2214,32 +2531,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                     </div>
 
                     <div className="dashFeedbackActions compact" role="group" aria-label={`Recommendation feedback for outfit option ${idx + 1}`}>
-                    <button
-                      type="button"
-                      className={"dashFeedbackBtn like compact" + (feedbackSignal === FEEDBACK_SIGNALS.LIKE ? " active" : "")}
-                      aria-pressed={feedbackSignal === FEEDBACK_SIGNALS.LIKE}
-                      disabled={isFeedbackPending}
-                      onClick={() => {
-                        selectRecommendationOption(idx, { track: false });
-                        void submitFeedback({ outfit, signal: FEEDBACK_SIGNALS.LIKE });
-                      }}
-                    >
-                      <span aria-hidden="true">👍</span>
-                      <span className="dashFeedbackBtnText">Like</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={"dashFeedbackBtn dislike compact" + (feedbackSignal === FEEDBACK_SIGNALS.DISLIKE ? " active" : "")}
-                      aria-pressed={feedbackSignal === FEEDBACK_SIGNALS.DISLIKE}
-                      disabled={isFeedbackPending}
-                      onClick={() => {
-                        selectRecommendationOption(idx, { track: false });
-                        void submitFeedback({ outfit, signal: FEEDBACK_SIGNALS.DISLIKE });
-                      }}
-                    >
-                      <span aria-hidden="true">👎</span>
-                      <span className="dashFeedbackBtnText">Not for me</span>
-                    </button>
                     <button
                       type="button"
                       className="dashFeedbackBtn reject compact ghost"

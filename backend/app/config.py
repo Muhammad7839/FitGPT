@@ -78,7 +78,8 @@ DEFAULT_CORS_ORIGINS = [
     "https://www.fitgpt.tech",
 ]
 
-DATABASE_URL = get_env("DATABASE_URL", _default_sqlite_url("fitgpt.db"))
+FORCE_LOCAL_DATABASE = get_bool_env("FITGPT_LOCAL_BACKEND", False)
+DATABASE_URL = _default_sqlite_url("fitgpt.db") if FORCE_LOCAL_DATABASE else get_env("DATABASE_URL", _default_sqlite_url("fitgpt.db"))
 SECRET_KEY = get_env("SECRET_KEY", "dev-only-change-me")
 JWT_ALGORITHM = get_env("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = get_int_env("ACCESS_TOKEN_EXPIRE_MINUTES", 60)

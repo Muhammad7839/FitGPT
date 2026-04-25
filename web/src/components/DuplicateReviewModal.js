@@ -189,8 +189,11 @@ export default function DuplicateReviewModal({
   onClose,
   onStartAction,
   onKeepBoth,
+  onKeepAll,
 }) {
   if (!open) return null;
+
+  const hasFindings = !isDetecting && Array.isArray(findings) && findings.length > 0;
 
   return ReactDOM.createPortal(
     <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="duplicate-review-title">
@@ -203,9 +206,21 @@ export default function DuplicateReviewModal({
             </div>
           </div>
 
-          <button type="button" className="duplicateCloseBtn" onClick={onClose} aria-label="Close duplicate review">
-            {"\u00D7"}
-          </button>
+          <div className="duplicateModalHeaderActions">
+            {hasFindings && onKeepAll ? (
+              <button
+                type="button"
+                className="duplicateKeepAllBtn"
+                onClick={onKeepAll}
+                title="Keep every flagged pair and stop showing them"
+              >
+                Keep all ({findings.length})
+              </button>
+            ) : null}
+            <button type="button" className="duplicateCloseBtn" onClick={onClose} aria-label="Close duplicate review">
+              {"\u00D7"}
+            </button>
+          </div>
         </div>
 
         {isDetecting ? (

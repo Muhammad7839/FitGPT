@@ -471,12 +471,36 @@ function MannequinCanvas({ grouped, textures, actionToken, showCallouts, onDragC
   useEffect(() => {
     const controls = controlsRef.current;
     if (!controls || !actionToken?.type) return;
-    if (actionToken.type === CAMERA_ACTIONS.RESET) { controls.reset(); controls.update(); return; }
+
+    if (actionToken.type === CAMERA_ACTIONS.RESET) {
+      controls.reset();
+      controls.update();
+      return;
+    }
+
+    // three-stdlib's OrbitControls doesn't expose rotateLeft/rotateUp on
+    // its public API (only dollyIn/dollyOut). Rotate via spherical math
+    // around the target so we stay on supported methods.
     const step = Math.PI / 8;
-    if (actionToken.type === CAMERA_ACTIONS.ROTATE_LEFT) controls.rotateLeft(step);
-    if (actionToken.type === CAMERA_ACTIONS.ROTATE_RIGHT) controls.rotateLeft(-step);
-    if (actionToken.type === CAMERA_ACTIONS.ZOOM_IN) controls.dollyIn(1.18);
-    if (actionToken.type === CAMERA_ACTIONS.ZOOM_OUT) controls.dollyOut(1.18);
+    const camera = controls.object;
+    const target = controls.target;
+
+    if (actionToken.type === CAMERA_ACTIONS.ROTATE_LEFT
+      || actionToken.type === CAMERA_ACTIONS.ROTATE_RIGHT) {
+      const delta = actionToken.type === CAMERA_ACTIONS.ROTATE_LEFT ? step : -step;
+      const offset = new THREE.Vector3().subVectors(camera.position, target);
+      const spherical = new THREE.Spherical().setFromVector3(offset);
+      spherical.theta += delta;
+      offset.setFromSpherical(spherical);
+      camera.position.copy(target).add(offset);
+      camera.lookAt(target);
+    }
+
+    if (actionToken.type === CAMERA_ACTIONS.ZOOM_IN
+      && typeof controls.dollyIn === "function") controls.dollyIn(1.18);
+    if (actionToken.type === CAMERA_ACTIONS.ZOOM_OUT
+      && typeof controls.dollyOut === "function") controls.dollyOut(1.18);
+
     controls.update();
   }, [actionToken]);
 
@@ -612,13 +636,85 @@ export default function OutfitMannequinPreview({ isOpen, onClose, outfit = [], t
             )}
 
             <div className="mannequinPreviewControls" aria-label="Preview controls">
-              <button type="button" className="mannequinPreviewControlBtn" onClick={() => triggerAction(CAMERA_ACTIONS.ROTATE_LEFT)}>Rotate left</button>
-              <button type="button" className="mannequinPreviewControlBtn" onClick={() => triggerAction(CAMERA_ACTIONS.ROTATE_RIGHT)}>Rotate right</button>
-              <button type="button" className="mannequinPreviewControlBtn" onClick={() => triggerAction(CAMERA_ACTIONS.ZOOM_IN)}>Zoom in</button>
-              <button type="button" className="mannequinPreviewControlBtn" onClick={() => triggerAction(CAMERA_ACTIONS.ZOOM_OUT)}>Zoom out</button>
-              <button type="button" className="mannequinPreviewControlBtn isAccent" onClick={() => triggerAction(CAMERA_ACTIONS.RESET)}>Reset view</button>
-              <button type="button" className="mannequinPreviewControlBtn" onClick={() => setShowCallouts((p) => !p)}>
-                {showCallouts ? "Hide labels" : "Show labels"}
+              <button
+                type="button"
+                className="mannequinPreviewControlBtn"
+                onClick={() => triggerAction(CAMERA_ACTIONS.ROTATE_LEFT)}
+                title="Rotate left"
+                aria-label="Rotate left"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 12a9 9 0 1 0 3-6.7" />
+                  <polyline points="3 4 3 9 8 9" />
+                </svg>
+                <span>Rotate L</span>
+              </button>
+              <button
+                type="button"
+                className="mannequinPreviewControlBtn"
+                onClick={() => triggerAction(CAMERA_ACTIONS.ROTATE_RIGHT)}
+                title="Rotate right"
+                aria-label="Rotate right"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 12a9 9 0 1 1-3-6.7" />
+                  <polyline points="21 4 21 9 16 9" />
+                </svg>
+                <span>Rotate R</span>
+              </button>
+              <button
+                type="button"
+                className="mannequinPreviewControlBtn"
+                onClick={() => triggerAction(CAMERA_ACTIONS.ZOOM_IN)}
+                title="Zoom in"
+                aria-label="Zoom in"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  <line x1="11" y1="8" x2="11" y2="14" />
+                  <line x1="8" y1="11" x2="14" y2="11" />
+                </svg>
+                <span>Zoom in</span>
+              </button>
+              <button
+                type="button"
+                className="mannequinPreviewControlBtn"
+                onClick={() => triggerAction(CAMERA_ACTIONS.ZOOM_OUT)}
+                title="Zoom out"
+                aria-label="Zoom out"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  <line x1="8" y1="11" x2="14" y2="11" />
+                </svg>
+                <span>Zoom out</span>
+              </button>
+              <button
+                type="button"
+                className="mannequinPreviewControlBtn isAccent"
+                onClick={() => triggerAction(CAMERA_ACTIONS.RESET)}
+                title="Reset view"
+                aria-label="Reset view"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="1 4 1 10 7 10" />
+                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                </svg>
+                <span>Reset</span>
+              </button>
+              <button
+                type="button"
+                className="mannequinPreviewControlBtn"
+                onClick={() => setShowCallouts((p) => !p)}
+                title={showCallouts ? "Hide labels" : "Show labels"}
+                aria-label={showCallouts ? "Hide labels" : "Show labels"}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                </svg>
+                <span>{showCallouts ? "Hide labels" : "Labels"}</span>
               </button>
             </div>
           </div>

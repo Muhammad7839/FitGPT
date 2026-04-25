@@ -136,8 +136,13 @@ class AiService:
         db: Session,
         user: models.User,
         context: RecommendationContext,
+        wardrobe_items_override: Optional[list[models.ClothingItem]] = None,
     ) -> RecommendationResult:
-        all_items = crud.get_clothing_items_for_user(db, user.id, include_archived=False)
+        all_items = (
+            wardrobe_items_override
+            if wardrobe_items_override is not None
+            else crud.get_clothing_items_for_user(db, user.id, include_archived=False)
+        )
         recent_fingerprints = history.get_recent_fingerprints(db, user.id)
         recent_fingerprint_set = set(recent_fingerprints)
         item_map = {item.id: item for item in all_items}

@@ -121,6 +121,82 @@ const LABEL_TO_CATEGORY = {
   academic: "Tops",
 };
 
+// ImageNet label keyword → app clothing type (must match CLOTHING_TYPE_OPTIONS values)
+const LABEL_TO_TYPE = {
+  // Tops
+  jersey: "t-shirt",
+  "t-shirt": "t-shirt",
+  tshirt: "t-shirt",
+  tee: "t-shirt",
+  polo: "polo",
+  sweater: "sweater",
+  pullover: "sweater",
+  sweatshirt: "hoodie",
+  hoodie: "hoodie",
+  tank: "tank top",
+  blouse: "blouse",
+  "dress shirt": "dress shirt",
+  buttonup: "button-up",
+  "button-up": "button-up",
+  flannel: "flannel",
+  // Bottoms
+  jean: "jeans",
+  jeans: "jeans",
+  trouser: "dress pants",
+  pant: "dress pants",
+  shorts: "shorts",
+  skirt: "skirt",
+  miniskirt: "skirt",
+  legging: "leggings",
+  jogger: "joggers",
+  sweatpants: "sweatpants",
+  cargo: "cargo pants",
+  // Outerwear
+  jacket: "jacket",
+  coat: "coat",
+  blazer: "blazer",
+  cardigan: "cardigan",
+  trench: "coat",
+  overcoat: "coat",
+  parka: "parka",
+  anorak: "parka",
+  raincoat: "windbreaker",
+  windbreaker: "windbreaker",
+  // Shoes
+  sneaker: "sneakers",
+  "running shoe": "sneakers",
+  trainer: "sneakers",
+  loafer: "dress shoes",
+  oxford: "dress shoes",
+  boot: "boots",
+  sandal: "sandals",
+  clog: "sandals",
+  heel: "heels",
+  slipper: "flats",
+  // Accessories
+  hat: "hat",
+  cap: "hat",
+  beret: "hat",
+  sombrero: "hat",
+  bonnet: "hat",
+  scarf: "scarf",
+  stole: "scarf",
+  tie: "scarf",
+  necktie: "scarf",
+  belt: "belt",
+  watch: "watch",
+  necklace: "jewelry",
+  bracelet: "jewelry",
+  earring: "jewelry",
+  ring: "jewelry",
+  sunglasses: "sunglasses",
+  sunglass: "sunglasses",
+  bag: "bag",
+  backpack: "bag",
+  handbag: "bag",
+  purse: "bag",
+};
+
 // Minimum confidence to trust the ML result over filename guess
 const MIN_CONFIDENCE = 0.08;
 
@@ -170,6 +246,16 @@ function labelToCategory(label) {
   return null;
 }
 
+function labelToType(label) {
+  const lower = label.toLowerCase();
+  const entries = Object.entries(LABEL_TO_TYPE);
+  entries.sort((a, b) => b[0].length - a[0].length);
+  for (const [keyword, type] of entries) {
+    if (lower.includes(keyword)) return type;
+  }
+  return "";
+}
+
 /**
  * Classify an already-loaded HTMLImageElement.
  * @param {HTMLImageElement} imgElement
@@ -185,13 +271,14 @@ export async function classifyClothingImage(imgElement) {
       if (category && pred.probability >= MIN_CONFIDENCE) {
         return {
           category,
+          type: labelToType(pred.className),
           confidence: pred.probability,
           label: pred.className,
         };
       }
     }
 
-    return { category: null, confidence: 0, label: "" };
+    return { category: null, type: "", confidence: 0, label: "" };
   } catch {
     return { category: null, confidence: 0, label: "" };
   }
@@ -204,7 +291,7 @@ export async function classifyClothingImage(imgElement) {
  * @returns {Promise<{category: string|null, confidence: number, label: string}>}
  */
 export async function classifyFromUrl(imageUrl) {
-  if (!imageUrl) return { category: null, confidence: 0, label: "" };
+  if (!imageUrl) return { category: null, type: "", confidence: 0, label: "" };
 
   try {
     const img = await new Promise((resolve, reject) => {
@@ -217,6 +304,6 @@ export async function classifyFromUrl(imageUrl) {
 
     return await classifyClothingImage(img);
   } catch {
-    return { category: null, confidence: 0, label: "" };
+    return { category: null, type: "", confidence: 0, label: "" };
   }
 }
