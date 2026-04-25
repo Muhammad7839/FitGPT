@@ -359,10 +359,11 @@ function getWeatherGlyph(category, isLoading, precipCondition) {
   return "🙂";
 }
 
-function buildWeatherPresentation({ category, tempF, loading, source, message, precipCondition }) {
+function buildWeatherPresentation({ category, tempF, loading, source, message, precipCondition, city }) {
   const tempNumber = Number(tempF);
   const hasTemp = Number.isFinite(tempNumber);
   const tempC = hasTemp ? Math.round(((tempNumber - 32) * 5) / 9) : null;
+  const locationLabel = city ? city : null;
 
   if (loading) {
     return {
@@ -371,11 +372,12 @@ function buildWeatherPresentation({ category, tempF, loading, source, message, p
       subline: "Getting your local conditions now.",
       status: "Checking local weather",
       detail: "",
+      locationLabel: null,
     };
   }
 
   const categoryLabel = titleCase(category || "mild");
-  const tempLabel = hasTemp ? `${Math.round(tempNumber)} F / ${tempC} C` : categoryLabel;
+  const tempLabel = hasTemp ? `${Math.round(tempNumber)}°F / ${tempC}°C` : categoryLabel;
 
   if (source === "override") {
     return {
@@ -384,6 +386,7 @@ function buildWeatherPresentation({ category, tempF, loading, source, message, p
       subline: `${categoryLabel} weather selected manually`,
       status: "Manual weather override",
       detail: "Recommendations are using the weather you picked.",
+      locationLabel: null,
     };
   }
 
@@ -391,9 +394,10 @@ function buildWeatherPresentation({ category, tempF, loading, source, message, p
     return {
       glyph: getWeatherGlyph(category, false, precipCondition),
       headline: "Weather unavailable",
-      subline: "Using balanced recommendations for now",
+      subline: message || "Using balanced recommendations for now",
       status: "Fallback mode",
-      detail: message || "We could not read live weather, so FitGPT is using a safe default.",
+      detail: "Allow location access or check back later for live conditions.",
+      locationLabel: null,
     };
   }
 
@@ -403,13 +407,18 @@ function buildWeatherPresentation({ category, tempF, loading, source, message, p
   return {
     glyph: getWeatherGlyph(category, false, precipCondition),
     headline: tempLabel,
-    subline: `Live weather: ${categoryLabel}${conditionSuffix}`,
+    subline: locationLabel
+      ? `${locationLabel} · ${categoryLabel}${conditionSuffix}`
+      : `Live weather: ${categoryLabel}${conditionSuffix}`,
     status: "Live weather active",
     detail: hasTemp
       ? precipLabel
         ? `Recommendations are adjusted for ${precipLabel.toLowerCase()} conditions.`
-        : "Recommendations are using your current local temperature."
+        : locationLabel
+          ? `Live conditions in ${locationLabel}.`
+          : "Recommendations are using your current local temperature."
       : "",
+    locationLabel,
   };
 }
 
@@ -566,6 +575,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [weatherMsg, setWeatherMsg] = useState("");
   const [weatherTempF, setWeatherTempF] = useState(null);
   const [weatherCategory, setWeatherCategory] = useState(() => readWeatherOverride() || "mild");
+  const [weatherCity, setWeatherCity] = useState(null);
   const [precipCondition, setPrecipCondition] = useState("clear");
   const [dotCount, setDotCount] = useState(1);
   const [showWeatherPicker, setShowWeatherPicker] = useState(false);
@@ -815,6 +825,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       setWeatherCategory(override);
       setPrecipCondition("clear");
       setWeatherMsg("");
+      setWeatherCity(null);
       setWeatherLoading(false);
       return;
     }
@@ -829,6 +840,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     setPrecipCondition(w.precipCondition || "clear");
     setWeatherSource(w.source || "auto");
     setWeatherMsg(w.message || "");
+    setWeatherCity(w.city || null);
     setWeatherLoading(false);
   };
 
@@ -1748,8 +1760,9 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       source: weatherSource,
       message: weatherMsg,
       precipCondition,
+      city: weatherCity,
     });
-  }, [weatherCategory, weatherTempF, weatherLoading, weatherSource, weatherMsg, precipCondition]);
+  }, [weatherCategory, weatherTempF, weatherLoading, weatherSource, weatherMsg, precipCondition, weatherCity]);
 
   useEffect(() => {
     let alive = true;

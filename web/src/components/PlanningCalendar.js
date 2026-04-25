@@ -132,7 +132,9 @@ function CalendarDayButton({
 export default function PlanningCalendar({
   plans,
   history,
+  wardrobe,
   wardrobeById,
+  onCreatePlan = null,
   onWearThis = () => {},
   onRemovePlan = () => {},
   onAddToGoogleCalendar = () => {},
@@ -143,6 +145,80 @@ export default function PlanningCalendar({
   const [selectedDateKey, setSelectedDateKey] = useState(todayKey);
   const [displayDate, setDisplayDate] = useState(() => startOfMonth(today));
   const [openHistoryEntry, setOpenHistoryEntry] = useState(null);
+
+  // Plan-for-day modal state
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [planOccasion, setPlanOccasion] = useState("");
+  const [planSelectedItemIds, setPlanSelectedItemIds] = useState([]);
+  const [planSaving, setPlanSaving] = useState(false);
+  const [planMsg, setPlanMsg] = useState("");
+
+  const activeWardrobe = useMemo(
+    () => (Array.isArray(wardrobe) ? wardrobe.filter((item) => !item?.is_archived) : []),
+    [wardrobe]
+  );
+
+  const handleOpenPlanModal = () => {
+    setPlanOccasion("");
+    setPlanSelectedItemIds([]);
+    setPlanMsg("");
+    setShowPlanModal(true);
+  };
+
+  const handleClosePlanModal = () => {
+    setShowPlanModal(false);
+    setPlanMsg("");
+  };
+
+  const togglePlanItem = (itemId) => {
+    const id = String(itemId);
+    setPlanSelectedItemIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSavePlan = async () => {
+    if (!onCreatePlan) return;
+    if (!planSelectedItemIds.length) {
+      setPlanMsg("Select at least one item to plan.");
+      return;
+    }
+    setPlanSaving(true);
+    setPlanMsg("");
+    try {
+      const numericIds = planSelectedItemIds.map((id) => {
+        const n = Number(id);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      }).filter(Boolean);
+      const itemDetails = planSelectedItemIds.map((id) => {
+        const item = wardrobeById.get(id) || activeWardrobe.find((w) => String(w?.id) === id);
+        if (!item) return null;
+        return {
+          id: String(item.id),
+          name: item.name || "",
+          category: item.category || "",
+          color: item.color || "",
+          image_url: item.image_url || "",
+        };
+      }).filter(Boolean);
+
+      await onCreatePlan({
+        plannedDate: selectedDateKey,
+        itemIds: numericIds.length ? numericIds : [],
+        occasion: planOccasion.trim(),
+        itemDetails,
+      });
+      setPlanMsg("Outfit planned.");
+      window.setTimeout(() => {
+        setShowPlanModal(false);
+        setPlanMsg("");
+      }, 900);
+    } catch {
+      setPlanMsg("Could not save plan. Try again.");
+    } finally {
+      setPlanSaving(false);
+    }
+  };
 
   const plansByDate = useMemo(() => {
     const grouped = new Map();
@@ -275,8 +351,19 @@ export default function PlanningCalendar({
             <div className="planningCalendarDetailsEyebrow">Selected date</div>
             <div className="planningCalendarDetailsTitle">{formatDetailHeading(selectedDate)}</div>
           </div>
-          <div className="planningCalendarDetailsCount">
-            {selectedSummary || "Nothing planned or worn"}
+          <div className="planningCalendarDetailsActions">
+            <div className="planningCalendarDetailsCount">
+              {selectedSummary || "Nothing planned or worn"}
+            </div>
+            {onCreatePlan && (
+              <button
+                type="button"
+                className="btn primary planCalendarPlanBtn"
+                onClick={handleOpenPlanModal}
+              >
+                Plan outfit for this day
+              </button>
+            )}
           </div>
         </div>
 
@@ -380,6 +467,92 @@ export default function PlanningCalendar({
           </div>
         </div>
       </div>
+
+      {showPlanModal && (
+        <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="plan-outfit-modal-title">
+          <div className="modalCard planOutfitModal">
+            <div className="planOutfitModalHeader">
+              <div>
+                <div className="planningCalendarDetailsEyebrow">Plan outfit</div>
+                <div id="plan-outfit-modal-title" className="modalTitle">{formatDetailHeading(selectedDate)}</div>
+              </div>
+              <button type="button" className="btn" onClick={handleClosePlanModal}>
+                Close
+              </button>
+            </div>
+
+            <div className="planOutfitModalBody">
+              <label className="planOutfitLabel" htmlFor="plan-occasion-input">
+                Occasion (optional)
+              </label>
+              <input
+                id="plan-occasion-input"
+                className="planOutfitInput"
+                type="text"
+                placeholder="e.g. Work, Gym, Date night"
+                maxLength={80}
+                value={planOccasion}
+                onChange={(e) => setPlanOccasion(e.target.value)}
+              />
+
+              <div className="planOutfitLabel" style={{ marginTop: 16 }}>
+                Select items from your wardrobe
+              </div>
+
+              {activeWardrobe.length === 0 ? (
+                <div className="plannedCalendarEmpty">
+                  Add items to your wardrobe first to plan an outfit.
+                </div>
+              ) : (
+                <div className="planOutfitItemGrid">
+                  {activeWardrobe.map((item) => {
+                    const id = String(item?.id ?? "");
+                    const selected = planSelectedItemIds.includes(id);
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        className={`planOutfitItemChip${selected ? " selected" : ""}`}
+                        onClick={() => togglePlanItem(id)}
+                        aria-pressed={selected}
+                      >
+                        {item?.image_url ? (
+                          <img className="planOutfitItemImg" src={item.image_url} alt={item?.name || "Item"} />
+                        ) : (
+                          <div className="planOutfitItemPh" />
+                        )}
+                        <span className="planOutfitItemName">{item?.name || "Item"}</span>
+                        <span className="planOutfitItemMeta">{[item?.category, item?.color].filter(Boolean).join(" · ")}</span>
+                        {selected && <span className="planOutfitItemCheck" aria-hidden="true">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {planMsg && (
+                <div className={`noteBox${planMsg === "Outfit planned." ? " success" : ""}`} style={{ marginTop: 12 }}>
+                  {planMsg}
+                </div>
+              )}
+            </div>
+
+            <div className="modalActions">
+              <button type="button" className="btn" onClick={handleClosePlanModal} disabled={planSaving}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={handleSavePlan}
+                disabled={planSaving || !planSelectedItemIds.length}
+              >
+                {planSaving ? "Saving..." : `Plan ${planSelectedItemIds.length ? `(${planSelectedItemIds.length} items)` : "outfit"}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {openHistoryEntry ? (
         <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="planning-calendar-modal-title">

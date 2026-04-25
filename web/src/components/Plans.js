@@ -278,7 +278,7 @@ export default function Plans() {
         history={history}
         wardrobe={wardrobe}
         wardrobeById={wardrobeById}
-        onCreatePlan={handleCreatePlan}
+        onCreatePlan={user ? handleCreatePlan : null}
         onWearThis={handleWearThis}
         onRemovePlan={handleRemove}
         onAddToGoogleCalendar={handleOpenGoogleCalendar}

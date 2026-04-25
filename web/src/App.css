@@ -20497,3 +20497,382 @@ border: 1px solid var(--border);
 [data-theme-id^="editorial"] .btn {
   border-radius: 0;
 }
+
+/* ====================================================
+   Plan Outfit for Day Modal (PlanningCalendar)
+   ==================================================== */
+
+.planningCalendarDetailsActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.planCalendarPlanBtn {
+  font-size: 13px;
+  padding: 6px 16px;
+  white-space: nowrap;
+}
+
+.planOutfitModal {
+  max-width: 560px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.planOutfitModalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border, rgba(0,0,0,0.1));
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+
+.planOutfitModalBody {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 4px;
+}
+
+.planOutfitLabel {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.planOutfitInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border, rgba(0,0,0,0.15));
+  background: var(--surface, #fff);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.planOutfitInput:focus {
+  border-color: var(--accent, #2563eb);
+}
+
+.planOutfitItemGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 4px 2px;
+}
+
+.planOutfitItemChip {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px 6px;
+  border-radius: 10px;
+  border: 2px solid var(--border, rgba(0,0,0,0.12));
+  background: var(--surface, #fff);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+  min-height: 90px;
+}
+
+.planOutfitItemChip:hover {
+  border-color: var(--accent, #2563eb);
+}
+
+.planOutfitItemChip.selected {
+  border-color: var(--accent, #2563eb);
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.planOutfitItemImg {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.planOutfitItemPh {
+  width: 52px;
+  height: 52px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--surface2, #f3f4f6), var(--border, #e5e7eb));
+  flex-shrink: 0;
+}
+
+.planOutfitItemName {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.planOutfitItemMeta {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.planOutfitItemCheck {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 12px;
+  color: var(--accent, #2563eb);
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* Success note box variant */
+.noteBox.success {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #065f46;
+}
+
+[data-theme="dark"] .noteBox.success {
+  color: #6ee7b7;
+}
+
+[data-theme="dark"] .planOutfitInput {
+  background: var(--surface, #1f2937);
+  border-color: rgba(255,255,255,0.12);
+}
+
+[data-theme="dark"] .planOutfitItemChip {
+  background: var(--surface, #1f2937);
+  border-color: rgba(255,255,255,0.12);
+}
+
+[data-theme="dark"] .planOutfitItemChip.selected {
+  background: rgba(96, 165, 250, 0.1);
+  border-color: var(--accent, #60a5fa);
+}
+
+
+/* ====================================================
+   Mobile Responsive Polish (≤768px)
+   ==================================================== */
+
+@media (max-width: 768px) {
+  /* Nav */
+  .topNav {
+    padding: 0 10px;
+    gap: 4px;
+  }
+
+  .navLink {
+    font-size: 11px;
+    padding: 4px 6px;
+  }
+
+  /* Dashboard cards */
+  .outfitGrid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+
+  .dashWide {
+    padding: 14px 12px;
+  }
+
+  /* Weather section */
+  .weatherRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  /* Planning calendar on mobile */
+  .planningCalendarColumns {
+    grid-template-columns: 1fr;
+  }
+
+  .planningCalendarDetailsHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .planningCalendarDetailsActions {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .planCalendarPlanBtn {
+    width: 100%;
+    text-align: center;
+  }
+
+  /* Wardrobe grid */
+  .wardrobeGrid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px;
+  }
+
+  /* Chatbot on mobile */
+  .chatbotWindow {
+    width: calc(100vw - 24px) !important;
+    max-width: 100% !important;
+    right: 12px !important;
+    bottom: 70px !important;
+    max-height: 60vh !important;
+  }
+
+  .chatbotMessages {
+    max-height: calc(60vh - 120px) !important;
+  }
+
+  /* Download page QR */
+  .downloadQrSection {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .downloadQrCode {
+    max-width: 180px;
+    width: 100%;
+  }
+
+  /* Modal full-width on mobile */
+  .modalCard {
+    width: calc(100vw - 24px) !important;
+    max-width: 100% !important;
+    margin: 0 auto;
+    max-height: 92vh;
+    overflow-y: auto;
+  }
+
+  .planOutfitModal {
+    max-width: 100% !important;
+  }
+
+  .planOutfitItemGrid {
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    max-height: 220px;
+  }
+
+  /* History actions stack on mobile */
+  .historyActions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .historyActions .btn {
+    flex: 1 1 auto;
+    min-width: 100px;
+    text-align: center;
+  }
+
+  /* Plans cards */
+  .plannedCard {
+    padding: 12px;
+  }
+
+  /* Saved outfit chips wrap */
+  .savedOutfitItems {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* Profile page */
+  .profileGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Onboarding full-width */
+  .onboardingStep {
+    padding: 16px 12px;
+  }
+
+  /* Analytics charts scroll */
+  .analyticsChartContainer {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Very small screens */
+  .topNavLinks {
+    gap: 2px;
+  }
+
+  .navLink {
+    font-size: 10px;
+    padding: 4px 4px;
+    letter-spacing: 0;
+  }
+
+  .navLink span {
+    display: none;
+  }
+
+  .wardrobeGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .planningCalendarGrid {
+    gap: 2px;
+  }
+
+  .planningCalendarDay {
+    min-height: 44px;
+    font-size: 11px;
+  }
+
+  .planningCalendarDayNumber {
+    font-size: 13px;
+  }
+
+  .planningCalendarChip {
+    font-size: 9px;
+    padding: 1px 4px;
+  }
+
+  .dashStrong {
+    font-size: 20px;
+  }
+
+  .editorialHeadline {
+    font-size: 26px !important;
+  }
+
+  /* Shrink action buttons */
+  .historyActions .btn {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+
+  /* AURA chat bubble closer to corner */
+  .chatbotToggle {
+    bottom: 16px !important;
+    right: 16px !important;
+  }
+
+  .chatbotWindow {
+    right: 8px !important;
+    width: calc(100vw - 16px) !important;
+  }
+}

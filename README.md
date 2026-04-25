@@ -64,17 +64,25 @@ All core logic lives in one place so the platforms don't drift.
 
 ---
 
+## Production deployment
+
+- **Web:** [www.fitgpt.tech](https://www.fitgpt.tech) — Vercel (React CRA build, `main` branch auto-deploys)
+- **Backend:** Render — `https://fitgpt-backend-tdiq.onrender.com` (gunicorn + uvicorn workers, PostgreSQL)
+- **Android:** targets the Render backend via `API_BASE_URL` in `gradle.properties`
+
+---
+
 ## Tech stack
 
 **Frontend (web):** React 19, React Router 7, JavaScript, CSS, Recharts, Three.js (3D mannequin), TensorFlow.js + MobileNet (on-device classifier).
 
 **Mobile (Android):** Kotlin, Jetpack Compose, Retrofit + OkHttp, Play Services Auth, Coil.
 
-**Backend:** Python 3.12, FastAPI, SQLAlchemy 2.0, bcrypt + PyJWT (auth), pydantic 2, requests, google-auth.
+**Backend:** Python 3.12, FastAPI 0.124, SQLAlchemy 2.0, bcrypt + PyJWT 2.12 (auth), pydantic 2, requests 2.33, google-auth.
 
-**Third-party services:** Google Sign-In, OpenWeather, Groq (LLM + vision).
+**Third-party services:** OpenWeather (weather), Groq `llama-3.1-8b-instant` (AURA chat + AI recommendations).
 
-**Tests:** pytest (backend), Jest + React Testing Library (web).
+**Tests:** pytest 9.0 (backend, 180+ tests), Jest + React Testing Library (web).
 
 **CI:** GitHub Actions — backend pytest on Python 3.12, web `npm test` + `npm run build` on Node 20.
 
@@ -94,7 +102,7 @@ All core logic lives in one place so the platforms don't drift.
 
 **Resource hygiene** — outbound HTTP responses are explicitly closed in `finally`; component timers are tracked by a `useManagedTimeouts` hook and cleared on unmount; rate-limit buckets prune stale keys on every write so memory is bounded.
 
-**Security posture** — explicit CORS allowlists (no wildcards), `X-Content-Type-Options` / `X-Frame-Options` / `Referrer-Policy` applied by middleware, sanitized client error messages with full detail in server logs, production-time hard fail if `SECRET_KEY` is still the dev default.
+**Security posture** — explicit CORS allowlists (no wildcards), `X-Content-Type-Options` / `X-Frame-Options` / `Referrer-Policy` applied by middleware, sanitized client error messages with full detail in server logs, production-time hard fail if `SECRET_KEY` is still the dev default. Password policy enforced server-side: minimum 8 characters with at least one letter and one number, common passwords rejected. Per-IP rate limiting on login (15 attempts / 15 min) and registration (10 / hour) to limit brute-force and enumeration attacks.
 
 ---
 

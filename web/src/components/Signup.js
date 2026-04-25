@@ -28,7 +28,8 @@ export default function Signup() {
     return e.includes("@") && e.includes(".");
   }, [email]);
 
-  const pwOk = password.trim().length >= 6;
+  const pwValue = password.trim();
+  const pwOk = pwValue.length >= 8 && /[a-zA-Z]/.test(pwValue) && /[0-9]/.test(pwValue);
   const matchOk = confirm.trim() !== "" && confirm === password;
 
   const canSubmit = fullName.trim() !== "" && emailOk && pwOk && matchOk;
@@ -150,7 +151,7 @@ export default function Signup() {
                 className="wardrobeInput"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Min 6 characters"
+                placeholder="Min 8 characters"
                 type={showPw ? "text" : "password"}
                 autoComplete="new-password"
               />
@@ -162,7 +163,7 @@ export default function Signup() {
                 {showPw ? "Hide" : "Show"}
               </button>
             </div>
-            <span className="authHint">Password must be at least 6 characters.</span>
+            <span className="authHint">At least 8 characters, with a letter and a number.</span>
           </label>
 
           <label className="authFormGroup">

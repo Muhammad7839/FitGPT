@@ -72,10 +72,14 @@ async function fetchBackendCurrentWeather({ lat, lon }) {
   else if (conditionText.includes("storm") || conditionText.includes("thunder")) precipCondition = "storm";
   else if (conditionText.includes("rain") || conditionText.includes("drizzle")) precipCondition = "rain";
 
+  const rawCity = (data?.city || "").trim();
+  const city = rawCity && rawCity.toLowerCase() !== "current location" ? rawCity : null;
+
   return {
     tempF,
     category: (data?.weather_category || tempCategoryFromF(tempF)).toString().trim().toLowerCase(),
     precipCondition,
+    city,
   };
 }
 
@@ -162,6 +166,7 @@ export async function getWeatherContext() {
       tempF: null,
       category: override,
       precipCondition: "clear",
+      city: null,
       message: "",
     };
   }
@@ -174,7 +179,8 @@ export async function getWeatherContext() {
       tempF: null,
       category: "mild",
       precipCondition: "clear",
-      message: "Weather unavailable, using default recommendations.",
+      city: null,
+      message: "Turn on location permission for live weather.",
     };
   }
 
@@ -186,6 +192,7 @@ export async function getWeatherContext() {
       tempF: weather.tempF,
       category: weather.category || tempCategoryFromF(weather.tempF),
       precipCondition: weather.precipCondition,
+      city: weather.city || null,
       message: "",
     };
   } catch {
@@ -195,6 +202,7 @@ export async function getWeatherContext() {
       tempF: null,
       category: "mild",
       precipCondition: "clear",
+      city: null,
       message: "Weather unavailable, using default recommendations.",
     };
   }
