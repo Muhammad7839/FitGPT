@@ -588,6 +588,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [showStylePicker, setShowStylePicker] = useState(false);
   const [seasonalMode, setSeasonalMode] = useState(() => readSeasonalMode(user));
   const [showWhyDetails, setShowWhyDetails] = useState(false);
+  const [whyPanelOpen, setWhyPanelOpen] = useState(false);
   const [showRefineControls, setShowRefineControls] = useState(false);
 
   const [rejectedOutfits] = useState(() => loadRejectedOutfits(user));
@@ -1317,6 +1318,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
     setSelectedIdx(optionIndex);
     setShowWhyDetails(false);
+    setWhyPanelOpen(true);
 
     if (!track) return;
 
@@ -2516,7 +2518,13 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                 <div className="dashOptionReason">
                   <div className="dashOptionReasonHead">
                     <div className="dashOptionReasonLabel">Why this works</div>
-                    <div className="dashOptionReasonHint">Quick summary</div>
+                    {idx === selectedIdx && !whyPanelOpen ? (
+                      <button type="button" className="dashWhyReopenBtn" onClick={(e) => { e.stopPropagation(); setWhyPanelOpen(true); }}>
+                        View breakdown
+                      </button>
+                    ) : (
+                      <div className="dashOptionReasonHint">Quick summary</div>
+                    )}
                   </div>
                   <div className="dashOptionReasonText">{summary.explanationPreview}</div>
                 </div>
@@ -2713,7 +2721,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       />
 
 
-      {selectedIdx != null && ReactDOM.createPortal(
+      {selectedIdx != null && whyPanelOpen && ReactDOM.createPortal(
         <div className="dashWhyFloat" aria-live="polite">
           <div className="dashWhyHeader">
             <div className="dashWhyHeaderCopy">
@@ -2731,7 +2739,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                 {showWhyDetails ? "Hide full breakdown" : "Show full breakdown"}
                 <span className={showWhyDetails ? "dashWhyToggleIcon open" : "dashWhyToggleIcon"}>v</span>
               </button>
-              <button type="button" className="dashWhyClose" onClick={() => { setSelectedIdx(null); setShowWhyDetails(false); }} aria-label="Close explanation">
+              <button type="button" className="dashWhyClose" onClick={() => { setWhyPanelOpen(false); setShowWhyDetails(false); }} aria-label="Close explanation">
                 x
               </button>
             </div>
