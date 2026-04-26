@@ -197,8 +197,64 @@ const LABEL_TO_TYPE = {
   purse: "bag",
 };
 
-// Minimum confidence to trust the ML result over filename guess
-const MIN_CONFIDENCE = 0.08;
+// Minimum confidence to auto-apply ML result without needing manual review
+const MIN_CONFIDENCE = 0.18;
+
+// Below MIN_CONFIDENCE but above this → return result flagged as needing review
+const REVIEW_CONFIDENCE = 0.08;
+
+// ── Filename keyword fallback ─────────────────────────────────────────────────
+// Infer category from the file name when ML confidence is low.
+
+const FILENAME_CATEGORY_PATTERNS = [
+  // Shoes — listed before "top/shirt" to avoid accidental mis-hits
+  {
+    pattern: /\b(shoe|shoes|sneaker|sneakers|boot|boots|sandal|sandals|heel|heels|loafer|loafers|slipper|slippers|oxford|trainer|trainers|kicks|footwear|clog|clogs)\b/i,
+    category: "Shoes",
+    type: "sneakers",
+  },
+  // Bottoms
+  {
+    pattern: /\b(jeans?|denim|trousers?|pants?|shorts?|skirts?|leggings?|joggers?|sweatpants?|chinos?|cargo|slacks)\b/i,
+    category: "Bottoms",
+    type: "jeans",
+  },
+  // Outerwear
+  {
+    pattern: /\b(jackets?|coats?|blazers?|hoodies?|parkas?|windbreakers?|overcoat|raincoat|cardigan|trench|anorak)\b/i,
+    category: "Outerwear",
+    type: "jacket",
+  },
+  // Tops
+  {
+    pattern: /\b(shirts?|tshirts?|tees?|tops?|blouses?|sweaters?|pullover|tanks?|polos?|tunic|halter|crop)\b/i,
+    category: "Tops",
+    type: "t-shirt",
+  },
+  // Accessories
+  {
+    pattern: /\b(hats?|caps?|scarves?|scarf|belts?|bags?|purse|wallet|watches?|sunglasses|glasses|necklace|bracelet|rings?|earrings?|gloves?|socks?)\b/i,
+    category: "Accessories",
+    type: "hat",
+  },
+];
+
+/**
+ * Guess category from a file's basename before the ML model runs.
+ * Returns { category, type } or null if no match found.
+ */
+export function categoryFromFilename(filename) {
+  if (!filename) return null;
+  const base = filename
+    .split(/[\\/]/)
+    .pop()
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_\-. ]+/g, " ");
+  for (const { pattern, category, type } of FILENAME_CATEGORY_PATTERNS) {
+    if (pattern.test(base)) return { category, type };
+  }
+  return null;
+}
 
 // Singleton model promise — lazy loaded
 let modelPromise = null;
@@ -258,29 +314,46 @@ function labelToType(label) {
 
 /**
  * Classify an already-loaded HTMLImageElement.
+ * Returns { category, type, confidence, label, needsReview }
+ *   needsReview=true  → low-confidence result, show the user a review prompt
+ *   needsReview=false → result is reliable enough to auto-apply
  * @param {HTMLImageElement} imgElement
- * @returns {Promise<{category: string|null, confidence: number, label: string}>}
+ * @param {string} [filename] - optional original filename for keyword fallback
  */
-export async function classifyClothingImage(imgElement) {
+export async function classifyClothingImage(imgElement, filename) {
   try {
     const model = await getModel();
     const predictions = await model.classify(imgElement, 5);
 
+    // Find the best matching prediction at or above the review threshold
+    let best = null;
     for (const pred of predictions) {
       const category = labelToCategory(pred.className);
-      if (category && pred.probability >= MIN_CONFIDENCE) {
-        return {
-          category,
-          type: labelToType(pred.className),
-          confidence: pred.probability,
-          label: pred.className,
-        };
+      if (category && pred.probability >= REVIEW_CONFIDENCE) {
+        best = { category, type: labelToType(pred.className), confidence: pred.probability, label: pred.className };
+        break;
       }
     }
 
-    return { category: null, type: "", confidence: 0, label: "" };
+    if (best) {
+      // High-confidence: auto-apply. Low-confidence: flag for review.
+      const needsReview = best.confidence < MIN_CONFIDENCE;
+      return { ...best, needsReview };
+    }
+
+    // ML gave no usable result — try filename keyword fallback
+    const fileGuess = categoryFromFilename(filename);
+    if (fileGuess) {
+      return { ...fileGuess, confidence: 0, label: "filename-inferred", needsReview: false };
+    }
+
+    return { category: null, type: "", confidence: 0, label: "", needsReview: true };
   } catch {
-    return { category: null, confidence: 0, label: "" };
+    const fileGuess = categoryFromFilename(filename);
+    if (fileGuess) {
+      return { ...fileGuess, confidence: 0, label: "filename-inferred", needsReview: false };
+    }
+    return { category: null, type: "", confidence: 0, label: "", needsReview: true };
   }
 }
 
@@ -288,10 +361,11 @@ export async function classifyClothingImage(imgElement) {
  * Classify a clothing image from a data URL or object URL.
  * Creates a temporary Image, waits for load, then classifies.
  * @param {string} imageUrl - data:... URL or blob:... URL
- * @returns {Promise<{category: string|null, confidence: number, label: string}>}
+ * @param {string} [filename] - optional original filename for keyword fallback
+ * @returns {Promise<{category: string|null, type: string, confidence: number, label: string, needsReview: boolean}>}
  */
-export async function classifyFromUrl(imageUrl) {
-  if (!imageUrl) return { category: null, type: "", confidence: 0, label: "" };
+export async function classifyFromUrl(imageUrl, filename) {
+  if (!imageUrl) return { category: null, type: "", confidence: 0, label: "", needsReview: true };
 
   try {
     const img = await new Promise((resolve, reject) => {
@@ -302,8 +376,12 @@ export async function classifyFromUrl(imageUrl) {
       el.src = imageUrl;
     });
 
-    return await classifyClothingImage(img);
+    return await classifyClothingImage(img, filename);
   } catch {
-    return { category: null, type: "", confidence: 0, label: "" };
+    const fileGuess = categoryFromFilename(filename);
+    if (fileGuess) {
+      return { ...fileGuess, confidence: 0, label: "filename-inferred", needsReview: false };
+    }
+    return { category: null, type: "", confidence: 0, label: "", needsReview: true };
   }
 }

@@ -1,8 +1,16 @@
 /**
  * Visual post-login tutorial shown once to explain the core FitGPT flows.
+ * Polished: slide/fade animated page transitions, better text contrast,
+ * clear progress dots, and proper Skip/Next/Finish hierarchy.
  */
 package com.fitgpt.app.ui.onboarding
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -20,11 +28,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -32,29 +42,36 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.fitgpt.app.R
 import com.fitgpt.app.ui.common.WebCard
 
 private data class TutorialPage(
     val title: String,
-    val message: String
+    val message: String,
+    val emoji: String = ""
 )
 
 private val tutorialPages = listOf(
     TutorialPage(
         title = "Upload your clothes",
-        message = "Start with Wardrobe and add clear photos so FitGPT can build better outfit suggestions."
+        message = "Head to Wardrobe and snap or upload photos of your items. FitGPT auto-identifies category and color so you can get going fast.",
+        emoji = "👕"
     ),
     TutorialPage(
-        title = "Get recommendations",
-        message = "Open Recommend to get weather-aware outfit ideas based on your available items."
+        title = "Get daily outfit picks",
+        message = "The Home screen suggests 3 outfits each day, adjusted for weather, time, and your style. Tap Refresh for new ideas.",
+        emoji = "✨"
     ),
     TutorialPage(
-        title = "Ask AI chat anytime",
-        message = "Use the AI chat button on main tabs for quick style help without leaving your flow."
+        title = "Chat with AURA anytime",
+        message = "Tap the AURA button on any screen to get personalized style help, outfit ideas, or quick fashion advice from your AI stylist.",
+        emoji = "💬"
     )
 )
 
@@ -63,14 +80,14 @@ fun PostLoginTutorialScreen(
     onComplete: () -> Unit
 ) {
     var pageIndex by remember { mutableIntStateOf(0) }
-    val page = tutorialPages[pageIndex]
     val isLast = pageIndex == tutorialPages.lastIndex
+
     val pulseTransition = rememberInfiniteTransition(label = "tutorial-pulse")
     val pulseScale by pulseTransition.animateFloat(
-        initialValue = 0.96f,
-        targetValue = 1.04f,
+        initialValue = 0.97f,
+        targetValue = 1.03f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1600),
+            animation = tween(durationMillis = 1800),
             repeatMode = RepeatMode.Reverse
         ),
         label = "logo-scale"
@@ -84,96 +101,135 @@ fun PostLoginTutorialScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 28.dp),
+                .padding(horizontal = 24.dp, vertical = 32.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
+
+            // ── Header ──────────────────────────────────────────────────────
             Column {
                 Text(
-                    text = "FitGPT quick tour",
-                    style = MaterialTheme.typography.headlineMedium
+                    text = "Quick tour",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onBackground
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Step ${pageIndex + 1} of ${tutorialPages.size}",
+                    text = "${pageIndex + 1} of ${tutorialPages.size}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            WebCard(
-                modifier = Modifier.fillMaxWidth(),
-                accentTop = false
-            ) {
-                Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+            // ── Animated page card ───────────────────────────────────────────
+            AnimatedContent(
+                targetState = pageIndex,
+                transitionSpec = {
+                    if (targetState > initialState) {
+                        (slideInHorizontally { it / 2 } + fadeIn(tween(280))) togetherWith
+                                (slideOutHorizontally { -it / 2 } + fadeOut(tween(180)))
+                    } else {
+                        (slideInHorizontally { -it / 2 } + fadeIn(tween(280))) togetherWith
+                                (slideOutHorizontally { it / 2 } + fadeOut(tween(180)))
+                    }
+                },
+                label = "tutorial-page"
+            ) { idx ->
+                val page = tutorialPages[idx]
+                WebCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    accentTop = true
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.fitgpt_splash_brand),
-                        contentDescription = "FitGPT",
-                        modifier = Modifier
-                            .size(144.dp)
-                            .scale(pulseScale)
-                    )
-                    Text(
-                        text = page.title,
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                    Text(
-                        text = page.message,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.fitgpt_splash_brand),
+                            contentDescription = "FitGPT",
+                            modifier = Modifier
+                                .size(120.dp)
+                                .scale(pulseScale)
+                        )
+                        if (page.emoji.isNotEmpty()) {
+                            Text(
+                                text = page.emoji,
+                                style = MaterialTheme.typography.headlineLarge,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                        Text(
+                            text = page.title,
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = page.message,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            lineHeight = MaterialTheme.typography.bodyLarge.lineHeight
+                        )
+                    }
                 }
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // ── Footer: dots + buttons ───────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+
+                // Progress dots
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     tutorialPages.forEachIndexed { index, _ ->
+                        val isActive = index == pageIndex
                         Box(
                             modifier = Modifier
                                 .padding(horizontal = 4.dp)
-                                .size(if (index == pageIndex) 10.dp else 8.dp)
+                                .width(if (isActive) 22.dp else 8.dp)
+                                .height(8.dp)
+                                .clip(CircleShape)
                                 .background(
-                                    color = if (index == pageIndex) {
+                                    color = if (isActive)
                                         MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
-                                    },
-                                    shape = CircleShape
+                                    else
+                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
                                 )
                         )
                     }
                 }
 
+                // Primary action
                 Button(
                     onClick = {
-                        if (isLast) {
-                            onComplete()
-                        } else {
-                            pageIndex += 1
-                        }
+                        if (isLast) onComplete() else pageIndex += 1
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
                     shape = RoundedCornerShape(14.dp)
                 ) {
-                    Text(if (isLast) "Finish tutorial" else "Next")
+                    Text(
+                        text = if (isLast) "Let's go!" else "Next",
+                        style = MaterialTheme.typography.labelLarge
+                    )
                 }
 
-                Button(
-                    onClick = onComplete,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Text("Skip")
+                // Skip — subdued text button, not a filled button
+                if (!isLast) {
+                    TextButton(
+                        onClick = onComplete,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Skip tour",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
