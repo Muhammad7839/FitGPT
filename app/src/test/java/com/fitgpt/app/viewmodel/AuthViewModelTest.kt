@@ -89,7 +89,10 @@ class AuthViewModelTest {
 
         assertEquals(null, sessionStore.accessToken)
         assertTrue(viewModel.loginState.value is AuthState.Error)
-        assertTrue((viewModel.loginState.value as AuthState.Error).message.contains("failed"))
+        assertEquals(
+            "Invalid Google token audience",
+            (viewModel.loginState.value as AuthState.Error).message
+        )
         assertTrue(!(viewModel.loginState.value as AuthState.Error).message.contains("cancelled"))
     }
 
@@ -107,6 +110,87 @@ class AuthViewModelTest {
             "Incorrect email or password. If this account already exists, try resetting your password.",
             (viewModel.loginState.value as AuthState.Error).message
         )
+    }
+
+    @Test
+    fun login_success_persistsSessionAndSetsSuccess() = runTest(dispatcher) {
+        val sessionStore = FakeSessionStore()
+        val viewModel = AuthViewModel(FakeAuthRepository(), sessionStore)
+
+        viewModel.login(" USER@example.com ", "Fitgpt2026")
+        advanceUntilIdle()
+
+        assertEquals("email-token", sessionStore.accessToken)
+        assertTrue(viewModel.loginState.value is AuthState.Success)
+    }
+
+    @Test
+    fun register_rejectsPasswordOutsideBackendPolicyBeforeNetworkCall() = runTest(dispatcher) {
+        val repository = FakeAuthRepository()
+        val viewModel = AuthViewModel(repository, FakeSessionStore())
+
+        viewModel.register(
+            email = "user@example.com",
+            password = "123456",
+            confirmPassword = "123456"
+        )
+        advanceUntilIdle()
+
+        assertEquals(0, repository.registerCalls)
+        assertEquals(
+            "Password must be at least 8 characters and include a letter and a number.",
+            (viewModel.registerState.value as AuthState.Error).message
+        )
+    }
+
+    @Test
+    fun register_http422_surfacesBackendValidationMessage() = runTest(dispatcher) {
+        val repository = FakeAuthRepository().apply {
+            registerFailure = httpExceptionWithRawBody(
+                422,
+                """
+                {
+                  "detail": [
+                    {
+                      "type": "value_error",
+                      "loc": ["body", "password"],
+                      "msg": "Value error, Password is too common. Please choose a stronger password.",
+                      "input": "password1"
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        }
+        val viewModel = AuthViewModel(repository, FakeSessionStore())
+
+        viewModel.register(
+            email = "user@example.com",
+            password = "password1",
+            confirmPassword = "password1"
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            "Password is too common. Please choose a stronger password.",
+            (viewModel.registerState.value as AuthState.Error).message
+        )
+    }
+
+    @Test
+    fun register_successSetsSuccessWithoutPersistingToken() = runTest(dispatcher) {
+        val sessionStore = FakeSessionStore()
+        val viewModel = AuthViewModel(FakeAuthRepository(), sessionStore)
+
+        viewModel.register(
+            email = "user@example.com",
+            password = "Fitgpt2026",
+            confirmPassword = "Fitgpt2026"
+        )
+        advanceUntilIdle()
+
+        assertEquals(null, sessionStore.accessToken)
+        assertTrue(viewModel.registerState.value is AuthState.Success)
     }
 
     @Test
@@ -140,7 +224,7 @@ class AuthViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            "Reset failed (400)",
+            "Invalid reset token",
             (viewModel.resetPasswordState.value as AuthState.Error).message
         )
     }
@@ -150,10 +234,17 @@ class AuthViewModelTest {
             .toResponseBody("application/json".toMediaType())
         return HttpException(Response.error<Any>(code, body))
     }
+
+    private fun httpExceptionWithRawBody(code: Int, rawBody: String): HttpException {
+        val body = rawBody.toResponseBody("application/json".toMediaType())
+        return HttpException(Response.error<Any>(code, body))
+    }
 }
 
 private class FakeAuthRepository : AuthRepository {
     var loginFailure: Exception? = null
+    var registerFailure: Exception? = null
+    var registerCalls = 0
     var lastGoogleToken: String? = null
     var lastAttemptId: String? = null
     var googleFailure: Exception? = null
@@ -165,7 +256,10 @@ private class FakeAuthRepository : AuthRepository {
         return TokenResponse(accessToken = "email-token", tokenType = "bearer")
     }
 
-    override suspend fun register(email: String, password: String) = Unit
+    override suspend fun register(email: String, password: String) {
+        registerCalls += 1
+        registerFailure?.let { throw it }
+    }
 
     override suspend fun loginWithGoogle(idToken: String, attemptId: String?): TokenResponse {
         lastGoogleToken = idToken

@@ -82,6 +82,18 @@ class BackendEnvironmentResolverTest {
     }
 
     @Test
+    fun physicalDeviceUsesProductionRenderBackendForDemoBuildConfiguration() {
+        val selected = BackendEnvironmentResolver.resolveBaseUrl(
+            apiBaseUrl = "https://fitgpt-backend-tdiq.onrender.com/",
+            physicalLanBaseUrl = "   ",
+            deviceInfo = physicalDeviceInfo()
+        )
+
+        assertEquals("https://fitgpt-backend-tdiq.onrender.com/", selected)
+        assertFalse(selected.contains("10.0.2.2"))
+    }
+
+    @Test
     fun physicalDeviceRejectsLocalhost() {
         val error = runCatching {
             BackendEnvironmentResolver.resolveBaseUrl(

@@ -89,6 +89,13 @@ fun SignupScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Use at least 8 characters with a letter and a number.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
                     Spacer(modifier = Modifier.height(12.dp))
 
                     OutlinedTextField(

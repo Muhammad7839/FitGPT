@@ -11,6 +11,7 @@ import com.fitgpt.app.data.auth.AuthSessionStore
 import com.fitgpt.app.data.network.BackendEnvironmentResolver
 import com.fitgpt.app.data.repository.AuthRepository
 import com.fitgpt.app.data.repository.ProfileRepository
+import com.google.gson.JsonParser
 import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
@@ -19,7 +20,6 @@ import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import org.json.JSONObject
 import retrofit2.HttpException
 
 /**
@@ -40,6 +40,8 @@ class AuthViewModel(
     companion object {
         private const val DEV_QUICK_LOGIN_EMAIL = "dev.quicklogin@example.com"
         private const val DEV_QUICK_LOGIN_PASSWORD = "Test1234"
+        private const val PASSWORD_POLICY_MESSAGE =
+            "Password must be at least 8 characters and include a letter and a number."
     }
 
     private val authLogTag = "GOOGLE_AUTH"
@@ -76,10 +78,11 @@ class AuthViewModel(
                     _loginState.value = AuthState.Error("Unable to save your session. Please try again.")
                 }
             } catch (e: HttpException) {
-                val message = if (e.code() == 401) {
-                    "Incorrect email or password. If this account already exists, try resetting your password."
-                } else {
-                    "Login failed (${e.code()})"
+                val responseDetail = extractHttpDetail(e)
+                val message = when {
+                    e.code() == 401 -> "Incorrect email or password. If this account already exists, try resetting your password."
+                    !responseDetail.isNullOrBlank() -> responseDetail
+                    else -> "Login failed (${e.code()})"
                 }
                 _loginState.value = AuthState.Error(message)
             } catch (e: Exception) {
@@ -223,8 +226,9 @@ class AuthViewModel(
             _registerState.value = AuthState.Error("Passwords do not match")
             return
         }
-        if (password.length < 6) {
-            _registerState.value = AuthState.Error("Password must be at least 6 characters")
+        val passwordPolicyError = validateBackendPasswordPolicy(password)
+        if (passwordPolicyError != null) {
+            _registerState.value = AuthState.Error(passwordPolicyError)
             return
         }
 
@@ -234,9 +238,10 @@ class AuthViewModel(
                 repository.register(email = normalizedEmail, password = password)
                 _registerState.value = AuthState.Success
             } catch (e: HttpException) {
+                val responseDetail = extractHttpDetail(e)
                 val message = when (e.code()) {
                     400 -> "An account with this email already exists. Sign in instead or reset your password."
-                    else -> "Registration failed (${e.code()})"
+                    else -> responseDetail ?: "Registration failed (${e.code()})"
                 }
                 _registerState.value = AuthState.Error(message)
             } catch (e: Exception) {
@@ -275,8 +280,9 @@ class AuthViewModel(
             _resetPasswordState.value = AuthState.Error("Passwords do not match")
             return
         }
-        if (newPassword.length < 6) {
-            _resetPasswordState.value = AuthState.Error("Password must be at least 6 characters")
+        val passwordPolicyError = validateBackendPasswordPolicy(newPassword)
+        if (passwordPolicyError != null) {
+            _resetPasswordState.value = AuthState.Error(passwordPolicyError)
             return
         }
 
@@ -286,7 +292,9 @@ class AuthViewModel(
                 repository.resetPassword(token, newPassword)
                 _resetPasswordState.value = AuthState.Success
             } catch (e: HttpException) {
-                _resetPasswordState.value = AuthState.Error("Reset failed (${e.code()})")
+                _resetPasswordState.value = AuthState.Error(
+                    extractHttpDetail(e) ?: "Reset failed (${e.code()})"
+                )
             } catch (e: Exception) {
                 _resetPasswordState.value = AuthState.Error(resolveNetworkAuthError(e, action = "reset password"))
             }
@@ -333,10 +341,39 @@ class AuthViewModel(
         if (payload.isBlank()) {
             return null
         }
-        val detail = runCatching {
-            JSONObject(payload).optString("detail")
-        }.getOrNull().orEmpty().trim()
-        return detail.ifBlank { null }
+        return runCatching {
+            val root = JsonParser.parseString(payload).asJsonObject
+            val detail = root.get("detail")
+            when {
+                detail == null || detail.isJsonNull -> null
+                detail.isJsonPrimitive -> detail.asString
+                detail.isJsonArray -> detail.asJsonArray
+                    .mapNotNull { item ->
+                        item.takeIf { it.isJsonObject }
+                            ?.asJsonObject
+                            ?.get("msg")
+                            ?.takeIf { it.isJsonPrimitive }
+                            ?.asString
+                    }
+                    .firstOrNull()
+                else -> null
+            }?.trim()?.removePrefix("Value error,")?.trim()
+        }.getOrNull()?.ifBlank { null }
+    }
+
+    private fun validateBackendPasswordPolicy(password: String): String? {
+        if (password.trim() != password) {
+            return "Password cannot have leading or trailing spaces."
+        }
+        if (password.length < 8) {
+            return PASSWORD_POLICY_MESSAGE
+        }
+        val hasLetter = password.any { it.isLetter() }
+        val hasDigit = password.any { it.isDigit() }
+        if (!hasLetter || !hasDigit) {
+            return PASSWORD_POLICY_MESSAGE
+        }
+        return null
     }
 
     private fun normalizeEmail(email: String): String {
