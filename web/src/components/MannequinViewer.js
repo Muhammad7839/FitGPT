@@ -341,6 +341,7 @@ export default function MannequinViewer({ outfit = [], bodyType = "rectangle" })
   const entries = useMemo(() => legendEntries(outfit).slice(0, 4), [outfit]);
   const [webglSupported, setWebglSupported] = useState(() => isWebGLAvailable());
   const [textures, setTextures] = useState({});
+  const [legendVisible, setLegendVisible] = useState(true);
 
   // Load clothing photos as textures
   useEffect(() => {
@@ -392,8 +393,14 @@ export default function MannequinViewer({ outfit = [], bodyType = "rectangle" })
         </div>
       ) : null}
 
-      {entries.length > 0 ? (
+      {legendVisible && entries.length > 0 ? (
         <div className="mannequinLegend" aria-hidden="true">
+          <button
+            type="button"
+            className="mannequinLegendClose"
+            onClick={() => setLegendVisible(false)}
+            aria-label="Hide outfit legend"
+          >×</button>
           {entries.map((entry) => (
             <div
               key={entry.id || entry.name}

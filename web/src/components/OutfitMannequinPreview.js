@@ -444,7 +444,7 @@ const CALLOUT_CFG = {
   onePiece: { dot: [0.66, 0.56, 0.58], tip: [1.72, 0.72, 0.1] },
 };
 
-function CalloutCard({ item, role, onDragChange }) {
+function CalloutCard({ item, role, onDragChange, onDismiss }) {
   const cfg = CALLOUT_CFG[role];
 
   const [isDragging, setIsDragging] = useState(false);
@@ -487,6 +487,12 @@ function CalloutCard({ item, role, onDragChange }) {
           style={{ transform: `translate(${offset.x}px, ${offset.y}px)`, cursor: isDragging ? "grabbing" : "grab", pointerEvents: "auto" }}
           onPointerDown={handlePointerDown}
         >
+          <button
+            type="button"
+            className="mannequinCalloutClose"
+            onPointerDown={(e) => { e.stopPropagation(); onDismiss?.(); }}
+            aria-label="Dismiss label"
+          >×</button>
           {item.image_url
             ? <img className="mannequinCalloutImg" src={item.image_url} alt={item.name || ""} draggable={false} />
             : <div className="mannequinCalloutPlaceholder" />}
@@ -498,12 +504,21 @@ function CalloutCard({ item, role, onDragChange }) {
 }
 
 function ClothingCallouts({ grouped, onDragChange }) {
+  const [dismissed, setDismissed] = useState(new Set());
   return (
     <group>
       {Object.keys(CALLOUT_CFG).map((role) => {
         const item = grouped[role];
-        if (!item) return null;
-        return <CalloutCard key={role} item={item} role={role} onDragChange={onDragChange} />;
+        if (!item || dismissed.has(role)) return null;
+        return (
+          <CalloutCard
+            key={role}
+            item={item}
+            role={role}
+            onDragChange={onDragChange}
+            onDismiss={() => setDismissed((prev) => new Set([...prev, role]))}
+          />
+        );
       })}
     </group>
   );
@@ -621,7 +636,8 @@ export default function OutfitMannequinPreview({ isOpen, onClose, outfit = [], t
   const [loading, setLoading] = useState(false);
   const [textureError, setTextureError] = useState("");
   const [actionToken, setActionToken] = useState({ type: "", tick: 0 });
-  const [showCallouts, setShowCallouts] = useState(true);
+  const [showCallouts, setShowCallouts] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const canUseWebGL = useMemo(() => supportsWebGL(), []);
 
   const previewData = useMemo(() => groupPreviewItems(outfit), [outfit]);
@@ -781,10 +797,31 @@ export default function OutfitMannequinPreview({ isOpen, onClose, outfit = [], t
                 </svg>
                 <span>{showCallouts ? "Hide labels" : "Labels"}</span>
               </button>
+              <button
+                type="button"
+                className={"mannequinPreviewControlBtn" + (sidebarOpen ? " isAccent" : "")}
+                onClick={() => setSidebarOpen((p) => !p)}
+                title={sidebarOpen ? "Hide outfit info" : "Show outfit info"}
+                aria-label={sidebarOpen ? "Hide outfit info" : "Show outfit info"}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span>Info</span>
+              </button>
             </div>
           </div>
 
+          {sidebarOpen ? (
           <aside className="mannequinPreviewInfoCard">
+            <button
+              type="button"
+              className="mannequinPreviewInfoClose"
+              onClick={() => setSidebarOpen(false)}
+              aria-label="Close info panel"
+            >×</button>
             <div className="mannequinPreviewSection">
               <div className="mannequinPreviewSectionTitle">Preview status</div>
               <div className="mannequinPreviewStatusRow">
@@ -845,6 +882,7 @@ export default function OutfitMannequinPreview({ isOpen, onClose, outfit = [], t
               </div>
             </div>
           </aside>
+          ) : null}
         </div>
       </div>
     </div>,
