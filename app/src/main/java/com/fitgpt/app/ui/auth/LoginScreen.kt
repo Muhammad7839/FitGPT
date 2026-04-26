@@ -80,7 +80,6 @@ fun LoginScreen(
     onLoginSuccess: (String?) -> Unit,
     onCreateAccountClick: () -> Unit,
     onForgotPasswordClick: () -> Unit,
-    onContinueAsGuestClick: () -> Unit,
     initialEmail: String = "",
     infoMessage: String? = null
 ) {
@@ -92,7 +91,6 @@ fun LoginScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val googleClientId = BuildConfig.GOOGLE_CLIENT_ID
-    val showGoogleSignIn = shouldShowGoogleSignInButton(googleClientId)
     val showQuickLoginDev = remember {
         BuildConfig.DEBUG && runCatching {
             val activeBaseUrl = BackendEnvironmentResolver.resolveBaseUrl(
@@ -300,31 +298,6 @@ fun LoginScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
                     HorizontalDivider()
-                    if (showGoogleSignIn) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Button(
-                            onClick = {
-                                val attemptId = UUID.randomUUID().toString()
-                                currentGoogleAttemptId = attemptId
-                                Log.d(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId button clicked")
-                                if (BuildConfig.GOOGLE_CLIENT_ID.isBlank()) {
-                                    Log.e(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId CONFIG_ERROR: CLIENT_ID_EMPTY")
-                                }
-                                if (!BuildConfig.GOOGLE_CLIENT_ID.endsWith(".apps.googleusercontent.com")) {
-                                    Log.e(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId CONFIG_ERROR: INVALID_CLIENT_ID_FORMAT")
-                                }
-                                googleErrorMessage = null
-                                val signInIntent = googleSignInClient.signInIntent
-                                Log.d(GOOGLE_AUTH_LOG_TAG, "attempt_id=$attemptId launcher triggered")
-                                googleSignInLauncher.launch(signInIntent)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = state !is AuthState.Loading
-                        ) {
-                            Text("Sign in with Google")
-                        }
-                    }
-
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Button(
@@ -343,16 +316,6 @@ fun LoginScreen(
                         enabled = state !is AuthState.Loading
                     ) {
                         Text("Create account")
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    OutlinedButton(
-                        onClick = onContinueAsGuestClick,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = state !is AuthState.Loading
-                    ) {
-                        Text("Try AURA without signing in")
                     }
 
                     if (!infoMessage.isNullOrBlank()) {

@@ -323,9 +323,6 @@ fun AppNavHost(
                 onForgotPasswordClick = {
                     navController.navigate(Routes.FORGOT_PASSWORD)
                 },
-                onContinueAsGuestClick = {
-                    navController.navigate(Routes.CHAT)
-                },
                 initialEmail = loginPrefillEmail,
                 infoMessage = loginInfoMessage
             )
