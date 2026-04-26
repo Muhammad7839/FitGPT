@@ -18325,6 +18325,20 @@ select:focus-visible {
   color: rgba(255, 255, 255, 0.45);
 }
 
+/* Unplaced items in the legend — subtle muted style, not an error */
+.mannequinLegendUnplaced {
+  opacity: 0.72;
+}
+
+.mannequinLegendCatUnplaced {
+  color: rgba(0, 0, 0, 0.32) !important;
+  font-style: italic;
+}
+
+[data-theme="dark"] .mannequinLegendCatUnplaced {
+  color: rgba(255, 255, 255, 0.30) !important;
+}
+
 .mannequinConflictBanner {
   position: absolute;
   top: 12px;
@@ -22094,5 +22108,73 @@ a:focus-visible {
   /* Keep color/shadow transitions — they're safe */
   * {
     transition-duration: 80ms !important;
+  }
+}
+
+/* ============================================================
+   MOBILE POLISH 2026 — targeted fixes for small screens
+   Max viewport: 600px (phone portrait).
+   No layout changes that affect tablet or desktop.
+   ============================================================ */
+
+@media (max-width: 600px) {
+  /* Mannequin — reduce height so it doesn't eat the whole screen */
+  .mannequinViewerContainer {
+    height: 340px;
+  }
+
+  /* Mannequin legend — smaller thumbs and font so it fits */
+  .mannequinLegend {
+    top: 8px;
+    right: 8px;
+    gap: 5px;
+  }
+
+  .mannequinLegendItem {
+    min-width: 138px;
+    padding: 4px 8px;
+    gap: 6px;
+  }
+
+  .mannequinLegendThumb {
+    width: 28px;
+    height: 28px;
+  }
+
+  .mannequinLegendName {
+    font-size: 10px;
+  }
+
+  /* Outfit builder — stack cards vertically */
+  .outfitBuilderLayout {
+    flex-direction: column !important;
+  }
+
+  .outfitBuilderCanvas,
+  .outfitBuilderWardrobe {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Buttons — ensure minimum touch target (44px) everywhere */
+  .btn,
+  .btnPrimary,
+  .btnSecondary,
+  .styledSaveBtn {
+    min-height: 44px;
+  }
+
+  /* Top nav — ensure it doesn't clip on very narrow screens */
+  .topNavLinks {
+    gap: 0;
+  }
+
+  /* Download page — stack vertically with adequate spacing */
+  .downloadHero {
+    padding: 24px 16px;
+  }
+
+  .downloadSection {
+    padding: 20px 16px;
   }
 }

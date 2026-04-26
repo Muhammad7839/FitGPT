@@ -13,6 +13,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -126,14 +127,16 @@ fun SignupScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Button(
+                    // Back to sign in — low-emphasis action, text only
+                    TextButton(
                         onClick = onBackToLoginClick,
                         modifier = Modifier.fillMaxWidth(),
                         enabled = state !is AuthState.Loading
                     ) {
-                        Text("Back to sign in")
+                        Text(
+                            text = "Back to sign in",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
 
                     if (state is AuthState.Error) {

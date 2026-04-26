@@ -28,13 +28,13 @@ import {
 } from "../utils/speech";
 
 const GREETING =
-  "Hi! I'm AURA. Ask me about outfits, styling, color pairing, or what to wear for any occasion.";
+  "Hey! I'm AURA — your personal stylist. What are we dressing for today?";
 const EMPTY_PROMPT = "Ask me anything about outfits or styling!";
 const CLARIFY_PROMPT =
-  "Can you tell me more about the occasion or style you are going for?";
+  "Tell me a bit more — what's the occasion or vibe you're going for?";
 const ERROR_MESSAGE = "Something went wrong. Please try again.";
 const FALLBACK_MESSAGE =
-  "I'm having trouble right now, but a simple neutral outfit is always a safe choice.";
+  "I'm having a moment — try again in a sec. In the meantime, you can't go wrong with a clean neutral base and one statement piece.";
 const MAX_CHATS = 30;
 const TYPE_SPEED = 12;
 
@@ -42,19 +42,15 @@ const savedOutfitsStore = makeLocalStore(SAVED_OUTFITS_KEY);
 const plannedOutfitsStore = makeLocalStore(PLANNED_OUTFITS_KEY);
 const outfitHistoryStore = makeLocalStore(OUTFIT_HISTORY_KEY);
 
+// Greetings ("hi", "hey", "hello") are intentionally excluded here —
+// they go to the AI so AURA can respond warmly like a person, not with a
+// generic clarification prompt.
 const UNCLEAR_QUERIES = new Set([
   "",
   "?",
-  "help",
-  "advice",
-  "style",
-  "styling",
-  "what",
   "huh",
   "idk",
-  "hello",
-  "hi",
-  "hey",
+  "what",
 ]);
 
 const OUTFIT_KEYWORDS = [

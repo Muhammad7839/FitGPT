@@ -184,16 +184,6 @@ fun DashboardScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Text(
-                        text = "City: ${(locationDebugInfo.city ?: resolvedWeatherCity).orEmpty()}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "Coords: ${locationDebugInfo.lat?.let { String.format("%.5f", it) } ?: "-"}, ${locationDebugInfo.lon?.let { String.format("%.5f", it) } ?: "-"}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
 
                     when (val state = weatherState) {
                         UiState.Loading -> {

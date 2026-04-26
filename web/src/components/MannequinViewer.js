@@ -249,38 +249,63 @@ function OutfitMeshes({ slots, scale, textures }) {
   );
 }
 
+// ── Thin circular base platform — grounds the mannequin like a display stand ──
+function BasePlatform() {
+  return (
+    <group position={[0, -0.645, 0]}>
+      {/* Main disc */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.54, 0.54, 0.035, 64]} />
+        <meshStandardMaterial color="#d8d2cb" roughness={0.78} metalness={0.06} />
+      </mesh>
+      {/* Subtle shadow ring underneath for depth */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.002, 0]}>
+        <cylinderGeometry args={[0.52, 0.56, 0.001, 64]} />
+        <meshStandardMaterial color="#b0a89f" roughness={0.9} metalness={0} transparent opacity={0.35} />
+      </mesh>
+    </group>
+  );
+}
+
 function ViewerScene({ outfit, bodyType, textures }) {
   const scale = useMemo(() => bodyScaleForType(bodyType), [bodyType]);
   const validation = useMemo(() => validateOutfit(outfit), [outfit]);
 
   return (
     <>
-      {/* Soft fill — keeps shadows from going too dark */}
-      <ambientLight intensity={0.9} />
-      {/* Key light — strong from front-upper-right */}
-      <directionalLight position={[3, 6, 5]} intensity={1.8} castShadow={false} />
+      {/* Soft fill — prevents shadows going fully black */}
+      <ambientLight intensity={0.92} />
+      {/* Key light — front-upper-right, strong but not blown-out */}
+      <directionalLight position={[3, 6, 5]} intensity={1.7} castShadow={false} />
       {/* Fill light — left side, softer */}
-      <directionalLight position={[-4, 3, 2]} intensity={0.7} />
-      {/* Rim light — back-left, gives depth and separates mannequin from background */}
-      <directionalLight position={[-2, 1, -4]} intensity={0.5} />
-      {/* Ground bounce — warm subtle uplight */}
-      <directionalLight position={[0, -3, 1]} intensity={0.18} color="#fffbe6" />
+      <directionalLight position={[-4, 3, 2]} intensity={0.65} />
+      {/* Rim light — back-left edge, separates form from background */}
+      <directionalLight position={[-2, 1, -4]} intensity={0.48} />
+      {/* Ground bounce — warm uplight from below */}
+      <directionalLight position={[0, -3, 1]} intensity={0.20} color="#fffbe6" />
       <SlowSpin>
         <Body scale={scale} />
         <OutfitMeshes scale={scale} slots={{ ...validation.bySlot, accessories: validation.accessories }} textures={textures} />
+        <BasePlatform />
       </SlowSpin>
-      <OrbitControls enablePan={false} minDistance={3.2} maxDistance={6.2} />
+      <OrbitControls enablePan={false} minDistance={3.0} maxDistance={6.0} />
     </>
   );
 }
 
 function legendEntries(outfit) {
-  return (Array.isArray(outfit) ? outfit : []).filter(Boolean).map((item) => ({
-    id: item.id,
-    name: item.name || "Unnamed item",
-    category: slotLabel(getItemSlot(item)) || normalizeCategory(item.category) || "item",
-    imageUrl: item.image_url || "",
-  }));
+  return (Array.isArray(outfit) ? outfit : []).filter(Boolean).map((item) => {
+    const slot = getItemSlot(item);
+    const label = slotLabel(slot) || normalizeCategory(item.category) || "";
+    return {
+      id: item.id,
+      name: item.name || "Unnamed item",
+      // If getItemSlot returned null, the item has no recognized placement — surface that clearly
+      category: label || "unplaced",
+      unplaced: !slot,
+      imageUrl: item.image_url || "",
+    };
+  });
 }
 
 function MannequinFallback() {
@@ -333,7 +358,7 @@ export default function MannequinViewer({ outfit = [], bodyType = "rectangle" })
   return (
     <div className="mannequinViewerContainer">
       <MannequinCanvasBoundary fallback={<MannequinFallback />} onError={() => setWebglSupported(false)}>
-        <Canvas camera={{ position: [0, 1.1, 4.0], fov: 36 }} gl={createRenderer}>
+        <Canvas camera={{ position: [0, 0.85, 4.2], fov: 38 }} gl={createRenderer}>
           <ViewerScene outfit={outfit} bodyType={bodyType} textures={textures} />
         </Canvas>
       </MannequinCanvasBoundary>
@@ -352,13 +377,19 @@ export default function MannequinViewer({ outfit = [], bodyType = "rectangle" })
       {entries.length > 0 ? (
         <div className="mannequinLegend" aria-hidden="true">
           {entries.map((entry) => (
-            <div key={entry.id || entry.name} className="mannequinLegendItem">
+            <div
+              key={entry.id || entry.name}
+              className={`mannequinLegendItem${entry.unplaced ? " mannequinLegendUnplaced" : ""}`}
+              title={entry.unplaced ? "Item category not recognized — shown in legend only" : undefined}
+            >
               {entry.imageUrl
                 ? <img className="mannequinLegendThumb" src={entry.imageUrl} alt="" />
                 : <div className="mannequinLegendThumb mannequinLegendPlaceholder" />}
               <div className="mannequinLegendInfo">
                 <div className="mannequinLegendName">{entry.name}</div>
-                <div className="mannequinLegendCat">{entry.category}</div>
+                <div className={`mannequinLegendCat${entry.unplaced ? " mannequinLegendCatUnplaced" : ""}`}>
+                  {entry.unplaced ? "not placed" : entry.category}
+                </div>
               </div>
             </div>
           ))}

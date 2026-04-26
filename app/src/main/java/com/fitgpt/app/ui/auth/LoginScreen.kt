@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -158,22 +159,27 @@ fun LoginScreen(
                     HorizontalDivider()
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Button(
-                        onClick = onForgotPasswordClick,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = state !is AuthState.Loading
-                    ) {
-                        Text("Forgot password")
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Button(
+                    // Create account — prominent secondary action (outlined, not filled)
+                    OutlinedButton(
                         onClick = onCreateAccountClick,
                         modifier = Modifier.fillMaxWidth(),
                         enabled = state !is AuthState.Loading
                     ) {
                         Text("Create account")
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Forgot password — low-emphasis tertiary action (text only)
+                    TextButton(
+                        onClick = onForgotPasswordClick,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = state !is AuthState.Loading
+                    ) {
+                        Text(
+                            text = "Forgot password?",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
 
                     if (!infoMessage.isNullOrBlank()) {
