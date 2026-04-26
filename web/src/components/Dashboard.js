@@ -2722,7 +2722,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
 
       {selectedIdx != null && whyPanelOpen && ReactDOM.createPortal(
-        <div className="dashWhyFloat" aria-live="polite">
+        <div className={"dashWhyFloat" + (showWhyDetails ? " isExpanded" : "")} aria-live="polite">
           <div className="dashWhyHeader">
             <div className="dashWhyHeaderCopy">
               <div className="dashWhyEyebrow">Selected outfit breakdown</div>
