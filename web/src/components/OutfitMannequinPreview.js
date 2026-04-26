@@ -52,6 +52,14 @@ function previewRole(item) {
   if (category === "outerwear" || layerType === "outer" || clothingType.includes("jacket") || clothingType.includes("coat") || clothingType.includes("blazer") || clothingType.includes("cardigan")) return "outerwear";
   if (category === "tops" || category === "top") return "top";
   if (category === "bottoms" || category === "bottom" || clothingType.includes("pants") || clothingType.includes("jeans") || clothingType.includes("skirt") || clothingType.includes("shorts") || clothingType.includes("trousers")) return "bottom";
+  if (category === "accessories" || category === "accessory" ||
+      clothingType.includes("necklace") || clothingType.includes("bracelet") ||
+      clothingType.includes("bag") || clothingType.includes("belt") ||
+      clothingType.includes("watch") || clothingType.includes("purse") ||
+      clothingType.includes("sunglasses") || clothingType.includes("glasses") ||
+      clothingType.includes("scarf") || clothingType.includes("hat") ||
+      clothingType.includes("cap") || clothingType.includes("beanie") ||
+      clothingType.includes("tote") || clothingType.includes("handbag")) return "accessory";
   return "";
 }
 
@@ -92,7 +100,7 @@ function describeUnsupported(item) {
 }
 
 function groupPreviewItems(outfit) {
-  const buckets = { top: [], outerwear: [], bottom: [], shoes: [], onePiece: [] };
+  const buckets = { top: [], outerwear: [], bottom: [], shoes: [], onePiece: [], accessory: [] };
   const unsupported = [], skipped = [], conflicts = [];
   (Array.isArray(outfit) ? outfit : []).forEach((item) => {
     const role = previewRole(item);
@@ -103,6 +111,7 @@ function groupPreviewItems(outfit) {
     top: buckets.top[0] || null, outerwear: buckets.outerwear[0] || null,
     bottom: buckets.bottom[0] || null, shoes: buckets.shoes[0] || null,
     onePiece: buckets.onePiece[0] || null,
+    accessories: buckets.accessory.slice(0, 3),
   };
   ["top", "outerwear", "bottom", "shoes", "onePiece"].forEach((role) => {
     if (buckets[role].length > 1) {
@@ -110,12 +119,14 @@ function groupPreviewItems(outfit) {
       skipped.push(...buckets[role].slice(1));
     }
   });
+  if (buckets.accessory.length > 3) skipped.push(...buckets.accessory.slice(3));
   if (grouped.onePiece) {
     if (grouped.top) { skipped.push(grouped.top); conflicts.push({ role: "top", kept: grouped.onePiece, skipped: [grouped.top], reason: "One-piece styling takes over the base outfit silhouette." }); }
     if (grouped.bottom) { skipped.push(grouped.bottom); conflicts.push({ role: "bottom", kept: grouped.onePiece, skipped: [grouped.bottom], reason: "One-piece styling takes over the base outfit silhouette." }); }
     grouped.top = null; grouped.bottom = null;
   }
-  return { grouped, unsupported, skipped, conflicts, supportedCount: Object.values(grouped).filter(Boolean).length };
+  const supportedCount = [grouped.top, grouped.outerwear, grouped.bottom, grouped.shoes, grouped.onePiece].filter(Boolean).length + grouped.accessories.length;
+  return { grouped, unsupported, skipped, conflicts, supportedCount };
 }
 
 // ── Improved mannequin body ────────────────────────────────────────
@@ -151,21 +162,21 @@ function MannequinBase() {
         <boxGeometry args={[0.92, 0.38, 0.46]} />
         <meshStandardMaterial color="#c7b8ab" roughness={0.98} metalness={0.02} />
       </mesh>
-      {/* Arms — capsule for smooth silhouette */}
-      <mesh position={[-0.88, 1.48, 0]} rotation={[0, 0, -0.18]}>
+      {/* Arms — A-pose: top at shoulder, bottom angles outward-down naturally */}
+      <mesh position={[-0.88, 1.42, 0]} rotation={[0, 0, -0.28]}>
         <capsuleGeometry args={[0.11, 1.18, 8, 20]} />
         <meshStandardMaterial color="#d2c3b7" roughness={0.97} metalness={0.02} />
       </mesh>
-      <mesh position={[0.88, 1.48, 0]} rotation={[0, 0, 0.18]}>
+      <mesh position={[0.88, 1.42, 0]} rotation={[0, 0, 0.28]}>
         <capsuleGeometry args={[0.11, 1.18, 8, 20]} />
         <meshStandardMaterial color="#d2c3b7" roughness={0.97} metalness={0.02} />
       </mesh>
       {/* Hands */}
-      <mesh position={[-0.94, 0.76, 0.04]}>
+      <mesh position={[-0.98, 0.70, 0.04]}>
         <sphereGeometry args={[0.12, 16, 16]} />
         <meshStandardMaterial color="#d4c5b8" roughness={0.95} metalness={0.02} />
       </mesh>
-      <mesh position={[0.94, 0.76, 0.04]}>
+      <mesh position={[0.98, 0.70, 0.04]}>
         <sphereGeometry args={[0.12, 16, 16]} />
         <meshStandardMaterial color="#d4c5b8" roughness={0.95} metalness={0.02} />
       </mesh>
@@ -328,6 +339,50 @@ function ShoeGarment({ item, texture }) {
   );
 }
 
+function accessoryBodyPos(item, index) {
+  const text = buildSearchText(item);
+  if (text.includes("belt")) return [0, 1.08, 0.36];
+  if (text.includes("bag") || text.includes("purse") || text.includes("tote") || text.includes("handbag")) return [index % 2 === 0 ? -1.1 : 1.1, 0.0, 0.14];
+  if (text.includes("necklace") || text.includes("chain") || text.includes("pendant")) return [0, 2.08, 0.44];
+  if (text.includes("scarf")) return [0, 2.20, 0.36];
+  if (text.includes("watch") || text.includes("bracelet") || text.includes("bangle")) return [index % 2 === 0 ? -1.04 : 1.04, 0.72, 0.12];
+  if (text.includes("hat") || text.includes("cap") || text.includes("beanie")) return [0, 2.90, 0.18];
+  if (text.includes("sunglass") || text.includes("glasses")) return [0, 2.58, 0.38];
+  return [index % 2 === 0 ? -0.54 : 0.54, 1.62, 0.44];
+}
+
+function AccessoryGarment({ item, index }) {
+  const color = primaryColorHex(item?.color);
+  const text = buildSearchText(item);
+  if (text.includes("belt")) return (
+    <BoxPart args={[1.1, 0.12, 0.42]} position={[0, 1.08, 0.34]} color={color} />
+  );
+  if (text.includes("necklace") || text.includes("chain") || text.includes("pendant")) return (
+    <mesh position={[0, 2.08, 0.42]} rotation={[-Math.PI / 2, 0, 0]}>
+      <torusGeometry args={[0.32, 0.045, 8, 28]} />
+      <meshStandardMaterial color={color} roughness={0.5} metalness={0.4} />
+    </mesh>
+  );
+  if (text.includes("scarf")) return (
+    <CylinderPart args={[0.38, 0.30, 0.38, 16]} position={[0, 2.18, 0.14]} color={color} />
+  );
+  if (text.includes("bag") || text.includes("purse") || text.includes("tote") || text.includes("handbag")) return (
+    <BoxPart args={[0.56, 0.68, 0.22]} position={[index % 2 === 0 ? -1.08 : 1.08, 0.0, 0.12]} color={color} />
+  );
+  if (text.includes("watch") || text.includes("bracelet") || text.includes("bangle")) return (
+    <mesh position={[index % 2 === 0 ? -1.02 : 1.02, 0.72, 0.10]}>
+      <torusGeometry args={[0.14, 0.04, 8, 20]} />
+      <meshStandardMaterial color={color} roughness={0.5} metalness={0.3} />
+    </mesh>
+  );
+  return (
+    <mesh position={[index % 2 === 0 ? -0.52 : 0.52, 1.62, 0.42]}>
+      <boxGeometry args={[0.24, 0.24, 0.08]} />
+      <meshStandardMaterial color={color} roughness={0.6} metalness={0.1} />
+    </mesh>
+  );
+}
+
 // ── Clothing image plane (shows actual photo on mannequin) ─────────
 
 function GarmentImagePlane({ texture, position, width, height }) {
@@ -369,6 +424,12 @@ function MannequinClothing({ grouped, textures }) {
           ? <GarmentImagePlane texture={textures[shoes.id]} position={[0, -2.08, 0.24]} width={0.9} height={0.42} />
           : <ShoeGarment item={shoes} texture={null} />
       ) : null}
+      {(grouped.accessories || []).map((item, i) => {
+        const pos = accessoryBodyPos(item, i);
+        return textures[item.id]
+          ? <GarmentImagePlane key={`acc-${item.id || i}`} texture={textures[item.id]} position={pos} width={0.52} height={0.52} />
+          : <AccessoryGarment key={`acc-${item.id || i}`} item={item} index={i} />;
+      })}
     </group>
   );
 }
@@ -564,7 +625,10 @@ export default function OutfitMannequinPreview({ isOpen, onClose, outfit = [], t
   const canUseWebGL = useMemo(() => supportsWebGL(), []);
 
   const previewData = useMemo(() => groupPreviewItems(outfit), [outfit]);
-  const supportedItems = useMemo(() => Object.values(previewData.grouped).filter(Boolean), [previewData]);
+  const supportedItems = useMemo(() => [
+    ...Object.values(previewData.grouped).filter((v) => v && !Array.isArray(v)),
+    ...(previewData.grouped.accessories || []),
+  ].filter(Boolean), [previewData]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -744,6 +808,12 @@ export default function OutfitMannequinPreview({ isOpen, onClose, outfit = [], t
                     </div>
                   );
                 })}
+                {(previewData.grouped.accessories || []).map((item, i) => (
+                  <div key={`acc-${item?.id || i}`} className="mannequinPreviewRoleRow">
+                    <span className="mannequinPreviewRoleLabel">{i === 0 ? "Accessories" : ""}</span>
+                    <span className="mannequinPreviewRoleValue">{item?.name || "Accessory"}</span>
+                  </div>
+                ))}
               </div>
             </div>
 

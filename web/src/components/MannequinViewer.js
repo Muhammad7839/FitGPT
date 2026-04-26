@@ -97,23 +97,23 @@ function Body({ scale }) {
         <cylinderGeometry args={[0.21, 0.20, 0.16, 32]} />
         <MannequinMat />
       </mesh>
-      {/* Upper arms — slight outward angle */}
+      {/* Upper arms — A-pose: top anchors at shoulder, bottom angles slightly outward-down */}
       {[-0.30 * scale.shoulders, 0.30 * scale.shoulders].map((x, i) => (
-        <mesh key={`uarm-${i}`} position={[x, 1.08, 0]} rotation={[0, 0, x < 0 ? 0.28 : -0.28]}>
+        <mesh key={`uarm-${i}`} position={[x, 1.00, 0]} rotation={[0, 0, x < 0 ? -0.30 : 0.30]}>
           <capsuleGeometry args={[0.052, 0.34, 8, 16]} />
           <MannequinMat />
         </mesh>
       ))}
-      {/* Lower arms — straight down from elbow */}
-      {[-0.335 * scale.shoulders, 0.335 * scale.shoulders].map((x, i) => (
-        <mesh key={`larm-${i}`} position={[x, 0.84, 0.01]}>
+      {/* Lower arms — continue natural downward hang */}
+      {[-0.340 * scale.shoulders, 0.340 * scale.shoulders].map((x, i) => (
+        <mesh key={`larm-${i}`} position={[x, 0.75, 0.01]}>
           <capsuleGeometry args={[0.044, 0.30, 8, 16]} />
           <MannequinMat />
         </mesh>
       ))}
       {/* Wrists/hands — small rounded termination */}
-      {[-0.338 * scale.shoulders, 0.338 * scale.shoulders].map((x, i) => (
-        <mesh key={`hand-${i}`} position={[x, 0.66, 0.02]}>
+      {[-0.343 * scale.shoulders, 0.343 * scale.shoulders].map((x, i) => (
+        <mesh key={`hand-${i}`} position={[x, 0.58, 0.02]}>
           <sphereGeometry args={[0.052, 14, 14]} />
           <MannequinMat />
         </mesh>
@@ -148,6 +148,18 @@ function Body({ scale }) {
       ))}
     </group>
   );
+}
+
+function accessorySlotPos(item, index) {
+  const text = [(item?.name || ""), (item?.category || ""), (item?.clothing_type || "")].join(" ").toLowerCase();
+  if (text.includes("necklace") || text.includes("chain") || text.includes("pendant")) return [0, 1.22, 0.22];
+  if (text.includes("belt")) return [0, 0.82, 0.23];
+  if (text.includes("bag") || text.includes("purse") || text.includes("tote") || text.includes("handbag")) return [index === 0 ? -0.32 : 0.32, 0.60, 0.22];
+  if (text.includes("watch") || text.includes("bracelet") || text.includes("bangle")) return [index === 0 ? -0.343 : 0.343, 0.62, 0.10];
+  if (text.includes("sunglass") || text.includes("glasses") || text.includes("shades")) return [0, 1.46, 0.20];
+  if (text.includes("scarf")) return [0, 1.26, 0.20];
+  if (text.includes("hat") || text.includes("cap") || text.includes("beanie")) return [0, 1.62, 0.05];
+  return [index === 0 ? -0.20 : 0.20, 1.05, 0.22];
 }
 
 // ── Outfit meshes — image plane when photo available, colored shape fallback ──
@@ -219,11 +231,11 @@ function OutfitMeshes({ slots, scale, textures }) {
       {/* Shoes */}
       {shoes ? (
         textures[shoes.id]
-          ? <GarmentPlane texture={textures[shoes.id]} position={[0, -0.2, 0.15]} width={0.32} height={0.13} />
+          ? <GarmentPlane texture={textures[shoes.id]} position={[0, -0.36, 0.16]} width={0.38} height={0.22} />
           : (
             <>
               {[-0.115 * scale.hips, 0.115 * scale.hips].map((x, i) => (
-                <mesh key={`shoe-${i}`} position={[x, -0.2, 0.07]}>
+                <mesh key={`shoe-${i}`} position={[x, -0.38, 0.09]}>
                   <boxGeometry args={[0.14, 0.08, 0.3]} />
                   <meshStandardMaterial color={normalizeDisplayColor(shoes.color)} roughness={0.65} />
                 </mesh>
@@ -239,12 +251,18 @@ function OutfitMeshes({ slots, scale, textures }) {
         </mesh>
       ) : null}
 
-      {accessories.slice(0, 2).map((item, index) => (
-        <mesh key={`acc-${item.id ?? index}`} position={[index === 0 ? -0.18 : 0.18, 0.96, 0.16]}>
-          <torusGeometry args={[0.07, 0.014, 10, 28]} />
-          <meshStandardMaterial color={normalizeDisplayColor(item.color)} roughness={0.58} metalness={0.2} />
-        </mesh>
-      ))}
+      {accessories.slice(0, 3).map((item, index) => {
+        const pos = accessorySlotPos(item, index);
+        if (textures[item.id]) {
+          return <GarmentPlane key={`acc-${item.id ?? index}`} texture={textures[item.id]} position={pos} width={0.22} height={0.22} />;
+        }
+        return (
+          <mesh key={`acc-${item.id ?? index}`} position={pos}>
+            <torusGeometry args={[0.065, 0.013, 10, 28]} />
+            <meshStandardMaterial color={normalizeDisplayColor(item.color)} roughness={0.58} metalness={0.2} />
+          </mesh>
+        );
+      })}
     </group>
   );
 }
