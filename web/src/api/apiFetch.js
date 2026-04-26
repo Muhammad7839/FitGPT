@@ -48,6 +48,14 @@ function getToken() {
   );
 }
 
+export function hasStoredToken() {
+  return Boolean(getToken());
+}
+
+export function usesCookieAuth() {
+  return USE_COOKIES;
+}
+
 export function setToken(token) {
   const t = (token || "").toString().trim();
   if (!t) {

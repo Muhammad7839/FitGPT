@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { getMe } from "../api/authApi";
-import { setUnauthorizedHandler } from "../api/apiFetch";
+import { hasStoredToken, setUnauthorizedHandler, usesCookieAuth } from "../api/apiFetch";
 import { migrateGuestData } from "../utils/userStorage";
 
 const AuthContext = createContext(null);
@@ -35,6 +35,12 @@ export function AuthProvider({ children }) {
     let alive = true;
 
     async function checkSession() {
+      if (!usesCookieAuth() && !hasStoredToken()) {
+        setUser(null);
+        setIsChecking(false);
+        return;
+      }
+
       try {
         const data = await getMe();
 
