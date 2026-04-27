@@ -235,7 +235,7 @@ function ViewerScene({ outfit, bodyType, textures }) {
 function legendEntries(outfit) {
   return (Array.isArray(outfit) ? outfit : []).filter(Boolean).map((item) => ({
     id: item.id,
-    name: item.name || "Unnamed item",
+    name: item.name || [item.color, item.category].filter(Boolean).join(" ") || "Item",
     category: slotLabel(getItemSlot(item)) || normalizeCategory(item.category) || "item",
     imageUrl: item.image_url || "",
   }));

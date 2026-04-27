@@ -301,13 +301,13 @@ class AuthViewModel(
         }
     }
 
-    private fun resolveNetworkAuthError(exception: Exception, action: String): String {
+    private fun resolveNetworkAuthError(exception: Exception, @Suppress("UNUSED_PARAMETER") action: String): String {
         return when (exception) {
-            is UnknownHostException -> "No internet or host not found during $action"
-            is ConnectException -> "Cannot reach backend during $action (check server is running)"
-            is SocketTimeoutException -> "Backend timeout during $action"
-            is IOException -> "Network I/O error during $action"
-            else -> "Unexpected network error during $action"
+            is UnknownHostException -> "No internet connection. Check your network and try again."
+            is ConnectException -> "Cannot reach the server. It may be starting up — try again in a moment."
+            is SocketTimeoutException -> "The server is taking too long to respond. Try again shortly."
+            is IOException -> "A network error occurred. Check your connection and retry."
+            else -> "Something went wrong. Please try again."
         }
     }
 
@@ -355,7 +355,8 @@ class AuthViewModel(
                             ?.takeIf { it.isJsonPrimitive }
                             ?.asString
                     }
-                    .firstOrNull()
+                    .joinToString(". ")
+                    .takeIf { it.isNotBlank() }
                 else -> null
             }?.trim()?.removePrefix("Value error,")?.trim()
         }.getOrNull()?.ifBlank { null }

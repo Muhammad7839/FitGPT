@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
@@ -58,6 +59,12 @@ fun MoreScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text("Outfit Tools", style = MaterialTheme.typography.titleMedium)
+                    MoreActionRow(
+                        icon = { Icon(Icons.Default.Build, contentDescription = null) },
+                        title = "Outfit Builder",
+                        subtitle = "Manually assemble and save an outfit",
+                        onClick = { navController.navigateToSecondary(Routes.OUTFIT_BUILDER) }
+                    )
                     MoreActionRow(
                         icon = { Icon(Icons.Default.Favorite, contentDescription = null) },
                         title = "Favorites",

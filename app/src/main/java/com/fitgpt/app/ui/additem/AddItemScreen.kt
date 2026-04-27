@@ -448,10 +448,8 @@ fun AddItemScreen(
         val items = successfulEntries.mapIndexedNotNull { index, entry ->
             val url = entry.imageUrl?.trim()?.takeIf(String::isNotEmpty) ?: return@mapIndexedNotNull null
             val hint = batchAutoFillHints[entry.fileName]
-            val resolvedCategory = typedCategory.ifBlank { hint?.category.orEmpty() }
-            if (resolvedCategory.isBlank()) {
-                return@mapIndexedNotNull null
-            }
+            // Fall back to "Tops" so uploads always land in the wardrobe; user can edit after.
+            val resolvedCategory = typedCategory.ifBlank { hint?.category.orEmpty().ifBlank { "Tops" } }
             val resolvedClothingType = typedClothingType ?: hint?.clothingType
             val resolvedColor = typedColor.ifBlank { hint?.color ?: AUTO_FILL_UNKNOWN }
             val resolvedSeason = typedSeason.ifBlank { hint?.season ?: "All" }
@@ -485,7 +483,7 @@ fun AddItemScreen(
             )
         }
         if (items.isEmpty()) {
-            batchAutoCreateMessage = "Images uploaded but none were ready to save."
+            batchAutoCreateMessage = "Upload complete. Tap 'Save Item' to confirm your changes."
             batchAutoFillHints = emptyMap()
             viewModel.clearBatchUploadState()
             return@LaunchedEffect
@@ -542,7 +540,7 @@ fun AddItemScreen(
                         navController.navigateToTopLevel(Routes.WARDROBE)
                     }
                 } else {
-                    batchAutoCreateMessage = "No uploaded photos were saved."
+                    batchAutoCreateMessage = "Items could not be saved. Check your connection and try again."
                 }
             }
         }
