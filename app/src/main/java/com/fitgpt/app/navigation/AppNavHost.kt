@@ -30,6 +30,7 @@ import androidx.navigation.navArgument
 import com.fitgpt.app.data.PreferencesManager
 import com.fitgpt.app.di.ServiceLocator
 import com.fitgpt.app.ui.additem.AddItemScreen
+import com.fitgpt.app.ui.builder.OutfitBuilderScreen
 import com.fitgpt.app.ui.auth.ForgotPasswordScreen
 import com.fitgpt.app.ui.auth.LoginScreen
 import com.fitgpt.app.ui.auth.ResetPasswordScreen
@@ -85,6 +86,7 @@ object Routes {
     const val ADD_ITEM = "add_item"
     const val EDIT_ITEM = "edit_item"
     const val RECOMMENDATION = "recommendation"
+    const val OUTFIT_BUILDER = "outfit_builder"
 }
 
 @Composable
@@ -467,6 +469,14 @@ fun AppNavHost(
         composable(Routes.RECOMMENDATION) {
             val vm = wardrobeViewModel ?: return@composable
             RecommendationScreen(
+                navController = navController,
+                viewModel = vm
+            )
+        }
+
+        composable(Routes.OUTFIT_BUILDER) {
+            val vm = wardrobeViewModel ?: return@composable
+            OutfitBuilderScreen(
                 navController = navController,
                 viewModel = vm
             )

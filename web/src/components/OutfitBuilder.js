@@ -161,7 +161,7 @@ export default function OutfitBuilder() {
                             <div className="outfitBuilderItemImg outfitBuilderItemPlaceholder" />
                           )}
                           <div className="outfitBuilderItemInfo">
-                            <span className="outfitBuilderItemName">{item.name || "Unnamed item"}</span>
+                            <span className="outfitBuilderItemName">{item.name || [item.color, item.category].filter(Boolean).join(" ") || "Item"}</span>
                             <span className="outfitBuilderItemColor" style={{ background: colorToCss(item.color) }} />
                           </div>
                         </button>
@@ -244,7 +244,7 @@ export default function OutfitBuilder() {
                       <div className="outfitBuilderSelectedImg outfitBuilderItemPlaceholder" />
                     )}
                     <div className="outfitBuilderSelectedMeta">
-                      <div className="outfitBuilderSelectedName">{item.name || "Unnamed item"}</div>
+                      <div className="outfitBuilderSelectedName">{item.name || [item.color, item.category].filter(Boolean).join(" ") || "Item"}</div>
                       <div className="outfitBuilderSelectedSlot">{slotLabel(getItemSlot(item)) || "item"}</div>
                     </div>
                   </div>

@@ -89,7 +89,14 @@ function buildUrl(path) {
 async function readErrorMessage(res) {
   try {
     const data = await res.json();
-    if (typeof data?.detail === "string") return data.detail;
+    if (typeof data?.detail === "string" && data.detail.trim()) return data.detail.trim();
+    // Pydantic 422: detail is an array of {loc, msg, type} objects
+    if (Array.isArray(data?.detail)) {
+      const msgs = data.detail
+        .map((e) => (typeof e?.msg === "string" ? e.msg.trim() : null))
+        .filter(Boolean);
+      if (msgs.length) return msgs.join(". ");
+    }
     if (typeof data?.message === "string") return data.message;
     if (typeof data?.error === "string") return data.error;
   } catch {}

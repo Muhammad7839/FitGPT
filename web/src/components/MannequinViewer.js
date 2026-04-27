@@ -317,7 +317,7 @@ function legendEntries(outfit) {
     const label = slotLabel(slot) || normalizeCategory(item.category) || "";
     return {
       id: item.id,
-      name: item.name || "Unnamed item",
+      name: item.name || [item.color, item.category].filter(Boolean).join(" ") || "Item",
       // If getItemSlot returned null, the item has no recognized placement — surface that clearly
       category: label || "unplaced",
       unplaced: !slot,

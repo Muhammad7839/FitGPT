@@ -1520,6 +1520,7 @@
 
 body {
   margin: 0;
+  overflow-x: hidden;
   color: var(--text);
   font-family: "Century Gothic", CenturyGothic, AppleGothic, system-ui, -apple-system, "Segoe UI", Roboto, Arial,
     sans-serif;
@@ -22132,6 +22133,28 @@ a:focus-visible {
   }
   .dashHeroIntro {
     font-size: 13px;
+  }
+  /* Forecast planner title too large at 390px */
+  .forecastPlannerTitle {
+    font-size: 22px;
+  }
+  /* Forecast day cards: slightly narrower so 2.5 fit at once */
+  .forecastDayBtn {
+    flex-basis: 130px;
+    min-height: 120px;
+  }
+  /* Planning calendar: tighter tap targets */
+  .planningCalendarDay {
+    min-height: 40px;
+    padding: 6px 4px;
+    border-radius: 10px;
+  }
+  .planningCalendarDayNumber {
+    font-size: 11px;
+  }
+  /* Modal card: full-width safe-area padding */
+  .modalCard {
+    padding: 14px 12px !important;
   }
 }
 
