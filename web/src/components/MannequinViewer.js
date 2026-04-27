@@ -43,75 +43,123 @@ function bodyScaleForType(bodyType) {
 
 function SlowSpin({ children }) {
   const groupRef = useRef(null);
-  useFrame((_state, delta) => { if (groupRef.current) groupRef.current.rotation.y += delta * 0.12; });
+  useFrame((_state, delta) => { if (groupRef.current) groupRef.current.rotation.y += delta * 0.10; });
   return <group ref={groupRef}>{children}</group>;
 }
 
-// ── Improved body with waist definition and smooth limbs ────────────
+// ── Fashion-store mannequin body — smooth matte white-cream, humanized proportions ──
+// Neutral featureless head, clear waist definition, elongated limbs.
+// All segments share the same material so the body reads as one cohesive form.
+
+const MANNEQUIN_COLOR   = "#f0ece6"; // warm off-white — clean store mannequin
+const MANNEQUIN_ROUGH   = 0.62;      // semi-matte, not plastic-shiny
+const MANNEQUIN_METAL   = 0.04;
+
+function MannequinMat() {
+  return <meshStandardMaterial color={MANNEQUIN_COLOR} roughness={MANNEQUIN_ROUGH} metalness={MANNEQUIN_METAL} />;
+}
 
 function Body({ scale }) {
   return (
     <group position={[0, -0.25, 0]}>
-      {/* Head */}
-      <mesh position={[0, 1.46, 0]}>
-        <sphereGeometry args={[0.165, 32, 32]} />
-        <meshStandardMaterial color="#e0d2c2" roughness={0.88} metalness={0.02} />
+      {/* Head — slightly elongated egg shape for fashion-mannequin look */}
+      <mesh position={[0, 1.50, 0]} scale={[0.92, 1.08, 0.88]}>
+        <sphereGeometry args={[0.170, 36, 36]} />
+        <MannequinMat />
       </mesh>
-      {/* Neck */}
-      <mesh position={[0, 1.24, 0]}>
-        <capsuleGeometry args={[0.065, 0.12, 8, 16]} />
-        <meshStandardMaterial color="#ddd0be" roughness={0.9} metalness={0.02} />
+      {/* Neck — slender */}
+      <mesh position={[0, 1.28, 0]}>
+        <capsuleGeometry args={[0.058, 0.14, 8, 16]} />
+        <MannequinMat />
       </mesh>
-      {/* Chest */}
-      <mesh position={[0, 1.11, 0]} scale={[scale.shoulders, 1, 0.82]}>
-        <cylinderGeometry args={[0.22, 0.2, 0.38, 28]} />
-        <meshStandardMaterial color="#cebfa9" roughness={0.95} metalness={0.02} />
+      {/* Shoulder connector — tapers into upper torso */}
+      <mesh position={[0, 1.17, 0]} scale={[scale.shoulders * 1.08, 1, 0.76]}>
+        <cylinderGeometry args={[0.24, 0.21, 0.18, 32]} />
+        <MannequinMat />
       </mesh>
-      {/* Waist — narrower */}
-      <mesh position={[0, 0.86, 0]} scale={[scale.shoulders * 0.88, 1, 0.78]}>
-        <cylinderGeometry args={[0.17, 0.19, 0.28, 28]} />
-        <meshStandardMaterial color="#c8b9a3" roughness={0.96} metalness={0.02} />
+      {/* Chest — slightly wider at top */}
+      <mesh position={[0, 1.01, 0]} scale={[scale.shoulders, 1, 0.80]}>
+        <cylinderGeometry args={[0.21, 0.19, 0.32, 32]} />
+        <MannequinMat />
       </mesh>
-      {/* Hips */}
-      <mesh position={[0, 0.68, 0]} scale={[scale.hips, 1, 0.85]}>
-        <cylinderGeometry args={[0.21, 0.22, 0.28, 28]} />
-        <meshStandardMaterial color="#c4b49d" roughness={0.97} metalness={0.02} />
+      {/* Waist — visibly pinched for natural silhouette */}
+      <mesh position={[0, 0.82, 0]} scale={[scale.shoulders * 0.84, 1, 0.74]}>
+        <cylinderGeometry args={[0.155, 0.185, 0.26, 32]} />
+        <MannequinMat />
       </mesh>
-      {/* Pelvis bridge */}
-      <mesh position={[0, 0.54, 0]} scale={[scale.hips, 1, 0.82]}>
-        <boxGeometry args={[0.36, 0.14, 0.2]} />
-        <meshStandardMaterial color="#c0b099" roughness={0.97} metalness={0.02} />
+      {/* Hip flare */}
+      <mesh position={[0, 0.65, 0]} scale={[scale.hips, 1, 0.83]}>
+        <cylinderGeometry args={[0.22, 0.21, 0.26, 32]} />
+        <MannequinMat />
       </mesh>
-      {/* Arms */}
-      {[-0.31 * scale.shoulders, 0.31 * scale.shoulders].map((x, i) => (
-        <mesh key={`arm-${i}`} position={[x, 1.06, 0]} rotation={[0, 0, x < 0 ? 0.22 : -0.22]}>
-          <capsuleGeometry args={[0.058, 0.52, 8, 16]} />
-          <meshStandardMaterial color="#cbb9a4" roughness={0.92} metalness={0.02} />
+      {/* Pelvis */}
+      <mesh position={[0, 0.52, 0]} scale={[scale.hips * 0.98, 1, 0.80]}>
+        <cylinderGeometry args={[0.21, 0.20, 0.16, 32]} />
+        <MannequinMat />
+      </mesh>
+      {/* Upper arms — A-pose: top anchors at shoulder, bottom angles slightly outward-down */}
+      {[-0.30 * scale.shoulders, 0.30 * scale.shoulders].map((x, i) => (
+        <mesh key={`uarm-${i}`} position={[x, 1.00, 0]} rotation={[0, 0, x < 0 ? -0.30 : 0.30]}>
+          <capsuleGeometry args={[0.052, 0.34, 8, 16]} />
+          <MannequinMat />
         </mesh>
       ))}
-      {/* Hands */}
-      {[-0.335 * scale.shoulders, 0.335 * scale.shoulders].map((x, i) => (
-        <mesh key={`hand-${i}`} position={[x, 0.72, 0.02]}>
-          <sphereGeometry args={[0.062, 14, 14]} />
-          <meshStandardMaterial color="#cfc0ac" roughness={0.9} metalness={0.02} />
+      {/* Lower arms — continue natural downward hang */}
+      {[-0.340 * scale.shoulders, 0.340 * scale.shoulders].map((x, i) => (
+        <mesh key={`larm-${i}`} position={[x, 0.75, 0.01]}>
+          <capsuleGeometry args={[0.044, 0.30, 8, 16]} />
+          <MannequinMat />
         </mesh>
       ))}
-      {/* Legs */}
-      {[-0.115 * scale.hips, 0.115 * scale.hips].map((x, i) => (
-        <mesh key={`leg-${i}`} position={[x, 0.24, 0]}>
-          <capsuleGeometry args={[0.075, 0.72, 8, 16]} />
-          <meshStandardMaterial color="#bfb09a" roughness={0.97} metalness={0.02} />
+      {/* Wrists/hands — small rounded termination */}
+      {[-0.343 * scale.shoulders, 0.343 * scale.shoulders].map((x, i) => (
+        <mesh key={`hand-${i}`} position={[x, 0.58, 0.02]}>
+          <sphereGeometry args={[0.052, 14, 14]} />
+          <MannequinMat />
         </mesh>
       ))}
-      {/* Feet */}
-      {[-0.115 * scale.hips, 0.115 * scale.hips].map((x, i) => (
-        <mesh key={`foot-${i}`} position={[x, -0.21, 0.07]}>
-          <boxGeometry args={[0.14, 0.07, 0.3]} />
-          <meshStandardMaterial color="#b0a18c" roughness={0.99} metalness={0.01} />
+      {/* Upper thighs */}
+      {[-0.11 * scale.hips, 0.11 * scale.hips].map((x, i) => (
+        <mesh key={`thigh-${i}`} position={[x, 0.30, 0]}>
+          <capsuleGeometry args={[0.080, 0.30, 8, 16]} />
+          <MannequinMat />
+        </mesh>
+      ))}
+      {/* Lower legs — tapered for calf definition */}
+      {[-0.11 * scale.hips, 0.11 * scale.hips].map((x, i) => (
+        <mesh key={`calf-${i}`} position={[x, -0.05, 0]}>
+          <capsuleGeometry args={[0.065, 0.34, 8, 16]} />
+          <MannequinMat />
+        </mesh>
+      ))}
+      {/* Ankles */}
+      {[-0.11 * scale.hips, 0.11 * scale.hips].map((x, i) => (
+        <mesh key={`ankle-${i}`} position={[x, -0.31, 0.01]}>
+          <capsuleGeometry args={[0.042, 0.10, 8, 12]} />
+          <MannequinMat />
+        </mesh>
+      ))}
+      {/* Feet — clean flat shape */}
+      {[-0.11 * scale.hips, 0.11 * scale.hips].map((x, i) => (
+        <mesh key={`foot-${i}`} position={[x, -0.38, 0.06]}>
+          <boxGeometry args={[0.12, 0.055, 0.26]} />
+          <MannequinMat />
         </mesh>
       ))}
     </group>
   );
+}
+
+function accessorySlotPos(item, index) {
+  const text = [(item?.name || ""), (item?.category || ""), (item?.clothing_type || "")].join(" ").toLowerCase();
+  if (text.includes("necklace") || text.includes("chain") || text.includes("pendant")) return [0, 1.22, 0.22];
+  if (text.includes("belt")) return [0, 0.82, 0.23];
+  if (text.includes("bag") || text.includes("purse") || text.includes("tote") || text.includes("handbag")) return [index === 0 ? -0.32 : 0.32, 0.60, 0.22];
+  if (text.includes("watch") || text.includes("bracelet") || text.includes("bangle")) return [index === 0 ? -0.343 : 0.343, 0.62, 0.10];
+  if (text.includes("sunglass") || text.includes("glasses") || text.includes("shades")) return [0, 1.46, 0.20];
+  if (text.includes("scarf")) return [0, 1.26, 0.20];
+  if (text.includes("hat") || text.includes("cap") || text.includes("beanie")) return [0, 1.62, 0.05];
+  return [index === 0 ? -0.20 : 0.20, 1.05, 0.22];
 }
 
 // ── Outfit meshes — image plane when photo available, colored shape fallback ──
@@ -183,11 +231,11 @@ function OutfitMeshes({ slots, scale, textures }) {
       {/* Shoes */}
       {shoes ? (
         textures[shoes.id]
-          ? <GarmentPlane texture={textures[shoes.id]} position={[0, -0.2, 0.15]} width={0.32} height={0.13} />
+          ? <GarmentPlane texture={textures[shoes.id]} position={[0, -0.36, 0.16]} width={0.38} height={0.22} />
           : (
             <>
               {[-0.115 * scale.hips, 0.115 * scale.hips].map((x, i) => (
-                <mesh key={`shoe-${i}`} position={[x, -0.2, 0.07]}>
+                <mesh key={`shoe-${i}`} position={[x, -0.38, 0.09]}>
                   <boxGeometry args={[0.14, 0.08, 0.3]} />
                   <meshStandardMaterial color={normalizeDisplayColor(shoes.color)} roughness={0.65} />
                 </mesh>
@@ -203,12 +251,36 @@ function OutfitMeshes({ slots, scale, textures }) {
         </mesh>
       ) : null}
 
-      {accessories.slice(0, 2).map((item, index) => (
-        <mesh key={`acc-${item.id ?? index}`} position={[index === 0 ? -0.18 : 0.18, 0.96, 0.16]}>
-          <torusGeometry args={[0.07, 0.014, 10, 28]} />
-          <meshStandardMaterial color={normalizeDisplayColor(item.color)} roughness={0.58} metalness={0.2} />
-        </mesh>
-      ))}
+      {accessories.slice(0, 3).map((item, index) => {
+        const pos = accessorySlotPos(item, index);
+        if (textures[item.id]) {
+          return <GarmentPlane key={`acc-${item.id ?? index}`} texture={textures[item.id]} position={pos} width={0.22} height={0.22} />;
+        }
+        return (
+          <mesh key={`acc-${item.id ?? index}`} position={pos}>
+            <torusGeometry args={[0.065, 0.013, 10, 28]} />
+            <meshStandardMaterial color={normalizeDisplayColor(item.color)} roughness={0.58} metalness={0.2} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+// ── Thin circular base platform — grounds the mannequin like a display stand ──
+function BasePlatform() {
+  return (
+    <group position={[0, -0.645, 0]}>
+      {/* Main disc */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.54, 0.54, 0.035, 64]} />
+        <meshStandardMaterial color="#d8d2cb" roughness={0.78} metalness={0.06} />
+      </mesh>
+      {/* Subtle shadow ring underneath for depth */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.002, 0]}>
+        <cylinderGeometry args={[0.52, 0.56, 0.001, 64]} />
+        <meshStandardMaterial color="#b0a89f" roughness={0.9} metalness={0} transparent opacity={0.35} />
+      </mesh>
     </group>
   );
 }
@@ -219,26 +291,39 @@ function ViewerScene({ outfit, bodyType, textures }) {
 
   return (
     <>
-      <ambientLight intensity={1.3} />
-      <directionalLight position={[4, 5, 4]} intensity={1.4} />
-      <directionalLight position={[-3, 2, 1]} intensity={0.5} />
-      <directionalLight position={[0, -1, 2]} intensity={0.2} />
+      {/* Soft fill — prevents shadows going fully black */}
+      <ambientLight intensity={0.92} />
+      {/* Key light — front-upper-right, strong but not blown-out */}
+      <directionalLight position={[3, 6, 5]} intensity={1.7} castShadow={false} />
+      {/* Fill light — left side, softer */}
+      <directionalLight position={[-4, 3, 2]} intensity={0.65} />
+      {/* Rim light — back-left edge, separates form from background */}
+      <directionalLight position={[-2, 1, -4]} intensity={0.48} />
+      {/* Ground bounce — warm uplight from below */}
+      <directionalLight position={[0, -3, 1]} intensity={0.20} color="#fffbe6" />
       <SlowSpin>
         <Body scale={scale} />
         <OutfitMeshes scale={scale} slots={{ ...validation.bySlot, accessories: validation.accessories }} textures={textures} />
+        <BasePlatform />
       </SlowSpin>
-      <OrbitControls enablePan={false} minDistance={3.2} maxDistance={6.2} />
+      <OrbitControls enablePan={false} minDistance={3.0} maxDistance={6.0} />
     </>
   );
 }
 
 function legendEntries(outfit) {
-  return (Array.isArray(outfit) ? outfit : []).filter(Boolean).map((item) => ({
-    id: item.id,
-    name: item.name || [item.color, item.category].filter(Boolean).join(" ") || "Item",
-    category: slotLabel(getItemSlot(item)) || normalizeCategory(item.category) || "item",
-    imageUrl: item.image_url || "",
-  }));
+  return (Array.isArray(outfit) ? outfit : []).filter(Boolean).map((item) => {
+    const slot = getItemSlot(item);
+    const label = slotLabel(slot) || normalizeCategory(item.category) || "";
+    return {
+      id: item.id,
+      name: item.name || [item.color, item.category].filter(Boolean).join(" ") || "Item",
+      // If getItemSlot returned null, the item has no recognized placement — surface that clearly
+      category: label || "unplaced",
+      unplaced: !slot,
+      imageUrl: item.image_url || "",
+    };
+  });
 }
 
 function MannequinFallback() {
@@ -256,6 +341,7 @@ export default function MannequinViewer({ outfit = [], bodyType = "rectangle" })
   const entries = useMemo(() => legendEntries(outfit).slice(0, 4), [outfit]);
   const [webglSupported, setWebglSupported] = useState(() => isWebGLAvailable());
   const [textures, setTextures] = useState({});
+  const [legendVisible, setLegendVisible] = useState(true);
 
   // Load clothing photos as textures
   useEffect(() => {
@@ -291,7 +377,7 @@ export default function MannequinViewer({ outfit = [], bodyType = "rectangle" })
   return (
     <div className="mannequinViewerContainer">
       <MannequinCanvasBoundary fallback={<MannequinFallback />} onError={() => setWebglSupported(false)}>
-        <Canvas camera={{ position: [0, 1.2, 4.2], fov: 34 }} gl={createRenderer}>
+        <Canvas camera={{ position: [0, 0.85, 4.2], fov: 38 }} gl={createRenderer}>
           <ViewerScene outfit={outfit} bodyType={bodyType} textures={textures} />
         </Canvas>
       </MannequinCanvasBoundary>
@@ -307,16 +393,28 @@ export default function MannequinViewer({ outfit = [], bodyType = "rectangle" })
         </div>
       ) : null}
 
-      {entries.length > 0 ? (
+      {legendVisible && entries.length > 0 ? (
         <div className="mannequinLegend" aria-hidden="true">
+          <button
+            type="button"
+            className="mannequinLegendClose"
+            onClick={() => setLegendVisible(false)}
+            aria-label="Hide outfit legend"
+          >×</button>
           {entries.map((entry) => (
-            <div key={entry.id || entry.name} className="mannequinLegendItem">
+            <div
+              key={entry.id || entry.name}
+              className={`mannequinLegendItem${entry.unplaced ? " mannequinLegendUnplaced" : ""}`}
+              title={entry.unplaced ? "Item category not recognized — shown in legend only" : undefined}
+            >
               {entry.imageUrl
                 ? <img className="mannequinLegendThumb" src={entry.imageUrl} alt="" />
                 : <div className="mannequinLegendThumb mannequinLegendPlaceholder" />}
               <div className="mannequinLegendInfo">
                 <div className="mannequinLegendName">{entry.name}</div>
-                <div className="mannequinLegendCat">{entry.category}</div>
+                <div className={`mannequinLegendCat${entry.unplaced ? " mannequinLegendCatUnplaced" : ""}`}>
+                  {entry.unplaced ? "not placed" : entry.category}
+                </div>
               </div>
             </div>
           ))}

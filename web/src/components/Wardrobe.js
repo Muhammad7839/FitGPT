@@ -529,10 +529,17 @@ export default function Wardrobe() {
 
 
   React.useEffect(() => {
+    // Never wipe existing storage with an empty array that might just be a transient load state.
+    // Only persist once items have been loaded AND there is at least one item, or we are confident
+    // the user genuinely has an empty wardrobe (itemsLoaded=true and a deliberate delete set it to []).
     if (itemsLoaded) {
-      saveWardrobe(items, user);
+      const existingCount = (loadWardrobe(user) || []).length;
+      // Skip saving empty if storage already has items — prevents transient-load race condition
+      // from wiping persisted data before the backend fetch completes.
+      if (items.length > 0 || existingCount === 0) {
+        saveWardrobe(items, user);
+      }
     }
-   
   }, [items, itemsLoaded, user]);
 
   const activeItems = useMemo(() => items.filter((x) => x && x.is_active !== false), [items]);
