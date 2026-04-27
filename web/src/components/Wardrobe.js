@@ -227,15 +227,29 @@ function buildAutoName(suggestions, category) {
 
 function applySuggestionToBulkEntry(entry, result) {
   const suggestions = result?.suggestions || null;
+  let taggingState = result?.status || "error";
+  let taggingMessage = result?.message || "We couldn't generate tags. Please add them manually.";
+
+  // If category needs review, mark the entry as needing review
+  if (result?.needsReview && result?.category) {
+    taggingState = "warning";
+    taggingMessage = `Category marked as ${result.category} (low confidence). Review before saving.`;
+  }
+
   const next = {
     ...entry,
     classifying: false,
-    taggingState: result?.status || "error",
-    taggingMessage: result?.message || "We couldn't generate tags. Please add them manually.",
+    taggingState,
+    taggingMessage,
     suggestedTags: hasSuggestedTagValues(suggestions) ? suggestions : null,
+    needsReview: result?.needsReview || false,
   };
 
-  if (result?.category && !entry.userOverrode) next.category = result.category;
+  // Only apply category if not already set by user and not low-confidence
+  if (result?.category && !entry.userOverrode && !result?.needsReview) {
+    next.category = result.category;
+  }
+
   if (!entry.color && suggestions?.color) next.color = suggestions.color;
   if (!entry.clothingType && suggestions?.clothingType) next.clothingType = suggestions.clothingType;
   if ((!Array.isArray(entry.styleTags) || entry.styleTags.length === 0) && suggestions?.styleTags?.length) next.styleTags = suggestions.styleTags;
@@ -392,6 +406,8 @@ export default function Wardrobe() {
 
   const [isArchiving, setIsArchiving] = useState(false);
   const [pendingArchiveId, setPendingArchiveId] = useState(null);
+  const [categoryReviewOpen, setCategoryReviewOpen] = useState(false);
+  const [pendingCategoryReview, setPendingCategoryReview] = useState(null);
   const currentSeason = useMemo(() => getCurrentSeason(), []);
   const currentSeasonLabel = useMemo(() => getSeasonLabel(currentSeason), [currentSeason]);
   const seasonalWardrobeLabel = useMemo(() => getSeasonalWardrobeLabel(currentSeason), [currentSeason]);
@@ -852,6 +868,19 @@ export default function Wardrobe() {
         fallbackCategory,
       }).then((result) => {
         setIsClassifying(false);
+
+        // If classification needs review, show confirmation dialog
+        if (result?.needsReview && result?.category && result.category !== fallbackCategory) {
+          setPendingCategoryReview({
+            result,
+            fallbackCategory,
+            preview,
+            file,
+          });
+          setCategoryReviewOpen(true);
+          return;
+        }
+
         setAddTaggingState(result.status);
         setAddTaggingMessage(result.message);
         setAddSuggestedTags(hasSuggestedTagValues(result.suggestions) ? result.suggestions : null);
@@ -979,6 +1008,80 @@ export default function Wardrobe() {
 
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
+  const handleConfirmCategory = useCallback((confirmedCategory) => {
+    if (!pendingCategoryReview) return;
+
+    const { result, fallbackCategory } = pendingCategoryReview;
+    setCategoryReviewOpen(false);
+    setPendingCategoryReview(null);
+
+    // Apply the result with the confirmed/chosen category
+    setAddTaggingState(result.status);
+    setAddTaggingMessage(result.message);
+    setAddSuggestedTags(hasSuggestedTagValues(result.suggestions) ? result.suggestions : null);
+
+    // Use the confirmed category (user may have changed it in the dialog)
+    setFormCategory(confirmedCategory);
+
+    if (result.suggestions?.color) {
+      setFormColor((current) => (current.trim() ? current : result.suggestions.color));
+    }
+    if (result.suggestions?.clothingType) {
+      setFormClothingType((current) => (current.trim() ? current : result.suggestions.clothingType));
+    }
+    if (result.suggestions?.styleTags?.length) {
+      setFormStyleTags((current) => (current.length ? current : result.suggestions.styleTags));
+    }
+    if (result.suggestions?.occasionTags?.length) {
+      setFormOccasionTags((current) => (current.length ? current : result.suggestions.occasionTags));
+    }
+    if (result.suggestions?.seasonTags?.length) {
+      setFormSeasonTags((current) => (current.length ? current : result.suggestions.seasonTags));
+    }
+    setFormName((current) => {
+      if (!looksLikeCameraName(current)) return current;
+      const auto = buildAutoName(result.suggestions, confirmedCategory);
+      return auto || current;
+    });
+  }, [pendingCategoryReview]);
+
+  const handleRejectCategory = useCallback(() => {
+    if (!pendingCategoryReview) return;
+
+    const { result, fallbackCategory } = pendingCategoryReview;
+    setCategoryReviewOpen(false);
+    setPendingCategoryReview(null);
+
+    // Apply the result but keep the fallback category instead
+    setAddTaggingState(result.status);
+    setAddTaggingMessage(result.message);
+    setAddSuggestedTags(hasSuggestedTagValues(result.suggestions) ? result.suggestions : null);
+
+    // Keep the fallback category
+    setFormCategory(fallbackCategory);
+
+    if (result.suggestions?.color) {
+      setFormColor((current) => (current.trim() ? current : result.suggestions.color));
+    }
+    if (result.suggestions?.clothingType) {
+      setFormClothingType((current) => (current.trim() ? current : result.suggestions.clothingType));
+    }
+    if (result.suggestions?.styleTags?.length) {
+      setFormStyleTags((current) => (current.length ? current : result.suggestions.styleTags));
+    }
+    if (result.suggestions?.occasionTags?.length) {
+      setFormOccasionTags((current) => (current.length ? current : result.suggestions.occasionTags));
+    }
+    if (result.suggestions?.seasonTags?.length) {
+      setFormSeasonTags((current) => (current.length ? current : result.suggestions.seasonTags));
+    }
+    setFormName((current) => {
+      if (!looksLikeCameraName(current)) return current;
+      const auto = buildAutoName(result.suggestions, fallbackCategory);
+      return auto || current;
+    });
+  }, [pendingCategoryReview]);
 
   const handleReceiptResult = useCallback(({ items: extractedItems }) => {
     setReceiptScannerOpen(false);
@@ -2464,6 +2567,53 @@ export default function Wardrobe() {
               </button>
               <button type="button" className="btnPrimary" onClick={confirmDelete} disabled={isDeleting}>
                 {isDeleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      ) : null}
+
+      {categoryReviewOpen && pendingCategoryReview ? ReactDOM.createPortal(
+        <div className="modalOverlay" role="dialog" aria-modal="true">
+          <div className="modalCard">
+            <div className="modalTitle">Confirm clothing category</div>
+            <div className="modalSub">
+              We detected this might be <strong>{pendingCategoryReview.result.category}</strong> (confidence: {(pendingCategoryReview.result.confidence * 100).toFixed(0)}%).
+              Is this correct?
+            </div>
+
+            <div style={{ margin: "1rem 0", padding: "0.75rem", backgroundColor: "var(--color-bg-secondary)", borderRadius: "0.5rem" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", fontWeight: "500" }}>
+                Category:
+              </label>
+              <select
+                value={formCategory || pendingCategoryReview.result.category}
+                onChange={(e) => setFormCategory(e.target.value)}
+                style={{ width: "100%", padding: "0.5rem", borderRadius: "0.25rem", border: "1px solid var(--color-border)" }}
+              >
+                {ITEM_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="modalActions">
+              <button
+                type="button"
+                className="btnSecondary"
+                onClick={() => handleRejectCategory()}
+              >
+                Use fallback
+              </button>
+              <button
+                type="button"
+                className="btnPrimary"
+                onClick={() => handleConfirmCategory(formCategory || pendingCategoryReview.result.category)}
+              >
+                Confirm
               </button>
             </div>
           </div>

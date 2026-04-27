@@ -318,12 +318,16 @@ export async function generateItemTagSuggestions({
   let category = fallbackCategory;
   let classifierLabel = "";
   let classifierType = "";
+  let needsReview = false;
+  let confidence = 0;
 
   try {
     const classification = await classifyFromUrl(imageUrl);
     if (classification?.category) category = classification.category;
     if (classification?.label) classifierLabel = classification.label;
     if (classification?.type) classifierType = classification.type;
+    if (classification?.needsReview !== undefined) needsReview = classification.needsReview;
+    if (classification?.confidence !== undefined) confidence = classification.confidence;
   } catch {}
 
   const { text, tokens } = tokenize(fileName, classifierLabel);
@@ -360,5 +364,7 @@ export async function generateItemTagSuggestions({
     status,
     message: buildStatusMessage(status),
     suggestedCount: filledCount,
+    needsReview,
+    confidence,
   };
 }
