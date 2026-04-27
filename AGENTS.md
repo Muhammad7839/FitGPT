@@ -27,7 +27,8 @@ This file captures collaboration rules that reduce repeated friction when workin
 - Before editing repo instruction files, check whether related guidance already exists so new rules do not conflict with established documentation.
 - Prefer targeted edits over broad formatting churn or opportunistic cleanup.
 - When a problem is localized to one file or one layer, keep the fix there unless there is a proven need to widen the scope.
-- For recurring maintenance or automation runs whose explicit job is to update repo guidance, do not stop for plan confirmation once the scope is clear. Read the existing instruction files and automation memory first, then make the smallest documentation-only change that resolves the observed friction.
+- This repository currently does not define project-local Codex skills (`SKILL.md`). If a maintenance task asks to review or improve "skills in this project," treat [`/Users/muhammad/AndroidStudioProjects/FitGPT/AGENTS.md`](/Users/muhammad/AndroidStudioProjects/FitGPT/AGENTS.md) and [`/Users/muhammad/AndroidStudioProjects/FitGPT/CLAUDE.md`](/Users/muhammad/AndroidStudioProjects/FitGPT/CLAUDE.md) as the active skill surface unless a real skill directory is added.
+- For recurring maintenance or automation runs whose explicit job is to update repo guidance, do not stop for plan confirmation or routine clarifying questions once the scope is clear. Read the existing instruction files and automation memory first, base the update on a concrete observed friction point, then make the smallest documentation-only change that resolves it.
 
 ## Response Expectations
 

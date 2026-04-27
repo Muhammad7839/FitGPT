@@ -22,9 +22,10 @@ val FitgptLightSubText = Color(0xFF5F5A5A)
 val FitgptLightOutline = Color(0xFFE5DBDE)
 val FitgptLightBorder = Color(0x1A111827)
 
-val FitgptDarkBackground = Color(0xFF141418)
-val FitgptDarkSurface = Color(0xFF1C1C22)
-val FitgptDarkSurfaceVariant = Color(0xFF272731)
+// True OLED near-black for deep contrast on AMOLED displays
+val FitgptDarkBackground = Color(0xFF080810)
+val FitgptDarkSurface = Color(0xFF12121A)
+val FitgptDarkSurfaceVariant = Color(0xFF1E1E28)
 val FitgptDarkText = Color(0xFFE8E6E3)
 val FitgptDarkSubText = Color(0xFFBBB8B4)
 val FitgptDarkOutline = Color(0xFF3E3E49)

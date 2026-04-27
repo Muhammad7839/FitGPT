@@ -1,5 +1,5 @@
 // web/src/components/TopNav.js
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import ThemePicker from "./ThemePicker";
 import { useAuth } from "../auth/AuthProvider";
@@ -18,6 +18,8 @@ export default function TopNav() {
   const [profilePic, setProfilePic] = useState(() => loadProfilePic(effectiveUser));
   const safeProfilePic = (profilePic || "").toString();
   const isGif = safeProfilePic.startsWith("data:image/gif");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
 
   useEffect(() => {
     setProfilePic(loadProfilePic(effectiveUser));
@@ -26,7 +28,23 @@ export default function TopNav() {
     return () => window.removeEventListener(EVT_PROFILE_PIC_CHANGED, onPicChange);
   }, [effectiveUser]);
 
-  
+  // Close menu on route change
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
+
   const [frozenPic, setFrozenPic] = useState("");
   useEffect(() => {
     if (!isGif || !safeProfilePic) { setFrozenPic(""); return; }
@@ -46,7 +64,7 @@ export default function TopNav() {
   if (isChecking || HIDDEN_ROUTES.includes(pathname)) return null;
 
   return (
-    <header className="topNav">
+    <header className="topNav" ref={menuRef}>
       <nav className="topNavInner" aria-label="Main navigation">
         <NavLink to="/" className="topNavBrand" aria-label="Go to home page">
           <img
@@ -60,7 +78,9 @@ export default function TopNav() {
           />
           <span className="topNavBrandName">FitGPT</span>
         </NavLink>
-        <div className="topNavLinks">
+
+        {/* Desktop nav links */}
+        <div className="topNavLinks topNavLinksDesktop">
           {visibleNavItems.map(({ to, label }) => (
             <NavLink
               key={to}
@@ -87,15 +107,54 @@ export default function TopNav() {
             </NavLink>
           ))}
         </div>
+
         <div className="topNavRight">
           {!user ? (
-            <NavLink to="/login" className="topNavAuthBtn">
+            <NavLink to="/login" className="topNavAuthBtn topNavAuthBtnDesktop">
               Sign in
             </NavLink>
           ) : null}
           <ThemePicker inline />
+
+          {/* Hamburger — mobile only */}
+          <button
+            className={"topNavHamburger" + (menuOpen ? " topNavHamburgerOpen" : "")}
+            aria-label={menuOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            <span className="topNavHamburgerBar" />
+            <span className="topNavHamburgerBar" />
+            <span className="topNavHamburgerBar" />
+          </button>
         </div>
       </nav>
+
+      {/* Mobile dropdown menu */}
+      {menuOpen && (
+        <div className="topNavMobileMenu" role="navigation" aria-label="Mobile navigation">
+          {visibleNavItems.map(({ to, label }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) =>
+                "topNavMobileLink" + (isActive ? " topNavMobileLinkActive" : "")
+              }
+              onClick={() => setMenuOpen(false)}
+            >
+              {to === "/profile" && safeProfilePic && (
+                <img src={isGif && frozenPic ? frozenPic : safeProfilePic} alt="" className="topNavProfilePic" style={{ marginRight: 6 }} />
+              )}
+              {label}
+            </NavLink>
+          ))}
+          {!user && (
+            <NavLink to="/login" className="topNavMobileAuthBtn" onClick={() => setMenuOpen(false)}>
+              Sign in
+            </NavLink>
+          )}
+        </div>
+      )}
     </header>
   );
 }

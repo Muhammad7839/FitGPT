@@ -10,7 +10,11 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
@@ -250,16 +254,34 @@ fun AppNavHost(
         navController = navController,
         startDestination = startDestination ?: Routes.LOGIN,
         enterTransition = {
-            fadeIn(animationSpec = tween(180))
+            slideInHorizontally(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                ),
+                initialOffsetX = { fullWidth -> fullWidth / 4 }
+            ) + fadeIn(animationSpec = tween(220))
         },
         exitTransition = {
-            fadeOut(animationSpec = tween(140))
+            slideOutHorizontally(
+                animationSpec = tween(180),
+                targetOffsetX = { fullWidth -> -fullWidth / 6 }
+            ) + fadeOut(animationSpec = tween(180))
         },
         popEnterTransition = {
-            fadeIn(animationSpec = tween(180))
+            slideInHorizontally(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                ),
+                initialOffsetX = { fullWidth -> -fullWidth / 4 }
+            ) + fadeIn(animationSpec = tween(220))
         },
         popExitTransition = {
-            fadeOut(animationSpec = tween(140))
+            slideOutHorizontally(
+                animationSpec = tween(180),
+                targetOffsetX = { fullWidth -> fullWidth / 6 }
+            ) + fadeOut(animationSpec = tween(180))
         }
     ) {
 

@@ -41,6 +41,15 @@
   --body-grad1: rgba(139, 30, 30, 0.10);
   --body-grad2: rgba(139, 30, 30, 0.07);
 
+  /* ── Fluid typography (clamp: min 375px → max 1280px) ── */
+  --text-xs:   clamp(11px, 0.7rem + 0.15vw, 12px);
+  --text-sm:   clamp(12px, 0.75rem + 0.2vw, 14px);
+  --text-base: clamp(13px, 0.82rem + 0.25vw, 16px);
+  --text-md:   clamp(14px, 0.9rem + 0.3vw, 18px);
+  --text-lg:   clamp(16px, 1rem + 0.5vw, 22px);
+  --text-xl:   clamp(20px, 1.25rem + 1vw, 30px);
+  --text-2xl:  clamp(26px, 1.6rem + 1.5vw, 42px);
+
   /* ── FitGPT UI Polish 2026 — light tokens ── */
   --fit-ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
   --fit-ease-out: cubic-bezier(0.0, 0.0, 0.2, 1);
@@ -65,7 +74,7 @@
 
 /* ── Dark theme ────────────────────────────────────────────── */
 [data-theme="dark"] {
-  --bg: #141418;
+  --bg: #0a0a0e;
   --text: #e8e6e3;
   --muted: rgba(232, 230, 227, 0.55);
   --border: rgba(255, 255, 255, 0.08);
@@ -87,8 +96,8 @@
   --shadow: 0 16px 44px rgba(0, 0, 0, 0.35);
   --shadow-hover: 0 20px 60px rgba(0, 0, 0, 0.45);
 
-  --pageBg1: #0e0e12;
-  --pageBg2: #141418;
+  --pageBg1: #060608;
+  --pageBg2: #0a0a0e;
 
   --focus: rgba(196, 60, 60, 0.55);
 
@@ -378,13 +387,15 @@
 }
 
 [data-theme="dark"] .wardrobeCard {
-  background: var(--surface);
-  border-color: var(--surface-border);
+  background: var(--fit-glass, rgba(22,22,30,0.78));
+  backdrop-filter: var(--fit-blur-sm, blur(8px));
+  -webkit-backdrop-filter: var(--fit-blur-sm, blur(8px));
+  border-color: var(--fit-glass-border, rgba(255,255,255,0.07));
 }
 
 [data-theme="dark"] .wardrobeCard:hover {
-  border-color: var(--surface-hover);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35), 0 0 0 6px rgba(196, 60, 60, 0.12);
+  border-color: rgba(196, 60, 60, 0.3);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.40), 0 0 0 4px rgba(196, 60, 60, 0.10);
 }
 
 [data-theme="dark"] .wardrobeThumbWrap {
@@ -1554,7 +1565,7 @@ a {
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
   overflow: hidden;
-  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  transition: transform 240ms cubic-bezier(0.34, 1.4, 0.64, 1), box-shadow 200ms ease, border-color 160ms ease;
 }
 
 .card::before {
@@ -1573,9 +1584,9 @@ a {
 }
 
 .card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-2px) scale(1.008);
   border-color: rgba(139, 30, 30, 0.22);
-  box-shadow: var(--shadow-hover), 0 0 0 6px rgba(139, 30, 30, 0.08);
+  box-shadow: var(--shadow-hover), 0 0 0 4px rgba(139, 30, 30, 0.07);
 }
 
 .brandBar {
@@ -4349,6 +4360,115 @@ img.dashSquareImg {
   }
 }
 
+/* ── Hamburger button (mobile only) ───────────────────────── */
+.topNavHamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 4px;
+  transition: background 120ms ease;
+  flex-shrink: 0;
+}
+.topNavHamburger:hover {
+  background: var(--accent-soft-2, rgba(139,30,30,0.08));
+}
+.topNavHamburgerBar {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: var(--text, #111);
+  border-radius: 2px;
+  transition: transform 220ms cubic-bezier(0.23, 1, 0.32, 1), opacity 180ms ease;
+}
+.topNavHamburgerOpen .topNavHamburgerBar:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.topNavHamburgerOpen .topNavHamburgerBar:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0);
+}
+.topNavHamburgerOpen .topNavHamburgerBar:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* ── Mobile dropdown menu ─────────────────────────────────── */
+.topNavMobileMenu {
+  display: none;
+  flex-direction: column;
+  padding: 8px 10px 12px;
+  border-top: 1px solid var(--border, rgba(0,0,0,0.08));
+  background: var(--bg, #fff);
+  animation: topNavMenuSlideDown 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@keyframes topNavMenuSlideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.topNavMobileLink {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted, #666);
+  text-decoration: none;
+  transition: background 120ms ease, color 120ms ease;
+}
+.topNavMobileLink:hover,
+.topNavMobileLinkActive {
+  background: var(--accent-soft, rgba(139,30,30,0.08));
+  color: var(--accent, #8b1e1e);
+}
+.topNavMobileAuthBtn {
+  display: block;
+  margin: 8px 12px 0;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--accent-outline, rgba(139,30,30,0.2));
+  background: var(--accent-soft, rgba(139,30,30,0.08));
+  color: var(--accent, #8b1e1e);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+  transition: background 120ms ease;
+}
+.topNavMobileAuthBtn:hover {
+  background: var(--accent-soft-2, rgba(139,30,30,0.14));
+}
+
+@media (max-width: 540px) {
+  .topNavLinksDesktop {
+    display: none !important;
+  }
+  .topNavAuthBtnDesktop {
+    display: none !important;
+  }
+  .topNavHamburger {
+    display: flex;
+  }
+  .topNavMobileMenu {
+    display: flex;
+  }
+}
+
+[data-theme="dark"] .topNavMobileMenu {
+  background: rgba(20, 20, 24, 0.96);
+  border-top-color: var(--border, rgba(255,255,255,0.08));
+}
+[data-theme="dark"] .topNavHamburgerBar {
+  background: var(--text, #e8e6e3);
+}
+
 .dashBottomNav {
   position: sticky;
   bottom: 0;
@@ -5084,8 +5204,15 @@ img.dashSquareImg {
 .wardrobeGrid {
   margin-top: 12px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(150px, 28vw, 220px), 1fr));
+  gap: clamp(10px, 2vw, 16px);
+}
+
+@media (max-width: 480px) {
+  .wardrobeGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
 }
 
 .wardrobeCard {
@@ -5094,17 +5221,17 @@ img.dashSquareImg {
   border-radius: 18px;
   background: #ffffff;
   overflow: hidden;
-  box-shadow: 0 12px 30px rgba(17, 24, 39, 0.08);
-  transition: transform 300ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 160ms ease, border-color 160ms ease;
-  transform-style: preserve-3d;
+  box-shadow: 0 4px 16px rgba(17, 24, 39, 0.07), 0 1px 4px rgba(17,24,39,0.04);
+  transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 200ms ease, border-color 160ms ease;
   will-change: transform;
   display: flex;
   flex-direction: column;
 }
 
 .wardrobeCard:hover {
-  border-color: rgba(139, 30, 30, 0.28);
-  box-shadow: 0 20px 50px rgba(17, 24, 39, 0.15), 0 0 0 6px rgba(139, 30, 30, 0.10);
+  transform: translateY(-3px) scale(1.015);
+  border-color: rgba(139, 30, 30, 0.22);
+  box-shadow: 0 16px 40px rgba(17, 24, 39, 0.13), 0 0 0 4px rgba(139, 30, 30, 0.08);
 }
 
 .wardrobeThumbWrap {
@@ -12780,14 +12907,16 @@ select:focus-visible {
   max-width: calc(100vw - 32px);
   height: 560px;
   max-height: calc(100vh - 130px);
-  border-radius: 16px;
-  background: var(--bg, #f9f9f9);
-  border: 1px solid var(--border, #e0e0e0);
-  box-shadow: 0 12px 48px rgba(0,0,0,.2);
+  border-radius: 20px;
+  background: var(--fit-glass, rgba(255,255,255,0.82));
+  backdrop-filter: var(--fit-blur, blur(18px));
+  -webkit-backdrop-filter: var(--fit-blur, blur(18px));
+  border: 1px solid var(--fit-glass-border, rgba(255,255,255,0.5));
+  box-shadow: 0 20px 60px rgba(0,0,0,.22), 0 2px 8px rgba(0,0,0,.10);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: chatbotSlideUp .25s ease-out;
+  animation: chatbotSlideUp .28s cubic-bezier(0.23, 1, 0.32, 1);
 }
 @keyframes chatbotSlideUp {
   from { opacity: 0; transform: translateY(16px) scale(.97); }
@@ -13172,11 +13301,11 @@ select:focus-visible {
   background: rgba(0, 0, 0, 0.42);
 }
 [data-theme="dark"] .chatbot-header {
-  background: var(--card-bg, #1e1e1e);
-  border-color: var(--border, #333);
+  background: var(--fit-panel, rgba(18,18,26,0.90));
+  border-color: var(--fit-glass-border, rgba(255,255,255,0.07));
 }
 [data-theme="dark"] .chatbot-action-btn {
-  background: var(--bg, #141414);
+  background: var(--fit-glass, rgba(22,22,30,0.78));
   color: var(--text-muted, #999);
 }
 [data-theme="dark"] .chatbot-action-btn:hover {

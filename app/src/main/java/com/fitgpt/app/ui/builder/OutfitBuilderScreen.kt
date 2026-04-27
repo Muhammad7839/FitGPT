@@ -1,7 +1,7 @@
 /**
  * 2D Outfit Builder — lets the user manually assemble an outfit
  * by picking one item per slot (Top, Bottom, Shoes, Outerwear, Accessory)
- * and then saving the combination.
+ * and saving the combination. Live preview strip shows selected items.
  */
 package com.fitgpt.app.ui.builder
 
@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -57,6 +59,14 @@ import com.fitgpt.app.viewmodel.UiState
 import com.fitgpt.app.viewmodel.WardrobeViewModel
 
 private val BUILDER_SLOTS = listOf("Tops", "Bottoms", "Shoes", "Outerwear", "Accessories")
+
+private val SLOT_EMOJI = mapOf(
+    "Tops" to "👕",
+    "Bottoms" to "👖",
+    "Shoes" to "👟",
+    "Outerwear" to "🧥",
+    "Accessories" to "👜"
+)
 
 @Composable
 fun OutfitBuilderScreen(
@@ -115,6 +125,61 @@ fun OutfitBuilderScreen(
                         title = "Build an Outfit",
                         subtitle = "Pick one item per slot, then save the combination."
                     )
+                }
+
+                // Live preview strip — shows selected items as a horizontal scroll
+                val previewItems = BUILDER_SLOTS.mapNotNull { selectedItems[it] }
+                if (previewItems.isNotEmpty()) {
+                    item {
+                        WebCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = "Your Outfit (${previewItems.size} piece${if (previewItems.size == 1) "" else "s"})",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 10.dp)
+                                )
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    items(previewItems) { item ->
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            if (!item.imageUrl.isNullOrBlank()) {
+                                                RemoteImagePreview(
+                                                    imageUrl = item.imageUrl,
+                                                    contentDescription = item.name ?: item.category,
+                                                    modifier = Modifier
+                                                        .size(72.dp)
+                                                        .clip(RoundedCornerShape(12.dp))
+                                                )
+                                            } else {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(72.dp)
+                                                        .clip(RoundedCornerShape(12.dp))
+                                                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = SLOT_EMOJI[item.category] ?: "👔",
+                                                        style = MaterialTheme.typography.headlineSmall
+                                                    )
+                                                }
+                                            }
+                                            Text(
+                                                text = item.category,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 if (allItems.isEmpty()) {
@@ -221,19 +286,18 @@ private fun BuilderSlotRow(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
                         .border(
                             1.dp,
-                            MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
                             RoundedCornerShape(10.dp)
                         )
                         .clickable { onClick() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = slot.first().toString(),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = SLOT_EMOJI[slot] ?: slot.first().toString(),
+                        style = MaterialTheme.typography.titleLarge
                     )
                 }
             }
