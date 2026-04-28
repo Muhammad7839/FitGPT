@@ -84,7 +84,7 @@ describe("apiFetch", () => {
     expect(request.headers.has("Content-Type")).toBe(false);
   });
 
-  test("uses a relative path when no production API env is configured", async () => {
+  test("uses the deployed backend URL when running on a non-local host", async () => {
     Object.defineProperty(window, "location", {
       configurable: true,
       value: { hostname: "fitgpt.tech" },
@@ -100,7 +100,7 @@ describe("apiFetch", () => {
     await apiFetch("/me", { method: "GET" });
 
     const [url] = global.fetch.mock.calls[0];
-    expect(url).toBe("/me");
+    expect(url).toBe("https://fitgpt-backend-tdiq.onrender.com/me");
   });
 
   test("uses the current LAN host for private-network development", async () => {

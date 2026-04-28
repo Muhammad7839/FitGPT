@@ -24,7 +24,7 @@ function resolveBaseUrl() {
     }
   }
 
-  return "";
+  return "https://fitgpt-backend-tdiq.onrender.com";
 }
 
 const AUTH_STRATEGY = (process.env.REACT_APP_AUTH_STRATEGY || "token").toLowerCase();

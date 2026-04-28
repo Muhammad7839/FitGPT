@@ -3,7 +3,7 @@ import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { wardrobeApi } from "../api/wardrobeApi";
 import { useAuth } from "../auth/AuthProvider";
-import { loadWardrobe, saveWardrobe, loadAnswers, mergeWardrobeWithLocalMetadata, readSeasonalMode, writeSeasonalMode } from "../utils/userStorage";
+import { loadWardrobe, saveWardrobe, loadAnswers, readSeasonalMode, writeSeasonalMode } from "../utils/userStorage";
 import { preloadModel } from "../utils/classifyClothing";
 import { detectDuplicateFindings, loadIgnoredDuplicateKeys, mergeDuplicateItems, saveIgnoredDuplicateKeys } from "../utils/duplicateDetection";
 import { OPEN_ADD_ITEM_FLAG } from "../utils/constants";
@@ -517,8 +517,30 @@ export default function Wardrobe() {
           const data = await wardrobeApi.getItems();
           if (!alive) return;
           const apiItems = Array.isArray(data) ? data : [];
-          const merged = apiItems.length > 0 ? mergeWardrobeWithLocalMetadata(apiItems, local) : (Array.isArray(local) ? local : []);
-          setItems(merged);
+          if (apiItems.length > 0) {
+            // Backend is authoritative: use only backend items, restoring local image_url and
+            // locally-enriched metadata for matching items. Do NOT add local-only items back.
+            const localMap = new Map((Array.isArray(local) ? local : []).map((it) => [String(it?.id || ""), it]));
+            const enriched = apiItems.map((item) => {
+              const localItem = localMap.get(String(item?.id || ""));
+              if (!localItem) return normalizeItemMetadata(item);
+              return normalizeItemMetadata({
+                ...item,
+                image_url: localItem.image_url || item.image_url,
+                fit_tag: item.fit_tag || localItem.fit_tag,
+                layer_type: item.layer_type || localItem.layer_type,
+                clothing_type: item.clothing_type || localItem.clothing_type,
+                set_id: item.set_id || localItem.set_id,
+                is_one_piece: item.is_one_piece || localItem.is_one_piece,
+                style_tags: item.style_tags?.length ? item.style_tags : localItem.style_tags,
+                occasion_tags: item.occasion_tags?.length ? item.occasion_tags : localItem.occasion_tags,
+                season_tags: item.season_tags?.length ? item.season_tags : localItem.season_tags,
+              });
+            });
+            setItems(enriched);
+          } else {
+            setItems(Array.isArray(local) ? local : []);
+          }
         } else {
           if (!alive) return;
           setItems(Array.isArray(local) ? local : []);
