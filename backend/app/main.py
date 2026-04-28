@@ -38,6 +38,9 @@ Base.metadata.create_all(bind=engine)
 
 
 def _ensure_runtime_schema() -> None:
+    import os
+    if os.getenv("DATABASE_URL") and not os.getenv("RUN_SCHEMA_PATCH"):
+        return
     """Apply minimal additive schema changes for local environments without migrations."""
     # TODO: Replace this startup schema patching with reviewed migrations before production hardening.
     inspector = inspect(engine)

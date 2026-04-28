@@ -174,7 +174,7 @@ export default function Login() {
         <div className="authQrCard">
           <img
             className="authQrCode"
-            src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https%3A%2F%2Fwww.fitgpt.tech%2Fdownload"
+            src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https%3A%2F%2Fgithub.com%2FMuhammad7839%2FFitGPT%2Freleases%2Fdownload%2Fsymposium-demo-v1%2Fapp-release-unsigned.apk"
             alt="QR code to download FitGPT Android app"
             loading="lazy"
           />
