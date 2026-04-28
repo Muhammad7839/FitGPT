@@ -358,7 +358,7 @@ def _store_uploaded_image(
                 bytes_written += len(chunk)
                 if bytes_written > MAX_UPLOAD_IMAGE_BYTES:
                     raise HTTPException(
-                        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                        status_code=413,
                         detail="Image exceeds max upload size",
                     )
                 output.write(chunk)
@@ -1027,7 +1027,7 @@ def receipt_ocr(
             buffer.extend(chunk)
             if len(buffer) > MAX_UPLOAD_IMAGE_BYTES:
                 raise HTTPException(
-                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                    status_code=413,
                     detail="Image exceeds max upload size",
                 )
     finally:

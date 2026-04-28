@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { normalizeFitTag } from "../utils/helpers";
 import { FIT_TAG_OPTIONS } from "./ItemFormFields";
 import { optionLabel } from "../utils/wardrobeOptions";
@@ -158,6 +158,7 @@ function WardrobeItemCard({
   const isBusy = isItemBusy(item.id);
   const actionProps = { item, tab, onToggleFavorite, onEdit, onArchive, onUnarchive, onDelete, isBusy, allowFavorites, allowArchive };
   const badges = metadataSummary(item);
+  const [imgError, setImgError] = useState(false);
   const colors = colorList(item.color);
   const seasonMatch = seasonalModeEnabled ? getSeasonMatch(item, currentSeason) : null;
   const seasonToneClass = seasonMatch ? `wardrobeSeasonTone-${seasonMatch.tone}` : "";
@@ -179,8 +180,8 @@ function WardrobeItemCard({
       >
         <div className="wardrobeRowLeft">
           <div className="wardrobeThumbWrap sm">
-            {item.image_url ? (
-              <img className="wardrobeThumbImg sm" src={item.image_url} alt={item.name} />
+            {item.image_url && !imgError ? (
+              <img className="wardrobeThumbImg sm" src={item.image_url} alt={item.name} onError={() => setImgError(true)} />
             ) : (
               <div className="wardrobeThumb sm" aria-hidden="true" />
             )}
@@ -233,8 +234,8 @@ function WardrobeItemCard({
       aria-pressed={selectionMode ? isSelected : undefined}
     >
       <div className="wardrobeThumbWrap">
-        {item.image_url ? (
-          <img className="wardrobeThumbImg" src={item.image_url} alt={item.name} />
+        {item.image_url && !imgError ? (
+          <img className="wardrobeThumbImg" src={item.image_url} alt={item.name} onError={() => setImgError(true)} />
         ) : (
           <div className="wardrobeThumb" aria-hidden="true" />
         )}
