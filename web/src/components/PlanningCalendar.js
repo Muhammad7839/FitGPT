@@ -141,6 +141,7 @@ export default function PlanningCalendar({
   onWearAgain = () => {},
 }) {
   const today = useMemo(() => startOfDay(new Date()), []);
+  const detailsRef = React.useRef(null);
   const todayKey = toDateKey(today);
   const [selectedDateKey, setSelectedDateKey] = useState(todayKey);
   const [displayDate, setDisplayDate] = useState(() => startOfMonth(today));
@@ -152,6 +153,12 @@ export default function PlanningCalendar({
   const [planSelectedItemIds, setPlanSelectedItemIds] = useState([]);
   const [planSaving, setPlanSaving] = useState(false);
   const [planMsg, setPlanMsg] = useState("");
+
+  React.useEffect(() => {
+    if (detailsRef.current) {
+      detailsRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [selectedDateKey]);
 
   const activeWardrobe = useMemo(
     () => (Array.isArray(wardrobe) ? wardrobe.filter((item) => !item?.is_archived) : []),
@@ -345,7 +352,7 @@ export default function PlanningCalendar({
         })}
       </div>
 
-      <div className="planningCalendarDetails">
+      <div className="planningCalendarDetails" ref={detailsRef}>
         <div className="planningCalendarDetailsHeader">
           <div>
             <div className="planningCalendarDetailsEyebrow">Selected date</div>
