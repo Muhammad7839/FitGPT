@@ -378,14 +378,22 @@ class WardrobeViewModel(
         }
         _batchImageUploadState.value = UiState.Loading
         viewModelScope.launch {
-            try {
-                val result = repository.uploadImagesBatch(payloads)
-                _batchImageUploadState.value = UiState.Success(result)
-            } catch (exception: Exception) {
-                _batchImageUploadState.value = UiState.Error(
-                    resolveUploadError(exception, "Failed to upload images")
-                )
+            // Upload each image independently so one failure never blocks the rest.
+            val results = payloads.map { payload ->
+                try {
+                    val url = repository.uploadImage(payload.bytes, payload.fileName, payload.mimeType)
+                    UploadResult(fileName = payload.fileName, status = "success", imageUrl = url, error = null)
+                } catch (exception: Exception) {
+                    Log.w(wardrobeLogTag, "batch upload failed for ${payload.fileName}", exception)
+                    UploadResult(
+                        fileName = payload.fileName,
+                        status = "error",
+                        imageUrl = null,
+                        error = resolveUploadError(exception, "Upload failed")
+                    )
+                }
             }
+            _batchImageUploadState.value = UiState.Success(results)
         }
     }
 

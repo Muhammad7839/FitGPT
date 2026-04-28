@@ -1094,7 +1094,8 @@ internal fun inferFromFileName(fileName: String): InferredNameHint {
             InferredNameHint(category = "Top", clothingType = "Dress", season = "Spring", comfortLevel = 3, confidence = 0.84f),
         setOf("jean", "pant", "trouser", "short", "skirt", "legging", "jogger", "chino", "cargo", "slack", "sweatpant") to
             InferredNameHint(category = "Bottom", clothingType = "Pants", season = "All", comfortLevel = 3, confidence = 0.86f),
-        setOf("shoe", "sneaker", "boot", "sandal", "loafer", "heel", "flat", "trainer", "oxford", "mule", "slipper") to
+        setOf("shoe", "sneaker", "boot", "sandal", "loafer", "heel", "flat", "trainer", "oxford", "mule", "slipper",
+              "nike", "adidas", "jordan", "vans", "converse", "puma", "reebok") to
             InferredNameHint(category = "Shoes", clothingType = "Shoes", season = "All", comfortLevel = 3, confidence = 0.86f),
         setOf("hat", "cap", "beanie", "scarf", "watch", "bag", "belt", "necklace", "ring", "bracelet", "wallet", "earring", "sunglass") to
             InferredNameHint(category = "Accessories", clothingType = "Accessory", season = "All", comfortLevel = 3, confidence = 0.8f),
@@ -1121,6 +1122,7 @@ internal fun inferFromFileName(fileName: String): InferredNameHint {
             "sneaker", "trainer" -> hint.copy(clothingType = "Sneakers", comfortLevel = 4)
             "boot" -> hint.copy(clothingType = "Boots", season = "Winter")
             "sandal" -> hint.copy(clothingType = "Sandals", season = "Summer", comfortLevel = 4)
+            "nike", "adidas", "jordan", "vans", "converse", "puma", "reebok" -> hint.copy(clothingType = "Sneakers", comfortLevel = 4, confidence = 0.91f)
             "bag" -> hint.copy(clothingType = "Bag")
             "cap", "beanie", "hat" -> hint.copy(clothingType = "Hat")
             else -> hint

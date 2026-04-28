@@ -62,11 +62,13 @@ import com.fitgpt.app.viewmodel.ChatViewModel
 @Composable
 fun ChatScreen(
     navController: NavController,
-    viewModel: ChatViewModel
+    viewModel: ChatViewModel,
+    wardrobeItemCount: Int = -1
 ) {
     val state by viewModel.uiState.collectAsState()
     var input by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val wardrobeEmpty = wardrobeItemCount == 0
     val starterPrompts = remember {
         listOf(
             "I want to go outside. What should I wear?",
@@ -114,6 +116,11 @@ fun ChatScreen(
                         contentPadding = PaddingValues(bottom = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        if (wardrobeEmpty) {
+                            item {
+                                WardrobeEmptyNotice()
+                            }
+                        }
                         if (state.messages.isEmpty()) {
                             item {
                                 EmptyAuraState()
@@ -389,5 +396,34 @@ private fun ComposerPanel(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun WardrobeEmptyNotice() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.38f))
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.32f),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = "Wardrobe is empty",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onErrorContainer
+        )
+        Text(
+            text = "AURA needs wardrobe items to give outfit advice. Add some clothes in the Wardrobe tab first.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
+        )
     }
 }

@@ -455,9 +455,14 @@ fun AppNavHost(
         }
 
         composable(Routes.CHAT) {
+            val wardrobeStateForChat by (wardrobeViewModel?.wardrobeState
+                ?: kotlinx.coroutines.flow.MutableStateFlow<com.fitgpt.app.viewmodel.UiState<List<com.fitgpt.app.data.model.ClothingItem>>>(com.fitgpt.app.viewmodel.UiState.Loading)
+            ).collectAsState()
+            val wardrobeCount = (wardrobeStateForChat as? com.fitgpt.app.viewmodel.UiState.Success)?.data?.size ?: -1
             ChatScreen(
                 navController = navController,
-                viewModel = chatViewModel
+                viewModel = chatViewModel,
+                wardrobeItemCount = wardrobeCount
             )
         }
 
