@@ -22446,3 +22446,75 @@ a:focus-visible {
     padding: 20px 16px;
   }
 }
+
+/* ── Mobile browser structural fixes ──────────────────────── */
+.dashOutfitsAnimWrap {
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  input,
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="number"],
+  select,
+  textarea,
+  .wardrobeInput,
+  .wardrobeSelect,
+  .chatbot-input,
+  .planOutfitInput {
+    font-size: 16px !important;
+  }
+
+  .authFormGroup input,
+  .authFormGroup select,
+  .authFormGroup textarea {
+    font-size: 16px !important;
+  }
+
+  .app,
+  .onboarding {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 16px;
+  }
+  .profileCard {
+    padding: 20px 16px;
+  }
+  .onboardingPage .card {
+    margin-top: 8px;
+  }
+
+  .wardrobeUploadCard,
+  .wardrobeUploadInner {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .dashWhyPanel,
+  .dashWhyGrid,
+  .dashWhyCard {
+    flex-direction: column !important;
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 540px) {
+  .topNavMobileLink {
+    min-height: 44px;
+  }
+  .topNavMobileAuthBtn {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}

@@ -5,7 +5,7 @@
       "Bash(python3 -m venv .venv)",
       "Bash(.venv/bin/pip install *)",
       "Bash(../.venv/bin/pip install *)",
-      "Bash(../.venv/bin/pytest -q)",
+      "Bash(../.venv/bin/pytest *)",
       "Bash(npm test *)",
       "Bash(.venv/bin/python -m pyflakes backend/app)",
       "Bash(npx eslint *)",
@@ -14,9 +14,10 @@
       "Bash(git checkout *)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(../.venv/bin/pytest tests/test_weather_hardening.py::test_weather_current_returns_controlled_error_when_provider_json_is_invalid -x)",
-      "Bash(../.venv/bin/pytest tests/test_security_headers.py tests/test_rate_limit_bucket_prune.py -q)",
-      "Bash(../.venv/bin/python -c \"from app.main import app; print\\('app ok, routes:', len\\(app.routes\\)\\)\")"
+      "Bash(../.venv/bin/python -c \"from app.main import app; print\\('app ok, routes:', len\\(app.routes\\)\\)\")",
+      "Bash(npx react-scripts *)",
+      "Bash(git push *)",
+      "Read(//Users/muhammad/AndroidStudioProjects/FitGPT/app/**)"
     ]
   }
 }
