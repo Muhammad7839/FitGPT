@@ -774,6 +774,18 @@ export default function Chatbot() {
   }, [submitText]);
 
   useEffect(() => {
+    const handleAuraOpen = (event) => {
+      const message = (event?.detail?.message || "").toString();
+      setOpen(true);
+      setShowHistory(false);
+      setInput(message);
+      window.setTimeout(() => inputRef.current?.focus(), 0);
+    };
+    window.addEventListener("fitgpt:aura-open", handleAuraOpen);
+    return () => window.removeEventListener("fitgpt:aura-open", handleAuraOpen);
+  }, []);
+
+  useEffect(() => {
     voiceModeRef.current = voiceMode;
   }, [voiceMode]);
 

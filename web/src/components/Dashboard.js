@@ -54,7 +54,7 @@ import {
 import {
   titleCase, normalizeCategory, normalizeColorName, colorToCss,
   timeCategoryFromDate,
-  generateThreeOutfits, idsSignature, makeRecentSets,
+  generateThreeOutfits, defaultOutfitSet, idsSignature, makeRecentSets,
   buildExplanation, buildOutfitFromIds, scoreOutfitForDisplay, computeOutfitConfidence,
   analyzeOutfitColors, colorInfo, buildPersonalizationProfile,
 } from "../utils/recommendationEngine";
@@ -530,6 +530,24 @@ function buildTomorrowInsight(plannedOutfits) {
     headline: label,
     sub: next.occasion ? titleCase(next.occasion) : "Outfit planned",
   };
+}
+
+function buildSparseWardrobePrompt(activeItems) {
+  const categories = new Set(
+    (Array.isArray(activeItems) ? activeItems : [])
+      .map((item) => normalizeCategory(item?.category).toLowerCase())
+  );
+  const hasTop = categories.has("tops") || categories.has("top");
+  const hasBottom = categories.has("bottoms") || categories.has("bottom");
+  const hasShoes = categories.has("shoes") || categories.has("shoe");
+  if (hasTop && !hasBottom) return "Add bottoms like jeans or trousers to complete your first outfit.";
+  if (!hasShoes) return "Add a pair of shoes to unlock full outfit recommendations.";
+  const active = activeItems.length;
+  const remaining = Math.max(0, 3 - active);
+  if (remaining > 0) {
+    return `Add ${remaining} more item${remaining === 1 ? "" : "s"} from different categories (tops, bottoms, shoes) and we'll start suggesting full outfits.`;
+  }
+  return `You have ${active} item${active === 1 ? "" : "s"} but we couldn't assemble an outfit. Try adding items from different categories (tops, bottoms, shoes).`;
 }
 
 function pickEditorialHeroImage(outfit) {
@@ -1846,6 +1864,8 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const editorialClosetGap = isEditorial ? buildClosetGapInsight(wardrobe) : null;
   const editorialRotation = isEditorial ? buildRotationInsight(historyEntries) : null;
   const editorialTomorrow = isEditorial ? buildTomorrowInsight(editorialPlanned) : null;
+  const activeWardrobeItems = wardrobe.filter((it) => it?.is_active !== false);
+  const demoFirstRunOutfit = useMemo(() => defaultOutfitSet(recSeed)[0] || [], [recSeed]);
 
   const handleResendVerification = async () => {
     try {
@@ -2310,36 +2330,43 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             <div className="dashAiLoading" style={{ padding: "32px 0", textAlign: "center" }}>
               {personalizationSummary.loadingLabel}
             </div>
-          ) : wardrobe.filter((it) => it?.is_active !== false).length === 0 ? (
-            <div className="dashEmptyWardrobe">
-              <div className="dashEmptyIcon">&#x1F455;</div>
-              <div className="dashEmptyTitle">Your wardrobe is empty</div>
-              <div className="dashEmptySub">Add a few items to get recommendations.</div>
+          ) : activeWardrobeItems.length === 0 ? (
+            <div className="dashEmptyWardrobe dashFirstRunWelcome">
+              <img className="dashFirstRunLogo" src="/fitgpt-logo.png" alt="FitGPT" />
+              <div className="dashEmptyTitle">Welcome to FitGPT</div>
+              <div className="dashEmptySub">
+                FitGPT turns the clothes you already own into weather-aware outfit recommendations. Add a few everyday pieces and AURA will help you style them for work, weekends, and everything in between.
+              </div>
+              <div className="dashDemoOutfitLabel">This is an example — add your clothes to get real recommendations</div>
+              <div className="dashDemoOutfitGrid">
+                {demoFirstRunOutfit.map((item) => (
+                  <div key={item.id} className="dashDemoOutfitTile">
+                    <div className="dashDemoOutfitSwatch" style={{ background: colorToCss(item.color) }} aria-hidden="true" />
+                    <div className="dashDemoOutfitName">{item.name}</div>
+                    <div className="dashDemoOutfitMeta">{item.category}</div>
+                  </div>
+                ))}
+              </div>
               <div className="dashEmptyActions">
                 <button className="btn primary dashEmptyBtn" type="button" onClick={() => navigate("/wardrobe")}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  <span>Add clothing items</span>
+                  <span>Add your first item</span>
                 </button>
-                <button className="btn dashEmptyBtn" type="button" onClick={() => navigate("/wardrobe")}>
+                <button
+                  className="btn dashEmptyBtn"
+                  type="button"
+                  onClick={() => window.dispatchEvent(new CustomEvent("fitgpt:aura-open", { detail: { message: "Tell me how FitGPT works" } }))}
+                >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v7"/><path d="M12 10l-8 4.5v5h16v-5z"/><circle cx="12" cy="4" r="1.5"/></svg>
-                  <span>Open wardrobe</span>
+                  <span>See how it works</span>
                 </button>
               </div>
             </div>
-          ) : outfits.length === 0 || wardrobe.filter((it) => it?.is_active !== false).length < 3 ? (
+          ) : outfits.length === 0 || activeWardrobeItems.length < 3 ? (
             <div className="dashEmptyWardrobe dashSparseWardrobe">
               <div className="dashEmptyIcon">&#x1F9FA;</div>
               <div className="dashEmptyTitle">Almost there</div>
-              <div className="dashEmptySub">
-                {(() => {
-                  const active = wardrobe.filter((it) => it?.is_active !== false).length;
-                  const remaining = Math.max(0, 3 - active);
-                  if (remaining > 0) {
-                    return `Add ${remaining} more item${remaining === 1 ? "" : "s"} from different categories (tops, bottoms, shoes) and we'll start suggesting full outfits.`;
-                  }
-                  return `You have ${active} item${active === 1 ? "" : "s"} but we couldn't assemble an outfit. Try adding items from different categories (tops, bottoms, shoes).`;
-                })()}
-              </div>
+              <div className="dashEmptySub">{buildSparseWardrobePrompt(activeWardrobeItems)}</div>
               <div className="dashEmptyActions">
                 <button className="btn primary dashEmptyBtn" type="button" onClick={() => navigate("/wardrobe")}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>

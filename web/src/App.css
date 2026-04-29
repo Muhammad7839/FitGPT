@@ -22615,3 +22615,81 @@ a:focus-visible {
   border-color: rgba(255, 213, 79, 0.3);
   color: #ffe7a3;
 }
+
+.dashFirstRunWelcome {
+  min-height: min(680px, 72vh);
+  justify-content: center;
+}
+
+.dashFirstRunLogo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  margin: 0 auto 12px;
+}
+
+.dashDemoOutfitLabel {
+  margin-top: 18px;
+  font-weight: 750;
+  color: var(--text-muted);
+}
+
+.dashDemoOutfitGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 12px;
+  width: min(720px, 100%);
+  margin: 16px auto 22px;
+}
+
+.dashDemoOutfitTile {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--card);
+  text-align: left;
+}
+
+.dashDemoOutfitSwatch {
+  height: 84px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.dashDemoOutfitName {
+  font-weight: 800;
+}
+
+.dashDemoOutfitMeta {
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  margin-top: 2px;
+}
+
+.wardrobeEmptyFirstRun {
+  min-height: 360px;
+}
+
+.wardrobeEmptyFirstRun .wardrobeEmptyIcon {
+  font-size: 64px;
+  width: 96px;
+  height: 96px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--accent-rgb), 0.1);
+  border-radius: 50%;
+}
+
+.wardrobeEmptyFirstRun .wardrobeEmptyBtn {
+  margin-top: 8px;
+  padding: 12px 18px;
+  font-size: 1rem;
+}
+
+@media (max-width: 720px) {
+  .dashDemoOutfitGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -2481,19 +2481,29 @@ export default function Wardrobe() {
         ))}
 
         {!filtered.length ? (
-          <div className="wardrobeEmpty">
+          <div className={tab === "active" && activeItems.length === 0 ? "wardrobeEmpty wardrobeEmptyFirstRun" : "wardrobeEmpty"}>
             <div className="wardrobeEmptyIcon">{tab === "archived" ? "\u2001" : tab === "favorites" ? "\u2661" : "\uD83D\uDC54"}</div>
-            <div className="wardrobeEmptyTitle">{tab === "archived" ? "No archived items yet" : tab === "favorites" ? "No favorites yet" : "Nothing matches right now"}</div>
+            <div className="wardrobeEmptyTitle">
+              {tab === "active" && activeItems.length === 0
+                ? "Your wardrobe is empty"
+                : tab === "archived"
+                  ? "No archived items yet"
+                  : tab === "favorites"
+                    ? "No favorites yet"
+                    : "Nothing matches right now"}
+            </div>
             <div className="wardrobeEmptySub">
-              {tab === "favorites"
+              {tab === "active" && activeItems.length === 0
+                ? "Start by adding a few items you wear often — a top, bottoms, and shoes is all you need."
+                : tab === "favorites"
                 ? "Favorite items appear here."
                 : tab === "archived"
                   ? "Archived items appear here."
                   : "Try another search or add an item."}
             </div>
             {tab === "active" ? (
-              <button type="button" className="btn primary wardrobeEmptyBtn" onClick={() => setShowUploadPanel(true)}>
-                Add wardrobe item
+              <button type="button" className="btn primary wardrobeEmptyBtn" onClick={activeItems.length === 0 ? openPicker : () => setShowUploadPanel(true)}>
+                {activeItems.length === 0 ? "Add your first item" : "Add wardrobe item"}
               </button>
             ) : null}
           </div>
