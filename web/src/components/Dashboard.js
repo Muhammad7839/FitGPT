@@ -1878,6 +1878,36 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     }
   };
 
+  const handleShareOutfit = async (outfit, optionIndex = selectedIdx ?? 0) => {
+    const pieces = Array.isArray(outfit) ? outfit : [];
+    if (!pieces.length) return;
+    const itemNames = pieces.map((item) => item?.name).filter(Boolean);
+    const weather = (weatherCategory || weatherPresentation?.status || "mild").toString().trim().toLowerCase();
+    const text = `My outfit today from FitGPT: ${itemNames.join(", ")}. Styled for ${weather} weather. Try it at fitgpt.tech`;
+    const title = `FitGPT outfit ${optionIndex + 1}`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text, url: "https://www.fitgpt.tech" });
+        setSaveMsg("Shared!");
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(text);
+        setSaveMsg("Copied to clipboard");
+      }
+    } catch {
+      if (navigator.clipboard) {
+        try {
+          await navigator.clipboard.writeText(text);
+          setSaveMsg("Copied to clipboard");
+        } catch {
+          setSaveMsg("Could not share outfit.");
+        }
+      }
+    } finally {
+      window.setTimeout(() => setSaveMsg(""), 2500);
+    }
+  };
+
   return (
     <div className={"onboarding onboardingPage dashPage" + (isEditorial ? " dashPageEditorial" : "")}>
       {verificationRequired ? (
@@ -2262,19 +2292,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
               <button
                 type="button"
                 className="dashRecActionBtn dashRecActionSecondary"
-                onClick={() => {
-                  const outfit = outfits[selectedIdx ?? 0] || outfits[0] || [];
-                  if (!outfit.length) return;
-                  const lines = outfit.map((item) => `${item.name}${item.color ? ` (${item.color})` : ""}`);
-                  const text = `My FitGPT Outfit:\n${lines.join("\n")}`;
-                  navigator.clipboard.writeText(text).then(() => {
-                    setSaveMsg("Outfit copied to clipboard!");
-                    window.setTimeout(() => setSaveMsg(""), 2500);
-                  }).catch(() => {
-                    setSaveMsg("Could not copy to clipboard.");
-                    window.setTimeout(() => setSaveMsg(""), 2500);
-                  });
-                }}
+                onClick={() => handleShareOutfit(outfits[selectedIdx ?? 0] || outfits[0] || [], selectedIdx ?? 0)}
                 aria-label="Share outfit"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -2474,6 +2492,25 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                       <div className="dashFeedbackBtns">
                         <button
                           type="button"
+                          className="dashFeedbackBtn dashShareOutfitBtn"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleShareOutfit(outfit, idx);
+                          }}
+                          title="Share outfit"
+                          aria-label={`Share outfit option ${idx + 1}`}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <circle cx="18" cy="5" r="3" />
+                            <circle cx="6" cy="12" r="3" />
+                            <circle cx="18" cy="19" r="3" />
+                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                          </svg>
+                          <span>Share</span>
+                        </button>
+                        <button
+                          type="button"
                           className="dashFeedbackBtn dashFeedbackLike"
                           onClick={(event) => {
                             event.stopPropagation();
@@ -2541,6 +2578,25 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                         <span className="styledSaveBtnText">{label}</span>
                       </button>
                       <div className="dashFeedbackBtns">
+                        <button
+                          type="button"
+                          className="dashFeedbackBtn dashShareOutfitBtn"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleShareOutfit(outfit, idx);
+                          }}
+                          title="Share outfit"
+                          aria-label={`Share outfit option ${idx + 1}`}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <circle cx="18" cy="5" r="3" />
+                            <circle cx="6" cy="12" r="3" />
+                            <circle cx="18" cy="19" r="3" />
+                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                          </svg>
+                          <span>Share</span>
+                        </button>
                         <button
                           type="button"
                           className={"dashFeedbackBtn dashFeedbackLike" + (feedbackSignal === FEEDBACK_SIGNALS.LIKE ? " active" : "")}

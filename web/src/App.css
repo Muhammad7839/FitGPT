@@ -22733,6 +22733,14 @@ a:focus-visible {
   to { transform: scaleX(0); }
 }
 
+.dashShareOutfitBtn {
+  opacity: 0.82;
+}
+
+.dashShareOutfitBtn:hover {
+  opacity: 1;
+}
+
 @media (max-width: 720px) {
   .dashDemoOutfitGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
