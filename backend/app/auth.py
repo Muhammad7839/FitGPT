@@ -10,7 +10,7 @@ from jwt.exceptions import InvalidTokenError
 from sqlalchemy.orm import Session
 
 from app import models
-from app.config import SECRET_KEY, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
+from app.config import SECRET_KEY, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS
 from app.database.database import get_db
 
 
@@ -92,6 +92,22 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=JWT_ALGORITHM)
     return encoded_jwt
+
+
+def create_refresh_token(data: dict) -> str:
+    """Create a signed JWT refresh token for issuing new access tokens."""
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(minutes=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+
+def decode_token(token: str) -> dict:
+    """Decode a signed JWT or raise a 401 credentials error."""
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=[JWT_ALGORITHM])
+    except InvalidTokenError:
+        raise _credentials_exception()
 
 
 def get_optional_user(

@@ -83,6 +83,7 @@ DATABASE_URL = _default_sqlite_url("fitgpt.db") if FORCE_LOCAL_DATABASE else get
 SECRET_KEY = get_env("SECRET_KEY", "dev-only-change-me")
 JWT_ALGORITHM = get_env("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = get_int_env("ACCESS_TOKEN_EXPIRE_MINUTES", 60)
+REFRESH_TOKEN_EXPIRE_DAYS = get_int_env("REFRESH_TOKEN_EXPIRE_DAYS", 30)
 GOOGLE_CLIENT_ID = resolve_google_client_id()
 RESET_TOKEN_EXPIRE_MINUTES = get_int_env("RESET_TOKEN_EXPIRE_MINUTES", 30)
 ENVIRONMENT = get_env("ENVIRONMENT", "development").strip().lower()

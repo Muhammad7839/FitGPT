@@ -182,10 +182,15 @@ class UserProfileUpdate(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    refresh_token: Optional[str] = None
 
 
 class TokenData(BaseModel):
     user_id: Optional[int] = None
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(min_length=1, max_length=4096)
 
 
 class GoogleLoginRequest(BaseModel):

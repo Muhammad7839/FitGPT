@@ -1,6 +1,7 @@
 import {
     apiFetch,
     setToken,
+    setRefreshToken,
     clearToken,
     markSignedInEmail,
     markGuest,
@@ -43,6 +44,25 @@ import {
   
     return "";
   }
+
+  function extractRefreshToken(data) {
+    if (!data || typeof data === "string") return "";
+
+    const candidates = [
+      data.refresh_token,
+      data.refreshToken,
+      data.refresh,
+    ];
+
+    for (const c of candidates) {
+      if (typeof c === "string" && c.trim()) return c.trim();
+    }
+
+    if (typeof data?.data?.refresh_token === "string") return data.data.refresh_token.trim();
+    if (typeof data?.data?.refreshToken === "string") return data.data.refreshToken.trim();
+
+    return "";
+  }
   
   function isNotFoundError(err) {
     return err && (err.status === 404 || err.status === 405);
@@ -74,12 +94,15 @@ import {
     );
   
     const token = extractToken(data);
+    const refreshToken = extractRefreshToken(data);
   
     if (!USE_COOKIES) {
       if (!token) throw new Error("Login succeeded but no token was returned by the API.");
       setToken(token);
+      setRefreshToken(refreshToken);
     } else {
       if (token) setToken(token);
+      if (refreshToken) setRefreshToken(refreshToken);
     }
   
     markSignedInEmail();
@@ -122,12 +145,15 @@ import {
     );
 
     const token = extractToken(data);
+    const refreshToken = extractRefreshToken(data);
 
     if (!USE_COOKIES) {
       if (!token) throw new Error("Google login succeeded but no token was returned.");
       setToken(token);
+      setRefreshToken(refreshToken);
     } else {
       if (token) setToken(token);
+      if (refreshToken) setRefreshToken(refreshToken);
     }
 
     markSignedInEmail();
@@ -151,4 +177,14 @@ import {
       AUTH_ENDPOINTS_FALLBACK.me,
       { method: "GET" }
     );
+  }
+
+  export async function refreshToken(refreshToken) {
+    if (!hasApi()) throw new Error("API base URL is missing.");
+
+    return apiFetch("/auth/refresh", {
+      method: "POST",
+      body: JSON.stringify({ refresh_token: refreshToken }),
+      skipAuthRefresh: true,
+    });
   }

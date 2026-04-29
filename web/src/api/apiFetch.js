@@ -1,6 +1,7 @@
 import { TOKEN_KEY, AUTH_MODE_KEY } from "../utils/constants";
 
 const REQUEST_TIMEOUT_MS = 15000;
+const REFRESH_TOKEN_KEY = "fitgpt_refresh_token_v1";
 
 function isPrivateNetworkHost(hostname) {
   return /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
@@ -48,6 +49,10 @@ function getToken() {
   );
 }
 
+function getRefreshToken() {
+  return localStorage.getItem(REFRESH_TOKEN_KEY) || "";
+}
+
 export function hasStoredToken() {
   return Boolean(getToken());
 }
@@ -61,15 +66,26 @@ export function setToken(token) {
   if (!t) {
     localStorage.removeItem("access_token");
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
     return;
   }
   localStorage.setItem("access_token", t);
   localStorage.setItem(TOKEN_KEY, t);
 }
 
+export function setRefreshToken(token) {
+  const t = (token || "").toString().trim();
+  if (!t) {
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    return;
+  }
+  localStorage.setItem(REFRESH_TOKEN_KEY, t);
+}
+
 export function clearToken() {
   localStorage.removeItem("access_token");
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
 function setAuthMode(mode) {
@@ -109,8 +125,43 @@ async function readErrorMessage(res) {
   return `Request failed (${res.status})`;
 }
 
+async function refreshAccessToken() {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+
+  try {
+    const res = await fetch(buildUrl("/auth/refresh"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (!res.ok) return false;
+    const contentType = res.headers.get("content-type") || "";
+    const data = contentType.includes("application/json") ? await res.json() : null;
+    const accessToken = (data?.access_token || data?.token || "").toString().trim();
+    if (!accessToken) return false;
+    setToken(accessToken);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function handleUnauthorized() {
+  if (!USE_COOKIES) clearToken();
+  setAuthMode("guest");
+  if (onUnauthorized) onUnauthorized();
+  if (typeof window !== "undefined" && window.location?.pathname !== "/login") {
+    try {
+      window.location.assign("/login");
+    } catch {}
+  }
+}
+
 export async function apiFetch(path, options = {}) {
-  const { timeoutMs, ...fetchOptions } = options;
+  const { timeoutMs, skipAuthRefresh = false, ...fetchOptions } = options;
   const url = buildUrl(path);
   const token = getToken();
   const headers = new Headers(fetchOptions.headers || {});
@@ -183,9 +234,11 @@ export async function apiFetch(path, options = {}) {
 
   if (!res.ok) {
     if (res.status === 401) {
-      if (!USE_COOKIES) clearToken();
-      setAuthMode("guest");
-      if (onUnauthorized) onUnauthorized();
+      const canRefresh = !USE_COOKIES && !skipAuthRefresh && path !== "/auth/refresh";
+      if (canRefresh && await refreshAccessToken()) {
+        return apiFetch(path, { ...options, skipAuthRefresh: true });
+      }
+      handleUnauthorized();
     }
 
     const msg = await readErrorMessage(res);

@@ -20,6 +20,8 @@ from app.ai.service import AiService, RecommendationContext as AiRecommendationC
 from app.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     create_access_token,
+    create_refresh_token,
+    decode_token,
     get_current_user,
     get_optional_user,
     verify_password,
@@ -644,7 +646,15 @@ def _login_with_credentials(db: Session, *, email: str, password: str) -> schema
         data={"sub": str(user.id)},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    refresh_token = create_refresh_token(data={"sub": str(user.id)})
+    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
+
+
+def _create_access_token_for_user(user: models.User) -> str:
+    return create_access_token(
+        data={"sub": str(user.id)},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
 
 
 # =============================
@@ -753,12 +763,13 @@ def login_with_google(
         data={"sub": str(user.id)},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
+    refresh_token = create_refresh_token(data={"sub": str(user.id)})
     logger.info(
         "GOOGLE_AUTH attempt_id=%s response status returned=%s",
         attempt_id,
         status.HTTP_200_OK,
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
 
 @router.post("/auth/google/callback", response_model=schemas.Token)
@@ -769,6 +780,33 @@ def login_with_google_alias(
 ):
     """Compatibility alias for web clients expecting /auth/google/callback."""
     return login_with_google(payload=payload, request=request, db=db)
+
+
+@router.post("/auth/refresh", response_model=schemas.Token)
+def refresh_access_token(
+    payload: schemas.RefreshTokenRequest,
+    db: Session = Depends(get_db),
+):
+    decoded = decode_token(payload.refresh_token)
+    user_id = decoded.get("sub")
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return {"access_token": _create_access_token_for_user(user), "token_type": "bearer"}
 
 
 @router.post("/forgot-password", response_model=schemas.ForgotPasswordResponse)
