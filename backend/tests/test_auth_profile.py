@@ -58,6 +58,46 @@ def test_auth_alias_register_login_and_me_success(client):
     assert me.json()["email"] == "alias-auth@example.com"
 
 
+def test_email_verification_flow_and_resend_rate_limit(client, monkeypatch):
+    sent_tokens = []
+
+    def fake_send_verification_email(email, token):
+        sent_tokens.append((email, token))
+
+    monkeypatch.setattr("app.routes.send_verification_email", fake_send_verification_email)
+
+    register = client.post(
+        "/register",
+        json={"email": "verify@example.com", "password": "Testpass9x"},
+    )
+    assert register.status_code == 200
+    assert register.json()["is_verified"] is False
+    assert sent_tokens[0][0] == "verify@example.com"
+
+    login = client.post(
+        "/login",
+        data={"username": "verify@example.com", "password": "Testpass9x"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert login.status_code == 200
+    assert login.json()["is_verified"] is False
+    auth = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    for _ in range(3):
+        resend = client.post("/auth/resend-verification", headers=auth)
+        assert resend.status_code == 200
+    blocked = client.post("/auth/resend-verification", headers=auth)
+    assert blocked.status_code == 429
+
+    verify = client.get("/auth/verify-email", params={"token": sent_tokens[-1][1]})
+    assert verify.status_code == 200
+    assert verify.json()["message"] == "Email verified successfully"
+
+    me = client.get("/auth/me", headers=auth)
+    assert me.status_code == 200
+    assert me.json()["is_verified"] is True
+
+
 def test_register_returns_400_when_uniqueness_conflict_happens_at_commit(client, monkeypatch):
     monkeypatch.setattr("app.routes.crud.get_user_by_email", lambda *_args, **_kwargs: None)
 

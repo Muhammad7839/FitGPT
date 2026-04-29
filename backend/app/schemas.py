@@ -95,6 +95,7 @@ class UserResponse(BaseModel):
     gender: Optional[str] = None
     height_cm: Optional[int] = None
     onboarding_complete: bool
+    is_verified: Optional[bool] = None
 
     @field_validator("gender", mode="before")
     @classmethod
@@ -183,6 +184,7 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     refresh_token: Optional[str] = None
+    is_verified: Optional[bool] = None
 
 
 class TokenData(BaseModel):

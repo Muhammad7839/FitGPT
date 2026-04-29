@@ -6,6 +6,7 @@ import { useTheme } from "../App";
 import { useAuth } from "../auth/AuthProvider";
 import { savedOutfitsApi } from "../api/savedOutfitsApi";
 import { outfitHistoryApi } from "../api/outfitHistoryApi";
+import { resendVerificationEmail } from "../api/authApi";
 import useWardrobe from "../hooks/useWardrobe";
 import { fetchAIRecommendations } from "../api/recommendationsApi";
 import { submitRecommendationFeedback } from "../api/recommendationFeedbackApi";
@@ -539,7 +540,7 @@ function pickEditorialHeroImage(outfit) {
 
 export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, verificationRequired, dismissVerificationBanner } = useAuth();
   const { theme } = useTheme() || {};
   // Catches "editorial" and any sibling like "editorial-dark" so the hero,
   // insight strip, and dominant-selected layout render across the family.
@@ -1846,8 +1847,39 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const editorialRotation = isEditorial ? buildRotationInsight(historyEntries) : null;
   const editorialTomorrow = isEditorial ? buildTomorrowInsight(editorialPlanned) : null;
 
+  const handleResendVerification = async () => {
+    try {
+      await resendVerificationEmail();
+      setSaveMsg("Verification email sent.");
+    } catch (error) {
+      setSaveMsg(error?.message || "Could not resend verification email.");
+    } finally {
+      window.setTimeout(() => setSaveMsg(""), 2500);
+    }
+  };
+
   return (
     <div className={"onboarding onboardingPage dashPage" + (isEditorial ? " dashPageEditorial" : "")}>
+      {verificationRequired ? (
+        <div className="verificationBanner" role="status">
+          <div className="verificationBannerText">
+            Please verify your email address. Check your inbox or resend the verification email.
+          </div>
+          <div className="verificationBannerActions">
+            <button type="button" className="verificationBannerBtn" onClick={handleResendVerification}>
+              Resend
+            </button>
+            <button
+              type="button"
+              className="verificationBannerDismiss"
+              onClick={dismissVerificationBanner}
+              aria-label="Dismiss verification reminder"
+            >
+              x
+            </button>
+          </div>
+        </div>
+      ) : null}
       {isEditorial ? (
         <header className="editorialHero">
           <div className="editorialHeroLeft">

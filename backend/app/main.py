@@ -113,8 +113,14 @@ def _ensure_runtime_schema() -> None:
         user_alters.append("ALTER TABLE users ADD COLUMN height_cm INTEGER")
     if "is_active" not in user_columns:
         user_alters.append("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1")
+    if "is_verified" not in user_columns:
+        user_alters.append("ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 0")
     if "onboarding_complete" not in user_columns:
         user_alters.append("ALTER TABLE users ADD COLUMN onboarding_complete BOOLEAN DEFAULT 0")
+    if "verification_token" not in user_columns:
+        user_alters.append("ALTER TABLE users ADD COLUMN verification_token VARCHAR")
+    if "verification_token_expires_at" not in user_columns:
+        user_alters.append("ALTER TABLE users ADD COLUMN verification_token_expires_at DATETIME")
     if "reset_token_hash" not in user_columns:
         user_alters.append("ALTER TABLE users ADD COLUMN reset_token_hash VARCHAR")
     if "reset_token_expires_at" not in user_columns:

@@ -1,6 +1,7 @@
 """API route definitions for auth, wardrobe, profile, planning, and recommendation flows."""
 
 import logging
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 from uuid import uuid4
@@ -26,7 +27,7 @@ from app.auth import (
 )
 from app.config import EXPOSE_RESET_TOKEN_IN_RESPONSE, MAX_UPLOAD_IMAGE_BYTES
 from app.database.database import get_db
-from app.email import send_password_reset_email
+from app.email import send_password_reset_email, send_verification_email
 from app.google_oauth import GoogleTokenValidationError, verify_google_id_token
 from app.receipt_ocr import extract_clothing_items as extract_receipt_clothing
 from app.recommendation_explanations import RecommendationContext, build_recommendation_explanation
@@ -55,6 +56,8 @@ LOGIN_IP_LIMIT = 15
 # Register rate limiting: max 10 new accounts per IP per hour
 REGISTER_WINDOW_SECONDS = 60 * 60
 REGISTER_IP_LIMIT = 10
+VERIFICATION_RESEND_WINDOW_SECONDS = 60 * 60
+VERIFICATION_RESEND_EMAIL_LIMIT = 3
 RATE_LIMIT_PRUNE_SECONDS = 60 * 60
 
 
@@ -80,6 +83,20 @@ def _enforce_register_rate_limit(request: Request, db: Session) -> None:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many registration attempts. Please try again later.",
+        )
+
+
+def _enforce_verification_resend_rate_limit(email: str, db: Session) -> None:
+    hits = _record_rate_limit_hit(
+        db,
+        crud.normalize_email(email),
+        "verification_resend_email",
+        VERIFICATION_RESEND_WINDOW_SECONDS,
+    )
+    if hits > VERIFICATION_RESEND_EMAIL_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many verification email requests. Please try again later.",
         )
 
 
@@ -641,7 +658,12 @@ def _login_with_credentials(db: Session, *, email: str, password: str) -> schema
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
-    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "is_verified": user.is_verified,
+    }
 
 
 def _create_access_token_for_user(user: models.User) -> str:
@@ -662,10 +684,14 @@ def register_user(user: schemas.UserCreate, request: Request, db: Session = Depe
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     try:
-        return crud.create_user(db, user)
+        created = crud.create_user(db, user)
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Email already registered") from exc
+    token = secrets.token_urlsafe(32)
+    crud.set_verification_token(db, created, token, datetime.utcnow() + timedelta(hours=24))
+    send_verification_email(created.email, token)
+    return created
 
 
 @router.post("/auth/register", response_model=schemas.UserResponse)
@@ -763,7 +789,12 @@ def login_with_google(
         attempt_id,
         status.HTTP_200_OK,
     )
-    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "is_verified": user.is_verified,
+    }
 
 
 @router.post("/auth/google/callback", response_model=schemas.Token)
@@ -800,7 +831,36 @@ def refresh_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return {"access_token": _create_access_token_for_user(user), "token_type": "bearer"}
+    return {
+        "access_token": _create_access_token_for_user(user),
+        "token_type": "bearer",
+        "is_verified": user.is_verified,
+    }
+
+
+@router.get("/auth/verify-email")
+def verify_email(token: str = Query(..., min_length=20, max_length=255), db: Session = Depends(get_db)):
+    user = crud.verify_user_by_token(db, token)
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+    logger.info("Verified email for user_id=%s", user.id)
+    return {"message": "Email verified successfully"}
+
+
+@router.post("/auth/resend-verification")
+def resend_verification_email(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if current_user.is_verified is True:
+        return {"message": "Email already verified"}
+
+    _enforce_verification_resend_rate_limit(current_user.email, db)
+    token = secrets.token_urlsafe(32)
+    crud.set_verification_token(db, current_user, token, datetime.utcnow() + timedelta(hours=24))
+    send_verification_email(current_user.email, token)
+    logger.info("Resent verification email user_id=%s", current_user.id)
+    return {"message": "Verification email sent"}
 
 
 @router.post("/forgot-password", response_model=schemas.ForgotPasswordResponse)

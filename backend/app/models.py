@@ -31,7 +31,10 @@ class User(Base):
     height_cm = Column(Integer, nullable=True)
 
     is_active = Column(Boolean, default=True)
+    is_verified = Column(Boolean, default=False)
     onboarding_complete = Column(Boolean, default=False)
+    verification_token = Column(String, nullable=True)
+    verification_token_expires_at = Column(DateTime, nullable=True)
     reset_token_hash = Column(String, nullable=True)
     reset_token_expires_at = Column(Integer, nullable=True)
 

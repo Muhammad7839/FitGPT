@@ -22561,3 +22561,57 @@ a:focus-visible {
     justify-content: center;
   }
 }
+
+.verificationBanner {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(209, 154, 0, 0.3);
+  border-radius: 8px;
+  background: #fff7d6;
+  color: #4a3500;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 8px 24px rgba(82, 57, 0, 0.08);
+}
+
+.verificationBannerText {
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.verificationBannerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.verificationBannerBtn,
+.verificationBannerDismiss {
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.verificationBannerBtn {
+  padding: 8px 12px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.verificationBannerDismiss {
+  width: 32px;
+  height: 32px;
+  background: rgba(74, 53, 0, 0.08);
+  color: inherit;
+}
+
+[data-theme="dark"] .verificationBanner {
+  background: rgba(255, 213, 79, 0.12);
+  border-color: rgba(255, 213, 79, 0.3);
+  color: #ffe7a3;
+}

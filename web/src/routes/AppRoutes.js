@@ -27,6 +27,7 @@ import Login from "../components/Login";
 import Signup from "../components/Signup";
 import ForgotPassword from "../components/ForgotPassword";
 import ResetPassword from "../components/ResetPassword";
+import VerifyEmail from "../components/VerifyEmail";
 import Onboarding from "../components/onboarding/Onboarding";
 import Dashboard from "../components/Dashboard";
 import Wardrobe from "../components/Wardrobe";
@@ -254,6 +255,7 @@ export default function AppRoutes() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
 
           <Route
             path="/dashboard"

@@ -131,6 +131,17 @@ import {
   export async function registerWithEmail(email, password) {
     return register(email, password);
   }
+
+  export async function verifyEmail(token) {
+    if (!hasApi()) throw new Error("API base URL is missing.");
+    const encoded = encodeURIComponent((token || "").toString().trim());
+    return apiFetch(`/auth/verify-email?token=${encoded}`, { method: "GET" });
+  }
+
+  export async function resendVerificationEmail() {
+    if (!hasApi()) throw new Error("API base URL is missing.");
+    return apiFetch("/auth/resend-verification", { method: "POST" });
+  }
   
   export async function loginWithGoogle(idToken) {
     if (!hasApi()) throw new Error("API base URL is missing.");

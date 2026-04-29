@@ -68,10 +68,13 @@ def get_or_create_google_user(db: Session, email: str, full_name: Optional[str])
     normalized_email = normalize_email(email)
     existing_user = get_user_by_email(db, normalized_email)
     if existing_user:
+        existing_user.is_verified = True
+        existing_user.verification_token = None
+        existing_user.verification_token_expires_at = None
         if full_name and not existing_user.full_name:
             existing_user.full_name = full_name
-            db.commit()
-            db.refresh(existing_user)
+        db.commit()
+        db.refresh(existing_user)
         return existing_user
 
     generated_password = uuid.uuid4().hex
@@ -79,6 +82,7 @@ def get_or_create_google_user(db: Session, email: str, full_name: Optional[str])
         email=normalized_email,
         full_name=full_name,
         hashed_password=hash_password(generated_password),
+        is_verified=True,
     )
     _apply_default_preferences(db_user)
     db.add(db_user)
@@ -131,6 +135,31 @@ def reset_user_password(db: Session, db_user: models.User, new_password: str):
     db.commit()
     db.refresh(db_user)
     return db_user
+
+
+def set_verification_token(db: Session, user: models.User, token: str, expires_at: datetime):
+    user.verification_token = token
+    user.verification_token_expires_at = expires_at
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def verify_user_by_token(db: Session, token: str):
+    now = datetime.utcnow()
+    user = db.query(models.User).filter(
+        models.User.verification_token == token,
+        models.User.verification_token_expires_at.is_not(None),
+        models.User.verification_token_expires_at >= now,
+    ).first()
+    if not user:
+        return None
+    user.is_verified = True
+    user.verification_token = None
+    user.verification_token_expires_at = None
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 def _normalize_optional_text(value: Optional[str]) -> Optional[str]:
