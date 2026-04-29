@@ -1,5 +1,36 @@
 import logging
 
+from app.config import ENVIRONMENT, SENTRY_DSN
+
+
+def _scrub_sentry_event(value):
+    sensitive_keys = {"password", "token", "access_token", "refresh_token", "image_url"}
+    if isinstance(value, dict):
+        return {
+            key: "[Filtered]" if str(key).lower() in sensitive_keys else _scrub_sentry_event(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_scrub_sentry_event(item) for item in value]
+    return value
+
+
+def _before_sentry_send(event, hint):
+    return _scrub_sentry_event(event)
+
+
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[FastApiIntegration()],
+        traces_sample_rate=0.1,
+        environment=ENVIRONMENT,
+        before_send=_before_sentry_send,
+    )
+
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response

@@ -108,6 +108,7 @@ GROQ_VISION_MODEL = get_env("GROQ_VISION_MODEL", "")
 AI_TIMEOUT_SECONDS = get_float_env("AI_TIMEOUT_SECONDS", 12)
 AI_MAX_TOKENS = get_int_env("AI_MAX_TOKENS", 600)
 AI_TEMPERATURE = get_float_env("AI_TEMPERATURE", 0.72)
+SENTRY_DSN = get_env("SENTRY_DSN", "")
 
 if ENVIRONMENT in {"prod", "production"} and SECRET_KEY == "dev-only-change-me":
     raise RuntimeError("SECRET_KEY must be set in production")
