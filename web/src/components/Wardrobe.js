@@ -6,7 +6,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { loadWardrobe, saveWardrobe, loadAnswers, readSeasonalMode, writeSeasonalMode } from "../utils/userStorage";
 import { preloadModel } from "../utils/classifyClothing";
 import { detectDuplicateFindings, loadIgnoredDuplicateKeys, mergeDuplicateItems, saveIgnoredDuplicateKeys } from "../utils/duplicateDetection";
-import { OPEN_ADD_ITEM_FLAG } from "../utils/constants";
+import { EVT_WARDROBE_CHANGED, OPEN_ADD_ITEM_FLAG } from "../utils/constants";
 import { makeId, normalizeFitTag, fileToDataUrl, isNetworkError, onTiltMove, onTiltLeave } from "../utils/helpers";
 import { generateItemTagSuggestions } from "../utils/tagSuggestions";
 import { getCurrentSeason, getSeasonLabel, getSeasonalWardrobeLabel, sortItemsBySeasonalRelevance, summarizeSeasonalCollection } from "../utils/seasonalWardrobe";
@@ -360,6 +360,8 @@ export default function Wardrobe() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [undoDelete, setUndoDelete] = useState(null);
+  const undoDeleteTimerRef = useRef(null);
 
   const [addOpen, setAddOpen] = useState(false);
   const [pendingPreview, setPendingPreview] = useState("");
@@ -1648,40 +1650,63 @@ export default function Wardrobe() {
 
   const confirmDelete = async () => {
     if (!pendingDeleteId) return;
-    setIsDeleting(true);
+    const index = items.findIndex((x) => x.id === pendingDeleteId);
+    const item = index >= 0 ? items[index] : null;
+    if (!item) return;
 
-    const removeLocally = () => {
-      setItemsAndSave((prev) => prev.filter((x) => x.id !== pendingDeleteId));
-      setIsDeleting(false);
-      setConfirmOpen(false);
-      setPendingDeleteId(null);
-    };
-
-    try {
-      if (!effectiveSignedIn) {
-        removeLocally();
-        setToast(backendOffline ? "Deleted (demo)." : "Deleted (guest mode).");
-        toastTimeouts.set(() => setToast(""), 2000);
-        return;
-      }
-
-      await wardrobeApi.deleteItem(pendingDeleteId);
-      removeLocally();
-      setToast("Deleted.");
-      toastTimeouts.set(() => setToast(""), 2000);
-    } catch (e) {
-      removeLocally();
-
-      if (effectiveSignedIn && isNetworkError(e)) {
-        setBackendOffline(true);
-        setToast("Backend offline. Deleted locally.");
-      } else {
-        setToast("Deleted locally.");
-      }
-      toastTimeouts.set(() => setToast(""), 2200);
-      toastTimeouts.set(() => setToast(""), 2500);
+    if (undoDeleteTimerRef.current) {
+      window.clearTimeout(undoDeleteTimerRef.current);
+      undoDeleteTimerRef.current = null;
     }
+
+    setIsDeleting(false);
+    setConfirmOpen(false);
+    setPendingDeleteId(null);
+    setToast("");
+    setItemsAndSave((prev) => prev.filter((x) => x.id !== item.id));
+    setUndoDelete({ item, index, effectiveSignedInAtDelete: effectiveSignedIn, createdAt: Date.now() });
+
+    undoDeleteTimerRef.current = window.setTimeout(async () => {
+      undoDeleteTimerRef.current = null;
+      setUndoDelete(null);
+      try {
+        if (effectiveSignedIn) await wardrobeApi.deleteItem(item.id);
+        window.dispatchEvent(new Event(EVT_WARDROBE_CHANGED));
+      } catch (e) {
+        if (effectiveSignedIn && isNetworkError(e)) setBackendOffline(true);
+        setItemsAndSave((prev) => {
+          if (prev.some((x) => x.id === item.id)) return prev;
+          const next = [...prev];
+          next.splice(Math.min(index, next.length), 0, item);
+          return next;
+        });
+        setToast("Couldn't delete item. It's been restored.");
+        toastTimeouts.set(() => setToast(""), 2800);
+      }
+    }, 5000);
   };
+
+  const undoPendingDelete = () => {
+    if (!undoDelete) return;
+    if (undoDeleteTimerRef.current) {
+      window.clearTimeout(undoDeleteTimerRef.current);
+      undoDeleteTimerRef.current = null;
+    }
+    const { item, index } = undoDelete;
+    setItemsAndSave((prev) => {
+      if (prev.some((x) => x.id === item.id)) return prev;
+      const next = [...prev];
+      next.splice(Math.min(index, next.length), 0, item);
+      return next;
+    });
+    setUndoDelete(null);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (undoDeleteTimerRef.current) window.clearTimeout(undoDeleteTimerRef.current);
+    };
+  }, []);
 
   const archiveItem = async (id) => {
     const current = items.find((x) => x.id === id);
@@ -2700,7 +2725,15 @@ export default function Wardrobe() {
         document.body
       ) : null}
 
-      {toast ? <div className="wardrobeToast">{toast}</div> : null}
+      {undoDelete ? (
+        <div className="wardrobeUndoToast" role="status">
+          <div className="wardrobeUndoToastContent">
+            <span>Item deleted.</span>
+            <button type="button" onClick={undoPendingDelete}>Undo</button>
+          </div>
+          <div className="wardrobeUndoToastBar" />
+        </div>
+      ) : toast ? <div className="wardrobeToast">{toast}</div> : null}
 
     </div>
   );
