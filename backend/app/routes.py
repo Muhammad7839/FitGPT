@@ -1,7 +1,6 @@
 """API route definitions for auth, wardrobe, profile, planning, and recommendation flows."""
 
 import logging
-import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -50,51 +49,36 @@ ai_service = AiService()
 FORGOT_PASSWORD_WINDOW_SECONDS = 60 * 60
 FORGOT_PASSWORD_EMAIL_LIMIT = 5
 FORGOT_PASSWORD_IP_LIMIT = 20
-_forgot_password_email_hits: dict[str, list[float]] = {}
-_forgot_password_ip_hits: dict[str, list[float]] = {}
-_forgot_password_lock = threading.Lock()
 
 # Login rate limiting: max 15 attempts per IP per 15 minutes
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_IP_LIMIT = 15
-_login_ip_hits: dict[str, list[float]] = {}
-_login_lock = threading.Lock()
 
 # Register rate limiting: max 10 new accounts per IP per hour
 REGISTER_WINDOW_SECONDS = 60 * 60
 REGISTER_IP_LIMIT = 10
-_register_ip_hits: dict[str, list[float]] = {}
-_register_lock = threading.Lock()
+RATE_LIMIT_PRUNE_SECONDS = 60 * 60
 
 
 def _reset_forgot_password_throttle_state() -> None:
-    with _forgot_password_lock:
-        _forgot_password_email_hits.clear()
-        _forgot_password_ip_hits.clear()
+    """Compatibility hook for older tests; DB-backed rate limits reset with the test DB."""
+    return None
 
 
-def _enforce_login_rate_limit(request: Request) -> None:
+def _enforce_login_rate_limit(request: Request, db: Session) -> None:
     ip = _get_request_ip(request)
-    now = datetime.utcnow().timestamp()
-    with _login_lock:
-        hits = [t for t in _login_ip_hits.get(ip, []) if now - t < LOGIN_WINDOW_SECONDS]
-        hits.append(now)
-        _login_ip_hits[ip] = hits
-    if len(hits) > LOGIN_IP_LIMIT:
+    hits = _record_rate_limit_hit(db, ip, "login_ip", LOGIN_WINDOW_SECONDS)
+    if hits > LOGIN_IP_LIMIT:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many login attempts. Please try again later.",
         )
 
 
-def _enforce_register_rate_limit(request: Request) -> None:
+def _enforce_register_rate_limit(request: Request, db: Session) -> None:
     ip = _get_request_ip(request)
-    now = datetime.utcnow().timestamp()
-    with _register_lock:
-        hits = [t for t in _register_ip_hits.get(ip, []) if now - t < REGISTER_WINDOW_SECONDS]
-        hits.append(now)
-        _register_ip_hits[ip] = hits
-    if len(hits) > REGISTER_IP_LIMIT:
+    hits = _record_rate_limit_hit(db, ip, "register_ip", REGISTER_WINDOW_SECONDS)
+    if hits > REGISTER_IP_LIMIT:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many registration attempts. Please try again later.",
@@ -108,34 +92,51 @@ def _get_request_ip(request: Request) -> str:
     return request.client.host if request.client and request.client.host else "unknown"
 
 
-def _record_rate_limit_hit(bucket: dict[str, list[float]], key: str, now: float) -> int:
-    recent_hits = [value for value in bucket.get(key, []) if now - value < FORGOT_PASSWORD_WINDOW_SECONDS]
-    recent_hits.append(now)
-    bucket[key] = recent_hits
-    _prune_rate_limit_bucket(bucket, now)
-    return len(recent_hits)
+def _record_rate_limit_hit(
+    db: Session,
+    key: str,
+    event_type: str,
+    window_seconds: int,
+    now: Optional[datetime] = None,
+) -> int:
+    current_time = now or datetime.utcnow()
+    _prune_rate_limit_bucket(db, current_time)
+    db.add(models.RateLimitEvent(key=key, event_type=event_type, created_at=current_time))
+    db.commit()
+
+    cutoff = current_time - timedelta(seconds=window_seconds)
+    return db.query(models.RateLimitEvent).filter(
+        models.RateLimitEvent.key == key,
+        models.RateLimitEvent.event_type == event_type,
+        models.RateLimitEvent.created_at >= cutoff,
+    ).count()
 
 
-def _prune_rate_limit_bucket(bucket: dict[str, list[float]], now: float) -> None:
-    """Drop stale keys whose hits are all outside the window, so buckets don't grow unbounded."""
-    window = FORGOT_PASSWORD_WINDOW_SECONDS
-    stale_keys = [
-        existing_key
-        for existing_key, hits in bucket.items()
-        if not hits or (now - hits[-1]) >= window
-    ]
-    for existing_key in stale_keys:
-        bucket.pop(existing_key, None)
+def _prune_rate_limit_bucket(db: Session, now: Optional[datetime] = None) -> None:
+    """Drop stale rate-limit rows so the table does not grow unbounded."""
+    current_time = now or datetime.utcnow()
+    cutoff = current_time - timedelta(seconds=RATE_LIMIT_PRUNE_SECONDS)
+    db.query(models.RateLimitEvent).filter(
+        models.RateLimitEvent.created_at < cutoff,
+    ).delete(synchronize_session=False)
+    db.commit()
 
 
-def _enforce_forgot_password_throttle(email: str, request: Request) -> None:
+def _enforce_forgot_password_throttle(email: str, request: Request, db: Session) -> None:
     normalized_email = email.strip().lower()
     request_ip = _get_request_ip(request)
-    now = datetime.utcnow().timestamp()
-
-    with _forgot_password_lock:
-        email_hit_count = _record_rate_limit_hit(_forgot_password_email_hits, normalized_email, now)
-        ip_hit_count = _record_rate_limit_hit(_forgot_password_ip_hits, request_ip, now)
+    email_hit_count = _record_rate_limit_hit(
+        db,
+        normalized_email,
+        "forgot_password_email",
+        FORGOT_PASSWORD_WINDOW_SECONDS,
+    )
+    ip_hit_count = _record_rate_limit_hit(
+        db,
+        request_ip,
+        "forgot_password_ip",
+        FORGOT_PASSWORD_WINDOW_SECONDS,
+    )
 
     if email_hit_count > FORGOT_PASSWORD_EMAIL_LIMIT or ip_hit_count > FORGOT_PASSWORD_IP_LIMIT:
         logger.warning(
@@ -663,7 +664,7 @@ def _create_access_token_for_user(user: models.User) -> str:
 
 @router.post("/register", response_model=schemas.UserResponse)
 def register_user(user: schemas.UserCreate, request: Request, db: Session = Depends(get_db)):
-    _enforce_register_rate_limit(request)
+    _enforce_register_rate_limit(request, db)
     existing_user = crud.get_user_by_email(db, user.email)
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -690,7 +691,7 @@ def login_user(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
-    _enforce_login_rate_limit(request)
+    _enforce_login_rate_limit(request, db)
     return _login_with_credentials(
         db=db,
         email=form_data.username,
@@ -705,7 +706,7 @@ def login_user_alias(
     db: Session = Depends(get_db),
 ):
     """Compatibility alias for web clients expecting JSON login at /auth/login."""
-    _enforce_login_rate_limit(request)
+    _enforce_login_rate_limit(request, db)
     return _login_with_credentials(
         db=db,
         email=payload.email,
@@ -815,7 +816,7 @@ def forgot_password(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    _enforce_forgot_password_throttle(payload.email, request)
+    _enforce_forgot_password_throttle(payload.email, request, db)
     user = crud.get_user_by_email(db, payload.email)
     detail = "If the account exists, reset instructions were issued"
     if not user:

@@ -1,47 +1,100 @@
-"""Ensure the forgot-password rate-limit buckets drop stale keys."""
+"""Ensure DB-backed rate-limit events are counted and pruned."""
 
+from datetime import datetime, timedelta
+
+from app import models
 from app import routes as routes_module
+from conftest import TestingSessionLocal
 
 
-def test_prune_drops_keys_whose_hits_are_all_outside_the_window() -> None:
-    bucket: dict[str, list[float]] = {}
-
-    # Record a hit for an old key at time=0, then fast-forward beyond the window.
-    now = 1000.0
-    routes_module._record_rate_limit_hit(bucket, "old@example.com", now)
-    assert "old@example.com" in bucket
-
-    future_now = now + routes_module.FORGOT_PASSWORD_WINDOW_SECONDS + 60.0
-    routes_module._record_rate_limit_hit(bucket, "fresh@example.com", future_now)
-
-    # Old key must be pruned on any subsequent write; only the fresh key remains.
-    assert "old@example.com" not in bucket
-    assert "fresh@example.com" in bucket
+def _db_count() -> int:
+    db = TestingSessionLocal()
+    try:
+        return db.query(models.RateLimitEvent).count()
+    finally:
+        db.close()
 
 
-def test_prune_keeps_still_active_keys() -> None:
-    bucket: dict[str, list[float]] = {}
+def test_prune_drops_rows_older_than_one_hour() -> None:
+    db = TestingSessionLocal()
+    try:
+        now = datetime(2026, 1, 1, 12, 0, 0)
+        routes_module._record_rate_limit_hit(
+            db,
+            "old@example.com",
+            "forgot_password_email",
+            routes_module.FORGOT_PASSWORD_WINDOW_SECONDS,
+            now,
+        )
 
-    now = 1000.0
-    routes_module._record_rate_limit_hit(bucket, "user1@example.com", now)
-    routes_module._record_rate_limit_hit(bucket, "user2@example.com", now + 30.0)
+        future_now = now + timedelta(seconds=routes_module.RATE_LIMIT_PRUNE_SECONDS + 60)
+        routes_module._record_rate_limit_hit(
+            db,
+            "fresh@example.com",
+            "forgot_password_email",
+            routes_module.FORGOT_PASSWORD_WINDOW_SECONDS,
+            future_now,
+        )
 
-    # Both keys are still within the window — prune must not drop either.
-    assert "user1@example.com" in bucket
-    assert "user2@example.com" in bucket
+        rows = db.query(models.RateLimitEvent).all()
+        assert [row.key for row in rows] == ["fresh@example.com"]
+    finally:
+        db.close()
+
+
+def test_prune_keeps_still_active_rows() -> None:
+    db = TestingSessionLocal()
+    try:
+        now = datetime(2026, 1, 1, 12, 0, 0)
+        routes_module._record_rate_limit_hit(
+            db,
+            "user1@example.com",
+            "forgot_password_email",
+            routes_module.FORGOT_PASSWORD_WINDOW_SECONDS,
+            now,
+        )
+        routes_module._record_rate_limit_hit(
+            db,
+            "user2@example.com",
+            "forgot_password_email",
+            routes_module.FORGOT_PASSWORD_WINDOW_SECONDS,
+            now + timedelta(seconds=30),
+        )
+
+        assert _db_count() == 2
+    finally:
+        db.close()
 
 
 def test_record_returns_count_within_window_only() -> None:
-    bucket: dict[str, list[float]] = {}
+    db = TestingSessionLocal()
+    try:
+        now = datetime(2026, 1, 1, 12, 0, 0)
+        first = routes_module._record_rate_limit_hit(
+            db,
+            "user@example.com",
+            "forgot_password_email",
+            routes_module.FORGOT_PASSWORD_WINDOW_SECONDS,
+            now,
+        )
+        second = routes_module._record_rate_limit_hit(
+            db,
+            "user@example.com",
+            "forgot_password_email",
+            routes_module.FORGOT_PASSWORD_WINDOW_SECONDS,
+            now + timedelta(seconds=5),
+        )
+        assert first == 1
+        assert second == 2
 
-    now = 1000.0
-    first = routes_module._record_rate_limit_hit(bucket, "user@example.com", now)
-    second = routes_module._record_rate_limit_hit(bucket, "user@example.com", now + 5)
-    assert first == 1
-    assert second == 2
-
-    # After the full window has elapsed *past the last hit*, old hits drop
-    # out of the count — only the newest hit counts.
-    after_window = now + 5 + routes_module.FORGOT_PASSWORD_WINDOW_SECONDS + 1
-    third = routes_module._record_rate_limit_hit(bucket, "user@example.com", after_window)
-    assert third == 1
+        after_window = now + timedelta(seconds=routes_module.FORGOT_PASSWORD_WINDOW_SECONDS + 6)
+        third = routes_module._record_rate_limit_hit(
+            db,
+            "user@example.com",
+            "forgot_password_email",
+            routes_module.FORGOT_PASSWORD_WINDOW_SECONDS,
+            after_window,
+        )
+        assert third == 1
+    finally:
+        db.close()

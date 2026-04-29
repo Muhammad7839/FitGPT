@@ -1,9 +1,10 @@
 """SQLAlchemy ORM entities for users, wardrobe items, and outfit records."""
 
 import json
+from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Column, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.database.database import Base
@@ -336,3 +337,14 @@ class RecommendationInteraction(Base):
     signal = Column(String, nullable=False, index=True)
     item_ids_csv = Column(String, nullable=True)
     created_at_timestamp = Column(Integer, nullable=False, index=True)
+
+
+class RateLimitEvent(Base):
+    """Stores rate-limit attempts so throttling survives process restarts."""
+
+    __tablename__ = "rate_limit_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, nullable=False, index=True)
+    event_type = Column(String, nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
