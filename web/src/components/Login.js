@@ -155,6 +155,13 @@ export default function Login() {
             </NavLink>
           </div>
         </form>
+
+        <div className="authFooter">
+          <span className="heroSub">Just browsing?</span>{" "}
+          <button type="button" className="linkBtn" onClick={() => navigate("/dashboard")}>
+            Continue as guest.
+          </button>
+        </div>
       </div>
 
       <div className="authQrRow">

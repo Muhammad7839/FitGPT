@@ -21,6 +21,7 @@ import {
   isGuestRouteAllowed,
   shouldShowTutorial,
 } from "../utils/firstLaunchFlow";
+import { ONBOARDED_KEY, TOKEN_KEY } from "../utils/constants";
 import GuidedTutorial from "../components/GuidedTutorial";
 import Login from "../components/Login";
 import Signup from "../components/Signup";
@@ -67,10 +68,34 @@ function ProtectedRoute({ children }) {
   const { user } = useAuth();
 
   if (!user) {
+    if (shouldRouteFirstLaunchToOnboarding(location.pathname)) {
+      return <Navigate to="/onboarding" replace />;
+    }
     return <Navigate to={getGuestProtectedRedirect(location.pathname)} replace />;
   }
 
   return children;
+}
+
+function hasLocalStorageValue(key) {
+  try {
+    return Boolean(localStorage.getItem(key));
+  } catch {
+    return false;
+  }
+}
+
+function isBaseOnboardingSet() {
+  try {
+    return localStorage.getItem(ONBOARDED_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function shouldRouteFirstLaunchToOnboarding(pathname) {
+  if (pathname === "/onboarding") return false;
+  return !hasLocalStorageValue(TOKEN_KEY) && !isBaseOnboardingSet();
 }
 
 export default function AppRoutes() {
@@ -205,9 +230,27 @@ export default function AppRoutes() {
             }
           />
 
-          <Route path="/auth" element={<Navigate to="/login" replace />} />
           <Route path="/download" element={<DownloadPage />} />
-          <Route path="/login" element={<Login />} />
+          <Route
+            path="/auth"
+            element={
+              shouldRouteFirstLaunchToOnboarding(pathname) ? (
+                <Navigate to="/onboarding" replace />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              shouldRouteFirstLaunchToOnboarding(pathname) ? (
+                <Navigate to="/onboarding" replace />
+              ) : (
+                <Login />
+              )
+            }
+          />
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
