@@ -149,6 +149,7 @@ function buildWardrobeApiPayload({
   occasionTags = [],
   seasonTags = [],
   imageUrl = "",
+  imageFile = null,
 }) {
   const normalizedColor = (color || "").toString().trim();
   const normalizedFit = normalizeFitTag(fitTag);
@@ -171,8 +172,14 @@ function buildWardrobeApiPayload({
   };
 
   if (imageUrl) payload.image_url = imageUrl;
+  if (imageFile) payload.imageFile = imageFile;
 
   return payload;
+}
+
+function isDurableImageUrl(value) {
+  const text = (value || "").toString().trim();
+  return /^https?:\/\//i.test(text) || text.startsWith("/uploads/");
 }
 
 function guessCategoryFromName(name) {
@@ -1302,11 +1309,17 @@ export default function Wardrobe() {
         occasionTags: formOccasionTags,
         seasonTags: formSeasonTags,
         imageUrl,
+        imageFile: pendingFile,
       })).then((created) => {
-        if (created?.id && String(created.id) !== String(tempId)) {
+        const durableImageUrl = isDurableImageUrl(created?.image_url) ? created.image_url : "";
+        if (created?.id || durableImageUrl) {
           setItemsAndSave((prev) => prev.map((it) =>
             String(it.id) === String(tempId)
-              ? normalizeItemMetadata({ ...it, id: created.id })
+              ? normalizeItemMetadata({
+                  ...it,
+                  id: created?.id || it.id,
+                  image_url: durableImageUrl || it.image_url,
+                })
               : it
           ));
         }
@@ -1440,14 +1453,21 @@ export default function Wardrobe() {
         is_favorite: false,
       }));
 
+      const nextItems = [...newItems, ...items];
+      setItemsAndSave(nextItems);
+      applyDuplicateScanResult(nextItems, newItems);
+      setIsBulkSaving(false);
+      setBulkOpen(false);
+      setBulkItems([]);
+
       if (!!user) {
-        for (const entry of bulkItems) {
+        for (const [index, entry] of bulkItems.entries()) {
           try {
             let imgUrl = entry.preview || "";
             if (!imgUrl && entry.file) {
               try { imgUrl = await fileToDataUrl(entry.file); } catch {}
             }
-            await wardrobeApi.createItem(buildWardrobeApiPayload({
+            const created = await wardrobeApi.createItem(buildWardrobeApiPayload({
               name: entry.name.trim(),
               category: entry.category,
               color: entry.color.trim(),
@@ -1460,7 +1480,20 @@ export default function Wardrobe() {
               occasionTags: entry.occasionTags,
               seasonTags: entry.seasonTags,
               imageUrl: imgUrl,
+              imageFile: entry.file || null,
             }));
+            if (created?.id || isDurableImageUrl(created?.image_url)) {
+              const localId = newItems[index]?.id;
+              setItemsAndSave((prev) => prev.map((it) =>
+                String(it.id) === String(localId)
+                  ? normalizeItemMetadata({
+                      ...it,
+                      id: created?.id || it.id,
+                      image_url: isDurableImageUrl(created?.image_url) ? created.image_url : it.image_url,
+                    })
+                  : it
+              ));
+            }
             if (backendOffline) setBackendOffline(false);
           } catch (e) {
             if (isNetworkError(e)) {
@@ -1470,13 +1503,6 @@ export default function Wardrobe() {
           }
         }
       }
-
-      const nextItems = [...newItems, ...items];
-      setItemsAndSave(nextItems);
-      applyDuplicateScanResult(nextItems, newItems);
-      setIsBulkSaving(false);
-      setBulkOpen(false);
-      setBulkItems([]);
 
       setToast(isGuestMode ? `${newItems.length} item${newItems.length > 1 ? "s added for this session" : " added for this session"}.` : `${newItems.length} item${newItems.length > 1 ? "s" : ""} added.`);
       toastTimeouts.set(() => setToast(""), 2000);

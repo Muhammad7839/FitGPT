@@ -2,7 +2,6 @@
 
 import logging
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
@@ -31,6 +30,7 @@ from app.email import send_password_reset_email
 from app.google_oauth import GoogleTokenValidationError, verify_google_id_token
 from app.receipt_ocr import extract_clothing_items as extract_receipt_clothing
 from app.recommendation_explanations import RecommendationContext, build_recommendation_explanation
+from app.storage import get_storage
 from app.weather import (
     ForecastSnapshot,
     WeatherLookupError,
@@ -43,8 +43,6 @@ from app.weather import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-UPLOADS_DIR = Path("uploads")
-UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 ai_service = AiService()
 FORGOT_PASSWORD_WINDOW_SECONDS = 60 * 60
 FORGOT_PASSWORD_EMAIL_LIMIT = 5
@@ -349,34 +347,29 @@ def _store_uploaded_image(
         extension = ".gif"
 
     filename = f"{prefix}_{user_id}_{uuid4().hex}{extension}"
-    destination = UPLOADS_DIR / filename
-
-    bytes_written = 0
+    buffer = bytearray()
     try:
-        with destination.open("wb") as output:
-            while True:
-                chunk = image.file.read(1024 * 1024)
-                if not chunk:
-                    break
-                bytes_written += len(chunk)
-                if bytes_written > MAX_UPLOAD_IMAGE_BYTES:
-                    raise HTTPException(
-                        status_code=413,
-                        detail="Image exceeds max upload size",
-                    )
-                output.write(chunk)
-    except Exception:
-        logger.exception("Image upload write failed user_id=%s file=%s", user_id, filename)
-        try:
-            destination.unlink(missing_ok=True)
-        except OSError:
-            pass  # Best-effort cleanup; ignore if file cannot be removed (e.g. permissions)
-        raise
+        while True:
+            chunk = image.file.read(1024 * 1024)
+            if not chunk:
+                break
+            buffer.extend(chunk)
+            if len(buffer) > MAX_UPLOAD_IMAGE_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail="Image exceeds max upload size",
+                )
     finally:
         image.file.close()
 
-    logger.info("Stored uploaded image for user=%s file=%s bytes=%s", user_id, filename, bytes_written)
-    return f"/uploads/{filename}"
+    try:
+        image_url = get_storage().save(filename, bytes(buffer), content_type)
+    except Exception:
+        logger.exception("Image upload write failed user_id=%s file=%s", user_id, filename)
+        raise
+
+    logger.info("Stored uploaded image for user=%s file=%s bytes=%s", user_id, filename, len(buffer))
+    return image_url
 
 
 def _normalize_weather_category(value: Optional[str]) -> Optional[str]:

@@ -62,7 +62,20 @@ export function loadWardrobe(user) {
 export function saveWardrobe(items, user) {
   const sessionKey = userKey(GUEST_WARDROBE_KEY, user);
   const localKey = userKey(WARDROBE_KEY, user);
-  const safe = (Array.isArray(items) ? items : []).map(normalizeItemMetadata);
+  const safe = (Array.isArray(items) ? items : []).map((item) => {
+    const normalized = normalizeItemMetadata(item);
+    const imageUrl = (normalized.image_url || "").toString().trim();
+    if (/^https?:\/\//i.test(imageUrl)) {
+      const {
+        base64_image_url,
+        local_preview_image_url,
+        preview_image_url,
+        ...withoutTransientPreviews
+      } = normalized;
+      return withoutTransientPreviews;
+    }
+    return normalized;
+  });
   const json = JSON.stringify(safe);
   try {
     sessionStorage.setItem(sessionKey, json);

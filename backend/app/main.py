@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,8 +7,9 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
 from app.database.database import engine, Base
 from app import models  # noqa: F401  # imported for SQLAlchemy table registration side effect
-from app.config import CORS_ORIGINS, log_optional_config_warnings
+from app.config import CORS_ORIGINS, STORAGE_BACKEND, log_optional_config_warnings
 from app.routes import router
+from app.storage import LOCAL_UPLOAD_DIR
 
 logger = logging.getLogger(__name__)
 app = FastAPI()
@@ -158,9 +158,9 @@ def _ensure_runtime_schema() -> None:
 _ensure_runtime_schema()
 
 app.include_router(router)
-uploads_dir = Path("uploads")
-uploads_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+if STORAGE_BACKEND == "local":
+    LOCAL_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=LOCAL_UPLOAD_DIR), name="uploads")
 
 
 @app.get("/health")
