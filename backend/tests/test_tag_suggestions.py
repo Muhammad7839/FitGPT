@@ -34,7 +34,7 @@ def test_tag_suggestions_generate_and_persist_on_item_create(client):
 
     listed = client.get("/wardrobe/items", headers=auth)
     assert listed.status_code == 200
-    persisted = listed.json()[0]
+    persisted = listed.json()["items"][0]
     assert persisted["id"] == body["id"]
     assert persisted["suggested_colors"] == ["Black"]
     assert persisted["suggested_fit_tag"] == "regular"

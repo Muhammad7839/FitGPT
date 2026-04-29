@@ -1089,7 +1089,7 @@ def receipt_ocr(
     )
 
 
-@router.get("/wardrobe/items", response_model=list[schemas.ClothingItemResponse])
+@router.get("/wardrobe/items", response_model=schemas.WardrobeItemsResponse)
 def get_my_wardrobe(
     include_archived: bool = False,
     search: Optional[str] = None,
@@ -1106,29 +1106,38 @@ def get_my_wardrobe(
     occasion_tag: Optional[str] = None,
     accessory_type: Optional[str] = None,
     favorites_only: bool = False,
+    limit: int = Query(100, ge=1),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    capped_limit = min(limit, 200)
+    filters = {
+        "include_archived": include_archived,
+        "search": search,
+        "category": category,
+        "color": color,
+        "clothing_type": clothing_type,
+        "season": season,
+        "fit_tag": fit_tag,
+        "layer_type": layer_type,
+        "is_one_piece": is_one_piece,
+        "set_identifier": set_identifier,
+        "style_tag": style_tag,
+        "season_tag": season_tag,
+        "occasion_tag": occasion_tag,
+        "accessory_type": accessory_type,
+        "favorites_only": favorites_only,
+    }
     items = crud.get_clothing_items_for_user(
         db=db,
         user_id=current_user.id,
-        include_archived=include_archived,
-        search=search,
-        category=category,
-        color=color,
-        clothing_type=clothing_type,
-        season=season,
-        fit_tag=fit_tag,
-        layer_type=layer_type,
-        is_one_piece=is_one_piece,
-        set_identifier=set_identifier,
-        style_tag=style_tag,
-        season_tag=season_tag,
-        occasion_tag=occasion_tag,
-        accessory_type=accessory_type,
-        favorites_only=favorites_only,
+        limit=capped_limit,
+        offset=offset,
+        **filters,
     )
-    return items
+    total = crud.count_clothing_items_for_user(db=db, user_id=current_user.id, **filters)
+    return {"items": items, "total": total, "limit": capped_limit, "offset": offset}
 
 
 @router.get("/wardrobe/items/favorites", response_model=list[schemas.ClothingItemResponse])

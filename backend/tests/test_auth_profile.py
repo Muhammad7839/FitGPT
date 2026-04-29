@@ -139,7 +139,7 @@ def test_login_is_case_insensitive_and_preserves_wardrobe_after_relogin(client):
 
     wardrobe = client.get("/wardrobe/items", headers=relogin_auth)
     assert wardrobe.status_code == 200
-    names = [item["name"] for item in wardrobe.json()]
+    names = [item["name"] for item in wardrobe.json()["items"]]
     assert "Persistent Tee" in names
 
 

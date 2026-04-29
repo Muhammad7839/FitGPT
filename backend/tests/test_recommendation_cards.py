@@ -83,15 +83,15 @@ def test_metadata_fields_persist_and_are_filterable(client):
 
     filter_style = client.get("/wardrobe/items", headers=auth, params={"style_tag": "formal"})
     assert filter_style.status_code == 200
-    assert len(filter_style.json()) == 1
+    assert len(filter_style.json()["items"]) == 1
 
     filter_layer = client.get("/wardrobe/items", headers=auth, params={"layer_type": "outer"})
     assert filter_layer.status_code == 200
-    assert len(filter_layer.json()) == 1
+    assert len(filter_layer.json()["items"]) == 1
 
     filter_occasion = client.get("/wardrobe/items", headers=auth, params={"occasion_tag": "work"})
     assert filter_occasion.status_code == 200
-    assert len(filter_occasion.json()) == 1
+    assert len(filter_occasion.json()["items"]) == 1
 
 
 def test_one_piece_and_set_metadata_editing(client):

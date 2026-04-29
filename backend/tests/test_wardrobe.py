@@ -42,7 +42,8 @@ def test_wardrobe_crud_flow(client):
 
     list_items = client.get("/wardrobe/items", headers=auth)
     assert list_items.status_code == 200
-    assert len(list_items.json()) == 1
+    assert len(list_items.json()["items"]) == 1
+    assert list_items.json()["total"] == 1
 
     updated_payload = sample_item_payload()
     updated_payload["color"] = "Blue"
@@ -55,7 +56,8 @@ def test_wardrobe_crud_flow(client):
 
     list_after_delete = client.get("/wardrobe/items", headers=auth)
     assert list_after_delete.status_code == 200
-    assert list_after_delete.json() == []
+    assert list_after_delete.json()["items"] == []
+    assert list_after_delete.json()["total"] == 0
 
 
 def test_wardrobe_partial_update_supports_edit_workflow(client):
@@ -101,11 +103,11 @@ def test_wardrobe_include_archived_and_favorite_persistence(client):
 
     active_only = client.get("/wardrobe/items", headers=auth)
     assert active_only.status_code == 200
-    assert active_only.json() == []
+    assert active_only.json()["items"] == []
 
     include_archived = client.get("/wardrobe/items?include_archived=true", headers=auth)
     assert include_archived.status_code == 200
-    body = include_archived.json()
+    body = include_archived.json()["items"]
     assert len(body) == 1
     assert body[0]["is_archived"] is True
     assert body[0]["is_favorite"] is True
@@ -181,11 +183,11 @@ def test_wardrobe_update_accepts_is_active_archive_compatibility(client):
 
     active_items = client.get("/wardrobe/items", headers=auth)
     assert active_items.status_code == 200
-    assert all(item["id"] != item_id for item in active_items.json())
+    assert all(item["id"] != item_id for item in active_items.json()["items"])
 
     all_items = client.get("/wardrobe/items?include_archived=true", headers=auth)
     assert all_items.status_code == 200
-    restored = [item for item in all_items.json() if item["id"] == item_id]
+    restored = [item for item in all_items.json()["items"] if item["id"] == item_id]
     assert restored and restored[0]["is_archived"] is True
 
 
@@ -288,12 +290,12 @@ def test_wardrobe_search_and_filter_queries(client):
 
     search = client.get("/wardrobe/items", headers=auth, params={"search": "oxford"})
     assert search.status_code == 200
-    assert len(search.json()) == 1
-    assert search.json()[0]["name"] == "Oxford Shirt"
+    assert len(search.json()["items"]) == 1
+    assert search.json()["items"][0]["name"] == "Oxford Shirt"
 
     empty = client.get("/wardrobe/items", headers=auth, params={"search": "not-found-term"})
     assert empty.status_code == 200
-    assert empty.json() == []
+    assert empty.json()["items"] == []
 
     combined = client.get(
         "/wardrobe/items",
@@ -306,9 +308,29 @@ def test_wardrobe_search_and_filter_queries(client):
         },
     )
     assert combined.status_code == 200
-    body = combined.json()
+    body = combined.json()["items"]
     assert len(body) == 1
     assert body[0]["name"] == "Workout Shorts"
+
+
+def test_wardrobe_list_returns_paginated_envelope(client):
+    token = register_and_login(client, "pagination@example.com", "Testpass9x")
+    auth = {"Authorization": f"Bearer {token}"}
+
+    for name in ("First", "Second", "Third"):
+        assert client.post("/wardrobe/items", json=sample_item_payload() | {"name": name}, headers=auth).status_code == 200
+
+    response = client.get("/wardrobe/items", headers=auth, params={"limit": 2, "offset": 1})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 3
+    assert body["limit"] == 2
+    assert body["offset"] == 1
+    assert len(body["items"]) == 2
+
+    capped = client.get("/wardrobe/items", headers=auth, params={"limit": 500})
+    assert capped.status_code == 200
+    assert capped.json()["limit"] == 200
 
 
 def test_wardrobe_fit_tag_is_stored_and_filterable(client):
@@ -323,7 +345,7 @@ def test_wardrobe_fit_tag_is_stored_and_filterable(client):
 
     filtered = client.get("/wardrobe/items", headers=auth, params={"fit_tag": "slim"})
     assert filtered.status_code == 200
-    body = filtered.json()
+    body = filtered.json()["items"]
     assert len(body) == 1
     assert body[0]["name"] == "Slim Jeans"
 
@@ -349,7 +371,8 @@ def test_bulk_create_items_returns_per_item_result(client):
 
     listed = client.get("/wardrobe/items", headers=auth)
     assert listed.status_code == 200
-    assert len(listed.json()) == 2
+    assert len(listed.json()["items"]) == 2
+    assert listed.json()["total"] == 2
 
 
 def test_multi_file_upload_returns_success_and_failure_per_file(client):

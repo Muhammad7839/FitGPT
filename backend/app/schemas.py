@@ -340,6 +340,13 @@ class ClothingItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class WardrobeItemsResponse(BaseModel):
+    items: list[ClothingItemResponse]
+    total: int
+    limit: int
+    offset: int
+
+
 class ClothingItemUpdate(BaseModel):
     name: Optional[str] = Field(default=None, max_length=128)
     category: Optional[str] = Field(default=None, min_length=1, max_length=64)

@@ -36,7 +36,9 @@ function toFormData(payload) {
 export const wardrobeApi = {
   async getItems() {
     ensureApi();
-    return apiFetch(PATHS.list, { method: "GET" });
+    const response = await apiFetch(`${PATHS.list}?limit=200&offset=0`, { method: "GET" });
+    if (Array.isArray(response)) return response;
+    return Array.isArray(response?.items) ? response.items : [];
   },
 
   async createItem(payload) {

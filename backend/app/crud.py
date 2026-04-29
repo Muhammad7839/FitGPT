@@ -533,7 +533,7 @@ def bulk_create_clothing_items(
     return results
 
 
-def get_clothing_items_for_user(
+def _clothing_items_for_user_query(
     db: Session,
     user_id: int,
     include_archived: bool = False,
@@ -617,7 +617,94 @@ def get_clothing_items_for_user(
             )
         )
 
-    return query.order_by(models.ClothingItem.id.desc()).all()
+    return query
+
+
+def get_clothing_items_for_user(
+    db: Session,
+    user_id: int,
+    include_archived: bool = False,
+    search: Optional[str] = None,
+    category: Optional[str] = None,
+    color: Optional[str] = None,
+    clothing_type: Optional[str] = None,
+    season: Optional[str] = None,
+    fit_tag: Optional[str] = None,
+    layer_type: Optional[str] = None,
+    is_one_piece: Optional[bool] = None,
+    set_identifier: Optional[str] = None,
+    style_tag: Optional[str] = None,
+    season_tag: Optional[str] = None,
+    occasion_tag: Optional[str] = None,
+    accessory_type: Optional[str] = None,
+    favorites_only: bool = False,
+    limit: Optional[int] = None,
+    offset: int = 0,
+):
+    query = _clothing_items_for_user_query(
+        db=db,
+        user_id=user_id,
+        include_archived=include_archived,
+        search=search,
+        category=category,
+        color=color,
+        clothing_type=clothing_type,
+        season=season,
+        fit_tag=fit_tag,
+        layer_type=layer_type,
+        is_one_piece=is_one_piece,
+        set_identifier=set_identifier,
+        style_tag=style_tag,
+        season_tag=season_tag,
+        occasion_tag=occasion_tag,
+        accessory_type=accessory_type,
+        favorites_only=favorites_only,
+    ).order_by(models.ClothingItem.id.desc())
+    if offset > 0:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+    return query.all()
+
+
+def count_clothing_items_for_user(
+    db: Session,
+    user_id: int,
+    include_archived: bool = False,
+    search: Optional[str] = None,
+    category: Optional[str] = None,
+    color: Optional[str] = None,
+    clothing_type: Optional[str] = None,
+    season: Optional[str] = None,
+    fit_tag: Optional[str] = None,
+    layer_type: Optional[str] = None,
+    is_one_piece: Optional[bool] = None,
+    set_identifier: Optional[str] = None,
+    style_tag: Optional[str] = None,
+    season_tag: Optional[str] = None,
+    occasion_tag: Optional[str] = None,
+    accessory_type: Optional[str] = None,
+    favorites_only: bool = False,
+) -> int:
+    return _clothing_items_for_user_query(
+        db=db,
+        user_id=user_id,
+        include_archived=include_archived,
+        search=search,
+        category=category,
+        color=color,
+        clothing_type=clothing_type,
+        season=season,
+        fit_tag=fit_tag,
+        layer_type=layer_type,
+        is_one_piece=is_one_piece,
+        set_identifier=set_identifier,
+        style_tag=style_tag,
+        season_tag=season_tag,
+        occasion_tag=occasion_tag,
+        accessory_type=accessory_type,
+        favorites_only=favorites_only,
+    ).count()
 
 
 def get_favorite_items_for_user(db: Session, user_id: int):
