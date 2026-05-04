@@ -109,7 +109,7 @@ export function mergeWardrobeMetadata(remoteItems, localItems) {
       style_tags: localItem.style_tags?.length ? localItem.style_tags : remoteItem.style_tags,
       occasion_tags: localItem.occasion_tags?.length ? localItem.occasion_tags : remoteItem.occasion_tags,
       season_tags: localItem.season_tags?.length ? localItem.season_tags : remoteItem.season_tags,
-      image_url: localItem.image_url || remoteItem.image_url,
+      image_url: localItem.image_url ?? remoteItem.image_url,
       fit_tag: localItem.fit_tag || remoteItem.fit_tag,
     }));
     seen.add(id);

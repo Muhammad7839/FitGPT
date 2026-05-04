@@ -26,6 +26,19 @@ function toBackendPayload(payload) {
   return backendPayload;
 }
 
+/** Merge API JSON responses with client-side image data (never persist Render-local /uploads URLs). */
+function mergeItemResponse(response, payload) {
+  if (response == null || typeof response !== "object") return response;
+  const merged = { ...response };
+  const localUrl = payload?.image_url;
+  if (localUrl !== undefined && localUrl !== null) {
+    merged.image_url = String(localUrl).trim();
+  } else if (payload?.imageFile != null) {
+    merged.image_url = "";
+  }
+  return merged;
+}
+
 export const wardrobeApi = {
   async getItems() {
     ensureApi();
@@ -38,10 +51,11 @@ export const wardrobeApi = {
     ensureApi();
     const backendPayload = toBackendPayload(payload);
 
-    return apiFetch(PATHS.create, {
+    const response = await apiFetch(PATHS.create, {
       method: "POST",
       body: JSON.stringify(backendPayload),
     });
+    return mergeItemResponse(response, payload);
   },
 
   async updateItem(id, payload) {
@@ -49,10 +63,11 @@ export const wardrobeApi = {
     if (!isServerItemId(id)) return null;
     const backendPayload = toBackendPayload(payload);
 
-    return apiFetch(PATHS.update(id), {
+    const response = await apiFetch(PATHS.update(id), {
       method: "PUT",
       body: JSON.stringify(backendPayload),
     });
+    return mergeItemResponse(response, payload);
   },
 
   async deleteItem(id) {

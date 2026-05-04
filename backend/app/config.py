@@ -89,7 +89,7 @@ DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://fit-gpt-i3co.vercel.app",
-    "https://fitgpt.tech",
+    "https://fitgpt.tech",  # apex (bare) domain
     "https://www.fitgpt.tech",
 ]
 
@@ -115,6 +115,8 @@ OPENWEATHER_API_KEY = get_env("OPENWEATHER_API_KEY", "")
 OPENWEATHER_TIMEOUT_SECONDS = get_float_env("OPENWEATHER_TIMEOUT_SECONDS", 5)
 OPENWEATHER_FORECAST_CACHE_SECONDS = get_int_env("OPENWEATHER_FORECAST_CACHE_SECONDS", 900)
 MAX_UPLOAD_IMAGE_BYTES = get_int_env("MAX_UPLOAD_IMAGE_BYTES", 5 * 1024 * 1024)
+# In production on Render, set STORAGE_BACKEND=local (default). Images are now stored client-side as base64.
+# If upgrading to S3/R2, set STORAGE_BACKEND=s3 and all S3_* vars.
 STORAGE_BACKEND = get_env("STORAGE_BACKEND", "local").strip().lower()
 S3_BUCKET = get_env("S3_BUCKET", "")
 S3_ENDPOINT_URL = get_env("S3_ENDPOINT_URL", "")
