@@ -23,6 +23,17 @@ const wardrobe = [
   { id: "shoe-1", name: "Walking Sneakers", category: "Shoes", clothing_type: "sneakers", is_active: true },
 ];
 
+function futureDateLabel(daysFromToday) {
+  const date = new Date();
+  date.setDate(date.getDate() + daysFromToday);
+  return date.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 describe("TripPackingPlanner", () => {
   let tripsStore;
 
@@ -82,10 +93,10 @@ describe("TripPackingPlanner", () => {
     fireEvent.change(screen.getByPlaceholderText(/city, region, or destination/i), { target: { value: "Seattle" } });
 
     fireEvent.click(screen.getByRole("button", { name: /start date:/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Friday, April 10, 2026" }));
+    fireEvent.click(screen.getByRole("button", { name: futureDateLabel(4) }));
 
     fireEvent.click(screen.getByRole("button", { name: /end date:/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Monday, April 13, 2026" }));
+    fireEvent.click(screen.getByRole("button", { name: futureDateLabel(7) }));
 
     fireEvent.click(screen.getByRole("button", { name: /generate packing list/i }));
 
