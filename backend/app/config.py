@@ -71,6 +71,20 @@ def _default_sqlite_url(file_name: str) -> str:
     return f"sqlite:///{(BACKEND_ROOT / file_name).resolve()}"
 
 
+def _normalize_database_url(raw: str) -> str:
+    """Resolve relative sqlite:/// paths to absolute so the DB file is always
+    created in the backend directory regardless of the working directory."""
+    normalized = raw.strip()
+    prefix = "sqlite:///"
+    if not normalized.startswith(prefix):
+        return normalized
+    sqlite_path = normalized[len(prefix):]
+    if not sqlite_path or sqlite_path == ":memory:" or sqlite_path.startswith("/"):
+        return normalized
+    absolute = (BACKEND_ROOT / sqlite_path).resolve()
+    return f"{prefix}{absolute.as_posix()}"
+
+
 DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -79,7 +93,11 @@ DEFAULT_CORS_ORIGINS = [
 ]
 
 FORCE_LOCAL_DATABASE = get_bool_env("FITGPT_LOCAL_BACKEND", False)
-DATABASE_URL = _default_sqlite_url("fitgpt.db") if FORCE_LOCAL_DATABASE else get_env("DATABASE_URL", _default_sqlite_url("fitgpt.db"))
+DATABASE_URL = (
+    _default_sqlite_url("fitgpt.db")
+    if FORCE_LOCAL_DATABASE
+    else _normalize_database_url(get_env("DATABASE_URL", _default_sqlite_url("fitgpt.db")))
+)
 SECRET_KEY = get_env("SECRET_KEY", "dev-only-change-me")
 JWT_ALGORITHM = get_env("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = get_int_env("ACCESS_TOKEN_EXPIRE_MINUTES", 60)

@@ -41,6 +41,21 @@ export function hasApi() {
   return base.length > 0 || typeof window !== "undefined";
 }
 
+/**
+ * Resolve a possibly-relative image URL to a fully-qualified URL.
+ * Backend stores images as /uploads/<filename> which must be served from
+ * the backend origin, not the frontend origin.
+ */
+export function resolveImageUrl(url) {
+  if (!url) return url;
+  const s = url.toString().trim();
+  if (s.startsWith("/uploads/")) {
+    const base = resolveBaseUrl().replace(/\/$/, "");
+    return `${base}${s}`;
+  }
+  return s;
+}
+
 function getToken() {
   return (
     localStorage.getItem("fitgpt_token_v1") ||

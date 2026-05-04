@@ -5,6 +5,7 @@ import * as THREE from "three";
 
 import { colorToCss, normalizeCategory } from "../utils/recommendationEngine";
 import { getItemSlot, slotLabel, SLOTS, validateOutfit } from "../utils/outfitLayering";
+import { resolveImageUrl } from "../api/apiFetch";
 
 function isWebGLAvailable() {
   if (typeof window === "undefined" || typeof document === "undefined") return false;
@@ -351,7 +352,7 @@ export default function MannequinViewer({ outfit = [], bodyType = "rectangle" })
     let cancelled = false;
     const loader = new THREE.TextureLoader();
     Promise.all(imageItems.map((item) => new Promise((resolve) => {
-      loader.load(item.image_url, (tex) => {
+      loader.load(resolveImageUrl(item.image_url), (tex) => {
         if ("colorSpace" in tex) tex.colorSpace = THREE.SRGBColorSpace;
         tex.minFilter = THREE.LinearFilter;
         tex.magFilter = THREE.LinearFilter;
@@ -408,7 +409,7 @@ export default function MannequinViewer({ outfit = [], bodyType = "rectangle" })
               title={entry.unplaced ? "Item category not recognized — shown in legend only" : undefined}
             >
               {entry.imageUrl
-                ? <img className="mannequinLegendThumb" src={entry.imageUrl} alt="" />
+                ? <img className="mannequinLegendThumb" src={resolveImageUrl(entry.imageUrl)} alt="" />
                 : <div className="mannequinLegendThumb mannequinLegendPlaceholder" />}
               <div className="mannequinLegendInfo">
                 <div className="mannequinLegendName">{entry.name}</div>

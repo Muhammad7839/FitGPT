@@ -184,10 +184,12 @@ function isDurableImageUrl(value) {
 
 function guessCategoryFromName(name) {
   const n = (name || "").toLowerCase();
-  if (n.includes("shoe") || n.includes("sneaker") || n.includes("heel") || n.includes("boot")) return "Shoes";
-  if (n.includes("jacket") || n.includes("coat") || n.includes("blazer") || n.includes("hoodie")) return "Outerwear";
-  if (n.includes("pant") || n.includes("jean") || n.includes("trouser") || n.includes("skirt") || n.includes("short")) return "Bottoms";
-  if (n.includes("bag") || n.includes("hat") || n.includes("belt") || n.includes("scarf") || n.includes("watch")) return "Accessories";
+  // Shoe brand keywords — checked before generic terms to avoid mis-hits
+  if (/\b(jordan|air jordan|air max|air force|nike|adidas|vans|converse|puma|reebok|new balance|asics|saucony|yeezy|ultraboost|stan smith|chuck taylor|loafer|oxford|sandal|clog|slipper|flip flop|footwear|kicks)\b/.test(n)) return "Shoes";
+  if (n.includes("shoe") || n.includes("sneaker") || n.includes("heel") || n.includes("boot") || n.includes("trainer")) return "Shoes";
+  if (n.includes("jacket") || n.includes("coat") || n.includes("blazer") || n.includes("hoodie") || n.includes("parka") || n.includes("windbreaker")) return "Outerwear";
+  if (n.includes("pant") || n.includes("jean") || n.includes("trouser") || n.includes("skirt") || n.includes("short") || n.includes("legging")) return "Bottoms";
+  if (n.includes("bag") || n.includes("hat") || n.includes("belt") || n.includes("scarf") || n.includes("watch") || n.includes("glasses") || n.includes("sunglasses")) return "Accessories";
   return "Tops";
 }
 

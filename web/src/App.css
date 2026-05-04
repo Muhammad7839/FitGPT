@@ -21237,6 +21237,20 @@ border: 1px solid var(--border);
 /* ── Smooth scroll on root ── */
 html {
   scroll-behavior: smooth;
+  /* Prevent iOS elastic overscroll glitch at page bottom */
+  overscroll-behavior-y: none;
+}
+
+/* ── Prevent scroll jank from fixed/animated elements ── */
+.chatbot-toggle {
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Promote sticky nav to its own compositing layer so it doesn't repaint on scroll */
+.topNav {
+  will-change: transform;
 }
 
 /* ── Dark body radial ambient glow ── */

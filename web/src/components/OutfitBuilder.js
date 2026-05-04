@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 
+import { resolveImageUrl } from "../api/apiFetch";
 import { savedOutfitsApi } from "../api/savedOutfitsApi";
 import { useAuth } from "../auth/AuthProvider";
 import useWardrobe from "../hooks/useWardrobe";
@@ -156,7 +157,7 @@ export default function OutfitBuilder() {
                           }}
                         >
                           {item.image_url ? (
-                            <img className="outfitBuilderItemImg" src={item.image_url} alt={item.name || "Wardrobe item"} />
+                            <img className="outfitBuilderItemImg" src={resolveImageUrl(item.image_url)} alt={item.name || "Wardrobe item"} />
                           ) : (
                             <div className="outfitBuilderItemImg outfitBuilderItemPlaceholder" />
                           )}
@@ -239,7 +240,7 @@ export default function OutfitBuilder() {
                       ×
                     </button>
                     {item.image_url ? (
-                      <img className="outfitBuilderSelectedImg" src={item.image_url} alt={item.name || "Selected item"} />
+                      <img className="outfitBuilderSelectedImg" src={resolveImageUrl(item.image_url)} alt={item.name || "Selected item"} />
                     ) : (
                       <div className="outfitBuilderSelectedImg outfitBuilderItemPlaceholder" />
                     )}

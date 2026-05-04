@@ -7,7 +7,6 @@ from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile, status
-from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -707,14 +706,14 @@ def register_user_alias(user: schemas.UserCreate, request: Request, db: Session 
 @router.post("/login", response_model=schemas.Token)
 def login_user(
     request: Request,
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
+    payload: schemas.UserLogin,
+    db: Session = Depends(get_db),
 ):
     _enforce_login_rate_limit(request, db)
     return _login_with_credentials(
         db=db,
-        email=form_data.username,
-        password=form_data.password,
+        email=payload.email,
+        password=payload.password,
     )
 
 

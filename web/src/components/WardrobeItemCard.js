@@ -4,6 +4,7 @@ import { FIT_TAG_OPTIONS } from "./ItemFormFields";
 import { optionLabel } from "../utils/wardrobeOptions";
 import { colorToCss } from "../utils/recommendationEngine";
 import { getSeasonMatch } from "../utils/seasonalWardrobe";
+import { resolveImageUrl } from "../api/apiFetch";
 
 function fitLabel(value) {
   const v = normalizeFitTag(value);
@@ -181,7 +182,7 @@ function WardrobeItemCard({
         <div className="wardrobeRowLeft">
           <div className="wardrobeThumbWrap sm">
             {item.image_url && !imgError ? (
-              <img className="wardrobeThumbImg sm" src={item.image_url} alt={item.name} onError={() => setImgError(true)} />
+              <img className="wardrobeThumbImg sm" src={resolveImageUrl(item.image_url)} alt={item.name} onError={() => setImgError(true)} />
             ) : (
               <div className="wardrobeThumb sm" aria-hidden="true" />
             )}
@@ -235,7 +236,7 @@ function WardrobeItemCard({
     >
       <div className="wardrobeThumbWrap">
         {item.image_url && !imgError ? (
-          <img className="wardrobeThumbImg" src={item.image_url} alt={item.name} onError={() => setImgError(true)} />
+          <img className="wardrobeThumbImg" src={resolveImageUrl(item.image_url)} alt={item.name} onError={() => setImgError(true)} />
         ) : (
           <div className="wardrobeThumb" aria-hidden="true" />
         )}

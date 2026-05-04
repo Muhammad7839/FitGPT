@@ -322,7 +322,7 @@ export async function generateItemTagSuggestions({
   let confidence = 0;
 
   try {
-    const classification = await classifyFromUrl(imageUrl);
+    const classification = await classifyFromUrl(imageUrl, fileName);
     if (classification?.category) category = classification.category;
     if (classification?.label) classifierLabel = classification.label;
     if (classification?.type) classifierType = classification.type;

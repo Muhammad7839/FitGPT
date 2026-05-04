@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { formatCardDate, formatPlanDate, labelFromSource } from "../utils/helpers";
+import { resolveImageUrl } from "../api/apiFetch";
 
 function startOfDay(date) {
   const next = new Date(date);
@@ -333,6 +334,10 @@ export default function PlanningCalendar({
       <div className="planningCalendarGrid">
         {monthCells.map((date) => {
           const dateKey = toDateKey(date);
+          const datePlans = plansByDate.get(dateKey) || [];
+          const dateHistory = historyByDate.get(dateKey) || [];
+          const isEmpty = !datePlans.length && !dateHistory.length;
+          const isFutureOrToday = dateKey >= todayKey;
           return (
             <CalendarDayButton
               key={dateKey}
@@ -340,12 +345,16 @@ export default function PlanningCalendar({
               selected={selectedDateKey === dateKey}
               outOfMonth={date.getMonth() !== displayDate.getMonth()}
               isToday={dateKey === todayKey}
-              plans={plansByDate.get(dateKey) || []}
-              historyEntries={historyByDate.get(dateKey) || []}
+              plans={datePlans}
+              historyEntries={dateHistory}
               onSelect={(nextDate) => {
                 const nextKey = toDateKey(nextDate);
                 setSelectedDateKey(nextKey);
                 setDisplayDate(startOfMonth(nextDate));
+                // Open plan modal directly when clicking an empty future/today date
+                if (onCreatePlan && isEmpty && isFutureOrToday) {
+                  handleOpenPlanModal();
+                }
               }}
             />
           );
@@ -394,7 +403,7 @@ export default function PlanningCalendar({
                       {plan.previewItems.map((item, index) => (
                         <div key={`${plan?.planned_id || plan?.planned_date}-${item?.id || index}`} className="savedOutfitItemChip">
                           {item?.image_url ? (
-                            <img className="savedOutfitItemImg" src={item.image_url} alt={item?.name || "Item"} />
+                            <img className="savedOutfitItemImg" src={resolveImageUrl(item.image_url)} alt={item?.name || "Item"} />
                           ) : (
                             <div className="savedOutfitItemPh" />
                           )}

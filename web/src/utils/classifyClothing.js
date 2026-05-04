@@ -207,9 +207,9 @@ const REVIEW_CONFIDENCE = 0.08;
 // Infer category from the file name when ML confidence is low.
 
 const FILENAME_CATEGORY_PATTERNS = [
-  // Shoes — listed before "top/shirt" to avoid accidental mis-hits
+  // Shoes — brand names and generic terms, listed first to avoid mis-hits
   {
-    pattern: /\b(shoe|shoes|sneaker|sneakers|boot|boots|sandal|sandals|heel|heels|loafer|loafers|slipper|slippers|oxford|trainer|trainers|kicks|footwear|clog|clogs)\b/i,
+    pattern: /\b(jordan|air.?jordan|air.?max|air.?force|nike|adidas|vans|converse|puma|reebok|new.?balance|asics|saucony|yeezy|ultraboost|stan.?smith|chuck.?taylor|shoe|shoes|sneaker|sneakers|boot|boots|sandal|sandals|heel|heels|loafer|loafers|slipper|slippers|oxford|trainer|trainers|kicks|footwear|clog|clogs|slide|slides)\b/i,
     category: "Shoes",
     type: "sneakers",
   },
