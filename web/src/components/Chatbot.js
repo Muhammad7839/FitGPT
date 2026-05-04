@@ -159,12 +159,21 @@ function loadChats(user) {
 }
 
 function saveChats(chats, user) {
+  const key = getChatStorageKey(user);
+  const normalized = (Array.isArray(chats) ? chats : []).slice(0, MAX_CHATS).map(normalizeChat);
+  const write = (list) => {
+    localStorage.setItem(key, JSON.stringify(list));
+  };
   try {
-    localStorage.setItem(
-      getChatStorageKey(user),
-      JSON.stringify((Array.isArray(chats) ? chats : []).slice(0, MAX_CHATS).map(normalizeChat))
-    );
-  } catch {}
+    write(normalized);
+  } catch (e) {
+    const code = e && (e.code ?? e.name);
+    if (code !== 22 && code !== "QuotaExceededError") return;
+    if (normalized.length <= 1) return;
+    try {
+      write(normalized.slice(1));
+    } catch {}
+  }
 }
 
 function migrateLegacyChats(user) {

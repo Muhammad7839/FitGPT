@@ -560,6 +560,13 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const navigate = useNavigate();
   const { user, verificationRequired, dismissVerificationBanner } = useAuth();
   const { theme } = useTheme() || {};
+
+  useEffect(() => {
+    document.title = "FitGPT — Dashboard";
+    return () => {
+      document.title = "FitGPT";
+    };
+  }, []);
   // Catches "editorial" and any sibling like "editorial-dark" so the hero,
   // insight strip, and dominant-selected layout render across the family.
   const isEditorial = typeof theme?.id === "string" && theme.id.startsWith("editorial");

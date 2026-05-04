@@ -26,7 +26,7 @@ export default class ErrorBoundary extends React.Component {
       return (
         <div className="errorBoundaryFallback">
           <div className="errorBoundaryIcon">&#x26A0;</div>
-          <div className="errorBoundaryMsg">Something went wrong.</div>
+          <div className="errorBoundaryMsg">Something went wrong, refresh the page.</div>
           {process.env.NODE_ENV !== "production" && this.state.error ? (
             <div className="errorBoundaryDetails">
               {(this.state.error?.message || this.state.error?.toString() || "").toString()}

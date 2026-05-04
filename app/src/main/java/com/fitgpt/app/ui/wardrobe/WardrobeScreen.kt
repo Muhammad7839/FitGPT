@@ -403,7 +403,8 @@ fun WardrobeScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.deleteItem(itemToDelete!!)
+                        val victim = itemToDelete ?: return@TextButton
+                        viewModel.deleteItem(victim)
                         itemToDelete = null
                     }
                 ) {

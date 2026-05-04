@@ -16,6 +16,13 @@ export default function Plans() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  useEffect(() => {
+    document.title = "FitGPT — Plans";
+    return () => {
+      document.title = "FitGPT";
+    };
+  }, []);
+
   const [planned, setPlanned] = useState([]);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);

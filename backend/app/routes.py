@@ -160,8 +160,7 @@ def _enforce_forgot_password_throttle(email: str, request: Request, db: Session)
 
     if email_hit_count > FORGOT_PASSWORD_EMAIL_LIMIT or ip_hit_count > FORGOT_PASSWORD_IP_LIMIT:
         logger.warning(
-            "Forgot-password rate limit exceeded email=%s ip=%s email_hits=%s ip_hits=%s",
-            normalized_email,
+            "Forgot-password rate limit exceeded ip=%s email_hits=%s ip_hits=%s",
             request_ip,
             email_hit_count,
             ip_hit_count,
@@ -857,8 +856,10 @@ def refresh_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    new_refresh = create_refresh_token(data={"sub": str(user.id)})
     return {
         "access_token": _create_access_token_for_user(user),
+        "refresh_token": new_refresh,
         "token_type": "bearer",
         "is_verified": user.is_verified,
     }

@@ -1,5 +1,9 @@
 """Authentication utilities: password hashing, JWT creation, and user resolution."""
 
+# JWTs use HS256 with SECRET_KEY from env (see config.py). RS256 + asymmetric keys are
+# preferable for multi-service production setups; refresh tokens are stateless JWTs (no
+# server-side session table), so rotation relies on issuing new refresh tokens on /auth/refresh.
+
 import bcrypt
 import jwt
 from datetime import datetime, timedelta, timezone
@@ -11,6 +15,8 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.config import SECRET_KEY, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS
+
+BCRYPT_COST = 12
 from app.database.database import get_db
 
 
@@ -24,7 +30,7 @@ def _normalize_bcrypt_hash(hashed_password: str) -> bytes:
 def hash_password(password: str) -> str:
     """Hash a plaintext password using bcrypt."""
     password_bytes = password.encode("utf-8")
-    return bcrypt.hashpw(password_bytes, bcrypt.gensalt()).decode("utf-8")
+    return bcrypt.hashpw(password_bytes, bcrypt.gensalt(rounds=BCRYPT_COST)).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

@@ -320,6 +320,7 @@ export default function Wardrobe() {
   const [itemsLoaded, setItemsLoaded] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All Items");
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [seasonalMode, setSeasonalMode] = useState(() => readSeasonalMode(user));
   const [bodyFitOn, setBodyFitOn] = useState(false);
   const [view, setView] = useState("grid");
@@ -419,6 +420,21 @@ export default function Wardrobe() {
   const [pendingArchiveId, setPendingArchiveId] = useState(null);
   const [categoryReviewOpen, setCategoryReviewOpen] = useState(false);
   const [pendingCategoryReview, setPendingCategoryReview] = useState(null);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setDebouncedQuery(query.trim().toLowerCase());
+    }, 150);
+    return () => window.clearTimeout(t);
+  }, [query]);
+
+  useEffect(() => {
+    document.title = "FitGPT — Wardrobe";
+    return () => {
+      document.title = "FitGPT";
+    };
+  }, []);
+
   const currentSeason = useMemo(() => getCurrentSeason(), []);
   const currentSeasonLabel = useMemo(() => getSeasonLabel(currentSeason), [currentSeason]);
   const seasonalWardrobeLabel = useMemo(() => getSeasonalWardrobeLabel(currentSeason), [currentSeason]);
@@ -511,7 +527,7 @@ export default function Wardrobe() {
 
   React.useEffect(() => {
     let alive = true;
-
+    const fetchAbort = typeof AbortController !== "undefined" ? new AbortController() : null;
 
     if (localEditRef.current) {
       localEditRef.current = false;
@@ -525,7 +541,7 @@ export default function Wardrobe() {
 
       try {
         if (effectiveSignedIn) {
-          const data = await wardrobeApi.getItems();
+          const data = await wardrobeApi.getItems(fetchAbort ? { signal: fetchAbort.signal } : {});
           if (!alive) return;
           const apiItems = Array.isArray(data) ? data : [];
           if (apiItems.length > 0) {
@@ -558,6 +574,7 @@ export default function Wardrobe() {
         }
       } catch (e) {
         if (!alive) return;
+        if (e?.name === "AbortError") return;
 
         if (effectiveSignedIn && isNetworkError(e)) {
           setBackendOffline(true);
@@ -573,6 +590,7 @@ export default function Wardrobe() {
     load();
     return () => {
       alive = false;
+      fetchAbort?.abort();
     };
   }, [effectiveSignedIn, user]);
 
@@ -742,7 +760,7 @@ export default function Wardrobe() {
   };
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = debouncedQuery;
     const base = tab === "archived" ? archivedItems : tab === "favorites" ? favoriteItems : activeItems;
 
     const matches = base.filter((it) => {
@@ -784,7 +802,7 @@ export default function Wardrobe() {
     });
 
     return seasonalMode ? sortItemsBySeasonalRelevance(matches, currentSeason) : matches;
-  }, [activeItems, archivedItems, favoriteItems, tab, activeCategory, query, filterColors, filterFits, filterClothingTypes, filterLayers, filterStyles, filterOccasions, filterSeasons, seasonalMode, currentSeason]);
+  }, [activeItems, archivedItems, favoriteItems, tab, activeCategory, debouncedQuery, filterColors, filterFits, filterClothingTypes, filterLayers, filterStyles, filterOccasions, filterSeasons, seasonalMode, currentSeason]);
 
   const seasonalSummarySource = useMemo(() => (
     tab === "archived" ? archivedItems : tab === "favorites" ? favoriteItems : activeItems
@@ -2480,7 +2498,14 @@ export default function Wardrobe() {
       ) : null}
 
       <section className={view === "grid" ? "wardrobeGrid" : "wardrobeList"}>
-        {filtered.map((it) => (
+        {!itemsLoaded ? (
+          <>
+            {[0, 1, 2, 3].map((sk) => (
+              <div key={`sk-${sk}`} className="wardrobeSkeletonCard" aria-hidden="true" />
+            ))}
+          </>
+        ) : null}
+        {itemsLoaded ? filtered.map((it) => (
           <WardrobeItemCard
             key={it.id}
             item={it}
@@ -2505,9 +2530,9 @@ export default function Wardrobe() {
             isSelected={selectedIds.has(it.id)}
             onToggleSelect={toggleSelectItem}
           />
-        ))}
+        )) : null}
 
-        {!filtered.length ? (
+        {itemsLoaded && !filtered.length ? (
           <div className={tab === "active" && activeItems.length === 0 ? "wardrobeEmpty wardrobeEmptyFirstRun" : "wardrobeEmpty"}>
             <div className="wardrobeEmptyIcon">{tab === "archived" ? "\u2001" : tab === "favorites" ? "\u2661" : "\uD83D\uDC54"}</div>
             <div className="wardrobeEmptyTitle">
@@ -2531,6 +2556,11 @@ export default function Wardrobe() {
             {tab === "active" ? (
               <button type="button" className="btn primary wardrobeEmptyBtn" onClick={activeItems.length === 0 ? openPicker : () => setShowUploadPanel(true)}>
                 {activeItems.length === 0 ? "Add your first item" : "Add wardrobe item"}
+              </button>
+            ) : null}
+            {tab === "favorites" && favoriteItems.length === 0 && activeItems.length > 0 ? (
+              <button type="button" className="btn wardrobeEmptyBtn" onClick={() => setTab("active")}>
+                Browse wardrobe
               </button>
             ) : null}
           </div>

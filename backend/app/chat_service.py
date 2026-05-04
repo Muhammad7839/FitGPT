@@ -3,7 +3,7 @@ import json
 import logging
 from typing import Optional
 
-from app.config import GROQ_API_KEY, GROQ_MODEL
+from app.config import AI_TIMEOUT_SECONDS, GROQ_API_KEY, GROQ_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ def _get_client():
 
     try:
         from groq import Groq
-        _client = Groq(api_key=api_key)
+        _client = Groq(api_key=api_key, timeout=AI_TIMEOUT_SECONDS)
         return _client
     except Exception as e:
         logger.error("Failed to initialize Groq client for chat: %s", e)

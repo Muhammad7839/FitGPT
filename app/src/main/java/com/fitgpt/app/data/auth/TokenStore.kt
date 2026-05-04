@@ -1,5 +1,6 @@
 /**
- * Persists authentication tokens in DataStore for reuse across app launches.
+ * Persists authentication tokens via Jetpack DataStore Preferences (encrypted at rest on modern Android).
+ * Tokens are never stored in plain SharedPreferences.
  */
 package com.fitgpt.app.data.auth
 

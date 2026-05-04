@@ -89,7 +89,7 @@ DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://fit-gpt-i3co.vercel.app",
-    "https://fitgpt.tech",  # apex (bare) domain
+    "https://fitgpt.tech",
     "https://www.fitgpt.tech",
 ]
 

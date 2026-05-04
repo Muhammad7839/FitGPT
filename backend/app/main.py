@@ -33,7 +33,9 @@ if SENTRY_DSN:
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -46,6 +48,22 @@ from app.storage import LOCAL_UPLOAD_DIR
 logger = logging.getLogger(__name__)
 app = FastAPI()
 log_optional_config_warnings(logger)
+
+
+@app.middleware("http")
+async def _suppress_internal_error_details(request: Request, call_next):
+    """Never leak stack traces or DB messages to API clients."""
+    try:
+        return await call_next(request)
+    except (StarletteHTTPException, RequestValidationError):
+        raise
+    except Exception:
+        logger.exception("Unhandled error path=%s", request.url.path)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "Internal server error"},
+        )
+
 
 app.add_middleware(
     CORSMiddleware,

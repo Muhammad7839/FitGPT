@@ -40,9 +40,12 @@ function mergeItemResponse(response, payload) {
 }
 
 export const wardrobeApi = {
-  async getItems() {
+  async getItems(fetchOptions = {}) {
     ensureApi();
-    const response = await apiFetch(`${PATHS.list}?limit=200&offset=0`, { method: "GET" });
+    const response = await apiFetch(`${PATHS.list}?limit=200&offset=0`, {
+      method: "GET",
+      ...fetchOptions,
+    });
     if (Array.isArray(response)) return response;
     return Array.isArray(response?.items) ? response.items : [];
   },

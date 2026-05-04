@@ -485,7 +485,7 @@ fun AppNavHost(
             )
         ) { backStackEntry ->
             val vm = wardrobeViewModel ?: return@composable
-            val itemId = backStackEntry.arguments!!.getInt("itemId")
+            val itemId = backStackEntry.arguments?.getInt("itemId") ?: return@composable
             EditItemScreen(
                 navController = navController,
                 itemId = itemId,

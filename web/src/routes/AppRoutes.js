@@ -38,6 +38,7 @@ import Plans from "../components/Plans";
 import SavedOutfits from "../components/SavedOutfits";
 import OutfitBuilder from "../components/OutfitBuilder";
 import DownloadPage from "../components/DownloadPage";
+import NotFoundPage from "../components/NotFoundPage";
 
 function OnboardingWrapper({
   onComplete,
@@ -360,7 +361,7 @@ export default function AppRoutes() {
               !user && !isGuestRouteAllowed(pathname) ? (
                 <Navigate to={getGuestProtectedRedirect(pathname)} replace />
               ) : (
-                <Navigate to="/" replace />
+                <NotFoundPage />
               )
             }
           />

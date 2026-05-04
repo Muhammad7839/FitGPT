@@ -5208,6 +5208,47 @@ img.dashSquareImg {
   animation: tabFadeIn 0.25s ease-out;
 }
 
+.offlineBanner {
+  position: sticky;
+  top: 0;
+  z-index: 10050;
+  padding: 8px 14px;
+  text-align: center;
+  font-size: 13px;
+  background: rgba(251, 191, 36, 0.22);
+  color: #78350f;
+  border-bottom: 1px solid rgba(120, 53, 15, 0.18);
+}
+
+[data-theme="dark"] .offlineBanner {
+  background: rgba(252, 211, 77, 0.12);
+  color: #fcd34d;
+  border-bottom-color: rgba(252, 211, 77, 0.15);
+}
+
+.wardrobeSkeletonCard {
+  border-radius: 18px;
+  min-height: 200px;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.06) 25%,
+    rgba(0, 0, 0, 0.12) 50%,
+    rgba(0, 0, 0, 0.06) 75%
+  );
+  background-size: 200% 100%;
+  animation: gapShimmer 1.2s linear infinite;
+}
+
+[data-theme="dark"] .wardrobeSkeletonCard {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.06) 25%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.06) 75%
+  );
+  background-size: 200% 100%;
+}
+
 .wardrobeGrid {
   margin-top: 12px;
   display: grid;

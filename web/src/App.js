@@ -3,6 +3,7 @@ import React, { createContext, useCallback, useContext, useEffect, useLayoutEffe
 import "./App.css";
 
 import AppRoutes from "./routes/AppRoutes";
+import { subscribeOnlineStatus } from "./api/apiFetch";
 import { AuthProvider } from "./auth/AuthProvider";
 import { getPresetTheme, PRESET_THEMES } from "./theme/themeDefinitions";
 import { applyTheme } from "./theme/themeEngine";
@@ -90,6 +91,11 @@ export default function App() {
   const [activeTheme, setActiveTheme] = useState(() => readTheme(customThemes));
   const [textScale, setTextScaleState] = useState(() => readTextScale());
   const [highContrast, setHighContrastState] = useState(() => readHighContrast());
+  const [showOfflineBanner, setShowOfflineBanner] = useState(
+    () => typeof navigator !== "undefined" && navigator.onLine === false
+  );
+
+  useEffect(() => subscribeOnlineStatus((online) => setShowOfflineBanner(!online)), []);
 
   useLayoutEffect(() => {
     applyTheme(activeTheme);
@@ -190,6 +196,11 @@ export default function App() {
       <TextScaleContext.Provider value={textScaleValue}>
         <ContrastContext.Provider value={contrastValue}>
           <AuthProvider>
+            {showOfflineBanner ? (
+              <div className="offlineBanner" role="status">
+                You are offline — some features may not be available.
+              </div>
+            ) : null}
             <TopNav />
             <AppRoutes />
             <Chatbot />

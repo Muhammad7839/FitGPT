@@ -24,6 +24,13 @@ export function HistoryContent() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  useEffect(() => {
+    document.title = "FitGPT — History";
+    return () => {
+      document.title = "FitGPT";
+    };
+  }, []);
+
   const [range, setRange] = useState("30");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");

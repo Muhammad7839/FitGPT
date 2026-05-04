@@ -1,5 +1,11 @@
 import { TOKEN_KEY, AUTH_MODE_KEY } from "../utils/constants";
 
+/**
+ * JWT access tokens are stored in localStorage so the SPA can attach Authorization headers
+ * on fetch calls without a same-origin cookie round-trip. Tradeoff: any XSS could read tokens;
+ * httpOnly cookies avoid that but require same-site backend routing and CSRF protections.
+ */
+
 const REQUEST_TIMEOUT_MS = 15000;
 const REFRESH_TOKEN_KEY = "fitgpt_refresh_token_v1";
 
@@ -117,10 +123,32 @@ function buildUrl(path) {
   return `${base}${p}`;
 }
 
+function _sanitizeApiErrorText(status, rawText) {
+  if (status >= 500) return "Something went wrong. Please try again.";
+  const text = (rawText || "").toString();
+  if (
+    status >= 400 &&
+    (/\btraceback\b|\bexception\b|\bat\s+0x|\n\s+File "/i.test(text) || text.length > 400)
+  ) {
+    return "Something went wrong. Please try again.";
+  }
+  return text.slice(0, 300);
+}
+
 async function readErrorMessage(res) {
+  const status = res.status;
+  if (status >= 500) {
+    try {
+      await res.text();
+    } catch {}
+    return "Something went wrong. Please try again.";
+  }
+
   try {
     const data = await res.json();
-    if (typeof data?.detail === "string" && data.detail.trim()) return data.detail.trim();
+    if (typeof data?.detail === "string" && data.detail.trim()) {
+      return _sanitizeApiErrorText(status, data.detail.trim());
+    }
     // Pydantic 422: detail is an array of {loc, msg, type} objects
     if (Array.isArray(data?.detail)) {
       const msgs = data.detail
@@ -128,16 +156,16 @@ async function readErrorMessage(res) {
         .filter(Boolean);
       if (msgs.length) return msgs.join(". ");
     }
-    if (typeof data?.message === "string") return data.message;
-    if (typeof data?.error === "string") return data.error;
+    if (typeof data?.message === "string") return _sanitizeApiErrorText(status, data.message);
+    if (typeof data?.error === "string") return _sanitizeApiErrorText(status, data.error);
   } catch {}
 
   try {
     const text = await res.text();
-    if (text) return text.slice(0, 300);
+    if (text) return _sanitizeApiErrorText(status, text);
   } catch {}
 
-  return `Request failed (${res.status})`;
+  return `Request failed (${status})`;
 }
 
 async function refreshAccessToken() {
@@ -158,6 +186,8 @@ async function refreshAccessToken() {
     const accessToken = (data?.access_token || data?.token || "").toString().trim();
     if (!accessToken) return false;
     setToken(accessToken);
+    const nextRefresh = (data?.refresh_token || "").toString().trim();
+    if (nextRefresh) setRefreshToken(nextRefresh);
     return true;
   } catch {
     return false;
@@ -275,4 +305,35 @@ export function markSignedInEmail() {
 
 export function markGuest() {
   setAuthMode("guest");
+}
+
+const _offlineListeners = new Set();
+let _offlineListenersInstalled = false;
+
+function _notifyOfflineSubscribers(online) {
+  _offlineListeners.forEach((fn) => {
+    try {
+      fn(online);
+    } catch {}
+  });
+}
+
+function _ensureOfflineWindowListeners() {
+  if (_offlineListenersInstalled || typeof window === "undefined") return;
+  _offlineListenersInstalled = true;
+  window.addEventListener("online", () => _notifyOfflineSubscribers(true));
+  window.addEventListener("offline", () => _notifyOfflineSubscribers(false));
+}
+
+/** Subscribe to browser online/offline (detaches when callback returns cleanup). */
+export function subscribeOnlineStatus(callback) {
+  if (typeof callback !== "function") return () => {};
+  _ensureOfflineWindowListeners();
+  _offlineListeners.add(callback);
+  try {
+    callback(typeof navigator !== "undefined" ? navigator.onLine : true);
+  } catch {}
+  return () => {
+    _offlineListeners.delete(callback);
+  };
 }

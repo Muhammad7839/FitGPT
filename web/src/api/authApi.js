@@ -1,3 +1,7 @@
+/**
+ * Auth responses persist JWT access + refresh tokens via apiFetch/localStorage (see apiFetch.js).
+ * Changing to httpOnly cookies would require coordinated backend CORS, CSRF, and refresh flows.
+ */
 import {
     apiFetch,
     setToken,
