@@ -116,7 +116,25 @@ export function migrateGuestData(user) {
 
 
 export function mergeWardrobeWithLocalMetadata(remoteItems, localItems) {
-  return mergeWardrobeMetadata(remoteItems, localItems);
+  const localById = new Map(
+    (Array.isArray(localItems) ? localItems : [])
+      .map(normalizeItemMetadata)
+      .map((item) => [String(item?.id || ""), item])
+  );
+  const remoteWithoutImages = (Array.isArray(remoteItems) ? remoteItems : []).map((item) => ({
+    ...item,
+    image_url: "",
+  }));
+
+  return mergeWardrobeMetadata(remoteWithoutImages, localItems).map((item) => {
+    const id = String(item?.id || "");
+    if (!id || !localById.has(id)) return item;
+
+    return {
+      ...item,
+      image_url: (localById.get(id)?.image_url || "").toString().trim(),
+    };
+  });
 }
 
 export function clearGuestData() {

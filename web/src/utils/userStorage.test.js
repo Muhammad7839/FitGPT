@@ -214,6 +214,25 @@ describe("mergeWardrobeWithLocalMetadata", () => {
     expect(merged[1].style_tags).toEqual(["social"]);
     expect(merged[1].layer_type).toBe("outer");
   });
+
+  test("keeps local base64 image data instead of remote upload paths", () => {
+    const localImage = "data:image/jpeg;base64,local";
+    const local = [
+      { id: "2", name: "Server Shadow", category: "Bottoms", image_url: localImage },
+      { id: "3", name: "No Local Image", category: "Shoes", image_url: "" },
+    ];
+    const remote = [
+      { id: "2", name: "Server Shadow", category: "Bottoms", image_url: "/uploads/dead.jpg" },
+      { id: "3", name: "No Local Image", category: "Shoes", image_url: "/uploads/dead-2.jpg" },
+      { id: "4", name: "Remote Only", category: "Tops", image_url: "/uploads/dead-3.jpg" },
+    ];
+
+    const merged = mergeWardrobeWithLocalMetadata(remote, local);
+
+    expect(merged.find((item) => item.id === "2").image_url).toBe(localImage);
+    expect(merged.find((item) => item.id === "3").image_url).toBe("");
+    expect(merged.find((item) => item.id === "4").image_url).toBe("");
+  });
 });
 
 describe("migrateGuestData", () => {

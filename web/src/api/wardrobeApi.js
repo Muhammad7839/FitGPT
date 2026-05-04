@@ -23,6 +23,7 @@ function toFormData(payload) {
   Object.entries(payload || {}).forEach(([k, v]) => {
     if (v === undefined || v === null) return;
     if (k === "imageFile") return;
+    if (k === "image_url") return;
     fd.append(k, String(v));
   });
 
@@ -31,6 +32,15 @@ function toFormData(payload) {
   }
 
   return fd;
+}
+
+function toBackendPayload(payload) {
+  const backendPayload = {};
+  Object.entries(payload || {}).forEach(([key, value]) => {
+    if (key === "image_url" || key === "imageFile") return;
+    backendPayload[key] = value;
+  });
+  return backendPayload;
 }
 
 export const wardrobeApi = {
@@ -43,32 +53,34 @@ export const wardrobeApi = {
 
   async createItem(payload) {
     ensureApi();
+    const backendPayload = toBackendPayload(payload);
 
-    const hasFile = !!payload?.imageFile;
+    const hasFile = !!backendPayload?.imageFile;
     if (hasFile) {
-      const body = toFormData(payload);
+      const body = toFormData(backendPayload);
       return apiFetch(PATHS.create, { method: "POST", body });
     }
 
     return apiFetch(PATHS.create, {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(backendPayload),
     });
   },
 
   async updateItem(id, payload) {
     ensureApi();
     if (!isServerItemId(id)) return null;
+    const backendPayload = toBackendPayload(payload);
 
-    const hasFile = !!payload?.imageFile;
+    const hasFile = !!backendPayload?.imageFile;
     if (hasFile) {
-      const body = toFormData(payload);
+      const body = toFormData(backendPayload);
       return apiFetch(PATHS.update(id), { method: "PUT", body });
     }
 
     return apiFetch(PATHS.update(id), {
       method: "PUT",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(backendPayload),
     });
   },
 
