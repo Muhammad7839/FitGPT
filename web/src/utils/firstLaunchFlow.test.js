@@ -4,6 +4,7 @@ import {
   getStartupStage,
   getVisibleNavItems,
   isGuestRouteAllowed,
+  shouldRouteFirstLaunchToOnboarding,
   shouldShowTutorial,
 } from "./firstLaunchFlow";
 
@@ -89,5 +90,12 @@ describe("guest access", () => {
       search: "?reason=guest_protected&next=%2Fhistory",
     });
     expect(GUEST_PROTECTED_MESSAGE).toMatch(/Sign in to unlock/);
+  });
+
+  test("fresh first launch keeps auth routes reachable", () => {
+    expect(shouldRouteFirstLaunchToOnboarding({ pathname: "/login" })).toBe(false);
+    expect(shouldRouteFirstLaunchToOnboarding({ pathname: "/signup" })).toBe(false);
+    expect(shouldRouteFirstLaunchToOnboarding({ pathname: "/forgot-password" })).toBe(false);
+    expect(shouldRouteFirstLaunchToOnboarding({ pathname: "/dashboard" })).toBe(true);
   });
 });

@@ -25,6 +25,16 @@ const GUEST_ALLOWED_ROUTES = new Set([
   "/onboarding",
 ]);
 
+const FIRST_LAUNCH_ONBOARDING_EXEMPT_ROUTES = new Set([
+  "/auth",
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/verify-email",
+  "/download",
+]);
+
 export const GUEST_PROTECTED_MESSAGE =
   "Sign in to unlock the full FitGPT experience.";
 
@@ -56,6 +66,16 @@ export function getStartupStage({
   if (!onboarded) return splashSeen ? "onboarding" : "splash";
   if (!tutorialDone) return "tutorial";
   return "guest-home";
+}
+
+export function shouldRouteFirstLaunchToOnboarding({
+  pathname = "/",
+  hasToken = false,
+  hasBaseOnboarding = false,
+} = {}) {
+  if (pathname === "/onboarding") return false;
+  if (FIRST_LAUNCH_ONBOARDING_EXEMPT_ROUTES.has(pathname || "/")) return false;
+  return !hasToken && !hasBaseOnboarding;
 }
 
 export function shouldShowTutorial({ user, onboarded, tutorialDone, justOnboarded }) {

@@ -19,6 +19,7 @@ import {
   getGuestProtectedRedirect,
   getStartupStage,
   isGuestRouteAllowed,
+  shouldRouteFirstLaunchToOnboarding as shouldFirstLaunchRouteToOnboarding,
   shouldShowTutorial,
 } from "../utils/firstLaunchFlow";
 import { ONBOARDED_KEY, TOKEN_KEY } from "../utils/constants";
@@ -95,8 +96,11 @@ function isBaseOnboardingSet() {
 }
 
 function shouldRouteFirstLaunchToOnboarding(pathname) {
-  if (pathname === "/onboarding") return false;
-  return !hasLocalStorageValue(TOKEN_KEY) && !isBaseOnboardingSet();
+  return shouldFirstLaunchRouteToOnboarding({
+    pathname,
+    hasToken: hasLocalStorageValue(TOKEN_KEY),
+    hasBaseOnboarding: isBaseOnboardingSet(),
+  });
 }
 
 export default function AppRoutes() {
