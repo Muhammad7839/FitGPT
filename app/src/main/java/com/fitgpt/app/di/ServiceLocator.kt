@@ -15,6 +15,7 @@ import com.fitgpt.app.data.auth.TokenStore
 import com.fitgpt.app.data.remote.ApiService
 import com.fitgpt.app.data.repository.AuthRepository
 import com.fitgpt.app.data.repository.ChatRepository
+import com.fitgpt.app.data.repository.FileWardrobeImageStore
 import com.fitgpt.app.data.repository.ProfileRepository
 import com.fitgpt.app.data.repository.RemoteAuthRepository
 import com.fitgpt.app.data.repository.RemoteChatRepository
@@ -66,6 +67,7 @@ object ServiceLocator {
         return wardrobeRepository ?: synchronized(this) {
             wardrobeRepository ?: RemoteWardrobeRepository(
                 api = provideApiService(context),
+                imageStore = FileWardrobeImageStore(context.applicationContext),
             ).also { wardrobeRepository = it }
         }
     }

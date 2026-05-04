@@ -7,8 +7,9 @@ from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.datastructures import FormData
 
@@ -114,16 +115,21 @@ def _record_rate_limit_hit(
     now: Optional[datetime] = None,
 ) -> int:
     current_time = now or datetime.utcnow()
-    _prune_rate_limit_bucket(db, current_time)
-    db.add(models.RateLimitEvent(key=key, event_type=event_type, created_at=current_time))
-    db.commit()
+    try:
+        _prune_rate_limit_bucket(db, current_time)
+        db.add(models.RateLimitEvent(key=key, event_type=event_type, created_at=current_time))
+        db.commit()
 
-    cutoff = current_time - timedelta(seconds=window_seconds)
-    return db.query(models.RateLimitEvent).filter(
-        models.RateLimitEvent.key == key,
-        models.RateLimitEvent.event_type == event_type,
-        models.RateLimitEvent.created_at >= cutoff,
-    ).count()
+        cutoff = current_time - timedelta(seconds=window_seconds)
+        return db.query(models.RateLimitEvent).filter(
+            models.RateLimitEvent.key == key,
+            models.RateLimitEvent.event_type == event_type,
+            models.RateLimitEvent.created_at >= cutoff,
+        ).count()
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("Rate limit storage failed; allowing request to continue")
+        return 1
 
 
 def _prune_rate_limit_bucket(db: Session, now: Optional[datetime] = None) -> None:
@@ -665,6 +671,27 @@ def _login_with_credentials(db: Session, *, email: str, password: str) -> schema
     }
 
 
+async def _read_login_payload(request: Request) -> schemas.UserLogin:
+    content_type = (request.headers.get("content-type") or "").lower()
+
+    if "application/x-www-form-urlencoded" in content_type or "multipart/form-data" in content_type:
+        form = await request.form()
+        raw_payload = {
+            "email": form.get("email") or form.get("username") or "",
+            "password": form.get("password") or "",
+        }
+    else:
+        try:
+            raw_payload = await request.json()
+        except Exception:
+            raw_payload = {}
+
+    try:
+        return schemas.UserLogin.model_validate(raw_payload)
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
+
+
 def _create_access_token_for_user(user: models.User) -> str:
     return create_access_token(
         data={"sub": str(user.id)},
@@ -704,11 +731,11 @@ def register_user_alias(user: schemas.UserCreate, request: Request, db: Session 
 # =============================
 
 @router.post("/login", response_model=schemas.Token)
-def login_user(
+async def login_user(
     request: Request,
-    payload: schemas.UserLogin,
     db: Session = Depends(get_db),
 ):
+    payload = await _read_login_payload(request)
     _enforce_login_rate_limit(request, db)
     return _login_with_credentials(
         db=db,

@@ -138,6 +138,14 @@ def test_login_fails_with_wrong_password(client):
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     assert bad_login.status_code == 401
+    assert bad_login.json()["detail"] == "Incorrect email or password"
+
+    bad_alias_login = client.post(
+        "/auth/login",
+        json={"email": "user2@example.com", "password": "wrong-pass"},
+    )
+    assert bad_alias_login.status_code == 401
+    assert bad_alias_login.json()["detail"] == "Incorrect email or password"
 
 
 def test_login_is_case_insensitive_and_preserves_wardrobe_after_relogin(client):

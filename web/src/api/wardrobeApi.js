@@ -17,23 +17,6 @@ function ensureApi() {
   if (!hasApi()) throw new Error("API base URL is missing.");
 }
 
-function toFormData(payload) {
-  const fd = new FormData();
-
-  Object.entries(payload || {}).forEach(([k, v]) => {
-    if (v === undefined || v === null) return;
-    if (k === "imageFile") return;
-    if (k === "image_url") return;
-    fd.append(k, String(v));
-  });
-
-  if (payload?.imageFile) {
-    fd.append("image", payload.imageFile);
-  }
-
-  return fd;
-}
-
 function toBackendPayload(payload) {
   const backendPayload = {};
   Object.entries(payload || {}).forEach(([key, value]) => {
@@ -55,12 +38,6 @@ export const wardrobeApi = {
     ensureApi();
     const backendPayload = toBackendPayload(payload);
 
-    const hasFile = !!backendPayload?.imageFile;
-    if (hasFile) {
-      const body = toFormData(backendPayload);
-      return apiFetch(PATHS.create, { method: "POST", body });
-    }
-
     return apiFetch(PATHS.create, {
       method: "POST",
       body: JSON.stringify(backendPayload),
@@ -71,12 +48,6 @@ export const wardrobeApi = {
     ensureApi();
     if (!isServerItemId(id)) return null;
     const backendPayload = toBackendPayload(payload);
-
-    const hasFile = !!backendPayload?.imageFile;
-    if (hasFile) {
-      const body = toFormData(backendPayload);
-      return apiFetch(PATHS.update(id), { method: "PUT", body });
-    }
 
     return apiFetch(PATHS.update(id), {
       method: "PUT",

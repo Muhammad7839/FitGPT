@@ -33,15 +33,12 @@ import com.fitgpt.app.data.remote.dto.RecommendationFeedbackRequestDto
 import com.fitgpt.app.data.remote.dto.RejectOutfitRequestDto
 import com.fitgpt.app.data.remote.dto.SavedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.AiRecommendationRequestDto
+import com.fitgpt.app.data.remote.dto.ClothingItemDto
 import com.fitgpt.app.data.remote.dto.TripPackingRequestDto
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartBody
-import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
 
 class RemoteWardrobeRepository(
-    private val api: ApiService
+    private val api: ApiService,
+    private val imageStore: WardrobeImageStore? = null
 ) : WardrobeRepository {
     private val logTag = "WARDROBE_DEBUG"
     private var cachedItemsById = emptyMap<Int, ClothingItem>()
@@ -79,32 +76,25 @@ class RemoteWardrobeRepository(
             occasionTag = occasionTag,
             accessoryType = accessoryType,
             favoritesOnly = favoritesOnly
-        ).map { dto ->
-            dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl))
-        }
+        ).map { dto -> dto.toDomainWithLocalImage() }
         cachedItemsById = cachedItemsById + items.associateBy { it.id }
         return items
     }
 
     override suspend fun addItem(item: ClothingItem): ClothingItem {
-        val response = api.addWardrobeItem(item.toCreateRequest())
-        val created = response.toDomain().copy(imageUrl = resolveApiUrl(response.imageUrl))
+        val response = api.addWardrobeItem(item.toBackendCreateRequest())
+        val localImageUrl = imageStore?.attachExistingImageToItem(response.id, item.imageUrl)
+        val createdFromBackend = response.toDomainWithLocalImage()
+        val created = createdFromBackend.copy(imageUrl = localImageUrl ?: createdFromBackend.imageUrl)
         cachedItemsById = cachedItemsById + (created.id to created)
         Log.d(logTag, "API response: $created")
         return created
     }
 
     override suspend fun addItemWithPhoto(item: ClothingItem, photo: UploadImagePayload): ClothingItem {
-        val imagePart = MultipartBody.Part.createFormData(
-            name = "image",
-            filename = photo.fileName,
-            body = photo.bytes.toRequestBody(photo.mimeType.toMediaTypeOrNull())
-        )
-        val response = api.addWardrobeItemMultipart(
-            payload = buildMultipartItemFields(item),
-            image = imagePart
-        )
-        val created = response.toDomain().copy(imageUrl = resolveApiUrl(response.imageUrl))
+        val response = api.addWardrobeItem(item.toBackendCreateRequest())
+        val localImageUrl = imageStore?.saveImageForItem(response.id, photo.bytes, photo.fileName)
+        val created = response.toDomainWithLocalImage().copy(imageUrl = localImageUrl)
         cachedItemsById = cachedItemsById + (created.id to created)
         Log.d(logTag, "API response: $created")
         return created
@@ -112,17 +102,21 @@ class RemoteWardrobeRepository(
 
     override suspend fun addItemsBulk(items: List<ClothingItem>): List<ClothingItem> {
         val response = api.addWardrobeItemsBulk(
-            BulkCreateClothingItemsRequestDto(items = items.map { it.toCreateRequest() })
+            BulkCreateClothingItemsRequestDto(items = items.map { it.toBackendCreateRequest() })
         )
         val createdItems = response.results.mapNotNull { result ->
-            result.item?.let { dto -> dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl)) }
+            val dto = result.item ?: return@mapNotNull null
+            val sourceImage = items.getOrNull(result.index)?.imageUrl
+            val localImageUrl = imageStore?.attachExistingImageToItem(dto.id, sourceImage)
+            val createdFromBackend = dto.toDomainWithLocalImage()
+            createdFromBackend.copy(imageUrl = localImageUrl ?: createdFromBackend.imageUrl)
         }
         cachedItemsById = cachedItemsById + createdItems.associateBy { it.id }
         return createdItems
     }
 
     override suspend fun suggestTags(item: ClothingItem): TagSuggestion {
-        return api.suggestWardrobeTags(item.toCreateRequest()).toDomain()
+        return api.suggestWardrobeTags(item.toBackendCreateRequest()).toDomain()
     }
 
     override suspend fun getItemTagSuggestions(itemId: Int): TagSuggestion {
@@ -131,47 +125,37 @@ class RemoteWardrobeRepository(
 
     override suspend fun applyItemTagSuggestions(itemId: Int): ClothingItem {
         val response = api.applyWardrobeItemTagSuggestions(itemId)
-        val updated = response.toDomain().copy(imageUrl = resolveApiUrl(response.imageUrl))
+        val updated = response.toDomainWithLocalImage()
         cachedItemsById = cachedItemsById + (updated.id to updated)
         return updated
     }
 
     override suspend fun uploadImage(bytes: ByteArray, fileName: String, mimeType: String): String {
-        val body = bytes.toRequestBody(mimeType.toMediaTypeOrNull())
-        val part = MultipartBody.Part.createFormData(
-            name = "image",
-            filename = fileName,
-            body = body
-        )
-        return resolveApiUrl(api.uploadWardrobeImage(part).imageUrl).orEmpty()
+        return imageStore?.saveTemporaryImage(bytes, fileName).orEmpty()
     }
 
     override suspend fun uploadImagesBatch(images: List<UploadImagePayload>): List<UploadResult> {
-        val parts = images.map { payload ->
-            MultipartBody.Part.createFormData(
-                name = "images",
-                filename = payload.fileName,
-                body = payload.bytes.toRequestBody(payload.mimeType.toMediaTypeOrNull())
-            )
-        }
-        return api.uploadWardrobeImages(parts).results.map {
+        return images.map {
             UploadResult(
                 fileName = it.fileName,
-                status = it.status,
-                imageUrl = resolveApiUrl(it.imageUrl),
-                error = it.error
+                status = "success",
+                imageUrl = imageStore?.saveTemporaryImage(it.bytes, it.fileName),
+                error = null
             )
         }
     }
 
     override suspend fun deleteItem(item: ClothingItem) {
         api.deleteWardrobeItem(item.id)
+        imageStore?.deleteImageForItem(item.id)
         cachedItemsById = cachedItemsById - item.id
     }
 
     override suspend fun updateItem(item: ClothingItem): ClothingItem {
-        val response = api.updateWardrobeItem(item.id, item.toCreateRequest())
-        val updated = response.toDomain().copy(imageUrl = resolveApiUrl(response.imageUrl))
+        val response = api.updateWardrobeItem(item.id, item.toBackendCreateRequest())
+        val localImageUrl = imageStore?.attachExistingImageToItem(item.id, item.imageUrl)
+        val updatedFromBackend = response.toDomainWithLocalImage()
+        val updated = updatedFromBackend.copy(imageUrl = localImageUrl ?: updatedFromBackend.imageUrl)
         cachedItemsById = cachedItemsById + (updated.id to updated)
         Log.d(logTag, "API response: $updated")
         return updated
@@ -182,8 +166,8 @@ class RemoteWardrobeRepository(
             itemId = itemId,
             payload = FavoriteToggleRequestDto(isFavorite = isFavorite)
         )
-        val updated = response.toDomain().copy(
-            imageUrl = resolveApiUrl(response.imageUrl) ?: cachedItemsById[itemId]?.imageUrl
+        val updated = response.toDomainWithLocalImage().copy(
+            imageUrl = imageStore?.localImageUrlForItem(itemId) ?: cachedItemsById[itemId]?.imageUrl
         )
         cachedItemsById = cachedItemsById + (updated.id to updated)
         Log.d(logTag, "API response: $updated")
@@ -191,9 +175,7 @@ class RemoteWardrobeRepository(
     }
 
     override suspend fun getFavoriteItems(): List<ClothingItem> {
-        return api.getFavoriteWardrobeItems().map { dto ->
-            dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl))
-        }
+        return api.getFavoriteWardrobeItems().map { dto -> dto.toDomainWithLocalImage() }
     }
 
     override suspend fun getWardrobeGaps(): WardrobeGapAnalysis {
@@ -250,9 +232,7 @@ class RemoteWardrobeRepository(
             weatherLon = weatherLon,
             weatherCategory = weatherCategory,
             occasion = occasion
-        ).items.map { dto ->
-            dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl))
-        }
+        ).items.map { dto -> dto.toDomainWithLocalImage() }
     }
 
     override suspend fun getRecommendationOptions(
@@ -280,7 +260,7 @@ class RemoteWardrobeRepository(
             limit = limit
         ).outfits.map { option ->
             OutfitOption(
-                items = option.items.map { dto -> dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl)) },
+                items = option.items.map { dto -> dto.toDomainWithLocalImage() },
                 explanation = option.explanation,
                 outfitScore = option.confidenceScore ?: option.outfitScore
             )
@@ -375,7 +355,7 @@ class RemoteWardrobeRepository(
             preferredSeasons = preferredSeasons
         )
         return ForecastRecommendationResult(
-            items = response.items.map { dto -> dto.toDomain().copy(imageUrl = resolveApiUrl(dto.imageUrl)) },
+            items = response.items.map { dto -> dto.toDomainWithLocalImage() },
             explanation = response.explanation,
             outfitScore = response.outfitScore,
             source = response.source,
@@ -549,35 +529,11 @@ class RemoteWardrobeRepository(
         }
     }
 
-    private fun buildMultipartItemFields(item: ClothingItem): Map<String, RequestBody> {
-        val fields = linkedMapOf<String, RequestBody>()
-        fields.putText("category", item.category.ifBlank { "Top" })
-        fields.putText("color", item.color.ifBlank { "Unknown" })
-        fields.putText("season", item.season.ifBlank { "All" })
-        fields.putText("comfort_level", item.comfortLevel.coerceIn(1, 5).toString())
+    private fun ClothingItem.toBackendCreateRequest() = copy(imageUrl = null).toCreateRequest()
 
-        item.name?.takeIf { it.isNotBlank() }?.let { fields.putText("name", it) }
-        item.clothingType?.takeIf { it.isNotBlank() }?.let { fields.putText("clothing_type", it) }
-        item.layerType?.takeIf { it.isNotBlank() }?.let { fields.putText("layer_type", it) }
-        item.fitTag?.takeIf { it.isNotBlank() }?.let { fields.putText("fit_tag", it) }
-        item.setIdentifier?.takeIf { it.isNotBlank() }?.let { fields.putText("set_identifier", it) }
-        item.accessoryType?.takeIf { it.isNotBlank() }?.let { fields.putText("accessory_type", it) }
-        item.brand?.takeIf { it.isNotBlank() }?.let { fields.putText("brand", it) }
-
-        item.colors.takeIf { it.isNotEmpty() }?.let { fields.putText("colors", it.joinToString(",")) }
-        item.seasonTags.takeIf { it.isNotEmpty() }?.let { fields.putText("season_tags", it.joinToString(",")) }
-        item.styleTags.takeIf { it.isNotEmpty() }?.let { fields.putText("style_tags", it.joinToString(",")) }
-        item.occasionTags.takeIf { it.isNotEmpty() }?.let { fields.putText("occasion_tags", it.joinToString(",")) }
-
-        fields.putText("is_one_piece", item.isOnePiece.toString())
-        fields.putText("is_available", item.isAvailable.toString())
-        fields.putText("is_favorite", item.isFavorite.toString())
-        fields.putText("is_archived", item.isArchived.toString())
-        item.lastWornTimestamp?.let { fields.putText("last_worn_timestamp", it.toString()) }
-        return fields
-    }
-
-    private fun MutableMap<String, RequestBody>.putText(key: String, value: String) {
-        this[key] = value.toRequestBody("text/plain".toMediaType())
+    private fun ClothingItemDto.toDomainWithLocalImage(): ClothingItem {
+        val item = toDomain()
+        val localImageUrl = imageStore?.localImageUrlForItem(item.id)
+        return item.copy(imageUrl = localImageUrl ?: resolveApiUrl(imageUrl))
     }
 }

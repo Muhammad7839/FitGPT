@@ -36,6 +36,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import SQLAlchemyError
 from app.database.database import engine, Base
 from app import models  # noqa: F401  # imported for SQLAlchemy table registration side effect
 from app.config import CORS_ORIGINS, STORAGE_BACKEND, log_optional_config_warnings
@@ -78,13 +79,53 @@ async def _apply_security_headers(request: Request, call_next) -> Response:
 Base.metadata.create_all(bind=engine)
 
 
+def _ensure_rate_limit_schema(inspector) -> None:
+    """Keep auth rate limiting non-fatal when older databases miss this table."""
+    try:
+        models.RateLimitEvent.__table__.create(bind=engine, checkfirst=True)
+    except SQLAlchemyError:
+        logger.exception("Rate limit table creation failed; auth will continue without throttling")
+        return
+
+    table_names = set(inspector.get_table_names())
+    if "rate_limit_events" not in table_names:
+        if hasattr(inspector, "clear_cache"):
+            inspector.clear_cache()
+        else:
+            inspector = inspect(engine)
+
+    table_names = set(inspector.get_table_names())
+    if "rate_limit_events" not in table_names:
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("rate_limit_events")}
+    pending_alters: list[str] = []
+    if "key" not in columns:
+        pending_alters.append("ALTER TABLE rate_limit_events ADD COLUMN key VARCHAR")
+    if "event_type" not in columns:
+        pending_alters.append("ALTER TABLE rate_limit_events ADD COLUMN event_type VARCHAR")
+    if "created_at" not in columns:
+        pending_alters.append("ALTER TABLE rate_limit_events ADD COLUMN created_at TIMESTAMP")
+
+    if pending_alters:
+        try:
+            with engine.begin() as connection:
+                for sql in pending_alters:
+                    connection.execute(text(sql))
+        except SQLAlchemyError:
+            logger.exception("Rate limit schema patch failed; auth will continue without throttling")
+
+
 def _ensure_runtime_schema() -> None:
     import os
-    if os.getenv("DATABASE_URL") and not os.getenv("RUN_SCHEMA_PATCH"):
-        return
     """Apply minimal additive schema changes for local environments without migrations."""
     # TODO: Replace this startup schema patching with reviewed migrations before production hardening.
     inspector = inspect(engine)
+    _ensure_rate_limit_schema(inspector)
+
+    if os.getenv("DATABASE_URL") and not os.getenv("RUN_SCHEMA_PATCH"):
+        return
+
     table_names = set(inspector.get_table_names())
     if "users" not in table_names:
         return

@@ -7,7 +7,7 @@ import android.os.Build
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 object BackendEnvironmentResolver {
-    private const val EMULATOR_BASE_URL = "http://10.0.2.2:8000/"
+    private const val PRODUCTION_BASE_URL = "https://fitgpt-backend-tdiq.onrender.com/"
 
     data class DeviceInfo(
         val fingerprint: String,
@@ -20,16 +20,12 @@ object BackendEnvironmentResolver {
         physicalLanBaseUrl: String,
         deviceInfo: DeviceInfo = currentDeviceInfo()
     ): String {
-        if (isEmulator(deviceInfo)) {
-            return EMULATOR_BASE_URL
-        }
-
         val normalizedLanBaseUrl = normalizeOrBlank(physicalLanBaseUrl)
         if (normalizedLanBaseUrl.isNotBlank()) {
-            return validatePhysicalLanBaseUrl(normalizedLanBaseUrl)
+            return validateExplicitLocalBaseUrl(normalizedLanBaseUrl, deviceInfo)
         }
 
-        return validateApiBaseUrl(apiBaseUrl)
+        return validateApiBaseUrl(apiBaseUrl.ifBlank { PRODUCTION_BASE_URL })
     }
 
     fun isLocalDevelopmentBaseUrl(baseUrl: String): Boolean {
@@ -59,14 +55,18 @@ object BackendEnvironmentResolver {
             deviceInfo.hardware.contains("ranchu", ignoreCase = true)
     }
 
-    private fun validatePhysicalLanBaseUrl(normalized: String): String {
+    private fun validateExplicitLocalBaseUrl(normalized: String, deviceInfo: DeviceInfo): String {
         val parsed = normalized.toHttpUrlOrNull()
             ?: throw IllegalStateException("API_LAN_BASE_URL is invalid: $normalized")
 
-        val blockedHosts = setOf("localhost", "127.0.0.1", "10.0.2.2")
+        val blockedHosts = if (isEmulator(deviceInfo)) {
+            setOf("localhost", "127.0.0.1")
+        } else {
+            setOf("localhost", "127.0.0.1", "10.0.2.2")
+        }
         if (parsed.host.lowercase() in blockedHosts) {
             throw IllegalStateException(
-                "API_LAN_BASE_URL host '${parsed.host}' is not valid for physical devices. Use your Mac LAN IP."
+                "API_LAN_BASE_URL host '${parsed.host}' is not valid for this Android runtime. Use 10.0.2.2 for emulators or your Mac LAN IP for physical devices."
             )
         }
         return normalized

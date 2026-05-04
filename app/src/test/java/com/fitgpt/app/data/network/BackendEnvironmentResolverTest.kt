@@ -11,9 +11,9 @@ import org.junit.Test
 class BackendEnvironmentResolverTest {
 
     @Test
-    fun emulatorDeviceAlwaysUsesEmulatorHost() {
+    fun emulatorDeviceDefaultsToProductionWhenNoLocalOverrideIsSet() {
         val selected = BackendEnvironmentResolver.resolveBaseUrl(
-            apiBaseUrl = "https://api.fitgpt.test/",
+            apiBaseUrl = "",
             physicalLanBaseUrl = "",
             deviceInfo = BackendEnvironmentResolver.DeviceInfo(
                 fingerprint = "generic/sdk_gphone64_x86_64",
@@ -22,14 +22,14 @@ class BackendEnvironmentResolverTest {
             )
         )
 
-        assertEquals("http://10.0.2.2:8000/", selected)
+        assertEquals("https://fitgpt-backend-tdiq.onrender.com/", selected)
     }
 
     @Test
-    fun emulatorDetectionUsesModelCheck() {
+    fun emulatorUsesExplicitBridgeOverride() {
         val selected = BackendEnvironmentResolver.resolveBaseUrl(
             apiBaseUrl = "https://api.fitgpt.test/",
-            physicalLanBaseUrl = "http://192.168.1.220:8000/",
+            physicalLanBaseUrl = "http://10.0.2.2:8000/",
             deviceInfo = BackendEnvironmentResolver.DeviceInfo(
                 fingerprint = "google/device/build",
                 model = "Android Emulator",
@@ -41,7 +41,7 @@ class BackendEnvironmentResolverTest {
     }
 
     @Test
-    fun emulatorDetectionUsesHardwareCheck() {
+    fun emulatorCanUseExplicitLanOverride() {
         val selected = BackendEnvironmentResolver.resolveBaseUrl(
             apiBaseUrl = "https://api.fitgpt.test/",
             physicalLanBaseUrl = "http://192.168.1.220:8000/",
@@ -52,7 +52,7 @@ class BackendEnvironmentResolverTest {
             )
         )
 
-        assertEquals("http://10.0.2.2:8000/", selected)
+        assertEquals("http://192.168.1.220:8000/", selected)
     }
 
     @Test
@@ -104,7 +104,7 @@ class BackendEnvironmentResolverTest {
         }.exceptionOrNull()
 
         assertTrue(error is IllegalStateException)
-        assertTrue(error?.message?.contains("not valid for physical devices") == true)
+        assertTrue(error?.message?.contains("not valid for this Android runtime") == true)
     }
 
     @Test
@@ -118,7 +118,7 @@ class BackendEnvironmentResolverTest {
         }.exceptionOrNull()
 
         assertTrue(error is IllegalStateException)
-        assertTrue(error?.message?.contains("not valid for physical devices") == true)
+        assertTrue(error?.message?.contains("not valid for this Android runtime") == true)
     }
 
     @Test
@@ -132,7 +132,7 @@ class BackendEnvironmentResolverTest {
         }.exceptionOrNull()
 
         assertTrue(error is IllegalStateException)
-        assertTrue(error?.message?.contains("not valid for physical devices") == true)
+        assertTrue(error?.message?.contains("not valid for this Android runtime") == true)
     }
 
     @Test
@@ -150,17 +150,14 @@ class BackendEnvironmentResolverTest {
     }
 
     @Test
-    fun physicalDeviceRejectsBlankApiBaseUrlWhenLanMissing() {
-        val error = runCatching {
-            BackendEnvironmentResolver.resolveBaseUrl(
-                apiBaseUrl = "   ",
-                physicalLanBaseUrl = "   ",
-                deviceInfo = physicalDeviceInfo()
-            )
-        }.exceptionOrNull()
+    fun physicalDeviceDefaultsToProductionWhenApiBaseUrlAndLanAreMissing() {
+        val selected = BackendEnvironmentResolver.resolveBaseUrl(
+            apiBaseUrl = "   ",
+            physicalLanBaseUrl = "   ",
+            deviceInfo = physicalDeviceInfo()
+        )
 
-        assertTrue(error is IllegalStateException)
-        assertTrue(error?.message?.contains("API_BASE_URL is blank") == true)
+        assertEquals("https://fitgpt-backend-tdiq.onrender.com/", selected)
     }
 
     @Test
