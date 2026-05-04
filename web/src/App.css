@@ -19511,6 +19511,14 @@ html[data-hc="true"] .dashAiParagraph {
   line-height: 1.55;
 }
 
+.downloadCardNote {
+  margin-top: 8px !important;
+  font-size: 0.82rem !important;
+  color: var(--muted) !important;
+  opacity: 0.82;
+  font-style: italic;
+}
+
 .downloadButton {
   display: inline-flex;
   min-height: 48px;
@@ -21263,8 +21271,9 @@ html {
 /* ── Nav: richer glass ── */
 .topNav {
   background: var(--fit-glass) !important;
-  backdrop-filter: var(--fit-blur) saturate(180%);
-  -webkit-backdrop-filter: var(--fit-blur) saturate(180%);
+  /* saturate() causes severe iOS Safari rendering glitch — blur only */
+  backdrop-filter: var(--fit-blur);
+  -webkit-backdrop-filter: var(--fit-blur);
   border-bottom: 1px solid var(--fit-glass-border) !important;
   box-shadow: var(--fit-shadow-sm);
   transition: box-shadow var(--fit-transition), background var(--fit-transition-slow);
@@ -22758,5 +22767,88 @@ a:focus-visible {
 @media (max-width: 720px) {
   .dashDemoOutfitGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MOBILE & TOUCH FIXES — 2026-05
+   Addresses iOS Safari rendering bugs, hover-on-touch stickiness,
+   and animation glitches on phone browsers.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Hover transforms: only apply on devices that support true hover ──
+   On touch screens :hover fires on tap and stays "stuck". Wrapping in
+   (hover: hover) means the effect only applies to mouse/trackpad users. */
+@media (hover: none) {
+  .outfitCard:hover,
+  .wardrobeCard:hover,
+  .savedOutfitCard:hover,
+  .plannedCard:hover,
+  .historyCard:hover,
+  .analyticsCard:hover,
+  .profileCard:hover,
+  .card:hover,
+  .planningCalendarDay:hover,
+  .wardrobeFilterChip:hover,
+  .wardrobeChipBtn:hover,
+  .pill:hover,
+  .optionCard:hover,
+  .chatbot-toggle:hover,
+  .profileAvatar:hover,
+  .analyticsChartBlock:hover,
+  .planningCalendarChip:hover,
+  .topNavLink:hover,
+  .topNavAuthBtn:hover,
+  .btn:hover,
+  .saveBtn:hover,
+  .wardrobeBtn:hover,
+  .outfitSaveBtn:hover,
+  .downloadQrItem:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+}
+
+/* ── iOS Safari: disable heavy backdrop-filter blur on mobile
+   to prevent scroll jank and rendering artifacts ── */
+@media (max-width: 768px) {
+  .topNav {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  /* Keep topNav readable without blur */
+  .topNav {
+    background: var(--bg) !important;
+  }
+  [data-theme="dark"] .topNav {
+    background: rgba(18, 18, 22, 0.97) !important;
+  }
+
+  /* Disable heavy blur on modals/panels — use solid background instead */
+  .chatbot-panel {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Page-transition animation: shorten on mobile to feel snappier */
+  .pageTransition {
+    animation-duration: 200ms !important;
+  }
+
+  /* Disable chatbot float animation on mobile — causes scroll composition issues */
+  .chatbot-toggle {
+    animation: none !important;
+  }
+
+  /* Wardrobe stagger animation: reduce delay cascade on mobile for perceived speed */
+  .wardrobeGrid > *:nth-child(n+5) {
+    animation-delay: 200ms !important;
+  }
+}
+
+/* ── Safe area for bottom nav/floating elements on notched phones ── */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .chatbot-toggle {
+    bottom: max(24px, calc(16px + env(safe-area-inset-bottom)));
   }
 }

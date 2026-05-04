@@ -1,12 +1,12 @@
 import React from "react";
 
-const APK_DOWNLOAD_URL = "https://github.com/Muhammad7839/FitGPT/releases/download/symposium-demo-v1/FitGPT-Symposium-Demo.apk";
+const APK_DOWNLOAD_URL = "https://github.com/Muhammad7839/FitGPT/releases/download/symposium-demo-v1/app-release-unsigned.apk";
 const WEB_APP_URL = "https://www.fitgpt.tech/";
 const DOWNLOAD_PAGE_URL = "https://www.fitgpt.tech/download";
 const QR_CODE_URL = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(DOWNLOAD_PAGE_URL)}`;
 const APK_QR_CODE_URL = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(APK_DOWNLOAD_URL)}`;
 
-function DownloadCard({ title, text, buttonLabel, href, primary = false }) {
+function DownloadCard({ title, text, buttonLabel, href, primary = false, note = null }) {
   const titleId = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-download-title`;
 
   return (
@@ -14,6 +14,7 @@ function DownloadCard({ title, text, buttonLabel, href, primary = false }) {
       <div>
         <h2 id={titleId}>{title}</h2>
         <p>{text}</p>
+        {note ? <p className="downloadCardNote">{note}</p> : null}
       </div>
       <a
         className={`downloadButton${primary ? " primary" : ""}`}
@@ -38,16 +39,17 @@ export default function DownloadPage() {
       <div className="downloadGrid">
         <DownloadCard
           title="Web App"
-          text="Open the current FitGPT web experience in your browser."
+          text="Open the current FitGPT web experience in your browser — no install needed."
           buttonLabel="Open FITGPT Web"
           href={WEB_APP_URL}
           primary
         />
         <DownloadCard
           title="Android App"
-          text="Download the Android APK and install it on an Android device."
+          text="Download and sideload the FitGPT APK on any Android device."
           buttonLabel="Download Android APK"
           href={APK_DOWNLOAD_URL}
+          note='After downloading, open the APK file. If Android blocks it, go to Settings → Security → "Install unknown apps" and allow your browser or file manager.'
         />
       </div>
 
@@ -63,8 +65,7 @@ export default function DownloadPage() {
             />
             <h3>Web Page</h3>
             <p>
-              Open this page:
-              {" "}
+              Open this page:{" "}
               <a href={DOWNLOAD_PAGE_URL}>{DOWNLOAD_PAGE_URL}</a>
             </p>
           </article>
@@ -77,15 +78,17 @@ export default function DownloadPage() {
             />
             <h3>Android APK</h3>
             <p>
-              Download the APK:
-              {" "}
-              <a href={APK_DOWNLOAD_URL}>FitGPT Android APK</a>
+              Scan to download:{" "}
+              <a href={APK_DOWNLOAD_URL}>app-release-unsigned.apk</a>
             </p>
           </article>
         </div>
       </section>
 
-      <p className="downloadSupportNote">If the Android install does not work, use the web app.</p>
+      <p className="downloadSupportNote">
+        Having trouble installing? Use the web app at{" "}
+        <a href={WEB_APP_URL}>fitgpt.tech</a> — it works on any device.
+      </p>
     </main>
   );
 }
