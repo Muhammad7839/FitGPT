@@ -3355,7 +3355,6 @@ img.dashSquareImg {
   position: relative;
   overflow: hidden;
   max-width: 100%;
-  contain: paint;
   margin: 10px 0 0;
   padding: 10px 0;
   border-top: 1px solid rgba(139, 30, 30, 0.12);
@@ -3375,11 +3374,14 @@ img.dashSquareImg {
   display: inline-flex;
   gap: 40px;
   white-space: nowrap;
+  width: max-content;
+  -webkit-animation: dashStyleMarqueeScroll 60s linear infinite;
   animation: dashStyleMarqueeScroll 60s linear infinite;
   will-change: transform;
 }
 
 .dashStyleMarquee:hover .dashStyleMarqueeTrack {
+  -webkit-animation-play-state: paused;
   animation-play-state: paused;
 }
 
@@ -3412,13 +3414,25 @@ img.dashSquareImg {
   box-shadow: 0 0 0 3px rgba(196, 60, 60, 0.22);
 }
 
+@-webkit-keyframes dashStyleMarqueeScroll {
+  from {
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    -webkit-transform: translate3d(-50%, 0, 0);
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
 @keyframes dashStyleMarqueeScroll {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .dashStyleMarqueeTrack {
+    -webkit-animation: none;
     animation: none;
     white-space: normal;
     flex-wrap: wrap;
@@ -3438,7 +3452,6 @@ img.dashSquareImg {
     mask-image: none;
     -webkit-mask-image: none;
     padding: 10px 0;
-    contain: layout paint;
   }
 
   .dashStyleMarqueeTrack {
@@ -3447,6 +3460,7 @@ img.dashSquareImg {
     white-space: nowrap;
     width: max-content;
     max-width: none;
+    -webkit-animation: dashStyleMarqueeScroll 48s linear infinite;
     animation: dashStyleMarqueeScroll 48s linear infinite;
     will-change: transform;
   }

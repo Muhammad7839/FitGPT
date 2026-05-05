@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 
@@ -589,6 +589,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const feedbackNoticeTimerRef = useRef(null);
   const feedbackPromptTimerRef = useRef(null);
   const feedbackPromptFadeTimerRef = useRef(null);
+  const dashStyleMarqueeTrackRef = useRef(null);
 
   const [historyEntries, setHistoryEntries] = useState([]);
   const [dismissedRotationAlerts, setDismissedRotationAlerts] = useState({});
@@ -644,6 +645,96 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const nudgeTimerRef = useRef(null);
 
   useEffect(() => { recordVisit(user); }, [user]);
+
+  /* iOS WebKit often drops CSS marquee animations inside clipped/masked parents.
+   * Drive the track with rAF on coarse-pointer mobile; CSS handles laptop/desktop. */
+  useLayoutEffect(() => {
+    const track = dashStyleMarqueeTrackRef.current;
+    if (!track) return undefined;
+
+    const reduceMq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const mobileMq = window.matchMedia("(max-width: 768px)");
+    const coarseMq = window.matchMedia("(pointer: coarse)");
+
+    let ro = null;
+    let raf = 0;
+    let start = null;
+    let scrollHalf = 0;
+    const durationMs = 48000;
+
+    const measure = () => {
+      const w = track.scrollWidth;
+      scrollHalf = w > 0 ? w / 2 : 0;
+    };
+
+    const stopJs = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      start = null;
+      track.style.transform = "";
+      track.style.webkitAnimation = "";
+      track.style.animation = "";
+      if (ro) {
+        ro.disconnect();
+        ro = null;
+      }
+    };
+
+    const tick = (t) => {
+      if (scrollHalf <= 0) {
+        measure();
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      if (start == null) start = t;
+      const elapsed = (t - start) % durationMs;
+      const x = -(elapsed / durationMs) * scrollHalf;
+      track.style.transform = `translate3d(${x}px,0,0)`;
+      raf = requestAnimationFrame(tick);
+    };
+
+    const startJs = () => {
+      stopJs();
+      track.style.webkitAnimation = "none";
+      track.style.animation = "none";
+      measure();
+      raf = requestAnimationFrame(tick);
+      if (typeof ResizeObserver !== "undefined") {
+        ro = new ResizeObserver(() => {
+          measure();
+        });
+        ro.observe(track);
+      }
+    };
+
+    const sync = () => {
+      if (reduceMq.matches) {
+        stopJs();
+        return;
+      }
+      /* Coarse covers most phones; include iPhone/iPod UA for WebKit quirks. */
+      const useJsMarquee =
+        mobileMq.matches &&
+        (coarseMq.matches || /iPhone|iPod/i.test(navigator.userAgent));
+      if (useJsMarquee) {
+        startJs();
+      } else {
+        stopJs();
+      }
+    };
+
+    sync();
+    reduceMq.addEventListener("change", sync);
+    mobileMq.addEventListener("change", sync);
+    coarseMq.addEventListener("change", sync);
+
+    return () => {
+      reduceMq.removeEventListener("change", sync);
+      mobileMq.removeEventListener("change", sync);
+      coarseMq.removeEventListener("change", sync);
+      stopJs();
+    };
+  }, []);
 
   // Editorial mode: load planned outfits for the "Tomorrow" insight card.
   // Only fires when the editorial theme is active so we don't pay for it
@@ -2250,7 +2341,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       </div>
 
       <div className="dashStyleMarquee" aria-label="Style tips">
-        <div className="dashStyleMarqueeTrack" aria-hidden="true">
+        <div className="dashStyleMarqueeTrack" aria-hidden="true" ref={dashStyleMarqueeTrackRef}>
           {STYLE_TIPS.concat(STYLE_TIPS).map((tip, index) => (
             <span className="dashStyleMarqueeItem" key={`mq-${index}`}>
               <span className="dashStyleMarqueeDot" aria-hidden="true" />
