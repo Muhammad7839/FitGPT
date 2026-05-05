@@ -35,6 +35,9 @@ import com.fitgpt.app.data.remote.dto.SavedOutfitCreateRequest
 import com.fitgpt.app.data.remote.dto.AiRecommendationRequestDto
 import com.fitgpt.app.data.remote.dto.ClothingItemDto
 import com.fitgpt.app.data.remote.dto.TripPackingRequestDto
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class RemoteWardrobeRepository(
     private val api: ApiService,
@@ -117,9 +120,16 @@ class RemoteWardrobeRepository(
 
     override suspend fun addItemWithPhoto(item: ClothingItem, photo: UploadImagePayload): ClothingItem {
         return try {
-            val response = api.addWardrobeItem(item.toBackendCreateRequest())
+            val backendImageUrl = runCatching {
+                uploadImageToBackend(photo.bytes, photo.fileName, photo.mimeType)
+            }.getOrElse { error ->
+                Log.w(logTag, "photo backend upload failed, saving item without remote image: ${error.javaClass.simpleName}: ${error.message}")
+                null
+            }
+            val response = api.addWardrobeItem(item.copy(imageUrl = backendImageUrl ?: item.imageUrl).toBackendCreateRequest())
             val localImageUrl = imageStore?.saveImageForItem(response.id, photo.bytes, photo.fileName)
-            val created = response.toDomainWithLocalImage().copy(imageUrl = localImageUrl)
+            val createdFromBackend = response.toDomainWithLocalImage()
+            val created = createdFromBackend.copy(imageUrl = localImageUrl ?: createdFromBackend.imageUrl)
             cachedItemsById = cachedItemsById + (created.id to created)
             Log.d(logTag, "API response: $created")
             created
@@ -184,17 +194,41 @@ class RemoteWardrobeRepository(
     }
 
     override suspend fun uploadImage(bytes: ByteArray, fileName: String, mimeType: String): String {
-        return imageStore?.saveTemporaryImage(bytes, fileName).orEmpty()
+        return runCatching {
+            uploadImageToBackend(bytes, fileName, mimeType).orEmpty()
+        }.getOrElse { error ->
+            Log.w(logTag, "image upload backend unavailable, using local image: ${error.javaClass.simpleName}: ${error.message}")
+            imageStore?.saveTemporaryImage(bytes, fileName).orEmpty()
+        }
     }
 
     override suspend fun uploadImagesBatch(images: List<UploadImagePayload>): List<UploadResult> {
-        return images.map {
-            UploadResult(
-                fileName = it.fileName,
-                status = "success",
-                imageUrl = imageStore?.saveTemporaryImage(it.bytes, it.fileName),
-                error = null
-            )
+        return runCatching {
+            val parts = images.map {
+                MultipartBody.Part.createFormData(
+                    name = "images",
+                    filename = it.fileName,
+                    body = it.bytes.toRequestBody(it.mimeType.toMediaTypeOrNull())
+                )
+            }
+            api.uploadWardrobeImages(parts).results.map { entry ->
+                UploadResult(
+                    fileName = entry.fileName,
+                    status = entry.status,
+                    imageUrl = resolveApiUrl(entry.imageUrl),
+                    error = entry.error
+                )
+            }
+        }.getOrElse { error ->
+            Log.w(logTag, "batch image upload backend unavailable, using local images: ${error.javaClass.simpleName}: ${error.message}")
+            images.map {
+                UploadResult(
+                    fileName = it.fileName,
+                    status = "success",
+                    imageUrl = imageStore?.saveTemporaryImage(it.bytes, it.fileName),
+                    error = null
+                )
+            }
         }
     }
 
@@ -582,7 +616,26 @@ class RemoteWardrobeRepository(
         }
     }
 
-    private fun ClothingItem.toBackendCreateRequest() = copy(imageUrl = null).toCreateRequest()
+    private suspend fun uploadImageToBackend(bytes: ByteArray, fileName: String, mimeType: String): String? {
+        val part = MultipartBody.Part.createFormData(
+            name = "image",
+            filename = fileName,
+            body = bytes.toRequestBody(mimeType.toMediaTypeOrNull())
+        )
+        return resolveApiUrl(api.uploadWardrobeImage(part).imageUrl)
+    }
+
+    private fun ClothingItem.toBackendCreateRequest() = copy(
+        imageUrl = imageUrl?.takeIf(::isBackendPersistableImageUrl)
+    ).toCreateRequest()
+
+    private fun isBackendPersistableImageUrl(imageUrl: String): Boolean {
+        val normalized = imageUrl.trim()
+        return normalized.startsWith("http://", ignoreCase = true) ||
+            normalized.startsWith("https://", ignoreCase = true) ||
+            normalized.startsWith("data:image/", ignoreCase = true) ||
+            normalized.startsWith("/uploads/", ignoreCase = true)
+    }
 
     private fun ClothingItemDto.toDomainWithLocalImage(): ClothingItem {
         val item = toDomain()

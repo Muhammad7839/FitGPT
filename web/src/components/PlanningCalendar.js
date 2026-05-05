@@ -272,13 +272,11 @@ export default function PlanningCalendar({
   }, [historyByDate, plansByDate, todayKey]);
 
   useEffect(() => {
-    const hasSelectedData = plansByDate.has(selectedDateKey) || historyByDate.has(selectedDateKey) || selectedDateKey === todayKey;
-    if (hasSelectedData) return;
-
+    if (selectedDateKey) return;
     const fallbackFuture = populatedDateKeys.find((key) => key >= todayKey) || populatedDateKeys[0] || todayKey;
     setSelectedDateKey(fallbackFuture);
     setDisplayDate(startOfMonth(parseDateKey(fallbackFuture) || today));
-  }, [historyByDate, plansByDate, populatedDateKeys, selectedDateKey, today, todayKey]);
+  }, [populatedDateKeys, selectedDateKey, today, todayKey]);
 
   const selectedDate = parseDateKey(selectedDateKey) || today;
   const selectedPlans = plansByDate.get(selectedDateKey) || [];

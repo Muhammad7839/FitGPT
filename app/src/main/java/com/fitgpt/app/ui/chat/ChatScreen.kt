@@ -61,6 +61,7 @@ import com.fitgpt.app.ui.common.FitGptScaffold
 import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.ChatUiMessage
 import com.fitgpt.app.viewmodel.ChatViewModel
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -82,20 +83,16 @@ fun ChatScreen(
         )
     }
 
-    LaunchedEffect(state.messages.size, state.isLoading) {
+    LaunchedEffect(state.messages.size, state.isLoading, imeVisible, wardrobeEmpty) {
+        val leadingItems = (if (wardrobeEmpty) 1 else 0) + (if (state.messages.isEmpty()) 1 else 0)
         val trailingItems = if (state.isLoading) 1 else 0
-        val totalItems = if (state.messages.isEmpty()) 1 else state.messages.size
-        val targetIndex = (totalItems + trailingItems - 1).coerceAtLeast(0)
-        listState.animateScrollToItem(targetIndex)
-    }
-
-    // When keyboard opens, instantly snap to bottom so the latest message stays visible
-    LaunchedEffect(imeVisible) {
+        val totalItems = leadingItems + state.messages.size + trailingItems
+        val targetIndex = (totalItems - 1).coerceAtLeast(0)
         if (imeVisible) {
-            val trailingItems = if (state.isLoading) 1 else 0
-            val totalItems = if (state.messages.isEmpty()) 1 else state.messages.size
-            val targetIndex = (totalItems + trailingItems - 1).coerceAtLeast(0)
+            delay(80)
             listState.scrollToItem(targetIndex)
+        } else {
+            listState.animateScrollToItem(targetIndex)
         }
     }
 

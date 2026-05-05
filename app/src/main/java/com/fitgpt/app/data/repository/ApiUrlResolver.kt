@@ -9,6 +9,9 @@ internal fun resolveApiUrl(rawUrl: String?): String? {
     val candidate = rawUrl?.trim().orEmpty()
     if (candidate.isEmpty()) return null
     if (candidate.startsWith("http://") || candidate.startsWith("https://")) return candidate
+    if (candidate.startsWith("file:") || candidate.startsWith("content:") || candidate.startsWith("data:image/")) {
+        return candidate
+    }
 
     val baseUrl = BackendEndpointRegistry.activeBaseUrl().trimEnd('/')
     val path = candidate.trimStart('/')

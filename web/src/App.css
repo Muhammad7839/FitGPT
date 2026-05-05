@@ -3437,34 +3437,29 @@ img.dashSquareImg {
     overflow: hidden;
     mask-image: none;
     -webkit-mask-image: none;
-    padding: 12px;
+    padding: 10px 0;
+    contain: layout paint;
   }
 
   .dashStyleMarqueeTrack {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
-    white-space: normal;
-    animation: none !important;
-    transform: none !important;
-    will-change: auto;
+    display: inline-flex;
+    gap: 32px;
+    white-space: nowrap;
+    width: max-content;
+    max-width: none;
+    animation: dashStyleMarqueeScroll 48s linear infinite;
+    will-change: transform;
   }
 
   .dashStyleMarqueeItem {
-    align-items: flex-start;
+    align-items: center;
     font-size: 13px;
-    line-height: 1.35;
-    overflow-wrap: anywhere;
-    word-break: normal;
-  }
-
-  .dashStyleMarqueeItem:nth-child(n+7) {
-    display: none;
+    line-height: 1.2;
+    flex: 0 0 auto;
   }
 
   .dashStyleMarqueeText {
-    min-width: 0;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
   }
 }
 
