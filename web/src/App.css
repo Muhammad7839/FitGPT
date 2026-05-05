@@ -1549,6 +1549,15 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   overflow-x: hidden;
@@ -1569,12 +1578,18 @@ a {
 .app {
   min-height: 100vh;
   background: transparent;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .onboarding {
+  width: 100%;
   max-width: 1050px;
   margin: 0 auto;
   padding: 28px 16px 60px;
+  min-width: 0;
 }
 
 .card {
@@ -3339,6 +3354,8 @@ img.dashSquareImg {
 .dashStyleMarquee {
   position: relative;
   overflow: hidden;
+  max-width: 100%;
+  contain: paint;
   margin: 10px 0 0;
   padding: 10px 0;
   border-top: 1px solid rgba(139, 30, 30, 0.12);
@@ -3370,6 +3387,7 @@ img.dashSquareImg {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
   flex-shrink: 0;
   font-size: 13px;
   font-weight: 600;
@@ -3411,6 +3429,42 @@ img.dashSquareImg {
     mask-image: none;
     -webkit-mask-image: none;
     overflow: visible;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashStyleMarquee {
+    overflow: hidden;
+    mask-image: none;
+    -webkit-mask-image: none;
+    padding: 12px;
+  }
+
+  .dashStyleMarqueeTrack {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    white-space: normal;
+    animation: none !important;
+    transform: none !important;
+    will-change: auto;
+  }
+
+  .dashStyleMarqueeItem {
+    align-items: flex-start;
+    font-size: 13px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .dashStyleMarqueeItem:nth-child(n+7) {
+    display: none;
+  }
+
+  .dashStyleMarqueeText {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 }
 
@@ -22614,6 +22668,18 @@ a:focus-visible {
 }
 
 @media (max-width: 768px) {
+  .pageTransition,
+  .onboarding,
+  .onboardingPage,
+  .dashPage,
+  .wardrobeGrid,
+  .card,
+  .dashWide,
+  .wardrobeCard {
+    max-width: 100%;
+    min-width: 0;
+  }
+
   input,
   input[type="text"],
   input[type="email"],

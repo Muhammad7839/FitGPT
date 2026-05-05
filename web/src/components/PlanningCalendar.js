@@ -166,7 +166,12 @@ export default function PlanningCalendar({
     [wardrobe]
   );
 
-  const handleOpenPlanModal = () => {
+  const handleOpenPlanModal = (dateKey = selectedDateKey) => {
+    if (dateKey && dateKey !== selectedDateKey) {
+      setSelectedDateKey(dateKey);
+      const nextDate = parseDateKey(dateKey);
+      if (nextDate) setDisplayDate(startOfMonth(nextDate));
+    }
     setPlanOccasion("");
     setPlanSelectedItemIds([]);
     setPlanMsg("");
@@ -353,7 +358,7 @@ export default function PlanningCalendar({
                 setDisplayDate(startOfMonth(nextDate));
                 // Open plan modal directly when clicking an empty future/today date
                 if (onCreatePlan && isEmpty && isFutureOrToday) {
-                  handleOpenPlanModal();
+                  handleOpenPlanModal(nextKey);
                 }
               }}
             />

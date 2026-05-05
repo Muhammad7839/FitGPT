@@ -1,6 +1,6 @@
 import React from "react";
 
-const APK_DOWNLOAD_URL = "https://github.com/Muhammad7839/FitGPT/releases/download/symposium-demo-v1/app-release-unsigned.apk";
+const APK_DOWNLOAD_URL = "https://github.com/Muhammad7839/FitGPT/releases/download/symposium-demo-v1/app-debug.apk";
 const WEB_APP_URL = "https://www.fitgpt.tech/";
 const DOWNLOAD_PAGE_URL = "https://www.fitgpt.tech/download";
 const QR_CODE_URL = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(DOWNLOAD_PAGE_URL)}`;
