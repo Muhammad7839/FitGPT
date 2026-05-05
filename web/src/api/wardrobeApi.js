@@ -20,7 +20,7 @@ function ensureApi() {
 function toBackendPayload(payload) {
   const backendPayload = {};
   Object.entries(payload || {}).forEach(([key, value]) => {
-    if (key === "image_url" || key === "imageFile") return;
+    if (key === "imageFile") return;
     backendPayload[key] = value;
   });
   return backendPayload;
