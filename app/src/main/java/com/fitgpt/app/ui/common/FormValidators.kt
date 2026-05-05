@@ -5,7 +5,7 @@ package com.fitgpt.app.ui.common
 
 import java.time.LocalDate
 
-const val MAX_LOCAL_IMAGE_BYTES: Int = 5 * 1024 * 1024
+const val MAX_LOCAL_IMAGE_BYTES: Int = 15 * 1024 * 1024
 
 fun isImagePayloadAllowed(byteCount: Int): Boolean {
     return byteCount in 1..MAX_LOCAL_IMAGE_BYTES

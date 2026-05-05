@@ -313,7 +313,7 @@ class WardrobeViewModel(
                 _bulkItemSaveState.value = UiState.Success(savedItems.size)
             } catch (exception: Exception) {
                 Log.e(wardrobeLogTag, "bulk add item failed", exception)
-                _bulkItemSaveState.value = UiState.Error("Failed to save uploaded items")
+                _bulkItemSaveState.value = UiState.Error(resolveUploadError(exception, "Failed to save uploaded items"))
             }
         }
     }

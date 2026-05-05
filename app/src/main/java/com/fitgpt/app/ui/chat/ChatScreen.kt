@@ -16,8 +16,11 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -59,6 +62,7 @@ import com.fitgpt.app.ui.common.WebCard
 import com.fitgpt.app.viewmodel.ChatUiMessage
 import com.fitgpt.app.viewmodel.ChatViewModel
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(
     navController: NavController,
@@ -69,6 +73,7 @@ fun ChatScreen(
     var input by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
     val wardrobeEmpty = wardrobeItemCount == 0
+    val imeVisible = WindowInsets.isImeVisible
     val starterPrompts = remember {
         listOf(
             "I want to go outside. What should I wear?",
@@ -77,7 +82,7 @@ fun ChatScreen(
         )
     }
 
-    LaunchedEffect(state.messages.size, state.isLoading) {
+    LaunchedEffect(state.messages.size, state.isLoading, imeVisible) {
         val trailingItems = if (state.isLoading) 1 else 0
         val totalItems = if (state.messages.isEmpty()) 1 else state.messages.size
         val targetIndex = (totalItems + trailingItems - 1).coerceAtLeast(0)
