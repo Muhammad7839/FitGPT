@@ -93,11 +93,13 @@ DEFAULT_CORS_ORIGINS = [
     "https://www.fitgpt.tech",
 ]
 
+PRODUCTION_ENVIRONMENTS = {"prod", "production"}
 FORCE_LOCAL_DATABASE = get_bool_env("FITGPT_LOCAL_BACKEND", False)
+_DATABASE_URL_FROM_ENV = os.getenv("DATABASE_URL", "").strip()
 DATABASE_URL = (
     _default_sqlite_url("fitgpt.db")
     if FORCE_LOCAL_DATABASE
-    else _normalize_database_url(get_env("DATABASE_URL", _default_sqlite_url("fitgpt.db")))
+    else _normalize_database_url(_DATABASE_URL_FROM_ENV or _default_sqlite_url("fitgpt.db"))
 )
 SECRET_KEY = get_env("SECRET_KEY", "dev-only-change-me")
 JWT_ALGORITHM = get_env("JWT_ALGORITHM", "HS256")
@@ -131,8 +133,21 @@ AI_MAX_TOKENS = get_int_env("AI_MAX_TOKENS", 600)
 AI_TEMPERATURE = get_float_env("AI_TEMPERATURE", 0.72)
 SENTRY_DSN = get_env("SENTRY_DSN", "")
 
-if ENVIRONMENT in {"prod", "production"} and SECRET_KEY == "dev-only-change-me":
-    raise RuntimeError("SECRET_KEY must be set in production")
+def validate_runtime_configuration() -> None:
+    if ENVIRONMENT in PRODUCTION_ENVIRONMENTS:
+        if SECRET_KEY == "dev-only-change-me":
+            raise RuntimeError("SECRET_KEY must be set in production")
+        if not _DATABASE_URL_FROM_ENV:
+            raise RuntimeError("DATABASE_URL must be set in production")
+        if DATABASE_URL.startswith("sqlite"):
+            allow_sqlite = get_bool_env("ALLOW_SQLITE_IN_PRODUCTION", False)
+            if not allow_sqlite:
+                raise RuntimeError(
+                    "SQLite is not allowed in production. Configure PostgreSQL DATABASE_URL."
+                )
+
+
+validate_runtime_configuration()
 
 
 def collect_optional_config_warnings() -> list[str]:

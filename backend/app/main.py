@@ -41,7 +41,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from app.database.database import engine, Base
 from app import models  # noqa: F401  # imported for SQLAlchemy table registration side effect
-from app.config import CORS_ORIGINS, STORAGE_BACKEND, log_optional_config_warnings
+from app.config import CORS_ORIGINS, ENVIRONMENT, PRODUCTION_ENVIRONMENTS, STORAGE_BACKEND, log_optional_config_warnings
 from app.routes import router
 from app.storage import LOCAL_UPLOAD_DIR
 
@@ -253,7 +253,10 @@ def _ensure_runtime_schema() -> None:
                 connection.execute(text(sql))
 
 
-_ensure_runtime_schema()
+if ENVIRONMENT in PRODUCTION_ENVIRONMENTS:
+    logger.info("Skipping runtime schema patching in production")
+else:
+    _ensure_runtime_schema()
 
 app.include_router(router)
 if STORAGE_BACKEND == "local":

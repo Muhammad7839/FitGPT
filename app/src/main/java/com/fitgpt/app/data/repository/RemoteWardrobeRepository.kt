@@ -97,7 +97,7 @@ class RemoteWardrobeRepository(
             occasionTag = occasionTag,
             accessoryType = accessoryType,
             favoritesOnly = favoritesOnly
-        ).map { dto -> dto.toDomainWithLocalImage() }
+        ).items.map { dto -> dto.toDomainWithLocalImage() }
         cachedItemsById = cachedItemsById + items.associateBy { it.id }
         val pending = localPendingItems.values.toList()
         return items + pending

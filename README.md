@@ -70,6 +70,8 @@ All core logic lives in one place so the platforms don't drift.
 - **Backend:** Render — `https://fitgpt-backend-tdiq.onrender.com` (gunicorn + uvicorn workers, PostgreSQL)
 - **Android:** targets the Render backend via `API_BASE_URL` in `gradle.properties`
 
+On Render, set **`SECRET_KEY`** and **`DATABASE_URL`** (PostgreSQL) in the service environment. The repo [`render.yaml`](render.yaml) sets `ENVIRONMENT=production` so the API refuses the dev default secret and SQLite unless you explicitly opt in with `ALLOW_SQLITE_IN_PRODUCTION=true`.
+
 ---
 
 ## Tech stack
