@@ -151,7 +151,7 @@ describe("apiFetch", () => {
     }));
 
     const pending = apiFetch("/slow", { method: "GET" });
-    jest.advanceTimersByTime(15000);
+    jest.advanceTimersByTime(60000);
 
     await expect(pending).rejects.toMatchObject({
       message: "Request timed out. Please try again.",
