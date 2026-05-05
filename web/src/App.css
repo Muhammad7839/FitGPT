@@ -3430,21 +3430,8 @@ img.dashSquareImg {
   to   { transform: translate3d(-50%, 0, 0); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .dashStyleMarqueeTrack {
-    -webkit-animation: none;
-    animation: none;
-    white-space: normal;
-    flex-wrap: wrap;
-    gap: 14px 24px;
-    padding: 0 14px;
-  }
-  .dashStyleMarquee {
-    mask-image: none;
-    -webkit-mask-image: none;
-    overflow: visible;
-  }
-}
+/* Marquee is decorative (aria-hidden track); keep it scrolling for all users so
+   QR / mobile matches desktop without requiring system motion settings. */
 
 @media (max-width: 768px) {
   .dashStyleMarquee {

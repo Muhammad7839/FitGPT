@@ -646,15 +646,20 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
   useEffect(() => { recordVisit(user); }, [user]);
 
-  /* iOS WebKit often drops CSS marquee animations inside clipped/masked parents.
-   * Drive the track with rAF on coarse-pointer mobile; CSS handles laptop/desktop. */
+  /* iOS WebKit often drops CSS marquee animations; drive the track with rAF on
+   * phones/tablets (and narrow viewports) so behavior matches desktop without
+   * relying on pointer heuristics or system "Reduce Motion". */
   useLayoutEffect(() => {
     const track = dashStyleMarqueeTrackRef.current;
     if (!track) return undefined;
 
-    const reduceMq = window.matchMedia("(prefers-reduced-motion: reduce)");
     const mobileMq = window.matchMedia("(max-width: 768px)");
-    const coarseMq = window.matchMedia("(pointer: coarse)");
+    const isIOS =
+      /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (typeof navigator !== "undefined" &&
+        navigator.platform === "MacIntel" &&
+        typeof navigator.maxTouchPoints === "number" &&
+        navigator.maxTouchPoints > 1);
 
     let ro = null;
     let raf = 0;
@@ -708,14 +713,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     };
 
     const sync = () => {
-      if (reduceMq.matches) {
-        stopJs();
-        return;
-      }
-      /* Coarse covers most phones; include iPhone/iPod UA for WebKit quirks. */
-      const useJsMarquee =
-        mobileMq.matches &&
-        (coarseMq.matches || /iPhone|iPod/i.test(navigator.userAgent));
+      const useJsMarquee = mobileMq.matches || isIOS;
       if (useJsMarquee) {
         startJs();
       } else {
@@ -724,14 +722,10 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     };
 
     sync();
-    reduceMq.addEventListener("change", sync);
     mobileMq.addEventListener("change", sync);
-    coarseMq.addEventListener("change", sync);
 
     return () => {
-      reduceMq.removeEventListener("change", sync);
       mobileMq.removeEventListener("change", sync);
-      coarseMq.removeEventListener("change", sync);
       stopJs();
     };
   }, []);
