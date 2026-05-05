@@ -82,11 +82,21 @@ fun ChatScreen(
         )
     }
 
-    LaunchedEffect(state.messages.size, state.isLoading, imeVisible) {
+    LaunchedEffect(state.messages.size, state.isLoading) {
         val trailingItems = if (state.isLoading) 1 else 0
         val totalItems = if (state.messages.isEmpty()) 1 else state.messages.size
         val targetIndex = (totalItems + trailingItems - 1).coerceAtLeast(0)
         listState.animateScrollToItem(targetIndex)
+    }
+
+    // When keyboard opens, instantly snap to bottom so the latest message stays visible
+    LaunchedEffect(imeVisible) {
+        if (imeVisible) {
+            val trailingItems = if (state.isLoading) 1 else 0
+            val totalItems = if (state.messages.isEmpty()) 1 else state.messages.size
+            val targetIndex = (totalItems + trailingItems - 1).coerceAtLeast(0)
+            listState.scrollToItem(targetIndex)
+        }
     }
 
     FitGptScaffold(

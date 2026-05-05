@@ -42,6 +42,13 @@ class RemoteWardrobeRepository(
 ) : WardrobeRepository {
     private val logTag = "WARDROBE_DEBUG"
     private var cachedItemsById = emptyMap<Int, ClothingItem>()
+    // Local-only items saved when the backend is unreachable (negative IDs, in-memory)
+    private val localPendingItems = mutableMapOf<Int, ClothingItem>()
+
+    private fun nextLocalId(): Int {
+        val base = -(System.currentTimeMillis().and(0x7FFFFFFFL).toInt())
+        return if (localPendingItems.containsKey(base)) base - 1 else base
+    }
 
     override suspend fun getWardrobeItems(
         includeArchived: Boolean,
@@ -78,41 +85,73 @@ class RemoteWardrobeRepository(
             favoritesOnly = favoritesOnly
         ).map { dto -> dto.toDomainWithLocalImage() }
         cachedItemsById = cachedItemsById + items.associateBy { it.id }
-        return items
+        val pending = localPendingItems.values.toList()
+        return items + pending
     }
 
     override suspend fun addItem(item: ClothingItem): ClothingItem {
-        val response = api.addWardrobeItem(item.toBackendCreateRequest())
-        val localImageUrl = imageStore?.attachExistingImageToItem(response.id, item.imageUrl)
-        val createdFromBackend = response.toDomainWithLocalImage()
-        val created = createdFromBackend.copy(imageUrl = localImageUrl ?: createdFromBackend.imageUrl)
-        cachedItemsById = cachedItemsById + (created.id to created)
-        Log.d(logTag, "API response: $created")
-        return created
+        return try {
+            val response = api.addWardrobeItem(item.toBackendCreateRequest())
+            val localImageUrl = imageStore?.attachExistingImageToItem(response.id, item.imageUrl)
+            val createdFromBackend = response.toDomainWithLocalImage()
+            val created = createdFromBackend.copy(imageUrl = localImageUrl ?: createdFromBackend.imageUrl)
+            cachedItemsById = cachedItemsById + (created.id to created)
+            Log.d(logTag, "API response: $created")
+            created
+        } catch (e: Exception) {
+            Log.w(logTag, "addItem backend unavailable, saving locally: ${e.javaClass.simpleName}: ${e.message}")
+            val localId = nextLocalId()
+            val saved = item.copy(id = localId)
+            localPendingItems[localId] = saved
+            cachedItemsById = cachedItemsById + (localId to saved)
+            saved
+        }
     }
 
     override suspend fun addItemWithPhoto(item: ClothingItem, photo: UploadImagePayload): ClothingItem {
-        val response = api.addWardrobeItem(item.toBackendCreateRequest())
-        val localImageUrl = imageStore?.saveImageForItem(response.id, photo.bytes, photo.fileName)
-        val created = response.toDomainWithLocalImage().copy(imageUrl = localImageUrl)
-        cachedItemsById = cachedItemsById + (created.id to created)
-        Log.d(logTag, "API response: $created")
-        return created
+        return try {
+            val response = api.addWardrobeItem(item.toBackendCreateRequest())
+            val localImageUrl = imageStore?.saveImageForItem(response.id, photo.bytes, photo.fileName)
+            val created = response.toDomainWithLocalImage().copy(imageUrl = localImageUrl)
+            cachedItemsById = cachedItemsById + (created.id to created)
+            Log.d(logTag, "API response: $created")
+            created
+        } catch (e: Exception) {
+            Log.w(logTag, "addItemWithPhoto backend unavailable, saving locally: ${e.javaClass.simpleName}: ${e.message}")
+            val localId = nextLocalId()
+            val localImageUrl = imageStore?.saveTemporaryImage(photo.bytes, photo.fileName) ?: item.imageUrl
+            val saved = item.copy(id = localId, imageUrl = localImageUrl)
+            localPendingItems[localId] = saved
+            cachedItemsById = cachedItemsById + (localId to saved)
+            saved
+        }
     }
 
     override suspend fun addItemsBulk(items: List<ClothingItem>): List<ClothingItem> {
-        val response = api.addWardrobeItemsBulk(
-            BulkCreateClothingItemsRequestDto(items = items.map { it.toBackendCreateRequest() })
-        )
-        val createdItems = response.results.mapNotNull { result ->
-            val dto = result.item ?: return@mapNotNull null
-            val sourceImage = items.getOrNull(result.index)?.imageUrl
-            val localImageUrl = imageStore?.attachExistingImageToItem(dto.id, sourceImage)
-            val createdFromBackend = dto.toDomainWithLocalImage()
-            createdFromBackend.copy(imageUrl = localImageUrl ?: createdFromBackend.imageUrl)
+        return try {
+            val response = api.addWardrobeItemsBulk(
+                BulkCreateClothingItemsRequestDto(items = items.map { it.toBackendCreateRequest() })
+            )
+            val createdItems = response.results.mapNotNull { result ->
+                val dto = result.item ?: return@mapNotNull null
+                val sourceImage = items.getOrNull(result.index)?.imageUrl
+                val localImageUrl = imageStore?.attachExistingImageToItem(dto.id, sourceImage)
+                val createdFromBackend = dto.toDomainWithLocalImage()
+                createdFromBackend.copy(imageUrl = localImageUrl ?: createdFromBackend.imageUrl)
+            }
+            cachedItemsById = cachedItemsById + createdItems.associateBy { it.id }
+            createdItems
+        } catch (e: Exception) {
+            Log.w(logTag, "addItemsBulk backend unavailable, saving locally: ${e.javaClass.simpleName}: ${e.message}")
+            val saved = items.map { item ->
+                val localId = nextLocalId()
+                item.copy(id = localId).also { localItem ->
+                    localPendingItems[localId] = localItem
+                    cachedItemsById = cachedItemsById + (localId to localItem)
+                }
+            }
+            saved
         }
-        cachedItemsById = cachedItemsById + createdItems.associateBy { it.id }
-        return createdItems
     }
 
     override suspend fun suggestTags(item: ClothingItem): TagSuggestion {
