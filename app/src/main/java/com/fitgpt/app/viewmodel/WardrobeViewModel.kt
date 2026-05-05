@@ -272,6 +272,7 @@ class WardrobeViewModel(
             try {
                 val created = repository.addItem(item)
                 Log.d(wardrobeLogTag, "Item added: $created")
+                publishSavedItems(listOf(created))
                 _itemSaveState.value = UiState.Success(1)
             } catch (exception: Exception) {
                 Log.e(wardrobeLogTag, "add item failed", exception)
@@ -295,6 +296,7 @@ class WardrobeViewModel(
                 val created = repository.addItemWithPhoto(item, photo)
                 Log.d(wardrobeLogTag, "API response: $created")
                 Log.d(wardrobeLogTag, "Item added: $created")
+                publishSavedItems(listOf(created))
                 _itemSaveState.value = UiState.Success(1)
             } catch (exception: Exception) {
                 Log.e(wardrobeLogTag, "add item with photo failed", exception)
@@ -318,6 +320,7 @@ class WardrobeViewModel(
             try {
                 savedItems = repository.addItemsBulk(items)
                 Log.d(wardrobeLogTag, "API response: $savedItems")
+                publishSavedItems(savedItems)
                 _bulkItemSaveState.value = UiState.Success(savedItems.size)
             } catch (exception: Exception) {
                 Log.e(wardrobeLogTag, "bulk add item failed", exception)
@@ -933,6 +936,13 @@ class WardrobeViewModel(
         allItems.addAll(items)
         Log.d(wardrobeLogTag, "Fetched items count: ${items.size}")
         _wardrobeState.value = UiState.Success(items)
+    }
+
+    private fun publishSavedItems(savedItems: List<ClothingItem>) {
+        if (savedItems.isEmpty()) return
+        val merged = (savedItems + allItems)
+            .distinctBy { it.id }
+        publishWardrobeItems(merged)
     }
 
     private fun refreshWardrobeInsights() {

@@ -44,10 +44,21 @@ class RemoteWardrobeRepository(
     private var cachedItemsById = emptyMap<Int, ClothingItem>()
     // Local-only items saved when the backend is unreachable (negative IDs, in-memory)
     private val localPendingItems = mutableMapOf<Int, ClothingItem>()
+    private var nextLocalItemId = -1
 
     private fun nextLocalId(): Int {
-        val base = -(System.currentTimeMillis().and(0x7FFFFFFFL).toInt())
-        return if (localPendingItems.containsKey(base)) base - 1 else base
+        while (localPendingItems.containsKey(nextLocalItemId) || cachedItemsById.containsKey(nextLocalItemId)) {
+            nextLocalItemId--
+        }
+        return nextLocalItemId--
+    }
+
+    private fun savePendingLocalItem(item: ClothingItem): ClothingItem {
+        val localId = nextLocalId()
+        val saved = item.copy(id = localId)
+        localPendingItems[localId] = saved
+        cachedItemsById = cachedItemsById + (localId to saved)
+        return saved
     }
 
     override suspend fun getWardrobeItems(
@@ -100,11 +111,7 @@ class RemoteWardrobeRepository(
             created
         } catch (e: Exception) {
             Log.w(logTag, "addItem backend unavailable, saving locally: ${e.javaClass.simpleName}: ${e.message}")
-            val localId = nextLocalId()
-            val saved = item.copy(id = localId)
-            localPendingItems[localId] = saved
-            cachedItemsById = cachedItemsById + (localId to saved)
-            saved
+            savePendingLocalItem(item)
         }
     }
 
@@ -132,25 +139,32 @@ class RemoteWardrobeRepository(
             val response = api.addWardrobeItemsBulk(
                 BulkCreateClothingItemsRequestDto(items = items.map { it.toBackendCreateRequest() })
             )
+            val handledIndexes = mutableSetOf<Int>()
             val createdItems = response.results.mapNotNull { result ->
-                val dto = result.item ?: return@mapNotNull null
+                handledIndexes += result.index
+                val originalItem = items.getOrNull(result.index)
+                val dto = result.item
+                if (dto == null) {
+                    Log.w(logTag, "bulk item ${result.index} failed, saving locally: ${result.error}")
+                    return@mapNotNull originalItem?.let(::savePendingLocalItem)
+                }
                 val sourceImage = items.getOrNull(result.index)?.imageUrl
                 val localImageUrl = imageStore?.attachExistingImageToItem(dto.id, sourceImage)
                 val createdFromBackend = dto.toDomainWithLocalImage()
                 createdFromBackend.copy(imageUrl = localImageUrl ?: createdFromBackend.imageUrl)
             }
-            cachedItemsById = cachedItemsById + createdItems.associateBy { it.id }
-            createdItems
-        } catch (e: Exception) {
-            Log.w(logTag, "addItemsBulk backend unavailable, saving locally: ${e.javaClass.simpleName}: ${e.message}")
-            val saved = items.map { item ->
-                val localId = nextLocalId()
-                item.copy(id = localId).also { localItem ->
-                    localPendingItems[localId] = localItem
-                    cachedItemsById = cachedItemsById + (localId to localItem)
+            val missingItems = items.mapIndexedNotNull { index, item ->
+                if (index in handledIndexes) null else {
+                    Log.w(logTag, "bulk item $index missing from backend response, saving locally")
+                    savePendingLocalItem(item)
                 }
             }
-            saved
+            val savedItems = createdItems + missingItems
+            cachedItemsById = cachedItemsById + savedItems.associateBy { it.id }
+            savedItems
+        } catch (e: Exception) {
+            Log.w(logTag, "addItemsBulk backend unavailable, saving locally: ${e.javaClass.simpleName}: ${e.message}")
+            items.map(::savePendingLocalItem)
         }
     }
 

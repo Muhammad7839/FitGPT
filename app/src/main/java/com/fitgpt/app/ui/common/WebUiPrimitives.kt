@@ -1,5 +1,6 @@
 package com.fitgpt.app.ui.common
 
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
@@ -23,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 
@@ -155,9 +157,16 @@ fun RemoteImagePreview(
         return
     }
 
+    val model = if (imageUrl.startsWith("file:", ignoreCase = true)) {
+        Uri.parse(imageUrl)
+    } else {
+        imageUrl
+    }
+
     AsyncImage(
-        model = imageUrl,
+        model = model,
         contentDescription = contentDescription,
-        modifier = modifier.clip(shape)
+        modifier = modifier.clip(shape),
+        contentScale = ContentScale.Crop
     )
 }
