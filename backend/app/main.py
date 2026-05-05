@@ -167,11 +167,11 @@ def _ensure_runtime_schema() -> None:
     if "height_cm" not in user_columns:
         user_alters.append("ALTER TABLE users ADD COLUMN height_cm INTEGER")
     if "is_active" not in user_columns:
-        user_alters.append("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1")
+        user_alters.append("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT true")
     if "is_verified" not in user_columns:
-        user_alters.append("ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 0")
+        user_alters.append("ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT false")
     if "onboarding_complete" not in user_columns:
-        user_alters.append("ALTER TABLE users ADD COLUMN onboarding_complete BOOLEAN DEFAULT 0")
+        user_alters.append("ALTER TABLE users ADD COLUMN onboarding_complete BOOLEAN DEFAULT false")
     if "verification_token" not in user_columns:
         user_alters.append("ALTER TABLE users ADD COLUMN verification_token VARCHAR")
     if "verification_token_expires_at" not in user_columns:
@@ -181,9 +181,12 @@ def _ensure_runtime_schema() -> None:
     if "reset_token_expires_at" not in user_columns:
         user_alters.append("ALTER TABLE users ADD COLUMN reset_token_expires_at INTEGER")
     if user_alters:
-        with engine.begin() as connection:
-            for sql in user_alters:
-                connection.execute(text(sql))
+        try:
+            with engine.begin() as connection:
+                for sql in user_alters:
+                    connection.execute(text(sql))
+        except SQLAlchemyError:
+            logger.exception("User schema patch failed; some columns may be missing")
 
     if "clothing_items" in table_names:
         clothing_columns = {column["name"] for column in inspector.get_columns("clothing_items")}
@@ -191,7 +194,7 @@ def _ensure_runtime_schema() -> None:
         if "layer_type" not in clothing_columns:
             pending_alters.append("ALTER TABLE clothing_items ADD COLUMN layer_type VARCHAR")
         if "is_one_piece" not in clothing_columns:
-            pending_alters.append("ALTER TABLE clothing_items ADD COLUMN is_one_piece BOOLEAN DEFAULT 0")
+            pending_alters.append("ALTER TABLE clothing_items ADD COLUMN is_one_piece BOOLEAN DEFAULT false")
         if "set_identifier" not in clothing_columns:
             pending_alters.append("ALTER TABLE clothing_items ADD COLUMN set_identifier VARCHAR")
         if "style_tags_json" not in clothing_columns:
@@ -217,9 +220,12 @@ def _ensure_runtime_schema() -> None:
         if "accessory_type" not in clothing_columns:
             pending_alters.append("ALTER TABLE clothing_items ADD COLUMN accessory_type VARCHAR")
         if pending_alters:
-            with engine.begin() as connection:
-                for sql in pending_alters:
-                    connection.execute(text(sql))
+            try:
+                with engine.begin() as connection:
+                    for sql in pending_alters:
+                        connection.execute(text(sql))
+            except SQLAlchemyError:
+                logger.exception("Clothing items schema patch failed; some columns may be missing")
 
     index_statements: list[str] = []
     if "clothing_items" in table_names:
