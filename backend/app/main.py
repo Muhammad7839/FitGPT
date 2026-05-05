@@ -175,7 +175,7 @@ def _ensure_runtime_schema() -> None:
     if "verification_token" not in user_columns:
         user_alters.append("ALTER TABLE users ADD COLUMN verification_token VARCHAR")
     if "verification_token_expires_at" not in user_columns:
-        user_alters.append("ALTER TABLE users ADD COLUMN verification_token_expires_at DATETIME")
+        user_alters.append("ALTER TABLE users ADD COLUMN verification_token_expires_at TIMESTAMP")
     if "reset_token_hash" not in user_columns:
         user_alters.append("ALTER TABLE users ADD COLUMN reset_token_hash VARCHAR")
     if "reset_token_expires_at" not in user_columns:
