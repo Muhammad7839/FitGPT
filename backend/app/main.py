@@ -135,14 +135,10 @@ def _ensure_rate_limit_schema(inspector) -> None:
 
 
 def _ensure_runtime_schema() -> None:
-    import os
     """Apply minimal additive schema changes for local environments without migrations."""
     # TODO: Replace this startup schema patching with reviewed migrations before production hardening.
     inspector = inspect(engine)
     _ensure_rate_limit_schema(inspector)
-
-    if os.getenv("DATABASE_URL") and not os.getenv("RUN_SCHEMA_PATCH"):
-        return
 
     table_names = set(inspector.get_table_names())
     if "users" not in table_names:

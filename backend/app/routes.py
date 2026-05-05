@@ -713,9 +713,16 @@ def register_user(user: schemas.UserCreate, request: Request, db: Session = Depe
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Email already registered") from exc
-    token = secrets.token_urlsafe(32)
-    crud.set_verification_token(db, created, token, datetime.utcnow() + timedelta(hours=24))
-    send_verification_email(created.email, token)
+    try:
+        token = secrets.token_urlsafe(32)
+        crud.set_verification_token(db, created, token, datetime.utcnow() + timedelta(hours=24))
+        send_verification_email(created.email, token)
+    except Exception:
+        logger.warning(
+            "Verification token setup failed for new user %s — continuing without it",
+            created.email,
+        )
+
     return created
 
 
