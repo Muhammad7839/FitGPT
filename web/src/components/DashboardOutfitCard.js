@@ -661,6 +661,21 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         typeof navigator.maxTouchPoints === "number" &&
         navigator.maxTouchPoints > 1);
 
+    const mqlOn = (mql, fn) => {
+      if (typeof mql.addEventListener === "function") {
+        mql.addEventListener("change", fn);
+      } else if (typeof mql.addListener === "function") {
+        mql.addListener(fn);
+      }
+    };
+    const mqlOff = (mql, fn) => {
+      if (typeof mql.removeEventListener === "function") {
+        mql.removeEventListener("change", fn);
+      } else if (typeof mql.removeListener === "function") {
+        mql.removeListener(fn);
+      }
+    };
+
     let ro = null;
     let raf = 0;
     let start = null;
@@ -721,11 +736,22 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       }
     };
 
+    const onVisible = () => {
+      if (document.visibilityState === "visible") sync();
+    };
+    const onPageShow = (e) => {
+      if (e.persisted) sync();
+    };
+
     sync();
-    mobileMq.addEventListener("change", sync);
+    mqlOn(mobileMq, sync);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onPageShow);
 
     return () => {
-      mobileMq.removeEventListener("change", sync);
+      mqlOff(mobileMq, sync);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
       stopJs();
     };
   }, []);
