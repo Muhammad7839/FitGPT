@@ -1,6 +1,6 @@
 # FitGPT Documentation
 
-This folder contains all product and technical documentation for FitGPT, organized into two sections.
+This folder contains all product and technical documentation for FitGPT, organized into feature docs, demo readiness, and internal process notes.
 
 ---
 
@@ -24,6 +24,14 @@ Describes what the app does and how each part of the system works. Start here if
 | [user_engagement.md](features/user_engagement.md) | Feedback learning, wear history, rotation insights, and wardrobe gap detection |
 | [accessibility.md](features/accessibility.md) | Accessibility features: high-contrast themes, large text mode, keyboard navigation |
 | [weather_and_time_context.md](features/weather_and_time_context.md) | How weather and time-of-day context are fetched, normalized, and applied to recommendations |
+
+---
+
+## Live demos & symposium
+
+| File | Description |
+|------|-------------|
+| [symposium-readiness.md](symposium-readiness.md) | Day-before and day-of checklist, production smoke steps, backup plans, and judge-facing talking points (no secrets committed) |
 
 ---
 

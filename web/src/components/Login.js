@@ -4,6 +4,7 @@ import { loginWithEmail, getMe } from "../api/authApi";
 import { useAuth } from "../auth/AuthProvider";
 import { migrateGuestData, clearGuestData } from "../utils/userStorage";
 import { isNetworkError } from "../utils/helpers";
+import { SYMPOSIUM_APK_DOWNLOAD_URL } from "../constants/symposiumRelease";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -23,6 +24,12 @@ export default function Login() {
     (params.get("reason") === "guest_protected"
       ? "Sign in to unlock the full FitGPT experience."
       : "");
+
+  const androidApkQrSrc = useMemo(
+    () =>
+      `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(SYMPOSIUM_APK_DOWNLOAD_URL)}`,
+    []
+  );
 
   const emailOk = useMemo(() => {
     const e = email.trim();
@@ -181,12 +188,12 @@ export default function Login() {
         <div className="authQrCard">
           <img
             className="authQrCode"
-            src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https%3A%2F%2Fgithub.com%2FMuhammad7839%2FFitGPT%2Freleases%2Fdownload%2Fsymposium-demo-v1%2Fapp-debug.apk"
+            src={androidApkQrSrc}
             alt="QR code to download FitGPT Android app"
             loading="lazy"
           />
           <span className="authQrLabel">Android app</span>
-          <span className="authQrSub">Download APK</span>
+          <span className="authQrSub">Download FitGPT APK</span>
         </div>
       </div>
     </div>
