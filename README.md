@@ -4,6 +4,8 @@ FitGPT is a full-stack application that helps users manage their wardrobe, gener
 
 The goal was to build something practical and consistent across platforms. Instead of treating web, mobile, and backend as separate systems, the focus was on a single source of truth for data, logic, and user experience.
 
+**Repository:** [github.com/Muhammad7839/FitGPT](https://github.com/Muhammad7839/FitGPT) — default branch **`main`**.
+
 ---
 
 ## What this project demonstrates
@@ -104,7 +106,7 @@ On Render, set **`SECRET_KEY`** and **`DATABASE_URL`** (PostgreSQL) in the servi
 
 **Third-party services:** OpenWeather (weather), Groq `llama-3.1-8b-instant` (AURA chat + AI recommendations).
 
-**Tests:** pytest 9.0 (backend, 185+ tests), Jest + React Testing Library (web, 600+ tests).
+**Tests:** pytest 9.0 (backend, 185+ tests), Jest + React Testing Library (web, 617 tests in CI).
 
 **CI:** GitHub Actions — backend pytest on Python 3.12, web `npm test` + `npm run build` on Node 20.
 
@@ -188,6 +190,14 @@ Runs all Jest suites once and exits, matching CI behavior.
 cd web
 npm run build
 ```
+
+### Android (from repo root)
+
+```bash
+./gradlew :app:assembleDebug :app:assembleRelease
+```
+
+Produces APKs under `app/build/outputs/apk/`. Public demo installs use the hosted APK — see [/download](https://www.fitgpt.tech/download) and [`symposium-assets/README.md`](symposium-assets/README.md).
 
 ---
 
