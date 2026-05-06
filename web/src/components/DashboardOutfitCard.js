@@ -11,7 +11,6 @@ import useWardrobe from "../hooks/useWardrobe";
 import { fetchAIRecommendations } from "../api/recommendationsApi";
 import { submitRecommendationFeedback } from "../api/recommendationFeedbackApi";
 import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
-import ClothCard from "./ClothCard";
 import MannequinViewer from "./MannequinViewer";
 import MeshGradient from "./MeshGradient";
 import ErrorBoundary from "./ErrorBoundary";
@@ -96,13 +95,6 @@ const dismissedUnderusedAlertsStore = makeObjectStore(UNDERUSED_ALERTS_KEY);
 
 function recommendationSignature(outfit) {
   return idsSignature((Array.isArray(outfit) ? outfit : []).map((item) => item?.id));
-}
-
-function clothCardKey(outfit, item, refreshToken, recSeed) {
-  const outfitSig = recommendationSignature(outfit);
-  const itemId = (item?.id ?? "").toString();
-  const image = (item?.image_url || "").toString();
-  return `${outfitSig}|${itemId}|${image}|${refreshToken}|${recSeed}`;
 }
 
 function readRecentRecommendationSigs() {
@@ -2366,7 +2358,16 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
               <div className="dashDemoOutfitGrid">
                 {demoFirstRunOutfit.map((item) => (
                   <div key={item.id} className="dashDemoOutfitTile">
-                    <div className="dashDemoOutfitSwatch" style={{ background: colorToCss(item.color) }} aria-hidden="true" />
+                    {item.image_url ? (
+                      <img
+                        className="dashDemoOutfitImg"
+                        src={item.image_url}
+                        alt={item.name}
+                        draggable={false}
+                      />
+                    ) : (
+                      <div className="dashDemoOutfitSwatch" style={{ background: colorToCss(item.color) }} aria-hidden="true" />
+                    )}
                     <div className="dashDemoOutfitName">{item.name}</div>
                     <div className="dashDemoOutfitMeta">{item.category}</div>
                   </div>
@@ -2553,11 +2554,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                           onPointerLeave={onTiltLeave}
                         >
                           <div className="dashSquareRole">{outfitRoleLabel(item)}</div>
-                          {idx === selectedIdx ? (
-                            <ErrorBoundary fallback={item.image_url ? <img className="dashSquareImg" src={item.image_url} alt={item.name} /> : <div className="dashSquareImg" aria-hidden="true" />}>
-                              <ClothCard key={clothCardKey(outfit, item, aiRefreshToken, recSeed)} imageUrl={item.image_url} className="dashSquareImg" />
-                            </ErrorBoundary>
-                          ) : item.image_url ? (
+                          {item.image_url ? (
                             <img className="dashSquareImg" src={item.image_url} alt={item.name} />
                           ) : (
                             <div className="dashSquareImg" aria-hidden="true" />
