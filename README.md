@@ -85,6 +85,13 @@ All core logic lives in one place so the platforms don't drift.
 
 On Render, set **`SECRET_KEY`** and **`DATABASE_URL`** (PostgreSQL) in the service environment. The repo [`render.yaml`](render.yaml) sets `ENVIRONMENT=production` so the API refuses the dev default secret and SQLite unless you explicitly opt in with `ALLOW_SQLITE_IN_PRODUCTION=true`.
 
+### Production verification (quick)
+
+- **Backend health:** `GET https://fitgpt-backend-tdiq.onrender.com/health` (expect HTTP 200).
+- **Web:** [www.fitgpt.tech](https://www.fitgpt.tech) — public app.
+- **Download / Android APK:** [www.fitgpt.tech/download](https://www.fitgpt.tech/download) — primary entry for QR and sideload instructions; direct APK and GitHub release fallback are documented there and in [`symposium-assets/README.md`](symposium-assets/README.md).
+- **Automated smoke (health only, no secrets):** from repo root, run `./scripts/smoke-test-production.sh` — curls `/health` and prints URLs for manual checks. Full day-of steps: [`docs/symposium-readiness.md`](docs/symposium-readiness.md).
+
 ---
 
 ## Tech stack
@@ -97,7 +104,7 @@ On Render, set **`SECRET_KEY`** and **`DATABASE_URL`** (PostgreSQL) in the servi
 
 **Third-party services:** OpenWeather (weather), Groq `llama-3.1-8b-instant` (AURA chat + AI recommendations).
 
-**Tests:** pytest 9.0 (backend, 180+ tests), Jest + React Testing Library (web).
+**Tests:** pytest 9.0 (backend, 185+ tests), Jest + React Testing Library (web, 600+ tests).
 
 **CI:** GitHub Actions — backend pytest on Python 3.12, web `npm test` + `npm run build` on Node 20.
 
