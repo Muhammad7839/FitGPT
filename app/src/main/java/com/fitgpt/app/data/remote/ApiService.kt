@@ -49,6 +49,7 @@ import com.fitgpt.app.data.remote.dto.AvatarUploadResponse
 import com.fitgpt.app.data.remote.dto.UserProfileSummaryResponse
 import com.fitgpt.app.data.remote.dto.UserProfileUpdateRequest
 import com.fitgpt.app.data.remote.dto.UserResponse
+import com.fitgpt.app.data.remote.dto.WardrobeItemsResponseDto
 import com.fitgpt.app.data.remote.dto.WardrobeGapResponseDto
 import com.fitgpt.app.data.remote.dto.WeatherCurrentResponseDto
 import retrofit2.http.Body
@@ -136,7 +137,7 @@ interface ApiService {
         @Query("occasion_tag") occasionTag: String? = null,
         @Query("accessory_type") accessoryType: String? = null,
         @Query("favorites_only") favoritesOnly: Boolean = false
-    ): List<ClothingItemDto>
+    ): WardrobeItemsResponseDto
 
     @GET("wardrobe/items/favorites")
     suspend fun getFavoriteWardrobeItems(): List<ClothingItemDto>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { useNavigate } from "react-router-dom";
 
@@ -581,6 +581,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const feedbackNoticeTimerRef = useRef(null);
   const feedbackPromptTimerRef = useRef(null);
   const feedbackPromptFadeTimerRef = useRef(null);
+  const dashStyleMarqueeTrackRef = useRef(null);
 
   const [historyEntries, setHistoryEntries] = useState([]);
   const [dismissedRotationAlerts, setDismissedRotationAlerts] = useState({});
@@ -636,6 +637,116 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const nudgeTimerRef = useRef(null);
 
   useEffect(() => { recordVisit(user); }, [user]);
+
+  /* iOS WebKit often drops CSS marquee animations; drive the track with rAF on
+   * phones/tablets (and narrow viewports) so behavior matches desktop without
+   * relying on pointer heuristics or system "Reduce Motion". */
+  useLayoutEffect(() => {
+    const track = dashStyleMarqueeTrackRef.current;
+    if (!track) return undefined;
+
+    const mobileMq = window.matchMedia("(max-width: 768px)");
+    const isIOS =
+      /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (typeof navigator !== "undefined" &&
+        navigator.platform === "MacIntel" &&
+        typeof navigator.maxTouchPoints === "number" &&
+        navigator.maxTouchPoints > 1);
+
+    const mqlOn = (mql, fn) => {
+      if (typeof mql.addEventListener === "function") {
+        mql.addEventListener("change", fn);
+      } else if (typeof mql.addListener === "function") {
+        mql.addListener(fn);
+      }
+    };
+    const mqlOff = (mql, fn) => {
+      if (typeof mql.removeEventListener === "function") {
+        mql.removeEventListener("change", fn);
+      } else if (typeof mql.removeListener === "function") {
+        mql.removeListener(fn);
+      }
+    };
+
+    let ro = null;
+    let raf = 0;
+    let start = null;
+    let scrollHalf = 0;
+    const durationMs = 48000;
+
+    const measure = () => {
+      const w = track.scrollWidth;
+      scrollHalf = w > 0 ? w / 2 : 0;
+    };
+
+    const stopJs = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      start = null;
+      track.style.transform = "";
+      track.style.webkitAnimation = "";
+      track.style.animation = "";
+      if (ro) {
+        ro.disconnect();
+        ro = null;
+      }
+    };
+
+    const tick = (t) => {
+      if (scrollHalf <= 0) {
+        measure();
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      if (start == null) start = t;
+      const elapsed = (t - start) % durationMs;
+      const x = -(elapsed / durationMs) * scrollHalf;
+      track.style.transform = `translate3d(${x}px,0,0)`;
+      raf = requestAnimationFrame(tick);
+    };
+
+    const startJs = () => {
+      stopJs();
+      track.style.webkitAnimation = "none";
+      track.style.animation = "none";
+      measure();
+      raf = requestAnimationFrame(tick);
+      if (typeof ResizeObserver !== "undefined") {
+        ro = new ResizeObserver(() => {
+          measure();
+        });
+        ro.observe(track);
+      }
+    };
+
+    const sync = () => {
+      const useJsMarquee = mobileMq.matches || isIOS;
+      if (useJsMarquee) {
+        startJs();
+      } else {
+        stopJs();
+      }
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") sync();
+    };
+    const onPageShow = (e) => {
+      if (e.persisted) sync();
+    };
+
+    sync();
+    mqlOn(mobileMq, sync);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onPageShow);
+
+    return () => {
+      mqlOff(mobileMq, sync);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
+      stopJs();
+    };
+  }, []);
 
   // Editorial mode: load planned outfits for the "Tomorrow" insight card.
   // Only fires when the editorial theme is active so we don't pay for it
@@ -2221,7 +2332,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       </div>
 
       <div className="dashStyleMarquee" aria-label="Style tips">
-        <div className="dashStyleMarqueeTrack" aria-hidden="true">
+        <div className="dashStyleMarqueeTrack" aria-hidden="true" ref={dashStyleMarqueeTrackRef}>
           {STYLE_TIPS.concat(STYLE_TIPS).map((tip, index) => (
             <span className="dashStyleMarqueeItem" key={`mq-${index}`}>
               <span className="dashStyleMarqueeDot" aria-hidden="true" />

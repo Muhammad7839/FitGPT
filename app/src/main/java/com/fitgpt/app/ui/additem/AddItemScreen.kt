@@ -305,14 +305,15 @@ fun AddItemScreen(
 
         if (uris.size == 1) {
             val uri = uris.first()
-            val bytes = readBytes(context, uri)
-            if (bytes == null) {
+            val rawBytes = readBytes(context, uri)
+            if (rawBytes == null) {
                 photoFlowState = PhotoFlowState.ERROR
                 cameraMessage = "Unable to read selected image"
                 return@rememberLauncherForActivityResult
             }
+            val bytes = compressImageBytes(rawBytes)
             if (!isImagePayloadAllowed(bytes.size)) {
-                Log.w(UPLOAD_LOG_TAG, "batch image rejected size=${bytes.size}")
+                Log.w(UPLOAD_LOG_TAG, "gallery image rejected after compression size=${bytes.size}")
                 photoFlowState = PhotoFlowState.ERROR
                 cameraMessage = "Image is too large (max ${MAX_LOCAL_IMAGE_BYTES / (1024 * 1024)}MB)"
                 return@rememberLauncherForActivityResult
@@ -941,14 +942,15 @@ private fun prepareBatchUploadSelection(
     var unreadableCount = 0
 
     uris.forEachIndexed { index, uri ->
-        val bytes = readBytes(context, uri)
-        if (bytes == null) {
+        val rawBytes = readBytes(context, uri)
+        if (rawBytes == null) {
             unreadableCount += 1
             return@forEachIndexed
         }
+        val bytes = compressImageBytes(rawBytes)
         if (!isImagePayloadAllowed(bytes.size)) {
             oversizedCount += 1
-            Log.w(UPLOAD_LOG_TAG, "batch image rejected size=${bytes.size}")
+            Log.w(UPLOAD_LOG_TAG, "batch image rejected after compression size=${bytes.size}")
             return@forEachIndexed
         }
         val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
@@ -1010,6 +1012,25 @@ private fun resolveDisplayName(context: Context, uri: Uri): String? {
 private fun bitmapToJpegBytes(bitmap: Bitmap): ByteArray {
     val output = ByteArrayOutputStream()
     bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
+    return output.toByteArray()
+}
+
+private fun compressImageBytes(bytes: ByteArray, maxPixels: Int = 1600): ByteArray {
+    if (bytes.size <= MAX_LOCAL_IMAGE_BYTES) return bytes
+    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return bytes
+    val scale = minOf(1f, maxPixels.toFloat() / maxOf(bitmap.width, bitmap.height))
+    val scaled = if (scale < 1f) {
+        Bitmap.createScaledBitmap(
+            bitmap,
+            (bitmap.width * scale).toInt().coerceAtLeast(1),
+            (bitmap.height * scale).toInt().coerceAtLeast(1),
+            true
+        )
+    } else bitmap
+    val output = ByteArrayOutputStream()
+    scaled.compress(Bitmap.CompressFormat.JPEG, 85, output)
+    if (scaled != bitmap) scaled.recycle()
+    bitmap.recycle()
     return output.toByteArray()
 }
 

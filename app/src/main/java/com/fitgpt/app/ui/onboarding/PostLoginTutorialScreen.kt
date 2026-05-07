@@ -167,7 +167,7 @@ fun PostLoginTutorialScreen(
                         Text(
                             text = page.message,
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
                             lineHeight = MaterialTheme.typography.bodyLarge.lineHeight
                         )

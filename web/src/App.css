@@ -1475,12 +1475,20 @@
 
 /* ── Page Transition ──────────────────────────────────────── */
 .pageTransition {
+  -webkit-animation: pageFadeSlideIn 350ms ease forwards;
   animation: pageFadeSlideIn 350ms ease forwards;
 }
 
-.pageTransition:has(.splashScreen) {
+.pageTransition.no-transition {
   animation: none;
   opacity: 1;
+}
+
+@supports selector(:has(*)) {
+  .pageTransition:has(.splashScreen) {
+    animation: none;
+    opacity: 1;
+  }
 }
 
 @keyframes pageFadeSlideIn {
@@ -1490,6 +1498,18 @@
   }
   to {
     opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@-webkit-keyframes pageFadeSlideIn {
+  from {
+    opacity: 0;
+    -webkit-transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    -webkit-transform: translateY(0);
   }
 }
 
@@ -1529,6 +1549,15 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   overflow-x: hidden;
@@ -1549,12 +1578,18 @@ a {
 .app {
   min-height: 100vh;
   background: transparent;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .onboarding {
+  width: 100%;
   max-width: 1050px;
   margin: 0 auto;
   padding: 28px 16px 60px;
+  min-width: 0;
 }
 
 .card {
@@ -3164,6 +3199,7 @@ a {
   margin-right: -10px;
   border: 2px solid transparent;
   transition: border-color 180ms ease, background 180ms ease;
+  -webkit-transform-style: preserve-3d;
   transform-style: preserve-3d;
 }
 
@@ -3175,32 +3211,59 @@ a {
 @keyframes outfitSlideIn {
   from {
     opacity: 0;
-    transform: perspective(800px) rotateX(-12deg) translateY(24px) scale(0.95);
+    transform: rotateX(-12deg) translateY(24px) scale(0.95);
   }
   50% {
     opacity: 1;
-    transform: perspective(800px) rotateX(3deg) translateY(-2px) scale(1.01);
+    transform: rotateX(3deg) translateY(-2px) scale(1.01);
   }
   to {
     opacity: 1;
-    transform: perspective(800px) rotateX(0) translateY(0) scale(1);
+    transform: rotateX(0) translateY(0) scale(1);
+  }
+}
+
+@-webkit-keyframes outfitSlideIn {
+  from {
+    opacity: 0;
+    -webkit-transform: rotateX(-12deg) translateY(24px) scale(0.95);
+  }
+  50% {
+    opacity: 1;
+    -webkit-transform: rotateX(3deg) translateY(-2px) scale(1.01);
+  }
+  to {
+    opacity: 1;
+    -webkit-transform: rotateX(0) translateY(0) scale(1);
   }
 }
 
 /* Individual tile 3D flip reveal */
 .dashTileReveal {
   animation: tileReveal 650ms cubic-bezier(0.23, 1, 0.32, 1);
+  -webkit-transform-style: preserve-3d;
   transform-style: preserve-3d;
 }
 
 @keyframes tileReveal {
   from {
     opacity: 0;
-    transform: perspective(600px) rotateY(-70deg) scale(0.85);
+    transform: rotateY(-70deg) scale(0.85);
   }
   55% {
     opacity: 1;
-    transform: perspective(600px) rotateY(8deg) scale(1.02);
+    transform: rotateY(8deg) scale(1.02);
+  }
+}
+
+@-webkit-keyframes tileReveal {
+  from {
+    opacity: 0;
+    -webkit-transform: rotateY(-70deg) scale(0.85);
+  }
+  55% {
+    opacity: 1;
+    -webkit-transform: rotateY(8deg) scale(1.02);
   }
 }
 
@@ -3224,6 +3287,7 @@ a {
   gap: 12px;
   box-shadow: 0 10px 24px rgba(17, 24, 39, 0.08);
   transition: transform 300ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 160ms ease;
+  -webkit-transform-style: preserve-3d;
   transform-style: preserve-3d;
   will-change: transform;
 }
@@ -3290,6 +3354,7 @@ img.dashSquareImg {
 .dashStyleMarquee {
   position: relative;
   overflow: hidden;
+  max-width: 100%;
   margin: 10px 0 0;
   padding: 10px 0;
   border-top: 1px solid rgba(139, 30, 30, 0.12);
@@ -3309,11 +3374,14 @@ img.dashSquareImg {
   display: inline-flex;
   gap: 40px;
   white-space: nowrap;
+  width: max-content;
+  -webkit-animation: dashStyleMarqueeScroll 60s linear infinite;
   animation: dashStyleMarqueeScroll 60s linear infinite;
   will-change: transform;
 }
 
 .dashStyleMarquee:hover .dashStyleMarqueeTrack {
+  -webkit-animation-play-state: paused;
   animation-play-state: paused;
 }
 
@@ -3321,6 +3389,7 @@ img.dashSquareImg {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
   flex-shrink: 0;
   font-size: 13px;
   font-weight: 600;
@@ -3345,23 +3414,53 @@ img.dashSquareImg {
   box-shadow: 0 0 0 3px rgba(196, 60, 60, 0.22);
 }
 
-@keyframes dashStyleMarqueeScroll {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
+@-webkit-keyframes dashStyleMarqueeScroll {
+  from {
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    -webkit-transform: translate3d(-50%, 0, 0);
+    transform: translate3d(-50%, 0, 0);
+  }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .dashStyleMarqueeTrack {
-    animation: none;
-    white-space: normal;
-    flex-wrap: wrap;
-    gap: 14px 24px;
-    padding: 0 14px;
-  }
+@keyframes dashStyleMarqueeScroll {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+
+/* Marquee is decorative (aria-hidden track); keep it scrolling for all users so
+   QR / mobile matches desktop without requiring system motion settings. */
+
+@media (max-width: 768px) {
   .dashStyleMarquee {
+    overflow: hidden;
     mask-image: none;
     -webkit-mask-image: none;
-    overflow: visible;
+    padding: 10px 0;
+  }
+
+  .dashStyleMarqueeTrack {
+    display: inline-flex;
+    gap: 32px;
+    white-space: nowrap;
+    width: max-content;
+    max-width: none;
+    -webkit-animation: dashStyleMarqueeScroll 48s linear infinite;
+    animation: dashStyleMarqueeScroll 48s linear infinite;
+    will-change: transform;
+  }
+
+  .dashStyleMarqueeItem {
+    align-items: center;
+    font-size: 13px;
+    line-height: 1.2;
+    flex: 0 0 auto;
+  }
+
+  .dashStyleMarqueeText {
+    white-space: nowrap;
   }
 }
 
@@ -5280,6 +5379,11 @@ img.dashSquareImg {
 @keyframes wardrobeCardReveal {
   from { opacity: 0; transform: translateY(16px) scale(0.97); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@-webkit-keyframes wardrobeCardReveal {
+  from { opacity: 0; -webkit-transform: translateY(16px) scale(0.97); }
+  to   { opacity: 1; -webkit-transform: translateY(0) scale(1); }
 }
 
 .wardrobeGrid > *:nth-child(1)  { animation-delay:   0ms; }
@@ -22958,6 +23062,18 @@ a:focus-visible {
 }
 
 @media (max-width: 768px) {
+  .pageTransition,
+  .onboarding,
+  .onboardingPage,
+  .dashPage,
+  .wardrobeGrid,
+  .card,
+  .dashWide,
+  .wardrobeCard {
+    max-width: 100%;
+    min-width: 0;
+  }
+
   input,
   input[type="text"],
   input[type="email"],

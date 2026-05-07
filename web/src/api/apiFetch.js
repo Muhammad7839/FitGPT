@@ -6,7 +6,7 @@ import { TOKEN_KEY, AUTH_MODE_KEY } from "../utils/constants";
  * httpOnly cookies avoid that but require same-site backend routing and CSRF protections.
  */
 
-const REQUEST_TIMEOUT_MS = 15000;
+const REQUEST_TIMEOUT_MS = 60000;
 const REFRESH_TOKEN_KEY = "fitgpt_refresh_token_v1";
 
 function isPrivateNetworkHost(hostname) {
@@ -32,6 +32,14 @@ function resolveBaseUrl() {
   }
 
   return "https://fitgpt-backend-tdiq.onrender.com";
+}
+
+export function pingBackendSilently() {
+  const base = resolveBaseUrl();
+  if (!base) return;
+  // Fire and forget — never throws, never shows errors to user
+  fetch(`${base}/health`, { method: "GET", signal: AbortSignal.timeout(90000) })
+    .catch(() => {}); // intentionally swallow all errors
 }
 
 const AUTH_STRATEGY = (process.env.REACT_APP_AUTH_STRATEGY || "token").toLowerCase();
