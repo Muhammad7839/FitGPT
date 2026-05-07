@@ -846,11 +846,17 @@ function metadataScore(item, context) {
   const id = (item?.id ?? "").toString().trim();
   const recentPenalty = id && recentItemCounts ? (recentItemCounts.get(id) || 0) * 2 : 0;
 
-  const styles = normalizeTagArray(item?.style_tags).map(normalizeStyleValue);
-  const occasions = normalizeTagArray(item?.occasion_tags).map(normalizeOccasionValue);
+  const rawStyles = normalizeTagArray(item?.style_tags).map(normalizeStyleValue);
+  const rawOccasions = normalizeTagArray(item?.occasion_tags).map(normalizeOccasionValue);
   const seasons = normalizeTagArray(item?.season_tags);
   const preferredStyles = preferredStylesFromAnswers(answers);
   const preferredOccasions = preferredOccasionsFromAnswers(answers);
+
+  // Fall back to TAG_SUGGESTIONS when the item has no explicit tags so that items
+  // like blazers and dress shoes receive their correct formal classification.
+  const typeSuggestion = TAG_SUGGESTIONS[(item?.clothing_type || "").trim().toLowerCase()];
+  const styles = rawStyles.length > 0 ? rawStyles : (typeSuggestion ? typeSuggestion.style.map(normalizeStyleValue) : []);
+  const occasions = rawOccasions.length > 0 ? rawOccasions : (typeSuggestion ? typeSuggestion.occasion.map(normalizeOccasionValue) : []);
 
   let score = 0;
 

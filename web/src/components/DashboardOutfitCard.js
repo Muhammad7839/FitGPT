@@ -1664,9 +1664,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       window.setTimeout(() => setSaveMsg(""), 2500);
       return;
     }
-    const idx = selectedIdx ?? 0;
-    const outfit = outfits[idx] || outfits[0] || [];
-    if (!outfit.length) return;
     setPlanPickerDate(tomorrowDateStr());
     setShowPlanDatePicker(true);
   };
