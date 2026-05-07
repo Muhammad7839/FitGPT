@@ -3050,8 +3050,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         document.body
       )}
 
-    </div>
-
     {showPlanDatePicker && ReactDOM.createPortal(
       <div className="modalOverlay" onClick={(e) => { if (e.target === e.currentTarget) setShowPlanDatePicker(false); }}>
         <div className="modalCard planDatePickerCard">
@@ -3115,6 +3113,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       document.body
     )}
 
+    </div>
   );
 
 }
