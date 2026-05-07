@@ -852,9 +852,14 @@ function metadataScore(item, context) {
   const preferredStyles = preferredStylesFromAnswers(answers);
   const preferredOccasions = preferredOccasionsFromAnswers(answers);
 
-  // Fall back to TAG_SUGGESTIONS when the item has no explicit tags so that items
-  // like blazers and dress shoes receive their correct formal classification.
-  const typeSuggestion = TAG_SUGGESTIONS[(item?.clothing_type || "").trim().toLowerCase()];
+  // When the user has active preferences, fall back to TAG_SUGGESTIONS for items
+  // that carry no explicit tags. This ensures blazers/dress-shoes etc. receive their
+  // correct formal classification and get penalised on casual occasions.
+  // We do NOT apply the fallback for the no-preference casual-bonus branch below,
+  // because inferring "casual" onto every untagged item skews the neutral baseline.
+  const typeSuggestion = preferredStyles.length || preferredOccasions.length
+    ? TAG_SUGGESTIONS[(item?.clothing_type || "").trim().toLowerCase()]
+    : null;
   const styles = rawStyles.length > 0 ? rawStyles : (typeSuggestion ? typeSuggestion.style.map(normalizeStyleValue) : []);
   const occasions = rawOccasions.length > 0 ? rawOccasions : (typeSuggestion ? typeSuggestion.occasion.map(normalizeOccasionValue) : []);
 
@@ -862,7 +867,8 @@ function metadataScore(item, context) {
 
   if (preferredStyles.length) {
     score += styles.some((style) => preferredStyles.includes(style)) ? 10 : styles.length ? -12 : 2;
-  } else if (styles.includes("casual")) {
+  } else if (rawStyles.includes("casual")) {
+    // Casual bonus only for explicitly tagged items — avoids neutralising weather signal.
     score += 2;
   }
 
