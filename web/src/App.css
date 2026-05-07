@@ -5741,6 +5741,108 @@ img.dashSquareImg {
   background: linear-gradient(180deg, rgba(20, 20, 24, 0.18), rgba(28, 28, 34, 0.98) 42%);
 }
 
+/* Plan date picker */
+.planDatePickerCard {
+  width: min(440px, 94vw);
+}
+
+.planDateQuickBtns {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.planDateDayBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(0,0,0,0.10);
+  background: var(--surface, #fff);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  line-height: 1.3;
+}
+
+.planDateDayBtn:hover {
+  border-color: var(--accent, #8b1e1e);
+  background: rgba(139,30,30,0.05);
+}
+
+.planDateDayBtn.active {
+  border-color: var(--accent, #8b1e1e);
+  background: var(--accent, #8b1e1e);
+  color: #fff;
+}
+
+.planDateDayBtnSub {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+.planDateDayBtn.active .planDateDayBtnSub {
+  opacity: 0.85;
+}
+
+.planDateCustomRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0 2px;
+  border-top: 1px solid rgba(0,0,0,0.07);
+}
+
+.planDateCustomLabel {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.planDateInput {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(0,0,0,0.12);
+  background: var(--surface, #fff);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  min-width: 0;
+}
+
+.planDateInput:focus {
+  border-color: var(--accent, #8b1e1e);
+}
+
+[data-theme="dark"] .planDateDayBtn {
+  border-color: rgba(255,255,255,0.12);
+  background: var(--surface);
+}
+
+[data-theme="dark"] .planDateDayBtn:hover {
+  background: rgba(139,30,30,0.15);
+}
+
+[data-theme="dark"] .planDateDayBtn.active {
+  background: var(--accent, #8b1e1e);
+}
+
+[data-theme="dark"] .planDateCustomRow {
+  border-top-color: rgba(255,255,255,0.08);
+}
+
+[data-theme="dark"] .planDateInput {
+  border-color: rgba(255,255,255,0.12);
+}
+
 .bulkUploadItemCard {
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 16px;

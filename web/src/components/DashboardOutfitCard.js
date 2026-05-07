@@ -570,6 +570,9 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
   const [saveMsg, setSaveMsg] = useState("");
   const [savingSig, setSavingSig] = useState("");
   const [savedSigs, setSavedSigs] = useState(() => new Set());
+
+  const [showPlanDatePicker, setShowPlanDatePicker] = useState(false);
+  const [planPickerDate, setPlanPickerDate] = useState(() => tomorrowDateStr());
   const [savedOutfitEntries, setSavedOutfitEntries] = useState([]);
   const [recentRecommendationSigs, setRecentRecommendationSigs] = useState(() => new Set(readRecentRecommendationSigs()));
   const [recommendationFeedback, setRecommendationFeedback] = useState(() => readRecommendationFeedback(user));
@@ -1655,18 +1658,24 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     navigate("/wardrobe");
   };
 
-  const openPlanModal = async () => {
+  const openPlanModal = () => {
     if (isGuestMode) {
       setSaveMsg("Sign in to save outfit plans.");
       window.setTimeout(() => setSaveMsg(""), 2500);
       return;
     }
-
     const idx = selectedIdx ?? 0;
     const outfit = outfits[idx] || outfits[0] || [];
     if (!outfit.length) return;
+    setPlanPickerDate(tomorrowDateStr());
+    setShowPlanDatePicker(true);
+  };
 
-    const date = tomorrowDateStr();
+  const confirmPlanDate = async () => {
+    if (!planPickerDate) return;
+    const idx = selectedIdx ?? 0;
+    const outfit = outfits[idx] || outfits[0] || [];
+    if (!outfit.length) return;
 
     const itemIds = outfit.map((x) => x?.id).filter(Boolean);
     const itemDetails = outfit.map((x) => ({
@@ -1677,10 +1686,12 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       image_url: x?.image_url || "",
     }));
 
+    setShowPlanDatePicker(false);
+
     await plannedOutfitsApi.planOutfit({
       item_ids: itemIds,
       item_details: itemDetails,
-      planned_date: date,
+      planned_date: planPickerDate,
       occasion: "",
       source: "planner",
     }, user).catch(() => null);
@@ -3040,6 +3051,70 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       )}
 
     </div>
+
+    {showPlanDatePicker && ReactDOM.createPortal(
+      <div className="modalOverlay" onClick={(e) => { if (e.target === e.currentTarget) setShowPlanDatePicker(false); }}>
+        <div className="modalCard planDatePickerCard">
+          <p className="modalTitle">Plan for which day?</p>
+          <p className="modalSub">Choose the day you want to wear this outfit.</p>
+          <div className="planDateQuickBtns">
+            {(() => {
+              const opts = [];
+              const today = new Date();
+              for (let i = 0; i <= 6; i++) {
+                const d = new Date(today);
+                d.setDate(today.getDate() + i);
+                const key = [
+                  d.getFullYear(),
+                  String(d.getMonth() + 1).padStart(2, "0"),
+                  String(d.getDate()).padStart(2, "0"),
+                ].join("-");
+                const label = i === 0 ? "Today" : i === 1 ? "Tomorrow"
+                  : d.toLocaleDateString(undefined, { weekday: "long" });
+                opts.push(
+                  <button
+                    key={key}
+                    type="button"
+                    className={"planDateDayBtn" + (planPickerDate === key ? " active" : "")}
+                    onClick={() => setPlanPickerDate(key)}
+                  >
+                    {label}
+                    <span className="planDateDayBtnSub">
+                      {d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    </span>
+                  </button>
+                );
+              }
+              return opts;
+            })()}
+          </div>
+          <div className="planDateCustomRow">
+            <label className="planDateCustomLabel" htmlFor="planDateInput">Or pick a specific date</label>
+            <input
+              id="planDateInput"
+              type="date"
+              className="planDateInput"
+              value={planPickerDate}
+              min={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setPlanPickerDate(e.target.value)}
+            />
+          </div>
+          <div className="modalActions">
+            <button type="button" className="btnSecondary" onClick={() => setShowPlanDatePicker(false)}>Cancel</button>
+            <button
+              type="button"
+              className="btnPrimary"
+              disabled={!planPickerDate}
+              onClick={confirmPlanDate}
+            >
+              Plan this outfit
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+
   );
 
 }
