@@ -449,8 +449,8 @@ fun AddItemScreen(
         val items = successfulEntries.mapIndexedNotNull { index, entry ->
             val url = entry.imageUrl?.trim()?.takeIf(String::isNotEmpty) ?: return@mapIndexedNotNull null
             val hint = batchAutoFillHints[entry.fileName]
-            // Fall back to "Tops" so uploads always land in the wardrobe; user can edit after.
-            val resolvedCategory = typedCategory.ifBlank { hint?.category.orEmpty().ifBlank { "Tops" } }
+            // Fall back to "Top" so uploads match wardrobe filters, outfit builder, and backend defaults.
+            val resolvedCategory = typedCategory.ifBlank { hint?.category.orEmpty().ifBlank { "Top" } }
             val resolvedClothingType = typedClothingType ?: hint?.clothingType
             val resolvedColor = typedColor.ifBlank { hint?.color ?: AUTO_FILL_UNKNOWN }
             val resolvedSeason = typedSeason.ifBlank { hint?.season ?: "All" }

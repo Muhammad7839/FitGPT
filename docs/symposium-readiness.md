@@ -65,8 +65,8 @@ Automated helper (health only): `scripts/smoke-test-production.sh` from repo roo
 
 ## 5. Android APK checklist
 
-- Public URL is documented on `/download` and points to the **symposium-demo-v3** GitHub release asset (verify the file name matches the live release).
-- **Backup**: [GitHub release page](https://github.com/Muhammad7839/FitGPT/releases/tag/symposium-demo-v3) if a browser blocks the direct file URL.
+- Public URL is documented on `/download` and points to the **symposium-demo-v4** GitHub release asset (verify the file name matches the live release).
+- **Backup**: [GitHub release page](https://github.com/Muhammad7839/FitGPT/releases/tag/symposium-demo-v4) if a browser blocks the direct file URL.
 - **Unknown sources**: users may need **Settings → Security → Install unknown apps** for the browser or file manager.
 - **Manual follow-up**: If the team uploads a renamed APK (e.g. `FitGPT-Symposium-Demo.apk`), update `web/src/constants/symposiumRelease.js` and redeploy the web app so QR codes stay accurate.
 

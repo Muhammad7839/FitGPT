@@ -1,9 +1,9 @@
 /** Public symposium demo APK and related URLs — keep Login + DownloadPage in sync. */
 export const SYMPOSIUM_APK_DOWNLOAD_URL =
-  "https://github.com/Muhammad7839/FitGPT/releases/download/symposium-demo-v3/app-debug.apk";
+  "https://github.com/Muhammad7839/FitGPT/releases/download/symposium-demo-v4/app-debug.apk";
 
 export const SYMPOSIUM_GITHUB_RELEASE_URL =
-  "https://github.com/Muhammad7839/FitGPT/releases/tag/symposium-demo-v3";
+  "https://github.com/Muhammad7839/FitGPT/releases/tag/symposium-demo-v4";
 
 export const FITGPT_WEB_URL = "https://www.fitgpt.tech/";
 export const FITGPT_DOWNLOAD_PAGE_URL = "https://www.fitgpt.tech/download";
