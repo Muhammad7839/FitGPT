@@ -3,15 +3,15 @@
 **Public download page (recommended entry point):**  
 https://www.fitgpt.tech/download
 
-## Android APK (symposium-demo-v2)
+## Android APK (symposium-demo-v3)
 
-The live GitHub release **`symposium-demo-v2`** currently hosts the symposium APK as:
+The live GitHub release **`symposium-demo-v3`** currently hosts the symposium APK as:
 
 **Direct download (primary):**  
-https://github.com/Muhammad7839/FitGPT/releases/download/symposium-demo-v2/app-debug.apk
+https://github.com/Muhammad7839/FitGPT/releases/download/symposium-demo-v3/app-debug.apk
 
 **Backup** if a browser or network blocks direct file URLs:  
-https://github.com/Muhammad7839/FitGPT/releases/tag/symposium-demo-v2
+https://github.com/Muhammad7839/FitGPT/releases/tag/symposium-demo-v3
 
 The public `/download` page shows separate QR codes for the web page and the Android APK, and includes the GitHub release link as a fallback.
 

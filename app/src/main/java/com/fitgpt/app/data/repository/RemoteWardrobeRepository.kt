@@ -45,6 +45,7 @@ class RemoteWardrobeRepository(
 ) : WardrobeRepository {
     private val logTag = "WARDROBE_DEBUG"
     private var cachedItemsById = emptyMap<Int, ClothingItem>()
+    private val pendingRemoteImageUrlsByLocalUrl = mutableMapOf<String, String>()
     // Local-only items saved when the backend is unreachable (negative IDs, in-memory)
     private val localPendingItems = mutableMapOf<Int, ClothingItem>()
     private var nextLocalItemId = -1
@@ -120,7 +121,7 @@ class RemoteWardrobeRepository(
 
     override suspend fun addItemWithPhoto(item: ClothingItem, photo: UploadImagePayload): ClothingItem {
         return try {
-            val backendImageUrl = runCatching {
+            val backendImageUrl = consumePendingRemoteImageUrl(item.imageUrl) ?: runCatching {
                 uploadImageToBackend(photo.bytes, photo.fileName, photo.mimeType)
             }.getOrElse { error ->
                 Log.w(logTag, "photo backend upload failed, saving item without remote image: ${error.javaClass.simpleName}: ${error.message}")
@@ -146,8 +147,11 @@ class RemoteWardrobeRepository(
 
     override suspend fun addItemsBulk(items: List<ClothingItem>): List<ClothingItem> {
         return try {
+            val requestItems = items.map { item ->
+                item.copy(imageUrl = resolvePersistableImageUrl(item.imageUrl))
+            }
             val response = api.addWardrobeItemsBulk(
-                BulkCreateClothingItemsRequestDto(items = items.map { it.toBackendCreateRequest() })
+                BulkCreateClothingItemsRequestDto(items = requestItems.map { it.toBackendCreateRequest() })
             )
             val handledIndexes = mutableSetOf<Int>()
             val createdItems = response.results.mapNotNull { result ->
@@ -160,6 +164,7 @@ class RemoteWardrobeRepository(
                 }
                 val sourceImage = items.getOrNull(result.index)?.imageUrl
                 val localImageUrl = imageStore?.attachExistingImageToItem(dto.id, sourceImage)
+                clearPendingRemoteImageUrl(sourceImage)
                 val createdFromBackend = dto.toDomainWithLocalImage()
                 createdFromBackend.copy(imageUrl = localImageUrl ?: createdFromBackend.imageUrl)
             }
@@ -195,7 +200,10 @@ class RemoteWardrobeRepository(
 
     override suspend fun uploadImage(bytes: ByteArray, fileName: String, mimeType: String): String {
         return runCatching {
-            uploadImageToBackend(bytes, fileName, mimeType).orEmpty()
+            val remoteUrl = uploadImageToBackend(bytes, fileName, mimeType)
+            val localUrl = imageStore?.saveTemporaryImage(bytes, fileName)
+            rememberPendingRemoteImageUrl(localUrl, remoteUrl)
+            localUrl ?: remoteUrl.orEmpty()
         }.getOrElse { error ->
             Log.w(logTag, "image upload backend unavailable, using local image: ${error.javaClass.simpleName}: ${error.message}")
             imageStore?.saveTemporaryImage(bytes, fileName).orEmpty()
@@ -204,6 +212,9 @@ class RemoteWardrobeRepository(
 
     override suspend fun uploadImagesBatch(images: List<UploadImagePayload>): List<UploadResult> {
         return runCatching {
+            val localUrlsByFileName = images.associate { image ->
+                image.fileName to imageStore?.saveTemporaryImage(image.bytes, image.fileName)
+            }
             val parts = images.map {
                 MultipartBody.Part.createFormData(
                     name = "images",
@@ -212,10 +223,15 @@ class RemoteWardrobeRepository(
                 )
             }
             api.uploadWardrobeImages(parts).results.map { entry ->
+                val remoteUrl = resolveApiUrl(entry.imageUrl)
+                val localUrl = localUrlsByFileName[entry.fileName]
+                if (entry.status.equals("success", ignoreCase = true)) {
+                    rememberPendingRemoteImageUrl(localUrl, remoteUrl)
+                }
                 UploadResult(
                     fileName = entry.fileName,
                     status = entry.status,
-                    imageUrl = resolveApiUrl(entry.imageUrl),
+                    imageUrl = localUrl ?: remoteUrl,
                     error = entry.error
                 )
             }
@@ -635,6 +651,31 @@ class RemoteWardrobeRepository(
             normalized.startsWith("https://", ignoreCase = true) ||
             normalized.startsWith("data:image/", ignoreCase = true) ||
             normalized.startsWith("/uploads/", ignoreCase = true)
+    }
+
+    private fun resolvePersistableImageUrl(imageUrl: String?): String? {
+        val normalized = imageUrl?.trim().orEmpty()
+        if (normalized.isBlank()) return null
+        return pendingRemoteImageUrlsByLocalUrl[normalized] ?: normalized
+    }
+
+    private fun rememberPendingRemoteImageUrl(localUrl: String?, remoteUrl: String?) {
+        val local = localUrl?.trim().orEmpty()
+        val remote = remoteUrl?.trim().orEmpty()
+        if (local.isBlank() || remote.isBlank()) return
+        pendingRemoteImageUrlsByLocalUrl[local] = remote
+    }
+
+    private fun consumePendingRemoteImageUrl(localUrl: String?): String? {
+        val key = localUrl?.trim().orEmpty()
+        if (key.isBlank()) return null
+        return pendingRemoteImageUrlsByLocalUrl.remove(key)
+    }
+
+    private fun clearPendingRemoteImageUrl(localUrl: String?) {
+        val key = localUrl?.trim().orEmpty()
+        if (key.isBlank()) return
+        pendingRemoteImageUrlsByLocalUrl.remove(key)
     }
 
     private fun ClothingItemDto.toDomainWithLocalImage(): ClothingItem {

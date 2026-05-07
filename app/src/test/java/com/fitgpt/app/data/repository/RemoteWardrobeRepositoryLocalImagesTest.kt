@@ -127,7 +127,72 @@ class RemoteWardrobeRepositoryLocalImagesTest {
 
         val request = server.takeRequest()
         assertEquals("/wardrobe/items/image", request.path)
-        assertEquals("${server.url("/")}uploads/item_123.jpg", uploadedUrl)
+        assertEquals("file:///temp/item.jpg", uploadedUrl)
+    }
+
+    @Test
+    fun uploadImagesBatchReturnsLocalPreviewUrlsWhileCachingRemoteUrlsForPersistence() = runBlocking {
+        server.enqueue(
+            jsonResponse(
+                """
+                {
+                  "results": [
+                    {"file_name":"a.jpg","status":"success","image_url":"/uploads/a.jpg","error":null},
+                    {"file_name":"b.jpg","status":"success","image_url":"/uploads/b.jpg","error":null}
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+        server.enqueue(
+            jsonResponse(
+                """
+                {
+                  "results": [
+                    {
+                      "index": 0,
+                      "status": "success",
+                      "item": ${clothingItemJson(id = 201, imageUrl = "${server.url("/")}uploads/a.jpg")},
+                      "error": null
+                    },
+                    {
+                      "index": 1,
+                      "status": "success",
+                      "item": ${clothingItemJson(id = 202, imageUrl = "${server.url("/")}uploads/b.jpg")},
+                      "error": null
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val uploaded = repository.uploadImagesBatch(
+            listOf(
+                UploadImagePayload(byteArrayOf(1, 2, 3), "a.jpg", "image/jpeg"),
+                UploadImagePayload(byteArrayOf(4, 5, 6), "b.jpg", "image/jpeg")
+            )
+        )
+        assertEquals("file:///temp/a.jpg", uploaded[0].imageUrl)
+        assertEquals("file:///temp/b.jpg", uploaded[1].imageUrl)
+
+        val created = repository.addItemsBulk(
+            listOf(
+                item(id = 1).copy(name = "Item A", imageUrl = uploaded[0].imageUrl),
+                item(id = 2).copy(name = "Item B", imageUrl = uploaded[1].imageUrl)
+            )
+        )
+
+        val batchUploadRequest = server.takeRequest()
+        assertEquals("/wardrobe/items/images", batchUploadRequest.path)
+
+        val createRequest = server.takeRequest()
+        assertEquals("/wardrobe/items/bulk", createRequest.path)
+        val body = createRequest.body.readUtf8()
+        assertTrue(body.contains("${server.url("/")}uploads/a.jpg"))
+        assertTrue(body.contains("${server.url("/")}uploads/b.jpg"))
+        assertEquals("file:///wardrobe/201/a.jpg", created[0].imageUrl)
+        assertEquals("file:///wardrobe/202/b.jpg", created[1].imageUrl)
     }
 
     private fun item(id: Int): ClothingItem {

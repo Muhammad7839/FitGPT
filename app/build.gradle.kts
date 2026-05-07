@@ -39,8 +39,8 @@ android {
         applicationId = "com.fitgpt.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
         val googleWebClientId = projectPropertyOrLocal(
             project,
             "GOOGLE_WEB_CLIENT_ID",
