@@ -148,6 +148,7 @@ class UserProfileUpdate(BaseModel):
     gender: Optional[str] = Field(default=None, max_length=32)
     height_cm: Optional[int] = Field(default=None, ge=80, le=260)
     onboarding_complete: Optional[bool] = None
+    avatar_url: Optional[str] = None
 
     @field_validator("body_type", "lifestyle", "comfort_preference", "gender")
     @classmethod
