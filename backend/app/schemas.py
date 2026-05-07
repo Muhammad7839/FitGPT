@@ -743,6 +743,8 @@ class RecommendationFeedbackCreate(BaseModel):
     suggestion_id: str = Field(min_length=3, max_length=256)
     signal: str = Field(min_length=4, max_length=16)
     item_ids: Optional[list[int]] = Field(default=None, min_length=1, max_length=32)
+    detail_code: Optional[str] = Field(default=None, max_length=64)
+    note: Optional[str] = Field(default=None, max_length=1000)
 
     @field_validator("suggestion_id")
     @classmethod

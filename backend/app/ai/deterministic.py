@@ -598,6 +598,8 @@ def _style_score(item: models.ClothingItem, style_target: str) -> float:
         return 0.45
     if style_target in {"athletic", "sporty"} and "formal" in styles:
         return 0.4
+    if style_target in {"casual", "layered", "streetwear", "smart casual", "everyday"} and "formal" in styles:
+        return 0.4
     return 0.7
 
 
@@ -606,6 +608,11 @@ def _occasion_score(item: models.ClothingItem, occasion: str) -> float:
     if not occasion:
         return 0.7
     if not occasion_values:
+        blob = f"{item.name or ''} {item.clothing_type or ''}".lower()
+        formal_item = any(token in blob for token in {"blazer", "dress shirt", "oxford shirt", "slacks", "trousers", "loafer"})
+        casual_occasion = any(token in occasion for token in {"casual", "campus", "class", "daily", "weekend", "errand"})
+        if formal_item and casual_occasion:
+            return 0.35
         return 0.65
     if any(value in occasion for value in occasion_values):
         return 1.0
