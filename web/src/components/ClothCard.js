@@ -150,20 +150,40 @@ function TexturedClothMesh({ imageUrl, mouseRef }) {
       return;
     }
     let cancelled = false;
-    const loader = new THREE.TextureLoader();
-    loader.load(imageUrl, (tex) => {
-      if (cancelled) {
-        tex.dispose();
-        return;
-      }
+
+    const applyTexture = (img) => {
+      if (cancelled) return;
+      const tex = new THREE.Texture(img);
       tex.minFilter = THREE.LinearFilter;
       tex.magFilter = THREE.LinearFilter;
+      tex.needsUpdate = true;
       setTexture((current) => {
         if (current) current.dispose();
         textureRef.current = tex;
         return tex;
       });
-    });
+    };
+
+    if (imageUrl.startsWith("data:")) {
+      // Data URIs must bypass TextureLoader — direct Image avoids crossOrigin issues
+      const img = new Image();
+      img.onload = () => applyTexture(img);
+      img.onerror = () => { /* silently fall back to gradient shader */ };
+      img.src = imageUrl;
+    } else {
+      const loader = new THREE.TextureLoader();
+      loader.load(imageUrl, (tex) => {
+        if (cancelled) { tex.dispose(); return; }
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        setTexture((current) => {
+          if (current) current.dispose();
+          textureRef.current = tex;
+          return tex;
+        });
+      });
+    }
+
     return () => {
       cancelled = true;
     };

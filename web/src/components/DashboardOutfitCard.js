@@ -42,7 +42,7 @@ import {
   saveRecommendationFeedback,
 } from "../utils/userStorage";
 import { adaptAiText, effectiveAccessibilityPrefs, readAccessibilityPrefs } from "../utils/accessibilityPrefs";
-import { safeParse, formatToday, normalizeFitTag, normalizeItems, buildGoogleCalendarUrl, onTiltMove, onTiltLeave, tomorrowDateStr } from "../utils/helpers";
+import { safeParse, formatToday, normalizeFitTag, normalizeItems, onTiltMove, onTiltLeave, tomorrowDateStr } from "../utils/helpers";
 import { getWeatherContext } from "../api/weatherApi";
 import { analyzeWardrobeGaps } from "../utils/wardrobeGapInsights";
 import { analyzeWardrobeRotation } from "../utils/wardrobeRotationInsights";
@@ -1384,15 +1384,14 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     if (!signature) return;
 
     const existing = getRecommendationFeedback(recommendationFeedback, signature);
-    const signal = existing?.signal === FEEDBACK_SIGNALS.LIKE || existing?.signal === FEEDBACK_SIGNALS.DISLIKE
-      ? existing.signal
-      : preferredSignal;
+    // Always use preferredSignal (the button that was clicked); restore detail only if existing matches
+    const prevDetail = existing?.signal === preferredSignal ? existing : null;
 
     setFeedbackComposer({
       signature,
-      signal,
-      detailCode: existing?.detailCode || "",
-      note: existing?.note || "",
+      signal: preferredSignal,
+      detailCode: prevDetail?.detailCode || "",
+      note: prevDetail?.note || "",
     });
     setFeedbackPromptSig("");
   };
@@ -1415,6 +1414,10 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
     if (!result) {
       setFeedbackPendingSig("");
       return;
+    }
+
+    if (signal === FEEDBACK_SIGNALS.DISLIKE) {
+      saveRejectedOutfit(outfit, user);
     }
 
     setRecommendationFeedback(result.state);
@@ -1554,10 +1557,6 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
 
     const date = tomorrowDateStr();
 
-    const itemNames = outfit.map((x) => x?.name).filter(Boolean);
-    const calUrl = buildGoogleCalendarUrl({ date, occasion: "", itemNames });
-    window.open(calUrl, "_blank", "noopener");
-
     const itemIds = outfit.map((x) => x?.id).filter(Boolean);
     const itemDetails = outfit.map((x) => ({
       id: (x?.id ?? "").toString(),
@@ -1567,7 +1566,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       image_url: x?.image_url || "",
     }));
 
-    const result = await plannedOutfitsApi.planOutfit({
+    await plannedOutfitsApi.planOutfit({
       item_ids: itemIds,
       item_details: itemDetails,
       planned_date: date,
@@ -1575,8 +1574,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       source: "planner",
     }, user).catch(() => null);
 
-    setSaveMsg(result?.localOnly ? "Opening Google Calendar. Plan saved locally only." : "Opening Google Calendar...");
-    window.setTimeout(() => setSaveMsg(""), 2500);
+    navigate("/plans");
   };
 
 
@@ -1639,16 +1637,14 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
       setSavingSig(sig);
       try {
         const savedResult = await savedOutfitsApi.unsaveOutfit(sig, user);
-        const historyResult = await outfitHistoryApi.removeBySignature(sig, user);
         setSavedSigs((prev) => {
           const next = new Set(prev);
           next.delete(sig);
           return next;
         });
         setSavedOutfitEntries((prev) => prev.filter((entry) => (entry?.outfit_signature || "").toString().trim() !== sig));
-        syncHistoryState(historyEntries.filter((entry) => idsSignature(Array.isArray(entry?.item_ids) ? entry.item_ids : []) !== sig));
         setSaveMsg(
-          savedResult?.localOnly || historyResult?.localOnly
+          savedResult?.localOnly
             ? "Removed locally. Backend sync failed."
             : "Removed from saved outfits."
         );
@@ -1701,29 +1697,12 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
         });
       }
 
-      if (created) {
-        const historyRes = await outfitHistoryApi.recordWorn({
-          item_ids: normalized,
-          source: "recommendation",
-          context: {
-            occasion: chipText,
-            temperature_category: weatherCategory,
-            temperature_f: weatherTempF,
-            time_of_day: timeCategory,
-          },
-        }, user).catch(() => null);
-
-        if (historyRes?.history_entry) {
-          syncHistoryState([historyRes.history_entry, ...historyEntries]);
-        }
-      }
-
       if (res?.localOnly && created) {
         setSaveMsg("Saved locally only. Backend sync failed.");
       } else if (msg) {
         setSaveMsg(msg);
       } else {
-        setSaveMsg(created ? "Saved! Refreshing recommendations..." : "This outfit is already in your saved outfits.");
+        setSaveMsg(created ? "Outfit saved! Wear it later from Saved Outfits." : "This outfit is already in your saved outfits.");
       }
 
       window.setTimeout(() => {
@@ -1947,7 +1926,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
               <button type="button" className="editorialBtnPrimary" onClick={goAddItem}>Add item</button>
               {!isGuestMode ? (
                 <>
-                  <button type="button" className="editorialBtnGhost" onClick={openPlanModal}>Plan outfit</button>
+                  <button type="button" className="editorialBtnGhost" onClick={openPlanModal}>Plan for Later</button>
                   <button type="button" className="editorialBtnGhost" onClick={() => navigate("/history")}>History</button>
                 </>
               ) : null}
@@ -1980,7 +1959,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
               <button type="button" className="dashQuickBtn" onClick={goAddItem}>+ Add Item</button>
               {!isGuestMode ? (
                 <>
-                  <button type="button" className="dashQuickBtn" onClick={openPlanModal}>{"\u2606"} Plan Outfit</button>
+                  <button type="button" className="dashQuickBtn" onClick={openPlanModal}>{"\u2606"} Plan for Later</button>
                   <button type="button" className="dashQuickBtn" onClick={() => navigate("/history")}>{"\u29D6"} History</button>
                 </>
               ) : null}
@@ -2417,14 +2396,7 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
             const composerSignal = feedbackComposer?.signal || FEEDBACK_SIGNALS.DISLIKE;
             const composerReasons = FEEDBACK_REASON_OPTIONS[composerSignal] || FEEDBACK_REASON_OPTIONS.dislike;
             const isFeedbackCardActive = idx === (selectedIdx ?? 0);
-            const showFeedbackPanel = isFeedbackCardActive || Boolean(feedbackSignal) || isComposerOpen;
             const showPromptHighlight = isFeedbackCardActive && feedbackPromptSig === sig && !feedbackSignal && !isComposerOpen;
-            const showDetailToggle = feedbackSignal === FEEDBACK_SIGNALS.LIKE || feedbackSignal === FEEDBACK_SIGNALS.DISLIKE || isComposerOpen;
-            const feedbackHint = feedbackSignal
-              ? feedbackSummaryText(feedbackEntry)
-              : showPromptHighlight
-                ? "Hide removes this outfit from view. Add detail for a specific reason."
-                : "Hide this option, or add detail about what worked.";
             const feedbackToneClass = feedbackSignal === FEEDBACK_SIGNALS.LIKE
               ? " dashOutfitFeedbackLike"
               : feedbackSignal === FEEDBACK_SIGNALS.DISLIKE
@@ -2519,23 +2491,35 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                         </button>
                         <button
                           type="button"
-                          className="dashFeedbackBtn dashFeedbackLike"
+                          className={"dashFeedbackBtn dashFeedbackLike" + (feedbackSignal === FEEDBACK_SIGNALS.LIKE || (isComposerOpen && composerSignal === FEEDBACK_SIGNALS.LIKE) ? " active" : "")}
                           onClick={(event) => {
                             event.stopPropagation();
-                            handleFeedback(outfit, "like");
+                            if (isComposerOpen && composerSignal === FEEDBACK_SIGNALS.LIKE) {
+                              setFeedbackComposer(null);
+                            } else {
+                              selectRecommendationOption(idx, { track: false });
+                              openFeedbackComposer(outfit, FEEDBACK_SIGNALS.LIKE);
+                            }
                           }}
                           title="More like this"
+                          aria-pressed={feedbackSignal === FEEDBACK_SIGNALS.LIKE}
                         >
                           &#x25B2;
                         </button>
                         <button
                           type="button"
-                          className="dashFeedbackBtn dashFeedbackDislike"
+                          className={"dashFeedbackBtn dashFeedbackDislike" + (feedbackSignal === FEEDBACK_SIGNALS.DISLIKE || (isComposerOpen && composerSignal === FEEDBACK_SIGNALS.DISLIKE) ? " active" : "")}
                           onClick={(event) => {
                             event.stopPropagation();
-                            handleFeedback(outfit, "dislike");
+                            if (isComposerOpen && composerSignal === FEEDBACK_SIGNALS.DISLIKE) {
+                              setFeedbackComposer(null);
+                            } else {
+                              selectRecommendationOption(idx, { track: false });
+                              openFeedbackComposer(outfit, FEEDBACK_SIGNALS.DISLIKE);
+                            }
                           }}
                           title="Less like this"
+                          aria-pressed={feedbackSignal === FEEDBACK_SIGNALS.DISLIKE}
                         >
                           &#x25BC;
                         </button>
@@ -2603,8 +2587,15 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                         </button>
                         <button
                           type="button"
-                          className={"dashFeedbackBtn dashFeedbackLike" + (feedbackSignal === FEEDBACK_SIGNALS.LIKE ? " active" : "")}
-                          onClick={() => handleFeedback(outfit, "like")}
+                          className={"dashFeedbackBtn dashFeedbackLike" + (feedbackSignal === FEEDBACK_SIGNALS.LIKE || (isComposerOpen && composerSignal === FEEDBACK_SIGNALS.LIKE) ? " active" : "")}
+                          onClick={() => {
+                            if (isComposerOpen && composerSignal === FEEDBACK_SIGNALS.LIKE) {
+                              setFeedbackComposer(null);
+                            } else {
+                              selectRecommendationOption(idx, { track: false });
+                              openFeedbackComposer(outfit, FEEDBACK_SIGNALS.LIKE);
+                            }
+                          }}
                           title="More like this"
                           aria-label="More like this"
                           aria-pressed={feedbackSignal === FEEDBACK_SIGNALS.LIKE}
@@ -2617,8 +2608,15 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                         </button>
                         <button
                           type="button"
-                          className={"dashFeedbackBtn dashFeedbackDislike" + (feedbackSignal === FEEDBACK_SIGNALS.DISLIKE ? " active" : "")}
-                          onClick={() => handleFeedback(outfit, "dislike")}
+                          className={"dashFeedbackBtn dashFeedbackDislike" + (feedbackSignal === FEEDBACK_SIGNALS.DISLIKE || (isComposerOpen && composerSignal === FEEDBACK_SIGNALS.DISLIKE) ? " active" : "")}
+                          onClick={() => {
+                            if (isComposerOpen && composerSignal === FEEDBACK_SIGNALS.DISLIKE) {
+                              setFeedbackComposer(null);
+                            } else {
+                              selectRecommendationOption(idx, { track: false });
+                              openFeedbackComposer(outfit, FEEDBACK_SIGNALS.DISLIKE);
+                            }
+                          }}
                           title="Less like this"
                           aria-label="Less like this"
                           aria-pressed={feedbackSignal === FEEDBACK_SIGNALS.DISLIKE}
@@ -2648,76 +2646,20 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                   <div className="dashOptionReasonText">{summary.explanationPreview}</div>
                 </div>
 
-                {showFeedbackPanel ? (
-                  <div className={"dashFeedbackPanel" + (showPromptHighlight ? " subtlePrompt" : "")} onClick={(event) => event.stopPropagation()}>
-                    <div className="dashFeedbackHeader compact">
-                      <div className="dashFeedbackCopy">
-                        <div className="dashFeedbackLabel">{feedbackSignal ? feedbackBadgeText(feedbackSignal) : "Quick feedback"}</div>
-                        <div className="dashFeedbackHint">{feedbackHint}</div>
-                      </div>
-                      {showPromptHighlight ? (
-                        <button
-                          type="button"
-                          className="dashFeedbackLaterBtn"
-                          onClick={() => setFeedbackPromptSig("")}
-                        >
-                          Later
-                        </button>
-                      ) : feedbackSignal ? (
-                        <span className={`dashFeedbackState ${feedbackSignal}`}>
-                          {feedbackBadgeText(feedbackSignal)}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <div className="dashFeedbackActions compact" role="group" aria-label={`Recommendation feedback for outfit option ${idx + 1}`}>
-                    <button
-                      type="button"
-                      className="dashFeedbackBtn reject compact ghost"
-                      aria-label={`Hide outfit option ${idx + 1}`}
-                      disabled={isFeedbackPending}
-                      onClick={() => {
-                        void handleRejectOutfit(outfit, idx);
-                      }}
-                    >
-                      <span className="dashFeedbackBtnGlyph" aria-hidden="true">x</span>
-                      <span className="dashFeedbackBtnText">{isFeedbackPending ? "Hiding..." : "Hide"}</span>
-                    </button>
-                    {showDetailToggle ? (
-                      <button
-                        type="button"
-                        className={"dashFeedbackBtn explain compact ghost" + (isComposerOpen ? " active" : "")}
-                        aria-expanded={isComposerOpen}
-                        disabled={isFeedbackPending}
-                        onClick={() => {
-                          selectRecommendationOption(idx, { track: false });
-                          if (isComposerOpen) {
-                            setFeedbackComposer(null);
-                            return;
-                          }
-                          openFeedbackComposer(outfit, feedbackSignal === FEEDBACK_SIGNALS.LIKE ? FEEDBACK_SIGNALS.LIKE : FEEDBACK_SIGNALS.DISLIKE);
-                        }}
-                      >
-                        <span className="dashFeedbackBtnText">{isComposerOpen ? "Hide detail" : "Add detail"}</span>
-                      </button>
-                    ) : null}
-                  </div>
-
-                  {isComposerOpen ? (
-                    <div className="dashFeedbackExplainCard">
-                      <div className="dashFeedbackExplainTop">
-                        <div className="dashFeedbackExplainTitle">Explain this recommendation</div>
-                        <div className="dashFeedbackExplainHint">Optional detail helps future picks feel more personal.</div>
-                      </div>
-
-                      <div className="dashFeedbackSignalTabs" role="group" aria-label="Feedback type">
+                {isComposerOpen ? (
+                  <div
+                    className={"dashFeedbackPanel dashFeedbackComposerPanel" + (composerSignal === FEEDBACK_SIGNALS.LIKE ? " like" : " dislike")}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="dashFeedbackComposerHeader">
+                      <div className="dashFeedbackSignalTabs" role="group" aria-label="Feedback signal">
                         <button
                           type="button"
                           className={"dashFeedbackTab" + (composerSignal === FEEDBACK_SIGNALS.LIKE ? " active" : "")}
                           aria-pressed={composerSignal === FEEDBACK_SIGNALS.LIKE}
                           onClick={() => setFeedbackComposer((prev) => ({ ...prev, signal: FEEDBACK_SIGNALS.LIKE, detailCode: "" }))}
                         >
-                          👍 Like
+                          👍 Love it
                         </button>
                         <button
                           type="button"
@@ -2725,66 +2667,121 @@ export default function Dashboard({ answers, onResetOnboarding = () => {} }) {
                           aria-pressed={composerSignal === FEEDBACK_SIGNALS.DISLIKE}
                           onClick={() => setFeedbackComposer((prev) => ({ ...prev, signal: FEEDBACK_SIGNALS.DISLIKE, detailCode: "" }))}
                         >
-                          👎 Dislike
+                          👎 Not for me
                         </button>
                       </div>
+                      <button
+                        type="button"
+                        className="dashFeedbackComposerClose"
+                        onClick={() => setFeedbackComposer(null)}
+                        aria-label="Close feedback"
+                      >
+                        ×
+                      </button>
+                    </div>
 
-                      <div className="dashFeedbackChipRow">
-                        {composerReasons.map((reason) => (
-                          <button
-                            key={`${sig}-${reason.code}`}
-                            type="button"
-                            className={"dashFeedbackReasonChip" + (feedbackComposer?.detailCode === reason.code ? " active" : "")}
-                            aria-pressed={feedbackComposer?.detailCode === reason.code}
-                            onClick={() => setFeedbackComposer((prev) => ({
-                              ...prev,
-                              detailCode: prev?.detailCode === reason.code ? "" : reason.code,
-                            }))}
-                          >
-                            {reason.label}
-                          </button>
-                        ))}
-                      </div>
-
-                      <label className="dashFeedbackNoteField">
-                        <span className="dashFeedbackNoteLabel">Optional note</span>
-                        <textarea
-                          value={feedbackComposer?.note || ""}
-                          onChange={(event) => setFeedbackComposer((prev) => ({ ...prev, note: event.target.value.slice(0, 140) }))}
-                          rows={2}
-                          maxLength={140}
-                          placeholder="Add a quick note if you want more detail."
-                        />
-                      </label>
-
-                      <div className="dashFeedbackExplainActions">
+                    <div className="dashFeedbackChipRow">
+                      {composerReasons.map((reason) => (
                         <button
+                          key={`${sig}-${reason.code}`}
                           type="button"
-                          className="btnSecondary"
-                          onClick={() => setFeedbackComposer(null)}
-                          disabled={isFeedbackPending}
+                          className={"dashFeedbackReasonChip" + (feedbackComposer?.detailCode === reason.code ? " active" : "")}
+                          aria-pressed={feedbackComposer?.detailCode === reason.code}
+                          onClick={() => setFeedbackComposer((prev) => ({
+                            ...prev,
+                            detailCode: prev?.detailCode === reason.code ? "" : reason.code,
+                          }))}
                         >
-                          Cancel
+                          {reason.label}
                         </button>
+                      ))}
+                    </div>
+
+                    <label className="dashFeedbackNoteField">
+                      <span className="dashFeedbackNoteLabel">Optional note</span>
+                      <textarea
+                        value={feedbackComposer?.note || ""}
+                        onChange={(e) => setFeedbackComposer((prev) => ({ ...prev, note: e.target.value.slice(0, 140) }))}
+                        rows={2}
+                        maxLength={140}
+                        placeholder="What specifically did or didn't work?"
+                      />
+                    </label>
+
+                    <div className="dashFeedbackComposerActions">
+                      <button
+                        type="button"
+                        className="dashFeedbackQuickSave"
+                        disabled={isFeedbackPending}
+                        onClick={() => {
+                          selectRecommendationOption(idx, { track: false });
+                          void submitFeedback({
+                            outfit,
+                            signal: feedbackComposer?.signal || FEEDBACK_SIGNALS.DISLIKE,
+                            detailCode: "",
+                            note: "",
+                          });
+                        }}
+                      >
+                        {composerSignal === FEEDBACK_SIGNALS.LIKE ? "Just like it" : "Just mark as 'not for me'"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btnPrimary dashFeedbackSaveBtn"
+                        disabled={isFeedbackPending}
+                        onClick={() => {
+                          selectRecommendationOption(idx, { track: false });
+                          void submitFeedback({
+                            outfit,
+                            signal: feedbackComposer?.signal || FEEDBACK_SIGNALS.DISLIKE,
+                            detailCode: feedbackComposer?.detailCode || "",
+                            note: feedbackComposer?.note || "",
+                          });
+                        }}
+                      >
+                        {isFeedbackPending ? "Saving..." : "Save feedback"}
+                      </button>
+                    </div>
+                  </div>
+                ) : feedbackSignal ? (
+                  <div className={"dashFeedbackPanel dashFeedbackSavedPanel"} onClick={(e) => e.stopPropagation()}>
+                    <div className="dashFeedbackSavedRow">
+                      <div className="dashFeedbackSavedLeft">
+                        <span className={`dashFeedbackState ${feedbackSignal}`}>
+                          {feedbackSignal === FEEDBACK_SIGNALS.LIKE ? "👍 " : "👎 "}{feedbackBadgeText(feedbackSignal)}
+                        </span>
+                        {feedbackEntry?.detailCode && (
+                          <span className="dashFeedbackSavedDetail">
+                            {composerReasons.find((r) => r.code === feedbackEntry.detailCode)?.label}
+                          </span>
+                        )}
+                      </div>
+                      <div className="dashFeedbackSavedActions">
                         <button
                           type="button"
-                          className="btnPrimary"
+                          className="dashFeedbackEditBtn"
                           onClick={() => {
                             selectRecommendationOption(idx, { track: false });
-                            void submitFeedback({
-                              outfit,
-                              signal: feedbackComposer?.signal || FEEDBACK_SIGNALS.DISLIKE,
-                              detailCode: feedbackComposer?.detailCode || "",
-                              note: feedbackComposer?.note || "",
-                            });
+                            openFeedbackComposer(outfit, feedbackSignal);
                           }}
-                          disabled={isFeedbackPending}
                         >
-                          {isFeedbackPending ? "Saving..." : "Save feedback"}
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="dashFeedbackHideBtn"
+                          disabled={isFeedbackPending}
+                          onClick={() => void handleRejectOutfit(outfit, idx)}
+                        >
+                          {isFeedbackPending ? "Hiding..." : "Hide outfit"}
                         </button>
                       </div>
                     </div>
-                  ) : null}
+                  </div>
+                ) : showPromptHighlight ? (
+                  <div className={"dashFeedbackPanel subtlePrompt dashFeedbackPromptRow"} onClick={(e) => e.stopPropagation()}>
+                    <span className="dashFeedbackHint">Does this outfit work for you?</span>
+                    <button type="button" className="dashFeedbackLaterBtn" onClick={() => setFeedbackPromptSig("")}>Later</button>
                   </div>
                 ) : null}
               </div>

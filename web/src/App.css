@@ -7209,6 +7209,18 @@ img.dashSquareImg {
   flex-wrap: wrap;
 }
 
+.savedOutfitActionHint {
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(17, 24, 39, 0.42);
+  letter-spacing: 0.02em;
+}
+
+[data-theme="dark"] .savedOutfitActionHint {
+  color: rgba(255, 255, 255, 0.3);
+}
+
 .historyCalendarCard {
   margin-top: 14px;
   padding: 22px;
@@ -15210,6 +15222,392 @@ select:focus-visible {
   cursor: pointer;
 }
 
+/* ── Feedback composer panel (like & dislike) ──────────────────────── */
+.dashFeedbackComposerPanel {
+  margin: 12px 16px 0;
+  padding: 16px 18px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(247, 241, 239, 0.92));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  display: grid;
+  gap: 14px;
+  animation: feedbackComposerIn 180ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes feedbackComposerIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.dashFeedbackComposerPanel.like {
+  border-color: rgba(20, 124, 73, 0.16);
+  background: linear-gradient(135deg, rgba(20, 124, 73, 0.05), rgba(245, 252, 248, 0.96));
+}
+
+.dashFeedbackComposerPanel.dislike {
+  border-color: rgba(168, 34, 34, 0.16);
+  background: linear-gradient(135deg, rgba(168, 34, 34, 0.05), rgba(255, 248, 248, 0.96));
+}
+
+.dashFeedbackComposerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dashFeedbackComposerClose {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(17, 24, 39, 0.06);
+  color: rgba(17, 24, 39, 0.5);
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 140ms ease, color 140ms ease;
+}
+.dashFeedbackComposerClose:hover {
+  background: rgba(17, 24, 39, 0.12);
+  color: rgba(17, 24, 39, 0.8);
+}
+
+/* Like-signal chip/tab active: green */
+.dashFeedbackComposerPanel.like .dashFeedbackTab.active,
+.dashFeedbackComposerPanel.like .dashFeedbackReasonChip.active {
+  border-color: rgba(20, 124, 73, 0.4);
+  background: rgba(20, 124, 73, 0.18);
+  color: rgba(12, 92, 55, 0.95);
+  box-shadow: 0 0 0 2px rgba(20, 124, 73, 0.12);
+}
+
+/* Dislike-signal chip/tab active: strong red so it's visible against the panel */
+.dashFeedbackComposerPanel.dislike .dashFeedbackTab.active,
+.dashFeedbackComposerPanel.dislike .dashFeedbackReasonChip.active {
+  border-color: rgba(168, 34, 34, 0.5);
+  background: rgba(168, 34, 34, 0.18);
+  color: rgba(120, 20, 20, 0.95);
+  box-shadow: 0 0 0 2px rgba(168, 34, 34, 0.12);
+}
+
+/* Hover states for chips inside the composer so they feel interactive */
+.dashFeedbackComposerPanel .dashFeedbackReasonChip:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(17, 24, 39, 0.08);
+  border-color: rgba(17, 24, 39, 0.2);
+}
+
+.dashFeedbackComposerActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dashFeedbackQuickSave {
+  border: none;
+  background: transparent;
+  color: rgba(17, 24, 39, 0.5);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-decoration-color: rgba(17, 24, 39, 0.2);
+  transition: color 140ms ease;
+}
+.dashFeedbackQuickSave:hover { color: rgba(17, 24, 39, 0.75); }
+.dashFeedbackQuickSave:disabled { opacity: 0.5; cursor: wait; }
+
+.dashFeedbackSaveBtn {
+  min-width: 130px;
+}
+
+/* ── Feedback saved state panel ────────────────────────────────────── */
+.dashFeedbackSavedPanel {
+  margin: 12px 16px 0;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(17, 24, 39, 0.07);
+  background: rgba(255, 255, 255, 0.82);
+  animation: feedbackComposerIn 160ms ease forwards;
+}
+
+.dashFeedbackSavedRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dashFeedbackSavedLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dashFeedbackSavedDetail {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(17, 24, 39, 0.55);
+}
+
+.dashFeedbackSavedActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dashFeedbackEditBtn,
+.dashFeedbackHideBtn {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 120ms ease;
+}
+
+.dashFeedbackEditBtn {
+  border: 1px solid rgba(17, 24, 39, 0.14);
+  background: rgba(255, 255, 255, 0.9);
+  color: rgba(17, 24, 39, 0.75);
+}
+.dashFeedbackEditBtn:hover {
+  background: rgba(17, 24, 39, 0.06);
+  transform: translateY(-1px);
+}
+
+.dashFeedbackHideBtn {
+  border: 1px solid rgba(168, 34, 34, 0.18);
+  background: rgba(168, 34, 34, 0.07);
+  color: rgba(132, 27, 27, 0.88);
+}
+.dashFeedbackHideBtn:hover {
+  background: rgba(168, 34, 34, 0.13);
+  transform: translateY(-1px);
+}
+.dashFeedbackHideBtn:disabled { opacity: 0.6; cursor: wait; transform: none; }
+
+/* ── Feedback prompt row ───────────────────────────────────────────── */
+.dashFeedbackPromptRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Dark mode overrides */
+[data-theme="dark"] .dashFeedbackComposerPanel {
+  background: linear-gradient(135deg, rgba(28, 28, 36, 0.96), rgba(22, 20, 28, 0.92));
+  border-color: rgba(255, 255, 255, 0.1);
+}
+[data-theme="dark"] .dashFeedbackComposerPanel.like {
+  border-color: rgba(34, 197, 94, 0.2);
+  background: linear-gradient(135deg, rgba(20, 124, 73, 0.12), rgba(16, 24, 20, 0.92));
+}
+[data-theme="dark"] .dashFeedbackComposerPanel.dislike {
+  border-color: rgba(220, 60, 60, 0.2);
+  background: linear-gradient(135deg, rgba(168, 34, 34, 0.12), rgba(24, 16, 16, 0.92));
+}
+[data-theme="dark"] .dashFeedbackComposerPanel.like .dashFeedbackTab.active,
+[data-theme="dark"] .dashFeedbackComposerPanel.like .dashFeedbackReasonChip.active {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(20, 124, 73, 0.25);
+  color: rgba(134, 239, 172, 0.95);
+}
+[data-theme="dark"] .dashFeedbackComposerPanel.dislike .dashFeedbackTab.active,
+[data-theme="dark"] .dashFeedbackComposerPanel.dislike .dashFeedbackReasonChip.active {
+  border-color: rgba(220, 60, 60, 0.45);
+  background: rgba(168, 34, 34, 0.28);
+  color: rgba(255, 160, 160, 0.95);
+  box-shadow: 0 0 0 2px rgba(168, 34, 34, 0.15);
+}
+[data-theme="dark"] .dashFeedbackComposerClose {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.4);
+}
+[data-theme="dark"] .dashFeedbackComposerClose:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.8);
+}
+[data-theme="dark"] .dashFeedbackQuickSave {
+  color: rgba(255, 255, 255, 0.38);
+  text-decoration-color: rgba(255, 255, 255, 0.12);
+}
+[data-theme="dark"] .dashFeedbackQuickSave:hover { color: rgba(255, 255, 255, 0.65); }
+[data-theme="dark"] .dashFeedbackSavedPanel {
+  background: rgba(28, 28, 36, 0.88);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .dashFeedbackSavedDetail { color: rgba(255, 255, 255, 0.4); }
+[data-theme="dark"] .dashFeedbackEditBtn {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.65);
+}
+[data-theme="dark"] .dashFeedbackEditBtn:hover { background: rgba(255, 255, 255, 0.12); }
+[data-theme="dark"] .dashFeedbackHideBtn {
+  background: rgba(168, 34, 34, 0.14);
+  border-color: rgba(220, 60, 60, 0.2);
+  color: rgba(255, 160, 160, 0.85);
+}
+[data-theme="dark"] .dashFeedbackHideBtn:hover { background: rgba(168, 34, 34, 0.22); }
+
+/* ── Dislike mini-composer (legacy) ────────────────────────────────── */
+.dashDislikeMiniComposer {
+  margin: 8px 0 4px;
+  padding: 14px 16px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(168, 34, 34, 0.14);
+  background:
+    linear-gradient(135deg, rgba(168, 34, 34, 0.06), rgba(255, 255, 255, 0.88));
+  display: grid;
+  gap: 10px;
+  animation: feedbackMiniIn 180ms ease forwards;
+}
+
+@keyframes feedbackMiniIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.dashDislikeMiniHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.dashDislikeMiniTitle {
+  font-size: 13px;
+  font-weight: 900;
+  color: rgba(88, 28, 28, 0.9);
+}
+
+.dashDislikeMiniSub {
+  flex: 1;
+  font-size: 11px;
+  color: rgba(17, 24, 39, 0.5);
+}
+
+.dashDislikeMiniClose {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: rgba(17, 24, 39, 0.4);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 140ms ease, color 140ms ease;
+}
+.dashDislikeMiniClose:hover {
+  background: rgba(168, 34, 34, 0.1);
+  color: rgba(168, 34, 34, 0.8);
+}
+
+.dashDislikeMiniChips {
+  gap: 6px;
+}
+
+.dashDislikeMiniNote {
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  border-radius: 10px;
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  min-height: 52px;
+}
+.dashDislikeMiniNote:focus {
+  outline: none;
+  border-color: rgba(168, 34, 34, 0.28);
+  box-shadow: 0 0 0 3px rgba(168, 34, 34, 0.07);
+}
+
+.dashDislikeMiniActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dashDislikeMiniSkip {
+  padding: 0 14px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(17, 24, 39, 0.14);
+  background: rgba(255, 255, 255, 0.8);
+  color: rgba(17, 24, 39, 0.6);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+.dashDislikeMiniSkip:hover { background: rgba(17, 24, 39, 0.06); }
+
+.dashDislikeMiniSubmit {
+  padding: 0 14px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(168, 34, 34, 0.85);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+.dashDislikeMiniSubmit:hover { background: rgba(139, 28, 28, 0.95); }
+
+/* dark mode */
+[data-theme="dark"] .dashDislikeMiniComposer {
+  background:
+    linear-gradient(135deg, rgba(168, 34, 34, 0.12), rgba(30, 22, 22, 0.72));
+  border-color: rgba(200, 60, 60, 0.18);
+}
+[data-theme="dark"] .dashDislikeMiniTitle { color: rgba(255, 200, 200, 0.9); }
+[data-theme="dark"] .dashDislikeMiniNote {
+  background: rgba(28, 18, 18, 0.85);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.85);
+}
+[data-theme="dark"] .dashDislikeMiniSkip {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.55);
+}
+[data-theme="dark"] .dashDislikeMiniSkip:hover { background: rgba(255, 255, 255, 0.12); }
+[data-theme="dark"] .dashDislikeMiniClose { color: rgba(255, 255, 255, 0.3); }
+[data-theme="dark"] .dashDislikeMiniClose:hover { background: rgba(200, 60, 60, 0.15); color: rgba(255, 160, 160, 0.8); }
+
+.dashFeedbackBtn.pending {
+  opacity: 0.7;
+}
+
 .dashOutfitFeedbackLike {
   background:
     linear-gradient(180deg, rgba(20, 124, 73, 0.06), transparent 120px),
@@ -22719,6 +23117,16 @@ a:focus-visible {
   border-radius: 8px;
   margin-bottom: 10px;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.dashDemoOutfitImg {
+  width: 100%;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  display: block;
+  background: var(--bg-subtle, #f5f5f5);
 }
 
 .dashDemoOutfitName {

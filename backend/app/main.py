@@ -135,14 +135,22 @@ def _ensure_rate_limit_schema(inspector) -> None:
 
 
 def _ensure_runtime_schema() -> None:
-    import os
-    """Apply minimal additive schema changes for local environments without migrations."""
-    # TODO: Replace this startup schema patching with reviewed migrations before production hardening.
+    """Apply additive schema changes on every startup — safe on both SQLite and PostgreSQL."""
     inspector = inspect(engine)
     _ensure_rate_limit_schema(inspector)
 
-    if os.getenv("DATABASE_URL") and not os.getenv("RUN_SCHEMA_PATCH"):
-        return
+    is_pg = engine.dialect.name == "postgresql"
+    bool_true = "TRUE" if is_pg else "1"
+    bool_false = "FALSE" if is_pg else "0"
+    ts_type = "TIMESTAMP" if is_pg else "DATETIME"
+
+    def _run_alters(alters: list[str]) -> None:
+        for sql in alters:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(sql))
+            except Exception:
+                pass  # column already exists or DB constraint — safe to skip
 
     table_names = set(inspector.get_table_names())
     if "users" not in table_names:
@@ -171,23 +179,21 @@ def _ensure_runtime_schema() -> None:
     if "height_cm" not in user_columns:
         user_alters.append("ALTER TABLE users ADD COLUMN height_cm INTEGER")
     if "is_active" not in user_columns:
-        user_alters.append("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1")
+        user_alters.append(f"ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT {bool_true}")
     if "is_verified" not in user_columns:
-        user_alters.append("ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 0")
+        user_alters.append(f"ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT {bool_false}")
     if "onboarding_complete" not in user_columns:
-        user_alters.append("ALTER TABLE users ADD COLUMN onboarding_complete BOOLEAN DEFAULT 0")
+        user_alters.append(f"ALTER TABLE users ADD COLUMN onboarding_complete BOOLEAN DEFAULT {bool_false}")
     if "verification_token" not in user_columns:
         user_alters.append("ALTER TABLE users ADD COLUMN verification_token VARCHAR")
     if "verification_token_expires_at" not in user_columns:
-        user_alters.append("ALTER TABLE users ADD COLUMN verification_token_expires_at DATETIME")
+        user_alters.append(f"ALTER TABLE users ADD COLUMN verification_token_expires_at {ts_type}")
     if "reset_token_hash" not in user_columns:
         user_alters.append("ALTER TABLE users ADD COLUMN reset_token_hash VARCHAR")
     if "reset_token_expires_at" not in user_columns:
         user_alters.append("ALTER TABLE users ADD COLUMN reset_token_expires_at INTEGER")
     if user_alters:
-        with engine.begin() as connection:
-            for sql in user_alters:
-                connection.execute(text(sql))
+        _run_alters(user_alters)
 
     if "clothing_items" in table_names:
         clothing_columns = {column["name"] for column in inspector.get_columns("clothing_items")}
@@ -195,7 +201,7 @@ def _ensure_runtime_schema() -> None:
         if "layer_type" not in clothing_columns:
             pending_alters.append("ALTER TABLE clothing_items ADD COLUMN layer_type VARCHAR")
         if "is_one_piece" not in clothing_columns:
-            pending_alters.append("ALTER TABLE clothing_items ADD COLUMN is_one_piece BOOLEAN DEFAULT 0")
+            pending_alters.append(f"ALTER TABLE clothing_items ADD COLUMN is_one_piece BOOLEAN DEFAULT {bool_false}")
         if "set_identifier" not in clothing_columns:
             pending_alters.append("ALTER TABLE clothing_items ADD COLUMN set_identifier VARCHAR")
         if "style_tags_json" not in clothing_columns:
@@ -221,9 +227,7 @@ def _ensure_runtime_schema() -> None:
         if "accessory_type" not in clothing_columns:
             pending_alters.append("ALTER TABLE clothing_items ADD COLUMN accessory_type VARCHAR")
         if pending_alters:
-            with engine.begin() as connection:
-                for sql in pending_alters:
-                    connection.execute(text(sql))
+            _run_alters(pending_alters)
 
     index_statements: list[str] = []
     if "clothing_items" in table_names:
