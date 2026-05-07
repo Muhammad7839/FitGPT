@@ -133,6 +133,12 @@ export default function AppRoutes() {
   }, [remoteOnboarded, user]);
 
   useEffect(() => {
+    const handler = () => setAnswers(loadAnswers(user));
+    window.addEventListener("fitgpt:onboarding-answers-changed", handler);
+    return () => window.removeEventListener("fitgpt:onboarding-answers-changed", handler);
+  }, [user]);
+
+  useEffect(() => {
     if (user) {
       setGuestMode(false);
     }

@@ -4,7 +4,7 @@ import ReactDOM from "react-dom";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { logout } from "../api/authApi";
-import { uploadProfileAvatar, saveProfileDraft } from "../api/profileApi";
+import { saveProfileDraft } from "../api/profileApi";
 import { readDemoAuth, writeDemoAuth, loadProfilePic, saveProfilePic, loadAnswers, saveAnswers, mirrorUserDataToGuest } from "../utils/userStorage";
 import { fileToDataUrl, getProfilePicUploadIssue } from "../utils/helpers";
 import { STYLE_OPTIONS, COMFORT_OPTIONS, DRESS_FOR_OPTIONS, BODY_TYPE_OPTIONS, GENDER_OPTIONS } from "../utils/formOptions";
@@ -38,7 +38,9 @@ export default function Profile({ onResetOnboarding = () => {} }) {
 
   const demoUser = useMemo(() => readDemoAuth(), []);
   const effectiveUser = user || demoUser;
-  const remoteAvatarUrl = user?.avatar_url || user?.avatarUrl || effectiveUser?.avatar_url || effectiveUser?.avatarUrl || "";
+  const _rawRemoteUrl = user?.avatar_url || user?.avatarUrl || effectiveUser?.avatar_url || effectiveUser?.avatarUrl || "";
+  // Only trust data: URLs from the backend — file-path URLs break after server restarts
+  const remoteAvatarUrl = _rawRemoteUrl.startsWith("data:") ? _rawRemoteUrl : "";
 
   const email = effectiveUser?.email || effectiveUser?.user?.email || effectiveUser?.demoEmail || "";
 
@@ -155,6 +157,7 @@ export default function Profile({ onResetOnboarding = () => {} }) {
     setPrefs((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
       saveAnswers(next, effectiveUser);
+      window.dispatchEvent(new CustomEvent("fitgpt:onboarding-answers-changed"));
       setPrefsSaved(true);
       setTimeout(() => setPrefsSaved(false), 1500);
       if (user) {
@@ -804,16 +807,12 @@ export default function Profile({ onResetOnboarding = () => {} }) {
                 onClick={async () => {
                   try {
                     if (user) {
-                      if (!pendingPicFile) {
-                        setPicMsg("Choose a new image before saving.");
-                        return;
-                      }
-                      setPicMsg("Uploading avatar...");
-                      await uploadProfileAvatar(pendingPicFile).catch(() => {});
                       const displayUrl = pendingPic || "";
                       if (!displayUrl) {
-                        throw new Error("No image selected.");
+                        setPicMsg("Choose an image before saving.");
+                        return;
                       }
+                      setPicMsg("Saving...");
                       saveProfilePic(displayUrl, effectiveUser);
                       await saveProfileDraft({ avatar_url: displayUrl }, effectiveUser).catch(() => {});
                       setProfilePic(displayUrl);
