@@ -118,11 +118,14 @@ def build_recommendation_prompt(
     """Builds a strict JSON-only prompt for AI ranking on top of deterministic candidates."""
     rows = []
     for item in wardrobe_items:
+        style_tags_val = ", ".join(item.style_tags) if item.style_tags else "n/a"
+        occasion_tags_val = ", ".join(item.occasion_tags) if item.occasion_tags else "n/a"
         rows.append(
             (
                 f"id={item.id}; category={item.category}; type={item.clothing_type or 'n/a'}; "
                 f"fit_tag={item.fit_tag or 'n/a'}; color={item.color}; season={item.season}; "
-                f"comfort={item.comfort_level}; brand={item.brand or 'n/a'}"
+                f"comfort={item.comfort_level}; style_tags={style_tags_val}; occasion_tags={occasion_tags_val}; "
+                f"brand={item.brand or 'n/a'}"
             )
         )
 
@@ -131,6 +134,27 @@ def build_recommendation_prompt(
     time_text = _safe_text(time_context, fallback="unspecified")
     exclude_text = _safe_text(exclude, fallback="none")
     season_text = ", ".join(preferred_seasons) if preferred_seasons else "all"
+
+    _casual_occasions = {"casual", "campus", "class", "daily", "everyday", "weekend", "errand", "hangout", "outdoor"}
+    _formal_occasions = {"work", "office", "formal", "interview", "business", "dinner", "event", "date"}
+    occ_lower = occasion_text.lower()
+    is_casual_occasion = any(token in occ_lower for token in _casual_occasions)
+    is_formal_occasion = any(token in occ_lower for token in _formal_occasions)
+    style_lower = profile_style.lower()
+    is_casual_style = any(token in style_lower for token in {"casual", "streetwear", "sporty", "athletic", "relaxed", "everyday"})
+
+    occasion_guidance = ""
+    if is_casual_occasion or is_casual_style:
+        occasion_guidance = (
+            "9) This is a CASUAL occasion. Strongly prefer items with style_tags containing 'casual', 'streetwear', or 'sporty'. "
+            "Avoid items whose type or style_tags indicate formal wear (blazer, dress shirt, dress pants, slacks, oxford shirt, loafers, heels, dress shoes) "
+            "unless those are the ONLY options in a category. Jeans, hoodies, sneakers, t-shirts, and casual tops are ideal.\n"
+        )
+    elif is_formal_occasion:
+        occasion_guidance = (
+            "9) This is a FORMAL or work occasion. Prefer polished, professional items. "
+            "Avoid overly casual items like graphic tees or athletic wear unless nothing else is available.\n"
+        )
 
     return (
         "You are FitGPT AI ranking outfits from a fixed wardrobe.\n"
@@ -142,14 +166,15 @@ def build_recommendation_prompt(
         "5) Keep explanation natural, concise, and user-facing.\n"
         "6) The explanation must mention weather reasoning, color reasoning, and occasion or time-of-day reasoning.\n"
         "7) If the wardrobe is limited, still recommend the best option and name the limitation plainly.\n"
-        "8) Do not mention fallback behavior, provider issues, warnings, or internal logic.\n\n"
+        "8) Do not mention fallback behavior, provider issues, warnings, or internal logic.\n"
+        f"{occasion_guidance}\n"
         f"User profile: body_type={_safe_text(user.body_type)}, style={profile_style}, comfort={_safe_text(user.comfort_preference)}.\n"
         f"Weather category: {weather_category}\n"
         f"Occasion: {occasion_text}\n"
         f"Time context: {time_text}\n"
         f"Preferred seasons: {season_text}\n"
         f"Exclude tokens: {exclude_text}\n\n"
-        "Wardrobe items:\n"
+        "Wardrobe items (each includes style_tags and occasion_tags — use these to match occasion):\n"
         f"{chr(10).join(rows)}\n\n"
         "Output valid JSON only with this shape:\n"
         '{"item_ids":[1,2,3],"explanation":"...","item_explanations":{"1":"...","2":"..."}}'
