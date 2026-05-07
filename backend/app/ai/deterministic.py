@@ -11,6 +11,38 @@ from typing import Optional
 from app import models
 from app.weather import map_temperature_to_category
 
+_FORMAL_TYPE_TOKENS = frozenset({
+    "blazer",
+    "sport coat",
+    "dress shirt",
+    "oxford shirt",
+    "slacks",
+    "dress pants",
+    "trousers",
+    "loafer",
+    "loafers",
+    "dress shoe",
+    "dress shoes",
+    "formal dress",
+    "suit jacket",
+    "suit",
+    "heels",
+    "heel",
+    "pumps",
+})
+_CASUAL_OCCASION_TOKENS = frozenset({
+    "casual",
+    "campus",
+    "class",
+    "daily",
+    "everyday",
+    "weekend",
+    "errand",
+    "hangout",
+    "outdoor",
+    "hangout",
+})
+
 _NEUTRAL_COLORS = {
     "black",
     "white",
@@ -300,6 +332,17 @@ def _style_values(item: models.ClothingItem) -> set[str]:
     return values
 
 
+def _looks_formal_type(item: models.ClothingItem) -> bool:
+    blob = f"{(item.clothing_type or '')} {(item.name or '')}".lower()
+    return any(token in blob for token in _FORMAL_TYPE_TOKENS)
+
+
+def _is_casual_occasion_str(occasion: str) -> bool:
+    if not occasion:
+        return False
+    return any(token in occasion.lower() for token in _CASUAL_OCCASION_TOKENS)
+
+
 def _guess_style_from_item(item: models.ClothingItem) -> Optional[str]:
     blob = f"{item.name or ''} {item.clothing_type or ''} {item.brand or ''}".lower()
     if any(token in blob for token in {"formal", "tailored", "blazer", "dress", "oxford"}):
@@ -536,13 +579,19 @@ def _score_item(
     style_score = _style_score(item, style_target)
     occasion_score = _occasion_score(item, occasion)
     weather_penalty = _temperature_penalty(item, weather_category)
-    return (
+    base = (
         (season_score * 0.30)
         + (comfort_score * 0.25)
         + (style_score * 0.25)
         + (occasion_score * 0.20)
         - (weather_penalty * 0.12)
     )
+    # Hard type-based penalty for formal items on casual occasions, applied regardless of
+    # how the item is tagged. This prevents blazers/dress shoes/etc. from sneaking through
+    # when their tags don't explicitly say "formal".
+    if _is_casual_occasion_str(occasion) and _looks_formal_type(item):
+        base *= 0.45
+    return base
 
 
 def _resolve_comfort_target(raw_value: Optional[str]) -> int:
