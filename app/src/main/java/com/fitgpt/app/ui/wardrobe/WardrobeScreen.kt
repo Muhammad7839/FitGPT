@@ -366,6 +366,7 @@ fun WardrobeScreen(
                         )
                     } else {
                         LazyColumn(
+                            modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(

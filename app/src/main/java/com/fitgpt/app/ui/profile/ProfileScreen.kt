@@ -177,8 +177,10 @@ fun ProfileScreen(
                 var genderSelection by remember(profile.profileKey()) {
                     mutableStateOf(genderValueToLabel(profile.gender))
                 }
-                var heightCm by remember(profile.profileKey()) {
-                    mutableStateOf(profile.heightCm?.toString().orEmpty())
+                // Backend stores centimeters; display as whole inches to the user
+                var heightInches by remember(profile.profileKey()) {
+                    val display = profile.heightCm?.let { cm -> Math.round(cm / 2.54).toString() }.orEmpty()
+                    mutableStateOf(display)
                 }
                 var stylePreferences by remember(profile.profileKey()) {
                     mutableStateOf(profile.stylePreferences)
@@ -287,9 +289,9 @@ fun ProfileScreen(
                                 options = FormOptionCatalog.onboardingGenderOptions.map { it.label }
                             )
                             OutlinedTextField(
-                                value = heightCm,
-                                onValueChange = { heightCm = it.filter(Char::isDigit).take(3) },
-                                label = { Text("Height in centimeters") },
+                                value = heightInches,
+                                onValueChange = { heightInches = it.filter(Char::isDigit).take(3) },
+                                label = { Text("Height in inches") },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
@@ -333,7 +335,8 @@ fun ProfileScreen(
                                 comfortPreferences = comfortPreferences,
                                 dressFor = dressFor,
                                 gender = genderLabelToValue(genderSelection),
-                                heightCm = heightCm.toIntOrNull(),
+                                // convert inches back to centimeters before persisting
+                                heightCm = heightInches.toIntOrNull()?.let { Math.round(it * 2.54) },
                                 onboardingComplete = true
                             )
                             scope.launch {

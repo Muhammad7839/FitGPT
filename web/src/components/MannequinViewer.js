@@ -1,6 +1,6 @@
 import React, { Component, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { OrbitControls, Environment } from "@react-three/drei";
 import * as THREE from "three";
 
 import { colorToCss, normalizeCategory } from "../utils/recommendationEngine";
@@ -57,7 +57,15 @@ const MANNEQUIN_ROUGH   = 0.62;      // semi-matte, not plastic-shiny
 const MANNEQUIN_METAL   = 0.04;
 
 function MannequinMat() {
-  return <meshStandardMaterial color={MANNEQUIN_COLOR} roughness={MANNEQUIN_ROUGH} metalness={MANNEQUIN_METAL} />;
+  return (
+    <meshPhysicalMaterial
+      color={MANNEQUIN_COLOR}
+      roughness={MANNEQUIN_ROUGH}
+      metalness={MANNEQUIN_METAL}
+      clearcoat={0.18}
+      clearcoatRoughness={0.35}
+    />
+  );
 }
 
 function Body({ scale }) {
@@ -165,12 +173,40 @@ function accessorySlotPos(item, index) {
 
 // ── Outfit meshes — image plane when photo available, colored shape fallback ──
 
+// Builds a subdivided plane whose center vertices bow forward slightly,
+// so clothing looks like it conforms to the body rather than floating flat.
+function useCurvedGarmentGeo(width, height) {
+  return useMemo(() => {
+    const g = new THREE.PlaneGeometry(width, height, 14, 14);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const nx = pos.getX(i) / (width / 2);   // normalized -1..1
+      const ny = pos.getY(i) / (height / 2);  // normalized -1..1
+      const bulge = 0.055 * (1 - nx * nx) * (1 - ny * ny * 0.4);
+      pos.setZ(i, bulge);
+    }
+    pos.needsUpdate = true;
+    g.computeVertexNormals();
+    return g;
+  }, [width, height]);
+}
+
 function GarmentPlane({ texture, position, width, height }) {
   if (!texture) return null;
+  const geo = useCurvedGarmentGeo(width, height);
   return (
     <mesh position={position}>
-      <planeGeometry args={[width, height]} />
-      <meshStandardMaterial map={texture} transparent alphaTest={0.06} roughness={0.88} />
+      <primitive object={geo} attach="geometry" />
+      <meshPhysicalMaterial
+        map={texture}
+        transparent
+        alphaTest={0.06}
+        roughness={0.62}
+        metalness={0.0}
+        sheen={0.45}
+        sheenRoughness={0.5}
+        sheenColor="#ffffff"
+      />
     </mesh>
   );
 }
@@ -188,11 +224,11 @@ function OutfitMeshes({ slots, scale, textures }) {
       {/* One-piece */}
       {onePiece ? (
         textures[onePiece.id]
-          ? <GarmentPlane texture={textures[onePiece.id]} position={[0, 0.82, 0.22]} width={0.44} height={1.12} />
+          ? <GarmentPlane texture={textures[onePiece.id]} position={[0, 0.76, 0.27]} width={0.76} height={1.42} />
           : (
             <mesh position={[0, 0.88, 0.05]} scale={[scale.shoulders * 1.06, 1.46, 0.92]}>
               <capsuleGeometry args={[0.2, 0.72, 8, 18]} />
-              <meshStandardMaterial color={normalizeDisplayColor(onePiece.color)} roughness={0.72} />
+              <meshPhysicalMaterial color={normalizeDisplayColor(onePiece.color)} roughness={0.72} sheen={0.6} sheenRoughness={0.4} sheenColor="#ffffff" />
             </mesh>
           )
       ) : null}
@@ -200,11 +236,11 @@ function OutfitMeshes({ slots, scale, textures }) {
       {/* Top */}
       {!onePiece && top ? (
         textures[top.id]
-          ? <GarmentPlane texture={textures[top.id]} position={[0, 1.08, 0.22]} width={0.46} height={0.52} />
+          ? <GarmentPlane texture={textures[top.id]} position={[0, 0.92, 0.27]} width={0.78} height={0.72} />
           : (
             <mesh position={[0, 1.11, 0.04]} scale={[scale.shoulders * 1.08, 1.08, 0.9]}>
               <capsuleGeometry args={[0.2, 0.38, 8, 18]} />
-              <meshStandardMaterial color={normalizeDisplayColor(top.color)} roughness={0.72} />
+              <meshPhysicalMaterial color={normalizeDisplayColor(top.color)} roughness={0.72} sheen={0.6} sheenRoughness={0.4} sheenColor="#ffffff" />
             </mesh>
           )
       ) : null}
@@ -212,18 +248,18 @@ function OutfitMeshes({ slots, scale, textures }) {
       {/* Bottom */}
       {!onePiece && bottom ? (
         textures[bottom.id]
-          ? <GarmentPlane texture={textures[bottom.id]} position={[0, 0.46, 0.22]} width={0.38} height={0.7} />
+          ? <GarmentPlane texture={textures[bottom.id]} position={[0, 0.38, 0.27]} width={0.58} height={0.66} />
           : (
             <group>
               {[-0.115 * scale.hips, 0.115 * scale.hips].map((x, i) => (
                 <mesh key={`bot-${i}`} position={[x, 0.28, 0.03]}>
                   <capsuleGeometry args={[0.082, 0.68, 8, 14]} />
-                  <meshStandardMaterial color={normalizeDisplayColor(bottom.color)} roughness={0.74} />
+                  <meshPhysicalMaterial color={normalizeDisplayColor(bottom.color)} roughness={0.74} sheen={0.5} sheenRoughness={0.5} sheenColor="#ffffff" />
                 </mesh>
               ))}
               <mesh position={[0, 0.72, 0.04]} scale={[scale.hips, 1, 1]}>
                 <boxGeometry args={[0.36, 0.18, 0.18]} />
-                <meshStandardMaterial color={normalizeDisplayColor(bottom.color)} roughness={0.74} />
+                <meshPhysicalMaterial color={normalizeDisplayColor(bottom.color)} roughness={0.74} sheen={0.5} sheenRoughness={0.5} sheenColor="#ffffff" />
               </mesh>
             </group>
           )
@@ -232,13 +268,13 @@ function OutfitMeshes({ slots, scale, textures }) {
       {/* Shoes */}
       {shoes ? (
         textures[shoes.id]
-          ? <GarmentPlane texture={textures[shoes.id]} position={[0, -0.36, 0.16]} width={0.38} height={0.22} />
+          ? <GarmentPlane texture={textures[shoes.id]} position={[0, -0.40, 0.22]} width={0.54} height={0.30} />
           : (
             <>
               {[-0.115 * scale.hips, 0.115 * scale.hips].map((x, i) => (
                 <mesh key={`shoe-${i}`} position={[x, -0.38, 0.09]}>
                   <boxGeometry args={[0.14, 0.08, 0.3]} />
-                  <meshStandardMaterial color={normalizeDisplayColor(shoes.color)} roughness={0.65} />
+                  <meshPhysicalMaterial color={normalizeDisplayColor(shoes.color)} roughness={0.52} metalness={0.04} clearcoat={0.35} clearcoatRoughness={0.38} />
                 </mesh>
               ))}
             </>
@@ -248,7 +284,7 @@ function OutfitMeshes({ slots, scale, textures }) {
       {headwear ? (
         <mesh position={[0, 1.64, 0]}>
           <sphereGeometry args={[0.185, 24, 24]} />
-          <meshStandardMaterial color={normalizeDisplayColor(headwear.color)} roughness={0.7} />
+          <meshPhysicalMaterial color={normalizeDisplayColor(headwear.color)} roughness={0.65} sheen={0.4} sheenRoughness={0.5} sheenColor="#ffffff" />
         </mesh>
       ) : null}
 
@@ -292,16 +328,17 @@ function ViewerScene({ outfit, bodyType, textures }) {
 
   return (
     <>
-      {/* Soft fill — prevents shadows going fully black */}
-      <ambientLight intensity={0.92} />
-      {/* Key light — front-upper-right, strong but not blown-out */}
-      <directionalLight position={[3, 6, 5]} intensity={1.7} castShadow={false} />
-      {/* Fill light — left side, softer */}
-      <directionalLight position={[-4, 3, 2]} intensity={0.65} />
-      {/* Rim light — back-left edge, separates form from background */}
-      <directionalLight position={[-2, 1, -4]} intensity={0.48} />
-      {/* Ground bounce — warm uplight from below */}
-      <directionalLight position={[0, -3, 1]} intensity={0.20} color="#fffbe6" />
+      {/* Studio environment map provides IBL reflections for physical materials */}
+      <Environment preset="studio" />
+      <ambientLight intensity={0.32} />
+      {/* Key light — toned down because Environment provides ambient fill */}
+      <directionalLight position={[3, 6, 5]} intensity={1.0} castShadow={false} />
+      {/* Fill light */}
+      <directionalLight position={[-4, 3, 2]} intensity={0.42} />
+      {/* Rim light */}
+      <directionalLight position={[-2, 1, -4]} intensity={0.30} />
+      {/* Ground bounce */}
+      <directionalLight position={[0, -3, 1]} intensity={0.14} color="#fffbe6" />
       <SlowSpin>
         <Body scale={scale} />
         <OutfitMeshes scale={scale} slots={{ ...validation.bySlot, accessories: validation.accessories }} textures={textures} />
