@@ -6,7 +6,7 @@ import { outfitHistoryApi } from "../api/outfitHistoryApi";
 import { plannedOutfitsApi } from "../api/plannedOutfitsApi";
 import { loadWardrobe } from "../utils/userStorage";
 import { EVT_SAVED_OUTFITS_CHANGED } from "../utils/constants";
-import { buildWardrobeMap, formatCardDate, labelFromSource, setReuseOutfit as setReuse, buildGoogleCalendarUrl, tomorrowDateStr } from "../utils/helpers";
+import { buildWardrobeMap, formatCardDate, labelFromSource, setReuseOutfit as setReuse, tomorrowDateStr } from "../utils/helpers";
 import GuestModeNotice from "./GuestModeNotice";
 
 export default function SavedOutfits() {
@@ -17,7 +17,6 @@ export default function SavedOutfits() {
   const [saved, setSaved] = useState([]);
   const [msg, setMsg] = useState("");
   const [confirmUnsave, setConfirmUnsave] = useState(null);
-  const [plannedOutfit, setPlannedOutfit] = useState(null);
 
 
   const wardrobe = useMemo(() => loadWardrobe(user), [user]);
@@ -84,19 +83,11 @@ export default function SavedOutfits() {
     try {
       const result = await savedOutfitsApi.unsaveOutfit(sig, user);
       setSaved((prev) => prev.filter((o) => (o?.outfit_signature || "") !== sig));
-      setPlannedOutfit(null);
       setMsg(result?.localOnly ? "Outfit removed locally only. Backend sync failed." : "Outfit removed.");
-      window.setTimeout(() => {
-        setMsg("");
-        setPlannedOutfit(null);
-      }, 2500);
+      window.setTimeout(() => setMsg(""), 2500);
     } catch (e) {
-      setPlannedOutfit(null);
       setMsg(e?.message || "Could not remove outfit.");
-      window.setTimeout(() => {
-        setMsg("");
-        setPlannedOutfit(null);
-      }, 2500);
+      window.setTimeout(() => setMsg(""), 2500);
     }
     setConfirmUnsave(null);
   }
@@ -129,14 +120,7 @@ export default function SavedOutfits() {
       };
     });
 
-    const calUrl = buildGoogleCalendarUrl({
-      date,
-      occasion,
-      itemNames: itemDetails.map((d) => d.name),
-    });
-    window.open(calUrl, "_blank", "noopener");
-
-    const result = await plannedOutfitsApi.planOutfit({
+    await plannedOutfitsApi.planOutfit({
       item_ids: itemIds,
       item_details: itemDetails,
       planned_date: date,
@@ -144,17 +128,7 @@ export default function SavedOutfits() {
       source: "planner",
     }, user).catch(() => null);
 
-    if (result?.created) {
-      setPlannedOutfit(result?.planned_outfit || null);
-      setMsg(result?.localOnly ? "Outfit planned successfully. Backend sync is pending." : "Outfit planned successfully.");
-    } else {
-      setPlannedOutfit(null);
-      setMsg(result?.message || "Could not plan outfit.");
-    }
-    window.setTimeout(() => {
-      setMsg("");
-      setPlannedOutfit(null);
-    }, 2500);
+    navigate("/plans");
   }
 
   const onHoloMove = useCallback((e) => {
@@ -186,7 +160,7 @@ export default function SavedOutfits() {
       <div className="historyTopBar">
         <div>
           <div className="historyTitle">Saved Outfits</div>
-          <div className="historySub">Your favorite outfit combinations</div>
+          <div className="historySub">Bookmarked looks — wear them or plan them for a future date</div>
         </div>
 
         <div className="historyTopRight">
@@ -202,13 +176,6 @@ export default function SavedOutfits() {
       {msg && (
         <div className="noteBox" style={{ marginTop: 12 }} role="status" aria-live="polite">
           <div>{msg}</div>
-          {plannedOutfit ? (
-            <div style={{ marginTop: 10 }}>
-              <button className="btn" type="button" onClick={() => navigate("/plans")}>
-                Open Plans
-              </button>
-            </div>
-          ) : null}
         </div>
       )}
 
@@ -301,11 +268,14 @@ export default function SavedOutfits() {
                     .join(" | ")}
                 </div>
 
+                <div className="savedOutfitActionHint">
+                  Saved on {date}
+                </div>
                 <div className="historyActions">
-                  <button className="btn primary" onClick={() => reuseOutfit(o)}>
-                    Wear Again
+                  <button className="btn primary" title="Mark as worn today and load on dashboard" onClick={() => reuseOutfit(o)}>
+                    Wear
                   </button>
-                  <button className="btn" onClick={() => handlePlanForLater(o)}>
+                  <button className="btn" title="Add to your planner for a future date" onClick={() => handlePlanForLater(o)}>
                     Plan for Later
                   </button>
                   <button

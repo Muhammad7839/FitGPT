@@ -4,6 +4,8 @@ FitGPT is a full-stack application that helps users manage their wardrobe, gener
 
 The goal was to build something practical and consistent across platforms. Instead of treating web, mobile, and backend as separate systems, the focus was on a single source of truth for data, logic, and user experience.
 
+**Repository:** [github.com/Muhammad7839/FitGPT](https://github.com/Muhammad7839/FitGPT) — default branch **`main`**.
+
 ---
 
 ## What this project demonstrates
@@ -16,7 +18,19 @@ The goal was to build something practical and consistent across platforms. Inste
 
 ---
 
+## Scope for demos vs. full codebase
+
+**Symposium / live demo:** Lead with the web app ([fitgpt.tech](https://www.fitgpt.tech)), the shared **Render** backend, and the Android APK from [/download](https://www.fitgpt.tech/download). The strongest narrative is **wardrobe → contextual recommendations → optional AURA**, with **explainable rules** grounding suggestions in real items and weather.
+
+**Full repository:** The sections below describe everything the codebase supports. Not every capability needs a live slot—some depend on **optional API keys** (e.g. Groq, weather), **device features**, or **integration setup**. See [`docs/symposium-readiness.md`](docs/symposium-readiness.md) for day-of checklists and backup plans.
+
+FitGPT combines **structured recommendation logic** with **AI-assisted** styling. **AURA** and server-side AI outfit suggestions use Groq when configured; they **degrade gracefully** when not. The project does **not** claim a custom-trained personal ML model for core scoring.
+
+---
+
 ## Core features
+
+> **Demo tip:** Prioritize wardrobe, recommendations, and AURA (or its fallback). Other bullets are real features—frame them accurately if judges ask.
 
 ### User experience
 - Digital wardrobe with add, edit, delete, and bulk upload
@@ -24,10 +38,10 @@ The goal was to build something practical and consistent across platforms. Inste
 - Save outfits for reuse and plan outfits against a calendar
 - Outfit history tracking and analytics
 - Manual outfit builder with drag-and-drop
-- 3D mannequin preview for visualizing outfits
-- Receipt OCR — scan a clothing receipt to pre-fill wardrobe items
+- 3D mannequin preview for visualizing outfits (outfit visualization, not full virtual try-on)
+- Receipt OCR — scan a clothing receipt to pre-fill wardrobe items (when backend OCR is configured)
 - Barcode / QR scanner for uploads
-- Hands-free voice chat with AURA, the in-app stylist assistant
+- Hands-free voice chat with AURA (when speech APIs and LLM backend are available)
 
 ### Recommendation engine
 - Weather-aware (current + multi-day forecast) outfit suggestions
@@ -36,6 +50,7 @@ The goal was to build something practical and consistent across platforms. Inste
 - Duplicate clothing detection with similarity scoring
 - Trip packing list generation tuned to destination forecast
 - Feedback-driven preference learning
+- **Core scoring is deterministic and explainable;** optional LLM-based suggestions augment when enabled
 
 ### Cross-platform behavior
 - Same backend logic used by both web and Android
@@ -70,6 +85,15 @@ All core logic lives in one place so the platforms don't drift.
 - **Backend:** Render — `https://fitgpt-backend-tdiq.onrender.com` (gunicorn + uvicorn workers, PostgreSQL)
 - **Android:** targets the Render backend via `API_BASE_URL` in `gradle.properties`
 
+On Render, set **`SECRET_KEY`** and **`DATABASE_URL`** (PostgreSQL) in the service environment. The repo [`render.yaml`](render.yaml) sets `ENVIRONMENT=production` so the API refuses the dev default secret and SQLite unless you explicitly opt in with `ALLOW_SQLITE_IN_PRODUCTION=true`.
+
+### Production verification (quick)
+
+- **Backend health:** `GET https://fitgpt-backend-tdiq.onrender.com/health` (expect HTTP 200).
+- **Web:** [www.fitgpt.tech](https://www.fitgpt.tech) — public app.
+- **Download / Android APK:** [www.fitgpt.tech/download](https://www.fitgpt.tech/download) — primary entry for QR and sideload instructions; direct APK and GitHub release fallback are documented there and in [`symposium-assets/README.md`](symposium-assets/README.md).
+- **Automated smoke (health only, no secrets):** from repo root, run `./scripts/smoke-test-production.sh` — curls `/health` and prints URLs for manual checks. Full day-of steps: [`docs/symposium-readiness.md`](docs/symposium-readiness.md).
+
 ---
 
 ## Tech stack
@@ -82,7 +106,7 @@ All core logic lives in one place so the platforms don't drift.
 
 **Third-party services:** OpenWeather (weather), Groq `llama-3.1-8b-instant` (AURA chat + AI recommendations).
 
-**Tests:** pytest 9.0 (backend, 180+ tests), Jest + React Testing Library (web).
+**Tests:** pytest 9.0 (backend, 185+ tests), Jest + React Testing Library (web, 617 tests in CI).
 
 **CI:** GitHub Actions — backend pytest on Python 3.12, web `npm test` + `npm run build` on Node 20.
 
@@ -167,11 +191,19 @@ cd web
 npm run build
 ```
 
+### Android (from repo root)
+
+```bash
+./gradlew :app:assembleDebug :app:assembleRelease
+```
+
+Produces APKs under `app/build/outputs/apk/`. Public demo installs use the hosted APK — see [/download](https://www.fitgpt.tech/download) and [`symposium-assets/README.md`](symposium-assets/README.md).
+
 ---
 
 ## Documentation
 
-All docs live in [`docs/`](docs/README.md), split into two folders:
+All docs live in [`docs/`](docs/README.md), including **[symposium / demo readiness](docs/symposium-readiness.md)**. The index splits content into:
 
 **[`docs/features/`](docs/features/)** — product and feature documentation (start here)
 
@@ -192,6 +224,8 @@ All docs live in [`docs/`](docs/README.md), split into two folders:
 | [accessibility.md](docs/features/accessibility.md) | High-contrast themes, large text mode |
 | [weather_and_time_context.md](docs/features/weather_and_time_context.md) | Weather fetch, normalization, and time-of-day context |
 
+**Symposium:** [symposium-readiness.md](docs/symposium-readiness.md) — checklists, smoke test, backup plans.
+
 **[`docs/internal/`](docs/internal/)** — team process, audits, and release checklists
 
 | Doc | Description |
@@ -211,12 +245,9 @@ See also: [`AGENTS.md`](AGENTS.md) — working conventions for this repo.
 
 ## Demo flow
 
-1. Sign in or create an account.
-2. Add wardrobe items (manually, via bulk upload, or by scanning a receipt).
-3. Generate an outfit recommendation.
-4. View the outfit on a 3D mannequin.
-5. Build a custom outfit in the drag-and-drop builder.
-6. Save or plan the outfit, or ask AURA for a second opinion.
+**Short path (symposium):** Sign in → show wardrobe → add one item → refresh → generate recommendations → optional AURA prompt. Use Android or `/download` only if network and time allow.
+
+**Longer path (full product tour):** Sign in or create an account → add wardrobe items (manually, bulk upload, or receipt scan when configured) → generate recommendations → view on the 3D mannequin → drag-and-drop builder → save or plan the outfit → ask AURA for a second opinion.
 
 ---
 

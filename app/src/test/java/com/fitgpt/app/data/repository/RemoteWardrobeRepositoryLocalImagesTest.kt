@@ -12,6 +12,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import retrofit2.Retrofit
@@ -45,6 +46,7 @@ class RemoteWardrobeRepositoryLocalImagesTest {
 
     @Test
     fun addItemWithPhotoSyncsMetadataOnlyAndReturnsLocalImage() = runBlocking {
+        server.enqueue(jsonResponse("""{"image_url":"/uploads/jacket.jpg"}"""))
         server.enqueue(jsonResponse(clothingItemJson(id = 77, imageUrl = "/uploads/dead.jpg")))
 
         val created = repository.addItemWithPhoto(
@@ -56,20 +58,141 @@ class RemoteWardrobeRepositoryLocalImagesTest {
             )
         )
 
-        val request = server.takeRequest()
-        assertEquals("/wardrobe/items", request.path)
-        assertFalse(request.body.readUtf8().contains("image_url"))
+        val uploadRequest = server.takeRequest()
+        assertEquals("/wardrobe/items/image", uploadRequest.path)
+
+        val createRequest = server.takeRequest()
+        assertEquals("/wardrobe/items", createRequest.path)
+        assertTrue(createRequest.body.readUtf8().contains("image_url"))
         assertEquals("file:///wardrobe/77/jacket.jpg", created.imageUrl)
     }
 
     @Test
     fun fetchedWardrobePrefersLocalImageOverRemoteUploadPath() = runBlocking {
         imageStore.imagesByItemId[77] = "file:///wardrobe/77/local.jpg"
-        server.enqueue(jsonResponse("[${clothingItemJson(id = 77, imageUrl = "/uploads/dead.jpg")}]"))
+        server.enqueue(jsonResponse(wardrobeItemsResponseJson(clothingItemJson(id = 77, imageUrl = "/uploads/dead.jpg"))))
 
         val items = repository.getWardrobeItems()
 
         assertEquals("file:///wardrobe/77/local.jpg", items.single().imageUrl)
+    }
+
+    @Test
+    fun bulkCreateAttachesUploadedLocalImagesToSavedItems() = runBlocking {
+        server.enqueue(
+            jsonResponse(
+                """
+                {
+                  "results": [
+                    {
+                      "index": 0,
+                      "status": "success",
+                      "item": ${clothingItemJson(id = 101, imageUrl = "/uploads/remote-a.jpg")},
+                      "error": null
+                    },
+                    {
+                      "index": 1,
+                      "status": "success",
+                      "item": ${clothingItemJson(id = 102, imageUrl = "/uploads/remote-b.jpg")},
+                      "error": null
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val created = repository.addItemsBulk(
+            listOf(
+                item(id = 1).copy(name = "Item A", imageUrl = "file:///temp/a.jpg"),
+                item(id = 2).copy(name = "Item B", imageUrl = "file:///temp/b.jpg")
+            )
+        )
+
+        val request = server.takeRequest()
+        assertEquals("/wardrobe/items/bulk", request.path)
+        assertEquals("file:///wardrobe/101/a.jpg", created[0].imageUrl)
+        assertEquals("file:///wardrobe/102/b.jpg", created[1].imageUrl)
+    }
+
+    @Test
+    fun uploadImageResolvesRelativeBackendPathsToAbsoluteUrls() = runBlocking {
+        server.enqueue(jsonResponse("""{"image_url":"/uploads/item_123.jpg"}"""))
+
+        val uploadedUrl = repository.uploadImage(
+            bytes = byteArrayOf(1, 2, 3),
+            fileName = "item.jpg",
+            mimeType = "image/jpeg"
+        )
+
+        val request = server.takeRequest()
+        assertEquals("/wardrobe/items/image", request.path)
+        assertEquals("file:///temp/item.jpg", uploadedUrl)
+    }
+
+    @Test
+    fun uploadImagesBatchReturnsLocalPreviewUrlsWhileCachingRemoteUrlsForPersistence() = runBlocking {
+        server.enqueue(
+            jsonResponse(
+                """
+                {
+                  "results": [
+                    {"file_name":"a.jpg","status":"success","image_url":"/uploads/a.jpg","error":null},
+                    {"file_name":"b.jpg","status":"success","image_url":"/uploads/b.jpg","error":null}
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+        server.enqueue(
+            jsonResponse(
+                """
+                {
+                  "results": [
+                    {
+                      "index": 0,
+                      "status": "success",
+                      "item": ${clothingItemJson(id = 201, imageUrl = "${server.url("/")}uploads/a.jpg")},
+                      "error": null
+                    },
+                    {
+                      "index": 1,
+                      "status": "success",
+                      "item": ${clothingItemJson(id = 202, imageUrl = "${server.url("/")}uploads/b.jpg")},
+                      "error": null
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val uploaded = repository.uploadImagesBatch(
+            listOf(
+                UploadImagePayload(byteArrayOf(1, 2, 3), "a.jpg", "image/jpeg"),
+                UploadImagePayload(byteArrayOf(4, 5, 6), "b.jpg", "image/jpeg")
+            )
+        )
+        assertEquals("file:///temp/a.jpg", uploaded[0].imageUrl)
+        assertEquals("file:///temp/b.jpg", uploaded[1].imageUrl)
+
+        val created = repository.addItemsBulk(
+            listOf(
+                item(id = 1).copy(name = "Item A", imageUrl = uploaded[0].imageUrl),
+                item(id = 2).copy(name = "Item B", imageUrl = uploaded[1].imageUrl)
+            )
+        )
+
+        val batchUploadRequest = server.takeRequest()
+        assertEquals("/wardrobe/items/images", batchUploadRequest.path)
+
+        val createRequest = server.takeRequest()
+        assertEquals("/wardrobe/items/bulk", createRequest.path)
+        val body = createRequest.body.readUtf8()
+        assertTrue(body.contains("${server.url("/")}uploads/a.jpg"))
+        assertTrue(body.contains("${server.url("/")}uploads/b.jpg"))
+        assertEquals("file:///wardrobe/201/a.jpg", created[0].imageUrl)
+        assertEquals("file:///wardrobe/202/b.jpg", created[1].imageUrl)
     }
 
     private fun item(id: Int): ClothingItem {
@@ -93,6 +216,17 @@ class RemoteWardrobeRepositoryLocalImagesTest {
             .setResponseCode(200)
             .addHeader("Content-Type", "application/json")
             .setBody(body)
+    }
+
+    private fun wardrobeItemsResponseJson(vararg items: String): String {
+        return """
+            {
+              "items": [${items.joinToString(",")}],
+              "total": ${items.size},
+              "limit": 100,
+              "offset": 0
+            }
+        """.trimIndent()
     }
 
     private fun clothingItemJson(id: Int, imageUrl: String?): String {

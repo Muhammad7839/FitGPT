@@ -220,9 +220,14 @@ class AiService:
                 outfit_options=deterministic_options,
             )
 
+        candidate_item_ids: set[int] = set()
+        for candidate in deterministic_options:
+            candidate_item_ids.update(candidate.item_ids)
+        ai_wardrobe_items = [item_map[iid] for iid in candidate_item_ids if iid in item_map] or all_items
+
         prompt = prompts.build_recommendation_prompt(
             user=user,
-            wardrobe_items=all_items,
+            wardrobe_items=ai_wardrobe_items,
             weather_category=deterministic_pick.weather_category,
             occasion=context.occasion,
             time_context=context.time_context,

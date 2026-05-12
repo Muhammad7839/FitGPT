@@ -846,17 +846,29 @@ function metadataScore(item, context) {
   const id = (item?.id ?? "").toString().trim();
   const recentPenalty = id && recentItemCounts ? (recentItemCounts.get(id) || 0) * 2 : 0;
 
-  const styles = normalizeTagArray(item?.style_tags).map(normalizeStyleValue);
-  const occasions = normalizeTagArray(item?.occasion_tags).map(normalizeOccasionValue);
+  const rawStyles = normalizeTagArray(item?.style_tags).map(normalizeStyleValue);
+  const rawOccasions = normalizeTagArray(item?.occasion_tags).map(normalizeOccasionValue);
   const seasons = normalizeTagArray(item?.season_tags);
   const preferredStyles = preferredStylesFromAnswers(answers);
   const preferredOccasions = preferredOccasionsFromAnswers(answers);
+
+  // When the user has active preferences, fall back to TAG_SUGGESTIONS for items
+  // that carry no explicit tags. This ensures blazers/dress-shoes etc. receive their
+  // correct formal classification and get penalised on casual occasions.
+  // We do NOT apply the fallback for the no-preference casual-bonus branch below,
+  // because inferring "casual" onto every untagged item skews the neutral baseline.
+  const typeSuggestion = preferredStyles.length || preferredOccasions.length
+    ? TAG_SUGGESTIONS[(item?.clothing_type || "").trim().toLowerCase()]
+    : null;
+  const styles = rawStyles.length > 0 ? rawStyles : (typeSuggestion ? typeSuggestion.style.map(normalizeStyleValue) : []);
+  const occasions = rawOccasions.length > 0 ? rawOccasions : (typeSuggestion ? typeSuggestion.occasion.map(normalizeOccasionValue) : []);
 
   let score = 0;
 
   if (preferredStyles.length) {
     score += styles.some((style) => preferredStyles.includes(style)) ? 10 : styles.length ? -12 : 2;
-  } else if (styles.includes("casual")) {
+  } else if (rawStyles.includes("casual")) {
+    // Casual bonus only for explicitly tagged items — avoids neutralising weather signal.
     score += 2;
   }
 
@@ -1028,24 +1040,24 @@ export function defaultOutfitSet(seedNumber) {
   const rng = mulberry32(seed);
 
   const altShoes = [
-    { id: "d4a", name: "Black Oxfords", color: "Black", category: "Shoes" },
-    { id: "d4b", name: "White Sneakers", color: "White", category: "Shoes" },
-    { id: "d4c", name: "Nude Flats", color: "Beige", category: "Shoes" },
+    { id: "d4a", name: "Black Oxfords", color: "Black", category: "Shoes", image_url: "/gap-athletic-shoes.svg" },
+    { id: "d4b", name: "White Sneakers", color: "White", category: "Shoes", image_url: "/gap-sneakers-real.jpg" },
+    { id: "d4c", name: "Nude Flats", color: "Beige", category: "Shoes", image_url: "/gap-sneakers.svg" },
   ];
 
   const altBottoms = [
-    { id: "d3a", name: "Gray Trousers", color: "Gray", category: "Bottoms" },
-    { id: "d3b", name: "Black Jeans", color: "Black", category: "Bottoms" },
-    { id: "d3c", name: "Navy Skirt", color: "Navy", category: "Bottoms" },
+    { id: "d3a", name: "Gray Trousers", color: "Gray", category: "Bottoms", image_url: "/gap-trousers.svg" },
+    { id: "d3b", name: "Black Jeans", color: "Black", category: "Bottoms", image_url: "/wardrobe-jeans-real.jpg" },
+    { id: "d3c", name: "Navy Skirt", color: "Navy", category: "Bottoms", image_url: "/wardrobe-jeans.svg" },
   ];
 
   const altTops = [
-    { id: "d2a", name: "White Button-Up", color: "White", category: "Tops" },
-    { id: "d2b", name: "Cream Knit Top", color: "Beige", category: "Tops" },
-    { id: "d2c", name: "Black Turtleneck", color: "Black", category: "Tops" },
+    { id: "d2a", name: "White Button-Up", color: "White", category: "Tops", image_url: "/wardrobe-tee-real.jpg" },
+    { id: "d2b", name: "Cream Knit Top", color: "Beige", category: "Tops", image_url: "/wardrobe-sweater-real.jpg" },
+    { id: "d2c", name: "Black Turtleneck", color: "Black", category: "Tops", image_url: "/wardrobe-sweater.svg" },
   ];
 
-  const outer = { id: "d1", name: "Navy Blazer", color: "Navy", category: "Outerwear" };
+  const outer = { id: "d1", name: "Navy Blazer", color: "Navy", category: "Outerwear", image_url: "/gap-jacket-real.jpg" };
 
   const make = () => {
     const top = pickOne(altTops, rng);

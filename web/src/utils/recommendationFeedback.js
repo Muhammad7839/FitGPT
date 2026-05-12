@@ -366,13 +366,13 @@ export function buildRecommendationFeedbackPayload({
   if (!entry) return null;
 
   return {
-    signature: entry.signature,
+    suggestion_id: entry.signature,
     signal: entry.signal,
     detail_code: entry.detailCode || "",
     note: entry.note || "",
     source: entry.source || "dashboard",
     updated_at: entry.updatedAt,
-    item_ids: entry.itemIds || [],
+    item_ids: (() => { const ids = (entry.itemIds || []).map((id) => Number(id)).filter((n) => Number.isInteger(n) && n > 0); return ids.length ? ids : null; })(),
     colors: entry.colors || [],
     categories: entry.categories || [],
     style_tags: entry.styleTags || [],

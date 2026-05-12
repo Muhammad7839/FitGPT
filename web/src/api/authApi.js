@@ -72,6 +72,11 @@ import {
     return err && (err.status === 404 || err.status === 405);
   }
   
+function isTransientAuthNetworkError(err) {
+  const code = (err?.code || "").toString().toLowerCase();
+  return code === "network_error" || code === "request_timeout";
+}
+
   async function callWithFallback(primaryPath, fallbackPath, options) {
     try {
       return await apiFetch(primaryPath, options);
@@ -88,7 +93,9 @@ import {
   
     const payload = { email, password };
   
-    const data = await callWithFallback(
+  let data;
+  try {
+    data = await callWithFallback(
       AUTH_ENDPOINTS_PRIMARY.login,
       AUTH_ENDPOINTS_FALLBACK.login,
       {
@@ -96,6 +103,19 @@ import {
         body: JSON.stringify(payload),
       }
     );
+  } catch (err) {
+    // Render cold starts or brief mobile network blips can fail the first login request.
+    // Retry once before surfacing an error to the user.
+    if (!isTransientAuthNetworkError(err)) throw err;
+    data = await callWithFallback(
+      AUTH_ENDPOINTS_PRIMARY.login,
+      AUTH_ENDPOINTS_FALLBACK.login,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+  }
   
     const token = extractToken(data);
     const refreshToken = extractRefreshToken(data);

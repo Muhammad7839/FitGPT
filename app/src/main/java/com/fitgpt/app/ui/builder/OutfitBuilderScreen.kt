@@ -68,6 +68,18 @@ private val SLOT_EMOJI = mapOf(
     "Accessories" to "👜"
 )
 
+/** Maps [ClothingItem.category] to builder slots (Top/Tops, Accessory/Accessories, etc.). */
+internal fun categoryMatchesBuilderSlot(category: String, slot: String): Boolean {
+    val c = category.trim().lowercase()
+    val s = slot.trim().lowercase()
+    if (c == s) return true
+    if ((c == "accessory" || c == "accessories") && (s == "accessory" || s == "accessories")) return true
+    val cStem = c.trimEnd('s')
+    val sStem = s.trimEnd('s')
+    if (cStem.isNotBlank() && cStem == sStem) return true
+    return c.contains(sStem) || s.contains(cStem)
+}
+
 @Composable
 fun OutfitBuilderScreen(
     navController: NavController,
@@ -238,8 +250,7 @@ fun OutfitBuilderScreen(
     // Item picker dialog
     pickerSlot?.let { slot ->
         val slotItems = allItems.filter { item ->
-            item.category.equals(slot, ignoreCase = true) ||
-                item.category.contains(slot.trimEnd('s'), ignoreCase = true)
+            categoryMatchesBuilderSlot(item.category, slot)
         }
         ItemPickerDialog(
             slot = slot,

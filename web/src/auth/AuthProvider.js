@@ -24,7 +24,6 @@ function looksLikeUser(data) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isChecking, setIsChecking] = useState(true);
-  const [verificationBannerDismissed, setVerificationBannerDismissed] = useState(false);
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
@@ -70,22 +69,15 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const verificationRequired = Boolean(
-    user &&
-      !user.demoEmail &&
-      user.is_verified !== true &&
-      verificationBannerDismissed !== true
-  );
-
   const value = useMemo(
     () => ({
       user,
       setUser,
       isChecking,
-      verificationRequired,
-      dismissVerificationBanner: () => setVerificationBannerDismissed(true),
+      verificationRequired: false,
+      dismissVerificationBanner: () => {},
     }),
-    [user, isChecking, verificationRequired]
+    [user, isChecking]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

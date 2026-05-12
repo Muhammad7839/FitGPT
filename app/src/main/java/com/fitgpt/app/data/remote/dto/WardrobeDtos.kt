@@ -57,6 +57,13 @@ data class ClothingItemDto(
     val lastWornTimestamp: Long?
 )
 
+data class WardrobeItemsResponseDto(
+    val items: List<ClothingItemDto> = emptyList(),
+    val total: Int = 0,
+    val limit: Int = 0,
+    val offset: Int = 0
+)
+
 data class ClothingItemCreateRequest(
     val name: String?,
     val category: String,

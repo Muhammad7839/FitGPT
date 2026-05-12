@@ -10,3 +10,12 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.13
+      # Production mode: enforces SECRET_KEY, DATABASE_URL, and disallows SQLite unless overridden.
+      - key: ENVIRONMENT
+        value: production
+      # Set in the Render dashboard or link a PostgreSQL database (connection string).
+      - key: DATABASE_URL
+        sync: false
+      # Set a strong random value in the Render dashboard (never commit real secrets).
+      - key: SECRET_KEY
+        sync: false

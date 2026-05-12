@@ -1,6 +1,7 @@
 /**
- * Persists authentication tokens via Jetpack DataStore Preferences (encrypted at rest on modern Android).
- * Tokens are never stored in plain SharedPreferences.
+ * Persists authentication tokens via Jetpack DataStore Preferences.
+ * DataStore is not encrypted by default; this keeps storage centralized but should be
+ * upgraded to keystore-backed encryption for stronger at-rest protection.
  */
 package com.fitgpt.app.data.auth
 

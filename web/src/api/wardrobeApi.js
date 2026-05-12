@@ -17,10 +17,21 @@ function ensureApi() {
   if (!hasApi()) throw new Error("API base URL is missing.");
 }
 
+function isClientOnlyImageUrl(value) {
+  if (value == null) return false;
+  const s = String(value).trim();
+  return s.startsWith("data:image/") || s.startsWith("blob:");
+}
+
 function toBackendPayload(payload) {
   const backendPayload = {};
+  const hasImageFile = payload?.imageFile != null;
   Object.entries(payload || {}).forEach(([key, value]) => {
-    if (key === "image_url" || key === "imageFile") return;
+    if (key === "imageFile") return;
+    if (key === "image_url") {
+      if (hasImageFile) return;
+      if (isClientOnlyImageUrl(value)) return;
+    }
     backendPayload[key] = value;
   });
   return backendPayload;

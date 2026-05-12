@@ -334,6 +334,8 @@ export default function Wardrobe() {
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [showCategoryTabs, setShowCategoryTabs] = useState(false);
 
   const [filterOpen, setFilterOpen] = useState(false);
@@ -1592,6 +1594,28 @@ export default function Wardrobe() {
     setBatchDeleteOpen(false);
   };
 
+  const confirmDeleteAll = async () => {
+    const allIds = items.map((x) => x.id).filter((id) => id != null);
+    setIsDeletingAll(true);
+    setItemsAndSave([]);
+    if (effectiveSignedIn) {
+      for (const id of allIds) {
+        try {
+          await wardrobeApi.deleteItem(id);
+        } catch (e) {
+          if (isNetworkError(e)) {
+            setBackendOffline(true);
+            break;
+          }
+        }
+      }
+    }
+    setIsDeletingAll(false);
+    setDeleteAllOpen(false);
+    setToast("All wardrobe items deleted.");
+    window.setTimeout(() => setToast(""), 2500);
+  };
+
   const confirmBatchDelete = async () => {
     if (!selectedIds.size) return;
     const ids = [...selectedIds];
@@ -2124,6 +2148,15 @@ export default function Wardrobe() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 3v18l2-1.5L9 21l2-1.5L13 21l2-1.5L17 21l2-1.5V3H5z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>
             </span>
             <span>Scan receipt</span>
+          </button>
+
+          <button
+            className="wg-toolbar-btn wg-toolbar-btn--danger"
+            onClick={() => setDeleteAllOpen(true)}
+            disabled={items.length === 0}
+            title="Delete every item in your wardrobe"
+          >
+            Delete All
           </button>
           <button
             type="button"
@@ -2756,6 +2789,34 @@ export default function Wardrobe() {
         </div>,
         document.body
       ) : null}
+
+      {deleteAllOpen && ReactDOM.createPortal(
+        <div className="wg-modal-overlay" role="dialog" aria-modal="true">
+          <div className="wg-modal">
+            <h2 className="wg-modal-title">Delete entire wardrobe?</h2>
+            <p className="wg-modal-body">
+              This removes all {items.length} item{items.length === 1 ? "" : "s"} permanently. You cannot undo this.
+            </p>
+            <div className="wg-modal-actions">
+              <button
+                className="wg-btn wg-btn--secondary"
+                onClick={() => setDeleteAllOpen(false)}
+                disabled={isDeletingAll}
+              >
+                Cancel
+              </button>
+              <button
+                className="wg-btn wg-btn--danger"
+                onClick={confirmDeleteAll}
+                disabled={isDeletingAll}
+              >
+                {isDeletingAll ? "Deleting..." : "Delete All"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {undoDelete ? (
         <div className="wardrobeUndoToast" role="status">

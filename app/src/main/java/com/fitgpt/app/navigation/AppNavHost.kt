@@ -45,6 +45,7 @@ import com.fitgpt.app.ui.edititem.EditItemScreen
 import com.fitgpt.app.ui.favorites.FavoritesScreen
 import com.fitgpt.app.ui.history.HistoryScreen
 import com.fitgpt.app.ui.more.MoreScreen
+import com.fitgpt.app.ui.onboarding.PostLoginTutorialScreen
 import com.fitgpt.app.ui.onboarding.WelcomeScreen
 import com.fitgpt.app.ui.plans.PlansScreen
 import com.fitgpt.app.ui.profile.ProfileScreen
@@ -169,7 +170,8 @@ fun AppNavHost(
                 localOnboardingComplete = true
             }
             hasToken = decision.hasToken
-            decision.route
+            val tutorialDone = prefs.tutorialCompleted.first()
+            if (decision.route == Routes.DASHBOARD && !tutorialDone) Routes.POST_LOGIN_TUTORIAL else decision.route
         } catch (exception: HttpException) {
             if (exception.code() == 401 || exception.code() == 403) {
                 val decision = resolveSessionBootstrapDecision(
@@ -391,6 +393,17 @@ fun AppNavHost(
                 navController = navController,
                 viewModel = authViewModel,
                 initialToken = backStackEntry.arguments?.getString("token").orEmpty()
+            )
+        }
+
+        composable(Routes.POST_LOGIN_TUTORIAL) {
+            PostLoginTutorialScreen(
+                onComplete = {
+                    appScope.launch { prefs.markTutorialSeen() }
+                    navController.navigate(Routes.DASHBOARD) {
+                        popUpTo(Routes.POST_LOGIN_TUTORIAL) { inclusive = true }
+                    }
+                }
             )
         }
 

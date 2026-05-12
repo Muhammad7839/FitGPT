@@ -5,6 +5,16 @@ import { useAuth } from "../auth/AuthProvider";
 import { migrateGuestData, clearGuestData } from "../utils/userStorage";
 import GoogleSignInButton from "./GoogleSignInButton";
 
+function isDuplicateRegistrationError(err) {
+  const status = Number(err?.status || 0);
+  const message = (err?.message || "").toString().toLowerCase();
+  return status === 400 && (
+    message.includes("already") ||
+    message.includes("registered") ||
+    message.includes("exists")
+  );
+}
+
 export default function Signup() {
   const navigate = useNavigate();
   const auth = useAuth();
@@ -49,11 +59,11 @@ export default function Signup() {
       try {
         await registerWithEmail(email.trim(), password);
       } catch (regErr) {
-        const msg = (regErr?.message || "").toLowerCase();
-        if (!msg.includes("already") && !msg.includes("registered") && !msg.includes("exists")) {
-          throw regErr;
+        if (isDuplicateRegistrationError(regErr)) {
+          setError("An account with this email already exists. Sign in or reset your password instead.");
+          return;
         }
-        // Account already exists — fall through to login below
+        throw regErr;
       }
 
       try {

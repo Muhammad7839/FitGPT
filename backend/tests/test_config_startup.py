@@ -1,5 +1,7 @@
 """Runtime config warning coverage for optional integrations."""
 
+import pytest
+
 from app import config
 
 
@@ -40,3 +42,34 @@ def test_get_list_env_parses_cors_origins(monkeypatch):
         "https://preview.fitgpt.tech",
         "http://192.168.1.50:3000",
     ]
+
+
+def test_validate_runtime_configuration_requires_database_url_in_production(monkeypatch):
+    monkeypatch.setattr(config, "ENVIRONMENT", "production")
+    monkeypatch.setattr(config, "_DATABASE_URL_FROM_ENV", "")
+    monkeypatch.setattr(config, "DATABASE_URL", "sqlite:////tmp/fitgpt.db")
+    monkeypatch.setattr(config, "SECRET_KEY", "secure-secret")
+
+    with pytest.raises(RuntimeError, match="DATABASE_URL must be set in production"):
+        config.validate_runtime_configuration()
+
+
+def test_validate_runtime_configuration_rejects_sqlite_in_production(monkeypatch):
+    monkeypatch.setattr(config, "ENVIRONMENT", "production")
+    monkeypatch.setattr(config, "_DATABASE_URL_FROM_ENV", "sqlite:////tmp/fitgpt.db")
+    monkeypatch.setattr(config, "DATABASE_URL", "sqlite:////tmp/fitgpt.db")
+    monkeypatch.setattr(config, "SECRET_KEY", "secure-secret")
+    monkeypatch.delenv("ALLOW_SQLITE_IN_PRODUCTION", raising=False)
+
+    with pytest.raises(RuntimeError, match="SQLite is not allowed in production"):
+        config.validate_runtime_configuration()
+
+
+def test_validate_runtime_configuration_allows_sqlite_when_explicitly_overridden(monkeypatch):
+    monkeypatch.setattr(config, "ENVIRONMENT", "production")
+    monkeypatch.setattr(config, "_DATABASE_URL_FROM_ENV", "sqlite:////tmp/fitgpt.db")
+    monkeypatch.setattr(config, "DATABASE_URL", "sqlite:////tmp/fitgpt.db")
+    monkeypatch.setattr(config, "SECRET_KEY", "secure-secret")
+    monkeypatch.setenv("ALLOW_SQLITE_IN_PRODUCTION", "true")
+
+    config.validate_runtime_configuration()

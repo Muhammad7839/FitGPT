@@ -272,13 +272,17 @@ class WardrobeViewModel(
             try {
                 val created = repository.addItem(item)
                 Log.d(wardrobeLogTag, "Item added: $created")
-                val items = loadWardrobeItems()
-                publishWardrobeItems(items)
-                refreshWardrobeInsights()
+                try {
+                    publishWardrobeAfterMutation(listOf(created))
+                    refreshWardrobeInsights()
+                } catch (e: Exception) {
+                    Log.w(wardrobeLogTag, "post-add refresh failed (items saved)", e)
+                }
                 _itemSaveState.value = UiState.Success(1)
             } catch (exception: Exception) {
                 Log.e(wardrobeLogTag, "add item failed", exception)
                 _itemSaveState.value = UiState.Error("Failed to save item")
+                return@launch
             }
         }
     }
@@ -290,13 +294,17 @@ class WardrobeViewModel(
                 val created = repository.addItemWithPhoto(item, photo)
                 Log.d(wardrobeLogTag, "API response: $created")
                 Log.d(wardrobeLogTag, "Item added: $created")
-                val items = loadWardrobeItems()
-                publishWardrobeItems(items)
-                refreshWardrobeInsights()
+                try {
+                    publishWardrobeAfterMutation(listOf(created))
+                    refreshWardrobeInsights()
+                } catch (e: Exception) {
+                    Log.w(wardrobeLogTag, "post-add refresh failed (items saved)", e)
+                }
                 _itemSaveState.value = UiState.Success(1)
             } catch (exception: Exception) {
                 Log.e(wardrobeLogTag, "add item with photo failed", exception)
                 _itemSaveState.value = UiState.Error(resolveUploadError(exception, "Failed to save item"))
+                return@launch
             }
         }
     }
@@ -304,16 +312,21 @@ class WardrobeViewModel(
     fun addItemsBulk(items: List<ClothingItem>) {
         _bulkItemSaveState.value = UiState.Loading
         viewModelScope.launch {
+            val savedItems: List<ClothingItem>
             try {
-                val savedItems = repository.addItemsBulk(items)
+                savedItems = repository.addItemsBulk(items)
                 Log.d(wardrobeLogTag, "API response: $savedItems")
-                val refreshedItems = loadWardrobeItems()
-                publishWardrobeItems(refreshedItems)
-                refreshWardrobeInsights()
+                try {
+                    publishWardrobeAfterMutation(savedItems)
+                    refreshWardrobeInsights()
+                } catch (e: Exception) {
+                    Log.w(wardrobeLogTag, "post-bulk-add refresh failed (items saved)", e)
+                }
                 _bulkItemSaveState.value = UiState.Success(savedItems.size)
             } catch (exception: Exception) {
                 Log.e(wardrobeLogTag, "bulk add item failed", exception)
-                _bulkItemSaveState.value = UiState.Error("Failed to save uploaded items")
+                _bulkItemSaveState.value = UiState.Error(resolveUploadError(exception, "Failed to save uploaded items"))
+                return@launch
             }
         }
     }
@@ -378,22 +391,13 @@ class WardrobeViewModel(
         }
         _batchImageUploadState.value = UiState.Loading
         viewModelScope.launch {
-            // Upload each image independently so one failure never blocks the rest.
-            val results = payloads.map { payload ->
-                try {
-                    val url = repository.uploadImage(payload.bytes, payload.fileName, payload.mimeType)
-                    UploadResult(fileName = payload.fileName, status = "success", imageUrl = url, error = null)
-                } catch (exception: Exception) {
-                    Log.w(wardrobeLogTag, "batch upload failed for ${payload.fileName}", exception)
-                    UploadResult(
-                        fileName = payload.fileName,
-                        status = "error",
-                        imageUrl = null,
-                        error = resolveUploadError(exception, "Upload failed")
-                    )
-                }
+            try {
+                val results = repository.uploadImagesBatch(payloads)
+                _batchImageUploadState.value = UiState.Success(results)
+            } catch (exception: Exception) {
+                Log.w(wardrobeLogTag, "batch upload failed", exception)
+                _batchImageUploadState.value = UiState.Error(resolveUploadError(exception, "Upload failed"))
             }
-            _batchImageUploadState.value = UiState.Success(results)
         }
     }
 
@@ -432,9 +436,12 @@ class WardrobeViewModel(
             try {
                 val updated = repository.updateItem(item)
                 Log.d(wardrobeLogTag, "API response: $updated")
-                val items = loadWardrobeItems()
-                publishWardrobeItems(items)
-                refreshWardrobeInsights()
+                try {
+                    publishWardrobeAfterMutation(listOf(updated))
+                    refreshWardrobeInsights()
+                } catch (e: Exception) {
+                    Log.w(wardrobeLogTag, "post-update refresh failed (item saved)", e)
+                }
                 _itemUpdateState.value = UiState.Success(item.id)
             } catch (exception: Exception) {
                 Log.e(wardrobeLogTag, "update item failed", exception)
@@ -917,6 +924,23 @@ class WardrobeViewModel(
         allItems.addAll(items)
         Log.d(wardrobeLogTag, "Fetched items count: ${items.size}")
         _wardrobeState.value = UiState.Success(items)
+    }
+
+    /**
+     * Re-fetch through current filters, then prepend any [mustInclude] rows that the filtered API
+     * query would drop (e.g. user has "Favorites only" or a category chip active, but just saved
+     * a new item that does not match yet). Without this, the list snaps to empty right after save.
+     */
+    private suspend fun publishWardrobeAfterMutation(mustInclude: List<ClothingItem>) {
+        val refreshed = loadWardrobeItems()
+        if (mustInclude.isEmpty()) {
+            publishWardrobeItems(refreshed)
+            return
+        }
+        val refreshedIds = refreshed.map { it.id }.toSet()
+        val missing = mustInclude.filter { it.id !in refreshedIds }
+        val merged = (missing + refreshed).distinctBy { it.id }
+        publishWardrobeItems(merged)
     }
 
     private fun refreshWardrobeInsights() {

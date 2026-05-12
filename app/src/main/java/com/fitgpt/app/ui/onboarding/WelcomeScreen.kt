@@ -282,7 +282,8 @@ private fun GuidedSpotlightCard(step: Int) {
         Text(
             text = spotlight.title,
             style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onBackground
         )
         Text(
             text = spotlight.body,
@@ -292,7 +293,7 @@ private fun GuidedSpotlightCard(step: Int) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+            color = MaterialTheme.colorScheme.surface
         ) {
             Column(
                 modifier = Modifier.padding(14.dp),
@@ -306,7 +307,8 @@ private fun GuidedSpotlightCard(step: Int) {
                 Text(
                     text = spotlight.callout,
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }

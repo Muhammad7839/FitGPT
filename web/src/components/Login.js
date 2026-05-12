@@ -4,6 +4,46 @@ import { loginWithEmail, getMe } from "../api/authApi";
 import { useAuth } from "../auth/AuthProvider";
 import { migrateGuestData, clearGuestData } from "../utils/userStorage";
 import { isNetworkError } from "../utils/helpers";
+import { SYMPOSIUM_APK_DOWNLOAD_URL } from "../constants/symposiumRelease";
+
+function isLikelyStorageError(err) {
+  const name = (err?.name || "").toString().toLowerCase();
+  const message = (err?.message || "").toString().toLowerCase();
+  return (
+    name.includes("securityerror") ||
+    name.includes("quotaexceedederror") ||
+    message.includes("localstorage") ||
+    message.includes("sessionstorage") ||
+    message.includes("storage") ||
+    message.includes("quota") ||
+    message.includes("private browsing")
+  );
+}
+
+function getLoginErrorMessage(err) {
+  const status = Number(err?.status || 0);
+  const code = (err?.code || "").toString().toLowerCase();
+
+  if (status === 401) {
+    return "Incorrect email or password. Please check your login details and try again.";
+  }
+  if (status === 429) {
+    return "Too many attempts. Please wait a moment before trying again.";
+  }
+  if (code === "request_timeout") {
+    return "The server may still be waking up. Please wait a few seconds and try again.";
+  }
+  if (code === "network_error" || isNetworkError(err)) {
+    return "We could not reach the FitGPT server. Check your connection and try again.";
+  }
+  if (status >= 500) {
+    return "The server had a temporary issue. Please try again shortly.";
+  }
+  if (isLikelyStorageError(err)) {
+    return "Your browser may be blocking saved login sessions. Try turning off private browsing or use another browser.";
+  }
+  return err?.message || "Login failed. Please try again.";
+}
 
 export default function Login() {
   const navigate = useNavigate();
@@ -23,6 +63,12 @@ export default function Login() {
     (params.get("reason") === "guest_protected"
       ? "Sign in to unlock the full FitGPT experience."
       : "");
+
+  const androidApkQrSrc = useMemo(
+    () =>
+      `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(SYMPOSIUM_APK_DOWNLOAD_URL)}`,
+    []
+  );
 
   const emailOk = useMemo(() => {
     const e = email.trim();
@@ -60,11 +106,7 @@ export default function Login() {
 
       navigate("/dashboard", { replace: true });
     } catch (err) {
-      if (isNetworkError(err)) {
-        setError("Can't reach the server. Check your connection or try again later.");
-      } else {
-        setError(err?.message || "Login failed. Please try again.");
-      }
+      setError(getLoginErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -162,6 +204,9 @@ export default function Login() {
             Continue as guest.
           </button>
         </div>
+        <div className="authHint" style={{ marginTop: 8 }}>
+          If login fails on school Wi-Fi, try refreshing once or switching to cellular/hotspot.
+        </div>
       </div>
 
       <div className="authQrRow">
@@ -181,12 +226,12 @@ export default function Login() {
         <div className="authQrCard">
           <img
             className="authQrCode"
-            src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https%3A%2F%2Fgithub.com%2FMuhammad7839%2FFitGPT%2Freleases%2Fdownload%2Fsymposium-demo-v1%2Fapp-release-unsigned.apk"
+            src={androidApkQrSrc}
             alt="QR code to download FitGPT Android app"
             loading="lazy"
           />
           <span className="authQrLabel">Android app</span>
-          <span className="authQrSub">Download APK</span>
+          <span className="authQrSub">Download FitGPT APK</span>
         </div>
       </div>
     </div>

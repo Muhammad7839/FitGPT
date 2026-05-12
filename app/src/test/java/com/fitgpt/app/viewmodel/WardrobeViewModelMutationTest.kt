@@ -104,6 +104,33 @@ class WardrobeViewModelMutationTest {
     }
 
     @Test
+    fun addItem_withFavoritesFilter_keepsNewlySavedNonFavoriteVisible() = runTest {
+        val viewModel = WardrobeViewModel(FakeWardrobeRepository())
+        advanceUntilIdle()
+
+        viewModel.applyWardrobeFilters(WardrobeFilters(favoritesOnly = true))
+        advanceUntilIdle()
+
+        assertTrue((viewModel.wardrobeState.value as UiState.Success).data.isEmpty())
+
+        viewModel.addItem(
+            ClothingItem(
+                id = 99,
+                name = "New Tee",
+                category = "Top",
+                color = "Green",
+                season = "All",
+                comfortLevel = 3,
+                isFavorite = false
+            )
+        )
+        advanceUntilIdle()
+
+        val state = viewModel.wardrobeState.value as UiState.Success<List<ClothingItem>>
+        assertTrue(state.data.any { it.id == 99 })
+    }
+
+    @Test
     fun addItem_updatesWardrobeStateWithSavedItem() = runTest {
         val viewModel = WardrobeViewModel(FakeWardrobeRepository())
         advanceUntilIdle()

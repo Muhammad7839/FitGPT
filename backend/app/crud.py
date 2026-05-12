@@ -437,6 +437,9 @@ def update_user_profile(
     if updated_data.onboarding_complete is not None:
         db_user.onboarding_complete = updated_data.onboarding_complete
 
+    if updated_data.avatar_url is not None:
+        db_user.avatar_url = updated_data.avatar_url
+
     _apply_default_preferences(db_user)
 
     db.commit()

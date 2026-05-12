@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from "react";
 import ReactDOM from "react-dom";
 import { savedOutfitsApi } from "../api/savedOutfitsApi";
+import { trackRecommendationPersonalization, PERSONALIZATION_ACTIONS } from "../utils/recommendationPersonalization";
 
 const SLOT_META = [
   { key: "top", label: "Top" },
@@ -155,6 +156,7 @@ export default function ManualOutfitBuilder({ items = [], user, open = false, on
         },
         user
       );
+      trackRecommendationPersonalization({ user, outfit: builtItems, action: PERSONALIZATION_ACTIONS.SELECT });
       setSaveMsg(res?.message || (res?.created ? "Saved to outfits." : "Saved."));
     } catch {
       setSaveMsg("Could not save that outfit right now.");
