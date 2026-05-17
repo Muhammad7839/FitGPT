@@ -1,63 +1,37 @@
 # Python
 backend/venv/
-backend/.venv/
-.venv/
-backend/.env
-.env
 backend/__pycache__/
 backend/*.db
 backend/*.sqlite3
-backend/uploads/
-fitgpt_test.db
 
 # Python cache
 __pycache__/
 *.pyc
-*.pyo
-.pytest_cache/
-.coverage
+
+# Environment files Ñ never commit real secrets
+.env
+backend/.env
+**/.env
 
 # macOS
 .DS_Store
 
-# Node / web
+# Node / Web
 node_modules/
-web/node_modules/
 dist/
-coverage/
+.next/
 
 # Android build
 build/
 .gradle/
-.kotlin/
 local.properties
 
 # IDE
 .idea/
 .vscode/
+*.iml
 
-# Env files
-.env.*
-!.env.example
-backend/.env.*
-!backend/.env.example
-
-.codex/
-tmp/
-fitgpt.db
-uploads/
-
-# Database files (all environments)
+# SQLite databases
 *.db
 *.sqlite3
-*.db-journal
-fitgpt_debug.db
-fitgpt_receipt_debug.db
-fitgpt_test.db
-
-# Generated reports
-*.docx
-FitGPT_Branch_Analysis.docx
-.vercel
-symposium-assets/apk/
-.claude/
+fitgpt.db
