@@ -2,7 +2,7 @@
 
 Full-stack AI wardrobe platform spanning the web, a REST API, and native Android.
 
-[Live app](https://fitgpt.tech) · [Engineering docs](./docs/README.md) · [Report an issue](../../issues)
+Relaunching soon · [Engineering docs](./docs/README.md) · [Report an issue](../../issues)
 
 FitGPT helps users organize a digital wardrobe and receive explainable outfit recommendations grounded in their preferences, clothing inventory, weather, time, and wear history. The product combines a React experience, a FastAPI service, persistent data, and a Kotlin Android client while preserving local-first fallbacks for core flows.
 
